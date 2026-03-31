@@ -4,14 +4,31 @@ import { CommandContextImpl } from "../../src/context.ts";
 import { RunLogger } from "../../src/logger.ts";
 import { ProcedureRegistry } from "../../src/registry.ts";
 import { SessionStore } from "../../src/session-store.ts";
-import { jsonType, type Procedure } from "../../src/types.ts";
+import type { Procedure, TypeDescriptor } from "../../src/types.ts";
 import { describeE2E } from "./helpers.ts";
 
 interface MathResult {
   result: number;
 }
 
-const MathResultType = jsonType<MathResult>();
+const MathResultType: TypeDescriptor<MathResult> = {
+  schema: {
+    type: "object",
+    properties: {
+      result: { type: "number" },
+    },
+    required: ["result"],
+    additionalProperties: false,
+  },
+  validate(input: unknown): input is MathResult {
+    return (
+      typeof input === "object" &&
+      input !== null &&
+      "result" in input &&
+      typeof (input as { result: unknown }).result === "number"
+    );
+  },
+};
 
 describeE2E("callProcedure composition (real agent)", () => {
   test(

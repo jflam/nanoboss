@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 
 import { getSessionDir } from "./config.ts";
@@ -85,6 +85,7 @@ export class SessionStore {
     this.rootDir = params.rootDir ?? getSessionDir(params.sessionId);
     this.cellsDir = join(this.rootDir, "cells");
     mkdirSync(this.cellsDir, { recursive: true });
+    this.loadExistingCells();
   }
 
   startCell(params: {
@@ -255,6 +256,29 @@ export class SessionStore {
       streamRef: record.output.stream !== undefined ? createValueRef(cell, "output.stream") : undefined,
       createdAt: record.meta.createdAt,
     };
+  }
+
+  private loadExistingCells(): void {
+    const files = readdirSync(this.cellsDir)
+      .filter((entry) => entry.endsWith(".json"))
+      .sort();
+
+    for (const fileName of files) {
+      const filePath = join(this.cellsDir, fileName);
+      const record = JSON.parse(readFileSync(filePath, "utf8")) as CellRecord;
+
+      if (!record.cellId) {
+        throw new Error(`Invalid cell record: ${filePath}`);
+      }
+
+      if (this.cellFilePaths.has(record.cellId)) {
+        throw new Error(`Duplicate cell record: ${record.cellId}`);
+      }
+
+      this.cells.set(record.cellId, record);
+      this.cellFilePaths.set(record.cellId, filePath);
+      this.order.push(record.cellId);
+    }
   }
 }
 

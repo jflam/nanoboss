@@ -1,11 +1,11 @@
 import { isAbsolute, relative, resolve } from "node:path";
 
 import {
-  jsonType,
   type CommandContext,
   type KernelValue,
   type Procedure,
   type RunResult,
+  type TypeDescriptor,
   type ValueRef,
 } from "../src/types.ts";
 
@@ -36,11 +36,108 @@ interface LintFixResult {
   description: string;
 }
 
-const LinterRunResultType = jsonType<LinterRunResult>();
-const LintFixResultType = jsonType<LintFixResult>();
+const LinterRunResultType: TypeDescriptor<LinterRunResult> = {
+  schema: {
+    type: "object",
+    properties: {
+      status: {
+        type: "string",
+        enum: ["configured", "missing_linter"],
+      },
+      command: {
+        type: ["string", "null"],
+      },
+      summary: {
+        type: "string",
+      },
+      errors: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            file: { type: "string" },
+            line: { type: "number" },
+            column: { type: "number" },
+            message: { type: "string" },
+            rule: { type: "string" },
+          },
+          required: ["file", "line", "column", "message", "rule"],
+          additionalProperties: false,
+        },
+      },
+      recommendations: {
+        type: "array",
+        items: { type: "string" },
+      },
+    },
+    required: ["status", "command", "summary", "errors", "recommendations"],
+    additionalProperties: false,
+  },
+  validate(input: unknown): input is LinterRunResult {
+    return (
+      typeof input === "object" &&
+      input !== null &&
+      "status" in input &&
+      ((input as { status: unknown }).status === "configured" ||
+        (input as { status: unknown }).status === "missing_linter") &&
+      "command" in input &&
+      ((input as { command: unknown }).command === null ||
+        typeof (input as { command: unknown }).command === "string") &&
+      "summary" in input &&
+      typeof (input as { summary: unknown }).summary === "string" &&
+      "errors" in input &&
+      Array.isArray((input as { errors: unknown }).errors) &&
+      (input as { errors: unknown[] }).errors.every(
+        (item) => isLinterError(item),
+      ) &&
+      "recommendations" in input &&
+      Array.isArray((input as { recommendations: unknown }).recommendations) &&
+      (input as { recommendations: unknown[] }).recommendations.every(
+        (item) => typeof item === "string",
+      )
+    );
+  },
+};
+
+const LintFixResultType: TypeDescriptor<LintFixResult> = {
+  schema: {
+    type: "object",
+    properties: {
+      applied: { type: "boolean" },
+      description: { type: "string" },
+    },
+    required: ["applied", "description"],
+    additionalProperties: false,
+  },
+  validate(input: unknown): input is LintFixResult {
+    return (
+      typeof input === "object" &&
+      input !== null &&
+      "applied" in input &&
+      typeof (input as { applied: unknown }).applied === "boolean" &&
+      "description" in input &&
+      typeof (input as { description: unknown }).description === "string"
+    );
+  },
+};
 
 const MAX_RETRIES = 3;
 const MAX_FIX_RETRIES = 2;
+
+function isLinterError(item: unknown): item is LinterError {
+  if (typeof item !== "object" || item === null) {
+    return false;
+  }
+
+  const candidate = item as Partial<LinterError>;
+  return (
+    typeof candidate.file === "string" &&
+    typeof candidate.line === "number" &&
+    typeof candidate.column === "number" &&
+    typeof candidate.message === "string" &&
+    typeof candidate.rule === "string"
+  );
+}
 
 function renderRecommendations(recommendations: string[]): string {
   if (recommendations.length === 0) {

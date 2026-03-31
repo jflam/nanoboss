@@ -7,14 +7,30 @@ import {
   parseAgentResponse,
   sanitizeJsonResponse,
 } from "../../src/call-agent.ts";
-import type { CallAgentTransport } from "../../src/types.ts";
-import { jsonType } from "../../src/types.ts";
+import type { CallAgentTransport, TypeDescriptor } from "../../src/types.ts";
 
 interface MathResult {
   result: number;
 }
 
-const MathResultType = jsonType<MathResult>();
+const MathResultType: TypeDescriptor<MathResult> = {
+  schema: {
+    type: "object",
+    properties: {
+      result: { type: "number" },
+    },
+    required: ["result"],
+    additionalProperties: false,
+  },
+  validate(input: unknown): input is MathResult {
+    return (
+      typeof input === "object" &&
+      input !== null &&
+      "result" in input &&
+      typeof (input as { result: unknown }).result === "number"
+    );
+  },
+};
 
 describe("callAgent response parsing", () => {
   test("returns raw string when no descriptor provided", async () => {

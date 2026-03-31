@@ -1,4 +1,10 @@
-import { jsonType, type KernelValue, type RunResult, type Procedure, type ValueRef } from "../src/types.ts";
+import {
+  type KernelValue,
+  type RunResult,
+  type Procedure,
+  type TypeDescriptor,
+  type ValueRef,
+} from "../src/types.ts";
 
 interface CritiqueResult {
   verdict: "sound" | "mixed" | "flawed";
@@ -7,7 +13,44 @@ interface CritiqueResult {
   revisedAnswer: string;
 }
 
-const CritiqueResultType = jsonType<CritiqueResult>();
+const CritiqueResultType: TypeDescriptor<CritiqueResult> = {
+  schema: {
+    type: "object",
+    properties: {
+      verdict: {
+        type: "string",
+        enum: ["sound", "mixed", "flawed"],
+      },
+      summary: { type: "string" },
+      issues: {
+        type: "array",
+        items: { type: "string" },
+      },
+      revisedAnswer: { type: "string" },
+    },
+    required: ["verdict", "summary", "issues", "revisedAnswer"],
+    additionalProperties: false,
+  },
+  validate(input: unknown): input is CritiqueResult {
+    return (
+      typeof input === "object" &&
+      input !== null &&
+      "verdict" in input &&
+      (
+        (input as { verdict: unknown }).verdict === "sound" ||
+        (input as { verdict: unknown }).verdict === "mixed" ||
+        (input as { verdict: unknown }).verdict === "flawed"
+      ) &&
+      "summary" in input &&
+      typeof (input as { summary: unknown }).summary === "string" &&
+      "issues" in input &&
+      Array.isArray((input as { issues: unknown }).issues) &&
+      (input as { issues: unknown[] }).issues.every((item) => typeof item === "string") &&
+      "revisedAnswer" in input &&
+      typeof (input as { revisedAnswer: unknown }).revisedAnswer === "string"
+    );
+  },
+};
 
 export default {
   name: "second-opinion",

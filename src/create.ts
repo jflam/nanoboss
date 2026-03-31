@@ -2,11 +2,11 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import {
-  jsonType,
   type KernelValue,
   type Procedure,
   type ProcedureRegistryLike,
   type RunResult,
+  type TypeDescriptor,
 } from "./types.ts";
 
 interface GeneratedProcedure {
@@ -14,7 +14,27 @@ interface GeneratedProcedure {
   source: string;
 }
 
-const GeneratedProcedureType = jsonType<GeneratedProcedure>();
+const GeneratedProcedureType: TypeDescriptor<GeneratedProcedure> = {
+  schema: {
+    type: "object",
+    properties: {
+      name: { type: "string" },
+      source: { type: "string" },
+    },
+    required: ["name", "source"],
+    additionalProperties: false,
+  },
+  validate(input: unknown): input is GeneratedProcedure {
+    return (
+      typeof input === "object" &&
+      input !== null &&
+      "name" in input &&
+      typeof (input as { name: unknown }).name === "string" &&
+      "source" in input &&
+      typeof (input as { source: unknown }).source === "string"
+    );
+  },
+};
 
 export function createCreateProcedure(registry: ProcedureRegistryLike): Procedure {
   return {
@@ -34,7 +54,7 @@ export function createCreateProcedure(registry: ProcedureRegistryLike): Procedur
           "",
           "CommandContext provides:",
           "- `ctx.callAgent(prompt)` for untyped downstream calls returning RunResult<string>",
-          "- `ctx.callAgent(prompt, jsonType<T>())` for typed downstream calls returning RunResult<T>",
+          "- `ctx.callAgent(prompt, descriptor)` for typed downstream calls returning RunResult<T>",
           "- `ctx.callAgent(prompt, { agent: { provider, model }, refs })` to choose a downstream agent per call and pass prior refs",
           "- `ctx.callProcedure(name, prompt)` for composing procedures and getting RunResult<T>",
           "- `ctx.session.last()` and `ctx.session.recent(...)` for discovery over prior cells",
