@@ -49,6 +49,7 @@ export function createCreateProcedure(registry: ProcedureRegistryLike): Procedur
           "CommandContext provides:",
           "- `ctx.callAgent(prompt)` for untyped downstream calls",
           "- `ctx.callAgent<T>(prompt, descriptor)` for typed downstream calls",
+          "- `ctx.callAgent(prompt, undefined, { agent: { provider, model } })` to choose a downstream agent per call",
           "- `ctx.callProcedure(name, prompt)` for composing procedures",
           "- `ctx.print(text)` to stream output back to the CLI",
           `- \`ctx.cwd\` for the current working directory (${ctx.cwd})`,

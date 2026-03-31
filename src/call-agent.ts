@@ -250,6 +250,9 @@ async function runAcpPrompt(
     JSON.stringify({
       timestamp: new Date().toISOString(),
       event: "spawn",
+      provider: config.provider,
+      model: config.model,
+      reasoningEffort: config.reasoningEffort,
       command: config.command,
       args: config.args,
       cwd,
@@ -353,6 +356,21 @@ async function runAcpPrompt(
       mcpServers: [],
     });
     sessionId = session.sessionId;
+
+    if (config.model) {
+      await connection.unstable_setSessionModel({
+        sessionId,
+        modelId: config.model,
+      });
+    }
+
+    if (config.reasoningEffort) {
+      await connection.setSessionConfigOption({
+        sessionId,
+        configId: "reasoning_effort",
+        valueId: config.reasoningEffort,
+      });
+    }
 
     await connection.prompt({
       sessionId,

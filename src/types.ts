@@ -1,10 +1,20 @@
 import type * as acp from "@agentclientprotocol/sdk";
 
 export interface DownstreamAgentConfig {
+  provider?: DownstreamAgentProvider;
   command: string;
   args: string[];
   cwd?: string;
   env?: Record<string, string>;
+  model?: string;
+  reasoningEffort?: string;
+}
+
+export type DownstreamAgentProvider = "claude" | "gemini" | "codex" | "copilot";
+
+export interface DownstreamAgentSelection {
+  provider: DownstreamAgentProvider;
+  model?: string;
 }
 
 export interface TypeDescriptor<T> {
@@ -36,9 +46,18 @@ export interface ProcedureRegistryLike {
 
 export interface CommandContext {
   readonly cwd: string;
-  callAgent<T = string>(prompt: string, descriptor?: TypeDescriptor<T>): Promise<AgentResult<T>>;
+  callAgent<T = string>(
+    prompt: string,
+    descriptor?: TypeDescriptor<T>,
+    options?: CommandCallAgentOptions,
+  ): Promise<AgentResult<T>>;
   callProcedure(name: string, prompt: string): Promise<string | void>;
   print(text: string): void;
+}
+
+export interface CommandCallAgentOptions {
+  agent?: DownstreamAgentSelection;
+  stream?: boolean;
 }
 
 export interface LogEntry {
@@ -54,6 +73,8 @@ export interface LogEntry {
   durationMs?: number;
   error?: string;
   agentLogFile?: string;
+  agentProvider?: DownstreamAgentProvider;
+  agentModel?: string;
 }
 
 export interface CallAgentOptions {

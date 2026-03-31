@@ -3,7 +3,14 @@ import type * as acp from "@agentclientprotocol/sdk";
 import { callAgent } from "./call-agent.ts";
 import { resolveDownstreamAgentConfig } from "./config.ts";
 import type { RunLogger } from "./logger.ts";
-import type { AgentResult, CommandContext, ProcedureRegistryLike, TypeDescriptor } from "./types.ts";
+import type {
+  AgentResult,
+  CommandCallAgentOptions,
+  CommandContext,
+  DownstreamAgentSelection,
+  ProcedureRegistryLike,
+  TypeDescriptor,
+} from "./types.ts";
 
 interface OutputState {
   hasOutput: boolean;
@@ -54,10 +61,12 @@ export class CommandContextImpl implements CommandContext {
   async callAgent<T = string>(
     prompt: string,
     descriptor?: TypeDescriptor<T>,
+    options?: CommandCallAgentOptions,
   ): Promise<AgentResult<T>> {
     const childSpanId = this.logger.newSpan(this.spanId);
     const startedAt = Date.now();
     const toolCallId = crypto.randomUUID();
+    const agentLabel = formatAgentLabel(options?.agent);
 
     this.logger.write({
       spanId: childSpanId,
@@ -65,35 +74,41 @@ export class CommandContextImpl implements CommandContext {
       procedure: this.procedureName,
       kind: "agent_start",
       prompt,
+      agentProvider: options?.agent?.provider,
+      agentModel: options?.agent?.model,
     });
 
     this.emitter.emit({
       sessionUpdate: "tool_call",
       toolCallId,
-      title: `callAgent: ${summarize(prompt)}`,
+      title: `callAgent${agentLabel}: ${summarize(prompt)}`,
       kind: "other",
       status: "pending",
-      rawInput: { prompt },
+      rawInput: { prompt, agent: options?.agent },
     });
 
     try {
       const result = await callAgent(prompt, descriptor, {
-        config: resolveDownstreamAgentConfig(this.cwd),
+        config: resolveDownstreamAgentConfig(this.cwd, options?.agent),
         signal: this.signal,
         onUpdate: async (update) => {
           if (
+            options?.stream !== false &&
+            (
+              update.sessionUpdate === "agent_message_chunk" ||
+              update.sessionUpdate === "tool_call" ||
+              update.sessionUpdate === "tool_call_update"
+            )
+          ) {
+            this.emitter.emit(update);
+          }
+
+          if (
+            options?.stream !== false &&
             update.sessionUpdate === "agent_message_chunk" &&
             update.content.type === "text"
           ) {
             this.outputState.hasOutput = true;
-          }
-
-          if (
-            update.sessionUpdate === "agent_message_chunk" ||
-            update.sessionUpdate === "tool_call" ||
-            update.sessionUpdate === "tool_call_update"
-          ) {
-            this.emitter.emit(update);
           }
         },
       });
@@ -107,6 +122,8 @@ export class CommandContextImpl implements CommandContext {
         result: descriptor ? result.value : undefined,
         raw: result.raw,
         agentLogFile: result.logFile,
+        agentProvider: options?.agent?.provider,
+        agentModel: options?.agent?.model,
       });
 
       this.emitter.emit({
@@ -130,6 +147,8 @@ export class CommandContextImpl implements CommandContext {
         kind: "agent_end",
         durationMs: Date.now() - startedAt,
         error: message,
+        agentProvider: options?.agent?.provider,
+        agentModel: options?.agent?.model,
       });
 
       this.emitter.emit({
@@ -218,4 +237,12 @@ export class CommandContextImpl implements CommandContext {
 function summarize(prompt: string): string {
   const compact = prompt.replace(/\s+/g, " ").trim();
   return compact.length > 60 ? `${compact.slice(0, 57)}...` : compact;
+}
+
+function formatAgentLabel(agent?: DownstreamAgentSelection): string {
+  if (!agent) {
+    return "";
+  }
+
+  return agent.model ? ` [${agent.provider}:${agent.model}]` : ` [${agent.provider}]`;
 }
