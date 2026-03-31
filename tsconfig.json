@@ -28,6 +28,8 @@
     "strictNullChecks": true
   },
   "include": [
+    "build.ts",
+    "nanoboss.ts",
     "cli.ts",
     "preload.ts",
     "src/**/*.ts",

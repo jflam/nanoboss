@@ -84,7 +84,7 @@ function extractPromptText(prompt: acp.PromptRequest["prompt"]): string {
     .join("\n");
 }
 
-async function main(): Promise<void> {
+export async function runAcpServerCommand(): Promise<void> {
   const service = await NanoAgentBossService.create();
   const stream = acp.ndJsonStream(
     Writable.toWeb(process.stdout),
@@ -97,4 +97,6 @@ async function main(): Promise<void> {
   await connection.closed;
 }
 
-void main();
+if (import.meta.main) {
+  await runAcpServerCommand();
+}

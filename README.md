@@ -6,37 +6,76 @@ To install dependencies:
 bun install
 ```
 
-To run the ACP server directly:
+## Unified entrypoint
+
+Everything now goes through a single `nanoboss` entrypoint.
+
+During development:
 
 ```bash
-bun run server
+bun run nanoboss --help
 ```
 
-To start the local REPL client against the stdio ACP server:
+Build a single compiled binary:
 
 ```bash
-bun run cli
+bun run build
 ```
 
-To start the HTTP/SSE server foundation for shared CLI + web frontends:
+That produces:
 
 ```bash
-bun run http
+dist/nanoboss
 ```
 
-Then connect the CLI over HTTP/SSE:
+The compiled binary includes the built-in commands. By default it skips loading
+additional `.ts` commands from `./commands` at runtime. If you want to opt back
+into disk-loaded commands, set:
 
 ```bash
-bun run cli --server-url http://localhost:3000
+NANO_AGENTBOSS_LOAD_DISK_COMMANDS=1
+```
+
+## Commands
+
+Launch the CLI frontend:
+
+```bash
+bun run nanoboss cli
+```
+
+Launch the HTTP/SSE server:
+
+```bash
+bun run nanoboss server --port 3000
+```
+
+Connect the CLI to a running server:
+
+```bash
+bun run nanoboss cli --server-url http://localhost:3000
+```
+
+The internal stdio ACP server is still available for local CLI mode:
+
+```bash
+bun run nanoboss acp-server
 ```
 
 Tool call progress lines are shown by default. Hide them with:
 
 ```bash
-bun run cli --no-tool-calls
+bun run nanoboss cli --no-tool-calls
 ```
 
-By default the REPL spawns `copilot --acp --allow-all-tools`. In that default path,
+For convenience, the old script names still route through the unified entrypoint:
+
+```bash
+bun run cli
+bun run server
+```
+
+By default the local REPL path spawns `copilot --acp --allow-all-tools`. In that default path,
 nano-agentboss does not set a model, so the downstream Copilot CLI uses its own
 default model unless a procedure selects one explicitly. Override the downstream
 agent with `NANO_AGENTBOSS_AGENT_CMD` and `NANO_AGENTBOSS_AGENT_ARGS` if needed.

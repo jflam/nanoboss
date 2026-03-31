@@ -1,13 +1,11 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import typia from "typia";
-
 import { expectData } from "./run-result.ts";
-import {
-  jsonType,
-  type Procedure,
-  type ProcedureRegistryLike,
+import type {
+  Procedure,
+  ProcedureRegistryLike,
+  TypeDescriptor,
 } from "./types.ts";
 
 interface GeneratedProcedure {
@@ -15,10 +13,25 @@ interface GeneratedProcedure {
   source: string;
 }
 
-const GeneratedProcedureType = jsonType<GeneratedProcedure>(
-  typia.json.schema<GeneratedProcedure>(),
-  typia.createValidate<GeneratedProcedure>(),
-);
+const GeneratedProcedureType: TypeDescriptor<GeneratedProcedure> = {
+  schema: {
+    type: "object",
+    properties: {
+      name: { type: "string" },
+      source: { type: "string" },
+    },
+    required: ["name", "source"],
+    additionalProperties: false,
+  },
+  validate(input: unknown): input is GeneratedProcedure {
+    return (
+      typeof input === "object" &&
+      input !== null &&
+      typeof (input as { name?: unknown }).name === "string" &&
+      typeof (input as { source?: unknown }).source === "string"
+    );
+  },
+};
 
 export function createCreateProcedure(registry: ProcedureRegistryLike): Procedure {
   return {

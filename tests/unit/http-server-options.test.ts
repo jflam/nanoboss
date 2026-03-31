@@ -1,0 +1,17 @@
+import { describe, expect, test } from "bun:test";
+
+import { parseHttpServerOptions } from "../../src/http-server.ts";
+
+describe("parseHttpServerOptions", () => {
+  test("uses explicit --port value", () => {
+    expect(parseHttpServerOptions(["--port", "3456"])).toEqual({ port: 3456 });
+  });
+
+  test("uses inline --port value", () => {
+    expect(parseHttpServerOptions(["--port=4567"])).toEqual({ port: 4567 });
+  });
+
+  test("rejects invalid ports", () => {
+    expect(() => parseHttpServerOptions(["--port", "0"])).toThrow("Invalid port: 0");
+  });
+});

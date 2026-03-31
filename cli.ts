@@ -18,6 +18,7 @@ import {
   startSessionEventStream,
 } from "./src/http-client.ts";
 import { parseCliOptions } from "./src/cli-options.ts";
+import { resolveSelfCommand } from "./src/self-command.ts";
 
 class OutputClient {
   availableCommands: string[] = [];
@@ -166,8 +167,8 @@ class OutputClient {
   }
 }
 
-async function main(): Promise<void> {
-  const options = parseCliOptions(Bun.argv.slice(2));
+export async function runCliCommand(argv: string[] = []): Promise<void> {
+  const options = parseCliOptions(argv);
   if (options.showHelp) {
     printHelp();
     return;
@@ -182,7 +183,8 @@ async function main(): Promise<void> {
 }
 
 async function runAcpCli(showToolCalls: boolean): Promise<void> {
-  const server: ChildProcessByStdio<Writable, Readable, null> = spawn("bun", ["run", "src/server.ts"], {
+  const serverCommand = resolveSelfCommand("acp-server");
+  const server: ChildProcessByStdio<Writable, Readable, null> = spawn(serverCommand.command, serverCommand.args, {
     cwd: process.cwd(),
     stdio: ["pipe", "pipe", "inherit"],
   });
@@ -285,15 +287,17 @@ async function runHttpCli(serverUrl: string, showToolCalls: boolean): Promise<vo
 
 function printHelp(): void {
   process.stdout.write([
-    "Usage: bun run cli [--tool-calls|--no-tool-calls] [--server-url <url>]",
+    "Usage: nanoboss cli [--tool-calls|--no-tool-calls] [--server-url <url>]",
     "",
     "Options:",
     "  --tool-calls          Show tool call progress lines (default)",
     "  --no-tool-calls       Hide tool call progress lines",
-    "  --server-url <url>    Connect to nano-agentboss over HTTP/SSE",
+    "  --server-url <url>    Connect to nanoboss over HTTP/SSE",
     "  -h, --help            Show this help text",
     "",
   ].join("\n"));
 }
 
-void main();
+if (import.meta.main) {
+  await runCliCommand(Bun.argv.slice(2));
+}

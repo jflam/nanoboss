@@ -1,9 +1,7 @@
-import typia from "typia";
-
 import { expectData, expectDataRef } from "../src/run-result.ts";
-import {
-  jsonType,
-  type Procedure,
+import type {
+  Procedure,
+  TypeDescriptor,
 } from "../src/types.ts";
 
 interface CritiqueResult {
@@ -13,10 +11,35 @@ interface CritiqueResult {
   revisedAnswer: string;
 }
 
-const CritiqueResultType = jsonType<CritiqueResult>(
-  typia.json.schema<CritiqueResult>(),
-  typia.createValidate<CritiqueResult>(),
-);
+const CritiqueResultType: TypeDescriptor<CritiqueResult> = {
+  schema: {
+    type: "object",
+    properties: {
+      verdict: { enum: ["sound", "mixed", "flawed"] },
+      summary: { type: "string" },
+      issues: {
+        type: "array",
+        items: { type: "string" },
+      },
+      revisedAnswer: { type: "string" },
+    },
+    required: ["verdict", "summary", "issues", "revisedAnswer"],
+    additionalProperties: false,
+  },
+  validate(input: unknown): input is CritiqueResult {
+    return (
+      typeof input === "object" &&
+      input !== null &&
+      ((input as { verdict?: unknown }).verdict === "sound" ||
+        (input as { verdict?: unknown }).verdict === "mixed" ||
+        (input as { verdict?: unknown }).verdict === "flawed") &&
+      typeof (input as { summary?: unknown }).summary === "string" &&
+      Array.isArray((input as { issues?: unknown }).issues) &&
+      (input as { issues: unknown[] }).issues.every((issue) => typeof issue === "string") &&
+      typeof (input as { revisedAnswer?: unknown }).revisedAnswer === "string"
+    );
+  },
+};
 
 export default {
   name: "second-opinion",

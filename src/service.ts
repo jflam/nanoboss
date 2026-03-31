@@ -9,6 +9,7 @@ import {
 } from "./frontend-events.ts";
 import { RunLogger } from "./logger.ts";
 import { ProcedureRegistry } from "./registry.ts";
+import { shouldLoadDiskCommands } from "./runtime-mode.ts";
 import {
   SessionStore,
   normalizeProcedureResult,
@@ -58,7 +59,9 @@ export class NanoAgentBossService {
   static async create(): Promise<NanoAgentBossService> {
     const registry = new ProcedureRegistry();
     registry.loadBuiltins();
-    await registry.loadFromDisk();
+    if (shouldLoadDiskCommands()) {
+      await registry.loadFromDisk();
+    }
     return new NanoAgentBossService(registry);
   }
 

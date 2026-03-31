@@ -3,6 +3,10 @@ import { mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
+import commitProcedure from "../commands/commit.ts";
+import linterProcedure from "../commands/linter.ts";
+import secondOpinionProcedure from "../commands/second-opinion.ts";
+
 import { createCreateProcedure } from "./create.ts";
 import type { Procedure, ProcedureRegistryLike } from "./types.ts";
 
@@ -29,6 +33,9 @@ export class ProcedureRegistry implements ProcedureRegistryLike {
 
   loadBuiltins(): void {
     this.register(createCreateProcedure(this));
+    this.register(commitProcedure);
+    this.register(linterProcedure);
+    this.register(secondOpinionProcedure);
   }
 
   async loadFromDisk(): Promise<void> {
@@ -38,6 +45,11 @@ export class ProcedureRegistry implements ProcedureRegistryLike {
       .sort();
 
     for (const file of files) {
+      const fileStem = file.replace(/\.ts$/, "");
+      if (this.procedures.has(fileStem)) {
+        continue;
+      }
+
       const procedure = await this.loadProcedureFromPath(join(this.commandsDir, file));
       this.register(procedure);
     }
