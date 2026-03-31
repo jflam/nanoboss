@@ -1,11 +1,19 @@
+import { isAbsolute, relative, resolve } from "node:path";
+
 import type { CommandContext, Procedure } from "../src/types.ts";
 
-interface LinterError {
+export interface LinterError {
   file: string;
   line: number;
   column: number;
   message: string;
   rule: string;
+}
+
+interface FileErrorGroup {
+  normalizedFile: string;
+  displayFile: string;
+  errors: LinterError[];
 }
 
 interface LinterRunResult {
@@ -132,6 +140,65 @@ function renderRecommendations(recommendations: string[]): string {
   return recommendations.map((item) => `- ${item}`).join("\n");
 }
 
+function normalizeErrorFile(cwd: string, file: string): string {
+  return isAbsolute(file) ? file : resolve(cwd, file);
+}
+
+function displayErrorFile(cwd: string, file: string): string {
+  const relativePath = relative(cwd, file);
+  return relativePath && !relativePath.startsWith("..") && !isAbsolute(relativePath)
+    ? relativePath
+    : file;
+}
+
+export function groupErrorsByFile(cwd: string, errors: LinterError[]): FileErrorGroup[] {
+  const groups = new Map<string, FileErrorGroup>();
+
+  for (const error of errors) {
+    const normalizedFile = normalizeErrorFile(cwd, error.file);
+    const existing = groups.get(normalizedFile);
+
+    if (existing) {
+      existing.errors.push(error);
+      continue;
+    }
+
+    groups.set(normalizedFile, {
+      normalizedFile,
+      displayFile: displayErrorFile(cwd, normalizedFile),
+      errors: [error],
+    });
+  }
+
+  return Array.from(groups.values());
+}
+
+function getFileErrorGroup(
+  cwd: string,
+  errors: LinterError[],
+  normalizedFile: string,
+): FileErrorGroup | undefined {
+  return groupErrorsByFile(cwd, errors).find((group) => group.normalizedFile === normalizedFile);
+}
+
+export function buildFixPrompt(group: FileErrorGroup): string {
+  const diagnostics = group.errors.map((error) =>
+    `- ${group.displayFile}:${error.line}:${error.column} ${error.message} (rule: ${error.rule})`
+  );
+
+  return [
+    `Fix only the following linter errors in ${group.normalizedFile}:`,
+    ...diagnostics,
+    `Prefer editing only ${group.normalizedFile}.`,
+    "Do not run the full repo linter or any repo-wide lint command.",
+    "Do not search for or fix unrelated lint errors in other files.",
+    "Do not run build or tests unless they are strictly necessary for this targeted file fix.",
+    "Do not commit changes.",
+    "The caller will rerun lint and manage commits after you return.",
+    "Return whether the targeted file-level fix was successful.",
+  ].join("\n");
+}
+
 function buildDiscoveryPrompt(cwd: string, prompt: string, command?: string): string {
   const commandInstruction = command
     ? [
@@ -194,54 +261,77 @@ export default {
     }
 
     while (errors.length > 0 && retries < MAX_RETRIES) {
+      const fileGroups = groupErrorsByFile(ctx.cwd, errors);
       ctx.print(
-        `Round ${retries + 1}: ${errors.length} errors to fix with \`${linterCommand}\`\n`,
+        `Round ${retries + 1}: ${errors.length} errors across ${fileGroups.length} files with \`${linterCommand}\`\n`,
       );
 
-      for (const error of errors) {
+      for (const fileGroup of fileGroups) {
+        const activeGroup = getFileErrorGroup(
+          ctx.cwd,
+          errors,
+          fileGroup.normalizedFile,
+        );
+        if (!activeGroup || activeGroup.errors.length === 0) {
+          continue;
+        }
+
+        const beforeCount = activeGroup.errors.length;
         let fixRetries = 0;
-        let fixed = false;
+        let agentReportedFixed = false;
+
+        ctx.print(
+          `Fixing ${beforeCount} errors in \`${activeGroup.displayFile}\`\n`,
+        );
 
         while (fixRetries < MAX_FIX_RETRIES) {
           const result = await ctx.callAgent<FixResult>(
-            [
-              `Fix this linter error in ${ctx.cwd}:`,
-              `${error.file}:${error.line}:${error.column} ${error.message} (rule: ${error.rule})`,
-              `The linter command that must pass is: ${linterCommand}`,
-              "After fixing it, run the build and tests if available.",
-              "Return whether the fix was successful.",
-            ].join("\n"),
+            buildFixPrompt(activeGroup),
             FixResultType,
           );
           fixRetries += 1;
           if (result.value.fixed) {
-            fixed = true;
+            agentReportedFixed = true;
             break;
           }
         }
 
-        if (fixed) {
-          totalFixed += 1;
+        linter = await runLinter(ctx, prompt, linterCommand);
+        if (linter.status === "missing_linter" || !linter.command) {
+          const recommendations = renderRecommendations(linter.recommendations);
+          ctx.print(
+            `${linter.summary}\n${recommendations ? `${recommendations}\n` : ""}`,
+          );
+          return;
+        }
+
+        linterCommand = linter.command;
+        errors = linter.errors;
+
+        const remainingGroup = getFileErrorGroup(
+          ctx.cwd,
+          errors,
+          activeGroup.normalizedFile,
+        );
+        const afterCount = remainingGroup?.errors.length ?? 0;
+        const resolvedCount = Math.max(0, beforeCount - afterCount);
+
+        if (resolvedCount > 0) {
+          totalFixed += resolvedCount;
           await ctx.callProcedure(
             "commit",
-            `linter fix for ${error.file}:${error.line} - ${error.message}`,
+            `linter fixes for ${activeGroup.displayFile}`,
           );
+        } else if (!agentReportedFixed) {
+          totalFailed += beforeCount;
         } else {
-          totalFailed += 1;
+          totalFailed += beforeCount;
+        }
+
+        if (errors.length === 0) {
+          break;
         }
       }
-
-      linter = await runLinter(ctx, prompt, linterCommand);
-      if (linter.status === "missing_linter" || !linter.command) {
-        const recommendations = renderRecommendations(linter.recommendations);
-        ctx.print(
-          `${linter.summary}\n${recommendations ? `${recommendations}\n` : ""}`,
-        );
-        return;
-      }
-
-      linterCommand = linter.command;
-      errors = linter.errors;
 
       retries += 1;
     }
