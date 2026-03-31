@@ -3,10 +3,14 @@ import { spawn, type ChildProcessByStdio } from "node:child_process";
 import readline from "node:readline/promises";
 import { Readable, Writable } from "node:stream";
 
+import { parseCliOptions } from "./src/cli-options.ts";
+
 class CliClient implements acp.Client {
   availableCommands: string[] = [];
   private readonly toolTitles = new Map<string, string>();
   private outputEndsWithNewline = true;
+
+  constructor(private readonly options: { showToolCalls: boolean }) {}
 
   async requestPermission(
     params: acp.RequestPermissionRequest,
@@ -37,11 +41,13 @@ class CliClient implements acp.Client {
         }
         break;
       case "tool_call":
-        this.toolTitles.set(update.toolCallId, update.title);
-        this.writeToolLine(`[tool] ${update.title}`);
+        if (this.options.showToolCalls) {
+          this.toolTitles.set(update.toolCallId, update.title);
+          this.writeToolLine(`[tool] ${update.title}`);
+        }
         break;
       case "tool_call_update":
-        if (update.status) {
+        if (this.options.showToolCalls && update.status) {
           this.handleToolCallUpdate(update);
         }
         break;
@@ -96,12 +102,18 @@ class CliClient implements acp.Client {
 }
 
 async function main(): Promise<void> {
+  const options = parseCliOptions(Bun.argv.slice(2));
+  if (options.showHelp) {
+    printHelp();
+    return;
+  }
+
   const server: ChildProcessByStdio<Writable, Readable, null> = spawn("bun", ["run", "src/server.ts"], {
     cwd: process.cwd(),
     stdio: ["pipe", "pipe", "inherit"],
   });
 
-  const client = new CliClient();
+  const client = new CliClient({ showToolCalls: options.showToolCalls });
   const stream = acp.ndJsonStream(
     Writable.toWeb(server.stdin),
     Readable.toWeb(server.stdout),
@@ -151,6 +163,18 @@ async function main(): Promise<void> {
     rl.close();
     server.kill();
   }
+}
+
+function printHelp(): void {
+  process.stdout.write([
+    "Usage: bun run cli [--tool-calls|--no-tool-calls]",
+    "",
+    "Options:",
+    "  --tool-calls     Show tool call progress lines (default)",
+    "  --no-tool-calls  Hide tool call progress lines",
+    "  -h, --help       Show this help text",
+    "",
+  ].join("\n"));
 }
 
 void main();
