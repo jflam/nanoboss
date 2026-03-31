@@ -4,11 +4,19 @@ import { parseHttpServerOptions } from "../../src/http-server.ts";
 
 describe("parseHttpServerOptions", () => {
   test("uses explicit --port value", () => {
-    expect(parseHttpServerOptions(["--port", "3456"])).toEqual({ port: 3456 });
+    expect(parseHttpServerOptions(["--port", "3456"])).toEqual({
+      port: 3456,
+      idleTimeoutSeconds: 30,
+      sseKeepAliveMs: 10000,
+    });
   });
 
   test("uses inline --port value", () => {
-    expect(parseHttpServerOptions(["--port=4567"])).toEqual({ port: 4567 });
+    expect(parseHttpServerOptions(["--port=4567"])).toEqual({
+      port: 4567,
+      idleTimeoutSeconds: 30,
+      sseKeepAliveMs: 10000,
+    });
   });
 
   test("rejects invalid ports", () => {

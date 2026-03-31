@@ -3,10 +3,14 @@ import { NanoAgentBossService } from "./service.ts";
 
 export interface HttpServerOptions {
   port: number;
+  idleTimeoutSeconds: number;
+  sseKeepAliveMs: number;
 }
 
 export function parseHttpServerOptions(argv: string[]): HttpServerOptions {
   let port = Number(Bun.env.NANO_AGENTBOSS_PORT ?? "3000");
+  const idleTimeoutSeconds = Number(Bun.env.NANO_AGENTBOSS_HTTP_IDLE_TIMEOUT_SECONDS ?? "30");
+  const sseKeepAliveMs = Number(Bun.env.NANO_AGENTBOSS_SSE_KEEPALIVE_MS ?? "10000");
 
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
@@ -33,7 +37,19 @@ export function parseHttpServerOptions(argv: string[]): HttpServerOptions {
     throw new Error(`Invalid port: ${String(port)}`);
   }
 
-  return { port };
+  if (!Number.isFinite(idleTimeoutSeconds) || idleTimeoutSeconds <= 0) {
+    throw new Error(`Invalid idle timeout: ${String(idleTimeoutSeconds)}`);
+  }
+
+  if (!Number.isFinite(sseKeepAliveMs) || sseKeepAliveMs <= 0) {
+    throw new Error(`Invalid SSE keepalive: ${String(sseKeepAliveMs)}`);
+  }
+
+  return {
+    port,
+    idleTimeoutSeconds,
+    sseKeepAliveMs,
+  };
 }
 
 export async function runHttpServerCommand(argv: string[] = []): Promise<ReturnType<typeof Bun.serve>> {
@@ -43,7 +59,7 @@ export async function runHttpServerCommand(argv: string[] = []): Promise<ReturnT
 
   const server = Bun.serve({
     port: options.port,
-    idleTimeout: 30,
+    idleTimeout: options.idleTimeoutSeconds,
     async fetch(request) {
       const url = new URL(request.url);
       const path = url.pathname;
@@ -139,7 +155,7 @@ export async function runHttpServerCommand(argv: string[] = []): Promise<ReturnT
                   clearInterval(keepAlive);
                   unsubscribe();
                 }
-              }, 10_000);
+              }, options.sseKeepAliveMs);
 
               const cleanup = () => {
                 clearInterval(keepAlive);
