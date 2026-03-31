@@ -31,6 +31,8 @@ export interface SessionDescriptor {
 }
 
 class CompositeSessionUpdateEmitter implements SessionUpdateEmitter {
+  private streamedText = "";
+
   constructor(
     private readonly sessionId: string,
     private readonly runId: string,
@@ -39,11 +41,19 @@ class CompositeSessionUpdateEmitter implements SessionUpdateEmitter {
   ) {}
 
   emit(update: acp.SessionUpdate): void {
+    if (update.sessionUpdate === "agent_message_chunk" && update.content.type === "text") {
+      this.streamedText += update.content.text;
+    }
+
     for (const event of mapSessionUpdateToFrontendEvents(this.runId, update)) {
       this.eventLog.publish(this.sessionId, event);
     }
 
     this.delegate?.emit(update);
+  }
+
+  hasStreamedText(text: string): boolean {
+    return this.streamedText === text;
   }
 
   flush(): Promise<void> {
@@ -212,7 +222,7 @@ export class NanoAgentBossService {
         raw: result.display,
       });
 
-      if (result.display) {
+      if (result.display && !emitter.hasStreamedText(result.display)) {
         emitter.emit({
           sessionUpdate: "agent_message_chunk",
           content: {

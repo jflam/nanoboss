@@ -43,6 +43,7 @@ export async function runHttpServerCommand(argv: string[] = []): Promise<ReturnT
 
   const server = Bun.serve({
     port: options.port,
+    idleTimeout: 30,
     async fetch(request) {
       const url = new URL(request.url);
       const path = url.pathname;
@@ -138,7 +139,7 @@ export async function runHttpServerCommand(argv: string[] = []): Promise<ReturnT
                   clearInterval(keepAlive);
                   unsubscribe();
                 }
-              }, 15_000);
+              }, 10_000);
 
               const cleanup = () => {
                 clearInterval(keepAlive);
