@@ -1,0 +1,118 @@
+import { execFileSync } from "node:child_process";
+import { cpSync, mkdtempSync, rmSync } from "node:fs";
+import { join } from "node:path";
+import { afterEach, expect, test } from "bun:test";
+
+import { CommandContextImpl, type SessionUpdateEmitter } from "../../src/context.ts";
+import { RunLogger } from "../../src/logger.ts";
+import { ProcedureRegistry } from "../../src/registry.ts";
+import { describeE2E } from "./helpers.ts";
+
+const repoRoot = process.cwd();
+const fixtureTemplateDir = join(repoRoot, "tests/fixtures/linter/basic");
+const tempDirs: string[] = [];
+
+describeE2E("/linter fixture (real agent)", () => {
+  afterEach(() => {
+    while (tempDirs.length > 0) {
+      const path = tempDirs.pop();
+      if (path) {
+        rmSync(path, { recursive: true, force: true });
+      }
+    }
+  });
+
+  test(
+    "fixes the fixture repo file by file and leaves it lint-clean",
+    async () => {
+      const fixtureDir = createFixtureRepo();
+      const output: string[] = [];
+      const registry = new ProcedureRegistry();
+      registry.loadBuiltins();
+      await registry.loadFromDisk();
+
+      const logger = new RunLogger();
+      const ctx = new CommandContextImpl({
+        cwd: fixtureDir,
+        logger,
+        registry,
+        procedureName: "linter",
+        spanId: logger.newSpan(),
+        emitter: createEmitter(output),
+      });
+
+      const linter = registry.get("linter");
+      if (!linter) {
+        throw new Error("Missing /linter procedure");
+      }
+
+      await linter.execute("", ctx);
+
+      execFileSync("bun", ["run", "lint", "--format", "json"], {
+        cwd: fixtureDir,
+        stdio: "pipe",
+      });
+
+      const status = execFileSync("git", ["status", "--short"], {
+        cwd: fixtureDir,
+        encoding: "utf8",
+      }).trim();
+      const commitCount = Number(
+        execFileSync("git", ["rev-list", "--count", "HEAD"], {
+          cwd: fixtureDir,
+          encoding: "utf8",
+        }).trim(),
+      );
+      const transcript = output.join("");
+
+      expect(transcript).toContain("Fixing 2 errors in `src/alpha.ts`");
+      expect(transcript).toContain("Fixing 1 errors in `src/beta.ts`");
+      expect(status).toBe("");
+      expect(commitCount).toBeGreaterThan(1);
+    },
+    10 * 60_000,
+  );
+});
+
+function createFixtureRepo(): string {
+  const dir = mkdtempSync(join(repoRoot, ".tmp-linter-fixture-"));
+  tempDirs.push(dir);
+  cpSync(fixtureTemplateDir, dir, { recursive: true });
+
+  execFileSync("git", ["init", "-b", "main"], {
+    cwd: dir,
+    stdio: "pipe",
+  });
+  execFileSync("git", ["config", "user.name", "nano-agentboss test"], {
+    cwd: dir,
+    stdio: "pipe",
+  });
+  execFileSync("git", ["config", "user.email", "nano-agentboss@example.com"], {
+    cwd: dir,
+    stdio: "pipe",
+  });
+  execFileSync("git", ["add", "."], {
+    cwd: dir,
+    stdio: "pipe",
+  });
+  execFileSync("git", ["commit", "-m", "Initial lint fixture"], {
+    cwd: dir,
+    stdio: "pipe",
+  });
+
+  return dir;
+}
+
+function createEmitter(output: string[]): SessionUpdateEmitter {
+  return {
+    emit(update) {
+      if (
+        update.sessionUpdate === "agent_message_chunk" &&
+        update.content.type === "text"
+      ) {
+        output.push(update.content.text);
+      }
+    },
+    async flush() {},
+  };
+}

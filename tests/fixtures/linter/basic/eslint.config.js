@@ -11,10 +11,8 @@ export default tseslint.config(
     ignores: [
       "coverage/**",
       "dist/**",
-      ".tmp-linter-fixture-*/**",
       "eslint.config.js",
       "out/**",
-      "tests/fixtures/**",
     ],
   },
   js.configs.recommended,
@@ -62,14 +60,6 @@ export default tseslint.config(
           allowNumber: true,
         },
       ],
-    },
-  },
-  {
-    files: ["tests/**/*.ts"],
-    rules: {
-      "@typescript-eslint/await-thenable": "off",
-      "@typescript-eslint/no-confusing-void-expression": "off",
-      "@typescript-eslint/unbound-method": "off",
     },
   },
 );
