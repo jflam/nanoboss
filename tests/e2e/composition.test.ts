@@ -52,7 +52,7 @@ describeE2E("callProcedure composition (real agent)", () => {
         description: "Quadruple a number",
         async execute(prompt, ctx) {
           const doubled = await ctx.callProcedure("double", prompt);
-          return ctx.callProcedure("double", doubled ?? "");
+          return ctx.callProcedure("double", doubled);
         },
       };
 

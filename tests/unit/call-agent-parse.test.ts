@@ -78,7 +78,9 @@ describe("callAgent response parsing", () => {
   });
 
   test("throws after retries are exhausted", async () => {
-    const transport = createTransport(Array(MAX_PARSE_RETRIES + 1).fill("still bad"));
+    const transport = createTransport(
+      Array.from({ length: MAX_PARSE_RETRIES + 1 }, () => "still bad"),
+    );
 
     await expect(callAgent("compute", MathResultType, {}, transport)).rejects.toThrow(
       `callAgent failed after ${MAX_PARSE_RETRIES + 1} attempts`,

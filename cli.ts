@@ -129,7 +129,7 @@ async function main(): Promise<void> {
     for (;;) {
       const line = await rl.question("> ");
       const trimmed = line.trim();
-      if (!trimmed) {
+      if (trimmed.length === 0) {
         continue;
       }
       if (trimmed === "exit" || trimmed === "quit") {

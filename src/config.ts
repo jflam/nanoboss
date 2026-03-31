@@ -35,7 +35,7 @@ function parseArgs(value: string | undefined): string[] | undefined {
   }
 
   try {
-    const parsed = JSON.parse(value);
+    const parsed: unknown = JSON.parse(value);
     if (Array.isArray(parsed) && parsed.every((item) => typeof item === "string")) {
       return parsed;
     }

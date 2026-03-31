@@ -26,7 +26,7 @@ class QueuedSessionUpdateEmitter implements SessionUpdateEmitter {
           update,
         }),
       )
-      .catch((error) => {
+      .catch((error: unknown) => {
         console.error("failed to emit session update", error);
       });
   }
@@ -37,7 +37,7 @@ class QueuedSessionUpdateEmitter implements SessionUpdateEmitter {
 }
 
 class NanoAgentBoss implements acp.Agent {
-  private readonly sessions = new Map<string, SessionState>();
+  private readonly sessions = new Map<acp.SessionId, SessionState>();
 
   constructor(
     private readonly connection: acp.AgentSideConnection,
@@ -59,7 +59,7 @@ class NanoAgentBoss implements acp.Agent {
 
   async newSession(params: acp.NewSessionRequest): Promise<acp.NewSessionResponse> {
     const sessionId = crypto.randomUUID();
-    this.sessions.set(String(sessionId), {
+    this.sessions.set(sessionId, {
       cwd: params.cwd,
     });
 
@@ -79,7 +79,7 @@ class NanoAgentBoss implements acp.Agent {
   }
 
   async prompt(params: acp.PromptRequest): Promise<acp.PromptResponse> {
-    const session = this.sessions.get(String(params.sessionId));
+    const session = this.sessions.get(params.sessionId);
     if (!session) {
       throw new Error(`Unknown session: ${params.sessionId}`);
     }
@@ -163,7 +163,7 @@ class NanoAgentBoss implements acp.Agent {
   }
 
   async cancel(params: acp.CancelNotification): Promise<void> {
-    this.sessions.get(String(params.sessionId))?.abortController?.abort();
+    this.sessions.get(params.sessionId)?.abortController?.abort();
   }
 }
 

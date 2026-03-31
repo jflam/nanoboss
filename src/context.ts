@@ -2,7 +2,7 @@ import type * as acp from "@agentclientprotocol/sdk";
 
 import { callAgent } from "./call-agent.ts";
 import { resolveDownstreamAgentConfig } from "./config.ts";
-import { RunLogger } from "./logger.ts";
+import type { RunLogger } from "./logger.ts";
 import type { AgentResult, CommandContext, ProcedureRegistryLike, TypeDescriptor } from "./types.ts";
 
 interface OutputState {

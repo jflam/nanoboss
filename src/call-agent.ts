@@ -1,6 +1,6 @@
 import * as acp from "@agentclientprotocol/sdk";
 import { appendFileSync, mkdirSync } from "node:fs";
-import { spawn } from "node:child_process";
+import { spawn, type ChildProcessByStdio } from "node:child_process";
 import { Readable, Writable } from "node:stream";
 import { join } from "node:path";
 
@@ -18,14 +18,12 @@ export async function callAgent<T = string>(
   const startedAt = Date.now();
   let lastError = "";
   let lastRaw = "";
-  let lastLogFile: string | undefined;
 
   for (let attempt = 0; attempt <= MAX_PARSE_RETRIES; attempt += 1) {
     const fullPrompt = buildPrompt(prompt, descriptor, attempt, lastError, lastRaw);
     const response = await transport.invoke(fullPrompt, options);
 
     lastRaw = response.raw;
-    lastLogFile = response.logFile;
 
     if (!descriptor) {
       return {
@@ -258,7 +256,7 @@ async function runAcpPrompt(
     }),
   );
 
-  const child = spawn(config.command, config.args, {
+  const child: ChildProcessByStdio<Writable, Readable, Readable> = spawn(config.command, config.args, {
     cwd,
     env: {
       ...process.env,
@@ -267,7 +265,7 @@ async function runAcpPrompt(
     stdio: ["pipe", "pipe", "pipe"],
   });
 
-  child.stderr?.on("data", (chunk: Buffer | string) => {
+  child.stderr.on("data", (chunk: Buffer | string) => {
     appendAgentTranscript(
       transcriptPath,
       JSON.stringify({
@@ -277,11 +275,6 @@ async function runAcpPrompt(
       }),
     );
   });
-
-  if (!child.stdin || !child.stdout) {
-    child.kill();
-    throw new Error("Failed to acquire stdio pipes for downstream agent");
-  }
 
   const stream = acp.ndJsonStream(
     Writable.toWeb(child.stdin),

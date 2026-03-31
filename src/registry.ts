@@ -1,4 +1,4 @@
-import * as acp from "@agentclientprotocol/sdk";
+import type * as acp from "@agentclientprotocol/sdk";
 import { mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -45,8 +45,8 @@ export class ProcedureRegistry implements ProcedureRegistryLike {
 
   async loadProcedureFromPath(path: string): Promise<Procedure> {
     const moduleUrl = `${pathToFileURL(path).href}?v=${Date.now()}`;
-    const loaded = await import(moduleUrl);
-    const procedure = loaded.default as Procedure | undefined;
+    const loaded: unknown = await import(moduleUrl);
+    const procedure = getDefaultExport(loaded);
     this.assertProcedure(procedure);
     return procedure;
   }
@@ -83,4 +83,12 @@ export class ProcedureRegistry implements ProcedureRegistryLike {
       throw new Error("Procedure module does not export a valid default procedure");
     }
   }
+}
+
+function getDefaultExport(module: unknown): unknown {
+  if (!module || typeof module !== "object" || !("default" in module)) {
+    return undefined;
+  }
+
+  return module.default;
 }
