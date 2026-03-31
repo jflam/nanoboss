@@ -5,6 +5,7 @@
   "private": true,
   "scripts": {
     "server": "bun run src/server.ts",
+    "http": "bun run src/http-server.ts",
     "cli": "bun run cli.ts",
     "lint": "eslint . --cache",
     "lint:fix": "eslint . --cache --fix",

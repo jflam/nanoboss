@@ -7,6 +7,7 @@ describe("parseCliOptions", () => {
     expect(parseCliOptions([])).toEqual({
       showToolCalls: true,
       showHelp: false,
+      serverUrl: undefined,
     });
   });
 
@@ -14,6 +15,7 @@ describe("parseCliOptions", () => {
     expect(parseCliOptions(["--no-tool-calls"])).toEqual({
       showToolCalls: false,
       showHelp: false,
+      serverUrl: undefined,
     });
   });
 
@@ -21,6 +23,23 @@ describe("parseCliOptions", () => {
     expect(parseCliOptions(["--tool-calls", "--help"])).toEqual({
       showToolCalls: true,
       showHelp: true,
+      serverUrl: undefined,
+    });
+  });
+
+  test("supports http server url", () => {
+    expect(parseCliOptions(["--server-url", "http://localhost:3000"])).toEqual({
+      showToolCalls: true,
+      showHelp: false,
+      serverUrl: "http://localhost:3000",
+    });
+  });
+
+  test("supports inline http server url", () => {
+    expect(parseCliOptions(["--server-url=http://localhost:4000"])).toEqual({
+      showToolCalls: true,
+      showHelp: false,
+      serverUrl: "http://localhost:4000",
     });
   });
 });

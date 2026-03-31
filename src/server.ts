@@ -1,18 +1,9 @@
 import * as acp from "@agentclientprotocol/sdk";
 import { Readable, Writable } from "node:stream";
 
-import { CommandContextImpl, type SessionUpdateEmitter } from "./context.ts";
-import { RunLogger } from "./logger.ts";
-import { ProcedureRegistry } from "./registry.ts";
-import { SessionStore, normalizeProcedureResult, summarizeText } from "./session-store.ts";
+import { NanoAgentBossService } from "./service.ts";
 
-interface SessionState {
-  cwd: string;
-  store: SessionStore;
-  abortController?: AbortController;
-}
-
-class QueuedSessionUpdateEmitter implements SessionUpdateEmitter {
+class QueuedSessionUpdateEmitter {
   private queue = Promise.resolve();
 
   constructor(
@@ -39,11 +30,9 @@ class QueuedSessionUpdateEmitter implements SessionUpdateEmitter {
 }
 
 class NanoAgentBoss implements acp.Agent {
-  private readonly sessions = new Map<acp.SessionId, SessionState>();
-
   constructor(
     private readonly connection: acp.AgentSideConnection,
-    private readonly registry: ProcedureRegistry,
+    private readonly service: NanoAgentBossService,
   ) {}
 
   async initialize(_params: acp.InitializeRequest): Promise<acp.InitializeResponse> {
@@ -60,24 +49,17 @@ class NanoAgentBoss implements acp.Agent {
   }
 
   async newSession(params: acp.NewSessionRequest): Promise<acp.NewSessionResponse> {
-    const sessionId = crypto.randomUUID();
-    this.sessions.set(sessionId, {
-      cwd: params.cwd,
-      store: new SessionStore({
-        sessionId,
-        cwd: params.cwd,
-      }),
-    });
+    const session = this.service.createSession({ cwd: params.cwd });
 
     await this.connection.sessionUpdate({
-      sessionId,
+      sessionId: session.sessionId,
       update: {
         sessionUpdate: "available_commands_update",
-        availableCommands: this.registry.toAvailableCommands(),
+        availableCommands: this.service.getAvailableCommands(),
       },
     });
 
-    return { sessionId };
+    return { sessionId: session.sessionId };
   }
 
   async authenticate(_params: acp.AuthenticateRequest): Promise<acp.AuthenticateResponse> {
@@ -85,114 +67,13 @@ class NanoAgentBoss implements acp.Agent {
   }
 
   async prompt(params: acp.PromptRequest): Promise<acp.PromptResponse> {
-    const session = this.sessions.get(params.sessionId);
-    if (!session) {
-      throw new Error(`Unknown session: ${params.sessionId}`);
-    }
-
-    session.abortController?.abort();
-    session.abortController = new AbortController();
-
     const emitter = new QueuedSessionUpdateEmitter(this.connection, params.sessionId);
-    const logger = new RunLogger();
-    const text = extractPromptText(params.prompt).trim();
-    const { commandName, commandPrompt } = resolveCommand(text);
-    const procedure = this.registry.get(commandName);
-    const procedureName = procedure?.name ?? "default";
-    const rootSpanId = logger.newSpan();
-    const startedAt = Date.now();
-
-    if (!procedure) {
-      emitter.emit({
-        sessionUpdate: "agent_message_chunk",
-        content: {
-          type: "text",
-          text: `Unknown command: /${commandName}\n`,
-        },
-      });
-      await emitter.flush();
-      return { stopReason: "end_turn" };
-    }
-
-    const rootCell = session.store.startCell({
-      procedure: procedureName,
-      input: commandPrompt,
-      kind: "top_level",
-    });
-    const ctx = new CommandContextImpl({
-      cwd: session.cwd,
-      logger,
-      registry: this.registry,
-      procedureName,
-      spanId: rootSpanId,
-      emitter,
-      store: session.store,
-      cell: rootCell,
-      signal: session.abortController.signal,
-    });
-
-    logger.write({
-      spanId: rootSpanId,
-      procedure: procedureName,
-      kind: "procedure_start",
-      prompt: commandPrompt,
-    });
-
-    try {
-      const rawResult = await procedure.execute(commandPrompt, ctx);
-      const result = normalizeProcedureResult(rawResult);
-      session.store.finalizeCell(rootCell, result);
-
-      logger.write({
-        spanId: rootSpanId,
-        procedure: procedureName,
-        kind: "procedure_end",
-        durationMs: Date.now() - startedAt,
-        result: result.data,
-        raw: result.display,
-      });
-
-      if (result.display) {
-        emitter.emit({
-          sessionUpdate: "agent_message_chunk",
-          content: {
-            type: "text",
-            text: result.display,
-          },
-        });
-      }
-
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      const errorText = `Error: ${message}\n`;
-
-      logger.write({
-        spanId: rootSpanId,
-        procedure: procedureName,
-        kind: "procedure_end",
-        durationMs: Date.now() - startedAt,
-        error: message,
-      });
-
-      ctx.print(errorText);
-      session.store.finalizeCell(rootCell, {
-        summary: summarizeText(errorText),
-      });
-    } finally {
-      emitter.emit({
-        sessionUpdate: "available_commands_update",
-        availableCommands: this.registry.toAvailableCommands(),
-      });
-      await emitter.flush();
-      logger.close();
-      session.abortController = undefined;
-    }
-
+    await this.service.prompt(params.sessionId, extractPromptText(params.prompt), emitter);
     return { stopReason: "end_turn" };
   }
 
   async cancel(params: acp.CancelNotification): Promise<void> {
-    this.sessions.get(params.sessionId)?.abortController?.abort();
+    this.service.cancel(params.sessionId);
   }
 }
 
@@ -203,32 +84,14 @@ function extractPromptText(prompt: acp.PromptRequest["prompt"]): string {
     .join("\n");
 }
 
-function resolveCommand(text: string): { commandName: string; commandPrompt: string } {
-  if (!text.startsWith("/")) {
-    return {
-      commandName: "default",
-      commandPrompt: text,
-    };
-  }
-
-  const [name, ...rest] = text.slice(1).split(/\s+/);
-  return {
-    commandName: name || "default",
-    commandPrompt: rest.join(" "),
-  };
-}
-
 async function main(): Promise<void> {
-  const registry = new ProcedureRegistry();
-  registry.loadBuiltins();
-  await registry.loadFromDisk();
-
+  const service = await NanoAgentBossService.create();
   const stream = acp.ndJsonStream(
     Writable.toWeb(process.stdout),
     Readable.toWeb(process.stdin),
   );
   const connection = new acp.AgentSideConnection(
-    (connection) => new NanoAgentBoss(connection, registry),
+    (connection) => new NanoAgentBoss(connection, service),
     stream,
   );
   await connection.closed;

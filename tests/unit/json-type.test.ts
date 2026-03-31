@@ -24,7 +24,10 @@ describe("jsonType", () => {
   });
 
   test("throws when called without transformed typia inputs", () => {
-    expect(() => jsonType<Answer>()).toThrow(
+    expect(() => {
+      // @ts-expect-error intentional misuse for runtime guard coverage
+      jsonType<Answer>();
+    }).toThrow(
       "jsonType(...) requires concrete schema and validator arguments",
     );
   });

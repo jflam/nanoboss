@@ -12,10 +12,22 @@ To run the ACP server directly:
 bun run server
 ```
 
-To start the local REPL client:
+To start the local REPL client against the stdio ACP server:
 
 ```bash
 bun run cli
+```
+
+To start the HTTP/SSE server foundation for shared CLI + web frontends:
+
+```bash
+bun run http
+```
+
+Then connect the CLI over HTTP/SSE:
+
+```bash
+bun run cli --server-url http://localhost:3000
 ```
 
 Tool call progress lines are shown by default. Hide them with:
