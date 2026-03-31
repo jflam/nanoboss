@@ -76,8 +76,10 @@ describeE2E("/linter fixture (real agent)", () => {
       );
       const transcript = output.join("");
 
-      expect(transcript).toContain("Fixing 2 errors in `src/alpha.ts`");
-      expect(transcript).toContain("Fixing 1 errors in `src/beta.ts`");
+      expect(transcript).toContain("Starting linter workflow...");
+      expect(transcript).toContain("Fixing 2 errors in `src/alpha.ts`...");
+      expect(transcript).toContain("Fixing 1 error in `src/beta.ts`...");
+      expect(transcript).toContain("Completed linter workflow: fixed 3 errors; 0 errors remain.");
       expect(status).toBe("");
       expect(commitCount).toBeGreaterThan(1);
     },

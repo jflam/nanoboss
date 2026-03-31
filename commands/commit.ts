@@ -6,6 +6,7 @@ export default {
   async execute(prompt, ctx) {
     const result = await ctx.callAgent(
       `Git commit the changes in ${ctx.cwd} with a descriptive message. Context: ${prompt}`,
+      { stream: false },
     );
 
     if (!result.dataRef) {

@@ -206,6 +206,7 @@ async function runLinter(
   const result = await ctx.callAgent(
     buildDiscoveryPrompt(ctx.cwd, prompt, command),
     LinterRunResultType,
+    { stream: false },
   );
 
   return expectData(result, "Linter discovery returned no data");
@@ -230,19 +231,32 @@ function buildSummaryData(linter: LinterRunResult, fixedErrors: number) {
   };
 }
 
+function pluralize(count: number, noun: string): string {
+  return `${count} ${noun}${count === 1 ? "" : "s"}`;
+}
+
 export default {
   name: "linter",
   description: "Fix all linter errors in the project",
   inputHint: "Optional focus area or instructions",
   async execute(prompt, ctx) {
     let fixedErrors = 0;
+
+    ctx.print("Starting linter workflow...\n");
     let linter = await runLinter(ctx, prompt);
 
     if (linter.status === "missing_linter" || !linter.command) {
+      ctx.print("No runnable linter found.\n");
       return buildMissingLinterResult(linter, fixedErrors);
     }
 
+    const initialGroups = groupErrorsByFile(ctx.cwd, linter.errors);
+    ctx.print(
+      `Using \`${linter.command}\`. Found ${pluralize(linter.errors.length, "error")} across ${pluralize(initialGroups.length, "file")}.\n`,
+    );
+
     if (linter.errors.length === 0) {
+      ctx.print("Repo is already lint-clean.\n");
       return {
         data: buildSummaryData(linter, fixedErrors),
         display: `Linter command \`${linter.command}\` ran cleanly. ${linter.summary}\n`,
@@ -255,7 +269,7 @@ export default {
       let fixedThisRound = 0;
 
       ctx.print(
-        `Round ${round + 1}: ${linter.errors.length} errors across ${fileGroups.length} files with \`${linter.command}\`\n`,
+        `Round ${round + 1}/${MAX_ROUNDS}: ${pluralize(linter.errors.length, "error")} across ${pluralize(fileGroups.length, "file")}.\n`,
       );
 
       for (const fileGroup of fileGroups) {
@@ -265,12 +279,13 @@ export default {
         }
 
         const beforeCount = currentGroup.errors.length;
-        ctx.print(`Fixing ${beforeCount} errors in \`${currentGroup.displayFile}\`\n`);
+        ctx.print(`Fixing ${pluralize(beforeCount, "error")} in \`${currentGroup.displayFile}\`...\n`);
 
         await ctx.callAgent(buildFixPrompt(currentGroup), { stream: false });
 
         linter = await runLinter(ctx, prompt, linter.command);
         if (linter.status === "missing_linter" || !linter.command) {
+          ctx.print("Linter stopped being runnable; stopping early.\n");
           return buildMissingLinterResult(linter, fixedErrors);
         }
 
@@ -282,11 +297,15 @@ export default {
         const resolvedCount = Math.max(0, beforeCount - afterCount);
 
         if (resolvedCount === 0) {
+          ctx.print(`No progress in \`${currentGroup.displayFile}\`.\n`);
           continue;
         }
 
         fixedThisRound += resolvedCount;
         fixedErrors += resolvedCount;
+        ctx.print(
+          `Resolved ${pluralize(resolvedCount, "error")} in \`${currentGroup.displayFile}\`; ${pluralize(linter.errors.length, "error")} remain.\n`,
+        );
         await ctx.callProcedure("commit", `linter fixes for ${currentGroup.displayFile}`);
 
         if (linter.errors.length === 0) {
@@ -295,9 +314,14 @@ export default {
       }
 
       if (fixedThisRound === 0) {
+        ctx.print("No further progress this round; stopping.\n");
         break;
       }
     }
+
+    ctx.print(
+      `Completed linter workflow: fixed ${pluralize(fixedErrors, "error")}; ${pluralize(linter.errors.length, "error")} remain.\n`,
+    );
 
     return {
       data: buildSummaryData(linter, fixedErrors),
