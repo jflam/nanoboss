@@ -48,8 +48,8 @@ interface CommandContextParams {
   cell: ActiveCell;
   signal?: AbortSignal;
   defaultConversation?: DefaultConversationSession;
-  getDefaultAgentConfig: () => DownstreamAgentConfig;
-  setDefaultAgentSelection: (selection: DownstreamAgentSelection) => DownstreamAgentConfig;
+  getDefaultAgentConfig?: () => DownstreamAgentConfig;
+  setDefaultAgentSelection?: (selection: DownstreamAgentSelection) => DownstreamAgentConfig;
   prepareDefaultPrompt?: (prompt: string) => PreparedDefaultPrompt;
 }
 
@@ -84,8 +84,10 @@ export class CommandContextImpl implements CommandContext {
     this.store = params.store;
     this.cell = params.cell;
     this.defaultConversation = params.defaultConversation;
-    this.getDefaultAgentConfigValue = params.getDefaultAgentConfig;
-    this.setDefaultAgentSelectionValue = params.setDefaultAgentSelection;
+    this.getDefaultAgentConfigValue = params.getDefaultAgentConfig
+      ?? (() => resolveDownstreamAgentConfig(this.cwd));
+    this.setDefaultAgentSelectionValue = params.setDefaultAgentSelection
+      ?? ((selection) => resolveDownstreamAgentConfig(this.cwd, selection));
     this.prepareDefaultPromptValue = params.prepareDefaultPrompt;
     this.refs = new CommandRefs(this.store, this.cwd);
     this.session = new CommandSession(this.store, this.cell.cell.cellId);

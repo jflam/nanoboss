@@ -17,8 +17,8 @@ export function buildSessionMcpServers(
   switch (params.config.provider) {
     case "claude":
     case "codex":
-      return [ensureSessionMcpHttpServer(params)];
     case "gemini":
+      return [ensureSessionMcpHttpServer(params)];
     case "copilot":
     default:
       return [buildStdioSessionMcpServer(params)];

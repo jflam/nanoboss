@@ -23,7 +23,7 @@ describe("session MCP attachment", () => {
     expect(servers[0]?.url).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/mcp$/);
   });
 
-  test("targets the same nanoboss binary via stdio for gemini", () => {
+  test("uses loopback HTTP for gemini ACP sessions", () => {
     const servers = buildSessionMcpServers({
       config: {
         provider: "gemini",
@@ -37,13 +37,9 @@ describe("session MCP attachment", () => {
 
     expect(servers).toHaveLength(1);
     expect(servers[0]).toMatchObject({
-      type: "stdio",
+      type: "http",
       name: "nanoboss-session",
     });
-    expect(servers[0]?.args).toContain("session-mcp-server");
-    expect(servers[0]?.env).toEqual(expect.arrayContaining([
-      { name: "NANOBOSS_SESSION_ID", value: "session-2" },
-      { name: "NANOBOSS_SESSION_CWD", value: process.cwd() },
-    ]));
+    expect(servers[0]?.url).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/mcp$/);
   });
 });

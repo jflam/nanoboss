@@ -54,12 +54,12 @@ describeE2E("callAgent typed (real agent)", () => {
   test(
     "rejects responses that never match the schema",
     async () => {
-      const strictType = jsonType<{ uuid: string; timestamp: number }>(
-        typia.json.schema<{ uuid: string; timestamp: number }>(),
-        typia.createValidate<{ uuid: string; timestamp: number }>(),
-      );
+      const impossibleType = {
+        schema: typia.json.schema<{ uuid: string; timestamp: number }>(),
+        validate: (_input: unknown): _input is { uuid: string; timestamp: number } => false,
+      };
 
-      await expect(callAgent("Say hello", strictType)).rejects.toThrow();
+      await expect(callAgent("Say hello", impossibleType)).rejects.toThrow();
     },
     60_000,
   );
