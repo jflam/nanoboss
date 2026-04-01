@@ -100,13 +100,21 @@ Decision:
 - full `display` should be retrievable by tool
 - it should not be injected into prompt context by default
 
-### 5. Schema/shape should be compact in prompts and queryable by tool
+### 5. Schema/shape should support duck-typed discovery
 
 Decision:
 
+- the primary goal is to give the model enough structural information to know what to ask for next
 - include only a compact inferred shape or compact schema summary in the memory preamble
 - do not dump a large JSON schema block unless it is tiny and clearly useful
 - provide a tool-based path to query schema/shape on demand
+
+The important idea here is **duck typing**, not nominal typing:
+
+- if a stored result has fields like `subject`, `critique`, and `verdict`, the model should be able to recognize it as “second-opinion-like”
+- if a stored result has fields like `command`, `errors`, and `recommendations`, the model should be able to recognize it as “linter-like”
+
+So schema/shape metadata exists primarily for affordance discovery: telling the model what fields, refs, and nested values are available.
 
 ### 6. Sync should be lazy and delta-based
 
@@ -137,14 +145,14 @@ interface ProcedureResult<T extends KernelValue = KernelValue> {
   display?: string;
   summary?: string;
   memory?: string;
-  dataSchema?: object;
+  explicitDataSchema?: object;
 }
 ```
 
 Meaning:
 
 - `memory`: compact follow-up-oriented prose suitable for later conversational grounding
-- `dataSchema`: optional runtime schema for `output.data`
+- `explicitDataSchema`: optional runtime schema for `output.data`
 
 `memory` should answer:
 
@@ -170,7 +178,7 @@ output: {
   stream?: string;
   summary?: string;
   memory?: string;
-  dataSchema?: object;
+  explicitDataSchema?: object;
 }
 ```
 
@@ -179,7 +187,8 @@ Also extend `CellSummary` or add a new summary/materializer shape so prompt sync
 - summary
 - memory
 - refs
-- compact schema/shape metadata
+- compact `dataShape` metadata
+- optional `explicitDataSchema` metadata when present
 
 Fallback rule for missing `memory`:
 
@@ -198,6 +207,16 @@ Instead:
 - procedure completion stores a durable memory card in `SessionStore`
 - session runtime tracks which cards have already been exposed to the default chat loop
 - the next `/default` turn prepends a bounded **memory update preamble** for any unsynced cards
+
+Semantically, the next `/default` submission should look like:
+
+```text
+[memory update preamble]
+
+[current user prompt]
+```
+
+This means the memory update is prepended to the prompt payload for that `/default` request, not written earlier as a fake hidden chat turn.
 
 Example preamble:
 
@@ -249,8 +268,10 @@ Minimum useful v1 surface:
 
 ### Schema / shape
 
-- either a dedicated schema lookup tool
-- or an extension of `cell_get` / `ref_stat` that can return compact schema metadata when available
+- `get_schema(cellRef | valueRef)` or equivalent support in `cell_get` / `ref_stat`
+- later, optionally `find_cells_by_shape(...)` for duck-typed discovery across prior turns
+
+The primary schema use case is structural discovery over the concrete stored `KernelValue`, not nominal type recovery.
 
 Constraints:
 
@@ -264,6 +285,8 @@ Constraints:
 ## 5. Split prompt grounding from exact retrieval
 
 A ref by itself is not enough for the downstream model unless `nanoboss` resolves it or exposes it through tools.
+
+This is fundamentally a **duck-typing / discoverability** problem: the model needs enough structural information to know what to ask for next.
 
 So the bridge should split responsibilities deliberately:
 
@@ -291,26 +314,40 @@ This gives the model a bounded index plus exact retrieval when needed.
 
 ---
 
-## 6. Runtime schema strategy: infer first, allow explicit schema later
+## 6. Runtime shape strategy: infer concrete `KernelValue` shape first
 
-Generic `T` is not available at runtime for arbitrary procedure outputs.
+The primary metadata here is the **concrete derived shape of the stored `KernelValue`**.
+
+Call that inferred structure `dataShape`.
+
+That shape tells the model what is available:
+
+- which fields exist
+- which fields are refs
+- what nested objects/arrays exist
+- which scalars or enum-like values are present
+
+This is primarily for duck-typed discovery, not for recovering an original TypeScript type name.
 
 So schema support should be two-tiered:
 
 ### Phase 1
 
-Infer lightweight shape from the stored value:
+Infer lightweight shape directly from the stored value:
 
 - scalar type
 - object keys
 - array/object nesting
-- enums when obvious from current value
+- enum-like values when obvious from current value
+- ref positions such as `ValueRef` / `CellRef`
+
+This is enough to help the model plan follow-up retrieval.
 
 ### Phase 2
 
-Allow procedures to attach true runtime `dataSchema` when they have one.
+Allow procedures to attach true runtime `explicitDataSchema` when they have one.
 
-This keeps the system useful immediately without blocking on universal runtime typing.
+That is additive. The inferred concrete `dataShape` remains the primary baseline because it always exists for stored `KernelValue` data.
 
 ---
 
@@ -392,9 +429,9 @@ Update:
 Changes:
 
 - add `memory?: string` to `ProcedureResult`
-- add `dataSchema?: object` to `ProcedureResult`
+- add `explicitDataSchema?: object` to `ProcedureResult`
 - persist both on `CellRecord.output`
-- surface them through `CellSummary` or a new summary/materializer shape
+- surface `dataShape` and optional `explicitDataSchema` through `CellSummary` or a new summary/materializer shape
 - preserve backward compatibility when older cells lack these fields
 
 ## Phase 2: build memory-card materialization
@@ -405,7 +442,9 @@ Add a helper, e.g. `src/memory-cards.ts`, that:
 - selects only top-level non-default completed procedure cells
 - skips nested `callAgent` cells and internal child procedure noise
 - computes a bounded set of cards to expose
-- infers `dataShape` from `output.data` when no `dataSchema` exists
+- infers `dataShape` from `output.data`
+- includes enough structural information for duck-typed discovery without dumping full data
+- includes `explicitDataSchema` only when a procedure provided one
 
 Suggested shape:
 
@@ -419,6 +458,7 @@ interface ProcedureMemoryCard {
   dataRef?: ValueRef;
   displayRef?: ValueRef;
   dataShape?: object;
+  explicitDataSchema?: object;
   createdAt: string;
 }
 ```
@@ -454,6 +494,8 @@ Responsibilities:
 - expose session discovery, ref-reading, and schema/shape tools
 - resolve only within the current `sessionId`
 - serialize safely and provide previews for large values
+- support `get_schema(...)` over stored cells/refs
+- later optionally support shape-based discovery such as `find_cells_by_shape(...)`
 - support either:
   - in-process loopback HTTP MCP owned by the current `nanoboss` process, or
   - stdio MCP mode exposed by the same `nanoboss` binary
@@ -514,7 +556,7 @@ Each should provide:
 
 #### `SessionStore`
 
-- persists `memory` and `dataSchema`
+- persists `memory` and optional `explicitDataSchema`
 - loads old cells without them
 - surfaces them through summary/materializer helpers
 
@@ -538,7 +580,8 @@ Each should provide:
 - `ref_read` follows nested refs correctly
 - `ref_stat` returns preview/size/type
 - `ref_write_to_file` materializes referenced values correctly
-- schema lookup returns compact schema/shape information when available
+- `get_schema(...)` returns compact schema/shape information derived from stored `KernelValue` data
+- if implemented, shape-based discovery returns matching cell ids for duck-typed queries
 
 ### Integration tests
 
@@ -589,7 +632,7 @@ Implement the smallest end-to-end vertical path:
    - `cell_get`
    - `ref_read`
    - `ref_stat`
-   - compact schema/shape lookup support
+   - `get_schema(...)` or equivalent compact schema/shape lookup over stored `KernelValue` data
 5. add provider-aware MCP attachment helpers that always target the same `nanoboss` executable
 6. wire the MCP server into `/default` ACP sessions
 7. prepend unsynced memory cards to the next `/default` prompt
