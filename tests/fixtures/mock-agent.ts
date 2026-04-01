@@ -78,6 +78,34 @@ class MockAgent implements acp.Agent {
     session.turns.push({ role: "assistant", text });
     persistSession(session);
 
+    if (prompt.toLowerCase().includes("nested tool trace demo")) {
+      const toolCallId = crypto.randomUUID();
+      await this.connection.sessionUpdate({
+        sessionId: params.sessionId,
+        update: {
+          sessionUpdate: "tool_call",
+          toolCallId,
+          title: "Mock read README.md",
+          kind: "read",
+          status: "in_progress",
+          rawInput: {
+            path: "README.md",
+          },
+        },
+      });
+      await this.connection.sessionUpdate({
+        sessionId: params.sessionId,
+        update: {
+          sessionUpdate: "tool_call_update",
+          toolCallId,
+          status: "completed",
+          rawOutput: {
+            path: "README.md",
+          },
+        },
+      });
+    }
+
     await this.connection.sessionUpdate({
       sessionId: params.sessionId,
       update: {
@@ -131,6 +159,24 @@ async function answerForPrompt(prompt: string, session: StoredSession): Promise<
 
   if (normalized.includes("first 3 prime numbers")) {
     return "2\n3\n5";
+  }
+
+  if (normalized.includes("markdown demo")) {
+    return [
+      "# Demo",
+      "",
+      "- one",
+      "- two",
+      "",
+      "```ts",
+      "const x = 1",
+      "```",
+      "",
+    ].join("\n");
+  }
+
+  if (normalized.includes("nested tool trace demo")) {
+    return "hidden nested output";
   }
 
   return `mock:${prompt.trim()}`;

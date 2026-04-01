@@ -21,6 +21,7 @@
   "dependencies": {
     "@agentclientprotocol/sdk": "^0.17.1",
     "@ryoppippi/unplugin-typia": "^2.6.5",
+    "markdansi": "^0.2.1",
     "typia": "^12.0.1"
   },
   "devDependencies": {

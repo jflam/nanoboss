@@ -155,6 +155,7 @@ import {
   sendSessionPrompt,
   startSessionEventStream,
 } from "./src/http-client.ts";
+import { StreamingTerminalMarkdownRenderer } from "./src/terminal-markdown.ts";
 import { parseCliOptions } from "./src/cli-options.ts";
 import {
   buildModelCommand,
@@ -182,6 +183,11 @@ const LOCAL_CLI_COMMANDS = ["/new", "/end", "/quit", "/exit"] as const;
 class OutputClient {
   availableCommands: string[] = [...LOCAL_CLI_COMMANDS];
   private readonly toolTitles = new Map<string, string>();
+  private readonly responseWaiters: Array<() => void> = [];
+  private readonly runStartedAt = new Map<string, number>();
+  private readonly runLastHeartbeatLineAt = new Map<string, number>();
+  private markdownRenderer?: StreamingTerminalMarkdownRenderer;
+  private responseActive = false;
   private outputEndsWithNewline = true;
   private currentAgentBanner = getDefaultAgentBanner(process.cwd());
   private currentAgentSelection = toDownstreamAgentSelection(
@@ -247,8 +253,20 @@ class OutputClient {
       return;
     }
 
+    if (event.type === "run_started") {
+      this.runStartedAt.set(event.data.runId, Date.parse(event.data.startedAt) || Date.now());
+      this.runLastHeartbeatLineAt.delete(event.data.runId);
+      this.beginResponse();
+      return;
+    }
+
     if (isTextDeltaEvent(event)) {
       this.writeOutput(event.data.text);
+      return;
+    }
+
+    if (event.type === "run_heartbeat") {
+      this.handleRunHeartbeat(event.data.runId, event.data.procedure, event.data.at);
       return;
     }
 
@@ -283,7 +301,17 @@ class OutputClient {
       return;
     }
 
+    if (event.type === "run_completed") {
+      this.runStartedAt.delete(event.data.runId);
+      this.runLastHeartbeatLineAt.delete(event.data.runId);
+      this.endResponse();
+      return;
+    }
+
     if (isRunFailedEvent(event)) {
+      this.runStartedAt.delete(event.data.runId);
+      this.runLastHeartbeatLineAt.delete(event.data.runId);
+      this.endResponse();
       this.writeToolLine(`[run] ${event.data.error}`);
     }
   }
@@ -321,13 +349,76 @@ class OutputClient {
     return [matches.length > 0 ? matches : this.availableCommands, line];
   };
 
+  beginResponse(): void {
+    this.endResponse();
+    this.markdownRenderer = new StreamingTerminalMarkdownRenderer();
+    this.responseActive = true;
+  }
+
+  endResponse(): void {
+    if (this.markdownRenderer) {
+      const tail = this.markdownRenderer.finish();
+      this.markdownRenderer = undefined;
+
+      if (tail.length > 0) {
+        process.stdout.write(tail);
+        this.outputEndsWithNewline = tail.endsWith("\n");
+      }
+    }
+
+    if (!this.responseActive) {
+      return;
+    }
+
+    this.responseActive = false;
+    for (const waiter of this.responseWaiters.splice(0)) {
+      waiter();
+    }
+  }
+
+  waitForResponseEnd(): Promise<void> {
+    if (!this.responseActive) {
+      return Promise.resolve();
+    }
+
+    return new Promise((resolve) => {
+      this.responseWaiters.push(resolve);
+    });
+  }
+
+  private handleRunHeartbeat(runId: string, procedure: string, at: string): void {
+    const now = Date.parse(at) || Date.now();
+    const lastPrintedAt = this.runLastHeartbeatLineAt.get(runId) ?? 0;
+    if (now - lastPrintedAt < 1_000) {
+      return;
+    }
+
+    this.runLastHeartbeatLineAt.set(runId, now);
+    const startedAt = this.runStartedAt.get(runId) ?? now;
+    const elapsedSeconds = Math.max(1, Math.round((now - startedAt) / 1_000));
+    this.writeToolLine(`[run] ${procedure} still working (${elapsedSeconds}s)`);
+  }
+
   private writeOutput(text: string): void {
-    process.stdout.write(text);
-    this.outputEndsWithNewline = text.endsWith("\n");
+    if (!this.markdownRenderer) {
+      process.stdout.write(text);
+      this.outputEndsWithNewline = text.endsWith("\n");
+      return;
+    }
+
+    const rendered = this.markdownRenderer.push(text);
+    if (rendered.length === 0) {
+      return;
+    }
+
+    process.stdout.write(rendered);
+    this.outputEndsWithNewline = rendered.endsWith("\n");
   }
 
   writeLineBreak(): void {
-    this.writeOutput("\n");
+    if (!this.outputEndsWithNewline) {
+      this.writeOutput("\n");
+    }
   }
 
   writeStatusLine(text: string): void {
@@ -440,15 +531,20 @@ async function runAcpCli(showToolCalls: boolean): Promise<void> {
         continue;
       }
 
-      await connection.prompt({
-        sessionId: session.sessionId,
-        prompt: [
-          {
-            type: "text",
-            text: prompt,
-          },
-        ],
-      });
+      client.beginResponse();
+      try {
+        await connection.prompt({
+          sessionId: session.sessionId,
+          prompt: [
+            {
+              type: "text",
+              text: prompt,
+            },
+          ],
+        });
+      } finally {
+        client.endResponse();
+      }
       client.writeLineBreak();
     }
   } finally {
@@ -539,6 +635,7 @@ async function runHttpCli(serverUrl: string, showToolCalls: boolean): Promise<vo
       await sendSessionPrompt(serverUrl, session.sessionId, prompt);
       const runId = await tracker.waitForNextRunStart();
       await tracker.waitForRunCompletion(runId);
+      await client.waitForResponseEnd();
       client.writeLineBreak();
     }
   } finally {

@@ -150,14 +150,7 @@ export class CommandContextImpl implements CommandContext {
         namedRefs,
         signal: this.signal,
         onUpdate: async (update) => {
-          if (
-            options?.stream !== false &&
-            (
-              update.sessionUpdate === "agent_message_chunk" ||
-              update.sessionUpdate === "tool_call" ||
-              update.sessionUpdate === "tool_call_update"
-            )
-          ) {
+          if (shouldForwardNestedAgentUpdate(update, options?.stream !== false)) {
             this.emitter.emit(update);
           }
         },
@@ -496,6 +489,17 @@ function resolveNamedRefs(
 
 function isValueRef(value: CellRef | ValueRef): value is ValueRef {
   return "path" in value;
+}
+
+function shouldForwardNestedAgentUpdate(
+  update: acp.SessionUpdate,
+  streamText: boolean,
+): boolean {
+  if (update.sessionUpdate === "agent_message_chunk") {
+    return streamText;
+  }
+
+  return update.sessionUpdate === "tool_call" || update.sessionUpdate === "tool_call_update";
 }
 
 function collectStreamText(updates: acp.SessionUpdate[]): string | undefined {

@@ -94,3 +94,26 @@ test("/exit is accepted as an exit alias", async () => {
     }
   }
 }, 20_000);
+
+test("renders markdown agent output through the terminal markdown renderer", async () => {
+  const cli = spawnCli();
+
+  try {
+    await waitForContains(cli.stdout, "> ");
+    cli.process.stdin.write("markdown demo\n");
+    await waitForContains(cli.stdout, "const x = 1");
+
+    const stdout = cli.stdout();
+    expect(stdout).toContain("Demo");
+    expect(stdout).toContain("- one");
+    expect(stdout).toContain("const x = 1");
+    expect(stdout).not.toContain("# Demo");
+    expect(stdout).not.toContain("```ts");
+    expect(stdout).not.toContain("```");
+  } finally {
+    if (cli.process.exitCode === null) {
+      cli.process.kill();
+      await once(cli.process, "exit");
+    }
+  }
+}, 20_000);
