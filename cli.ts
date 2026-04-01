@@ -1,5 +1,6 @@
 import * as acp from "@agentclientprotocol/sdk";
 import { spawn, type ChildProcessByStdio } from "node:child_process";
+import { once } from "node:events";
 import readline from "node:readline/promises";
 import { Readable, Writable } from "node:stream";
 
@@ -176,8 +177,10 @@ import {
 import { resolveSelfCommand } from "./src/self-command.ts";
 import type { DownstreamAgentSelection } from "./src/types.ts";
 
+const LOCAL_CLI_COMMANDS = ["/new", "/end", "/quit", "/exit"] as const;
+
 class OutputClient {
-  availableCommands: string[] = [];
+  availableCommands: string[] = [...LOCAL_CLI_COMMANDS];
   private readonly toolTitles = new Map<string, string>();
   private outputEndsWithNewline = true;
   private currentAgentBanner = getDefaultAgentBanner(process.cwd());
@@ -286,7 +289,10 @@ class OutputClient {
   }
 
   setCommands(commands: FrontendCommand[]): void {
-    this.availableCommands = commands.map((command) => `/${command.name}`);
+    this.availableCommands = uniqueStrings([
+      ...commands.map((command) => `/${command.name}`),
+      ...LOCAL_CLI_COMMANDS,
+    ]);
   }
 
   setCurrentAgentBanner(text: string): void {
@@ -322,6 +328,10 @@ class OutputClient {
 
   writeLineBreak(): void {
     this.writeOutput("\n");
+  }
+
+  writeStatusLine(text: string): void {
+    this.writeToolLine(text);
   }
 
   private writeToolLine(text: string): void {
@@ -386,7 +396,7 @@ async function runAcpCli(showToolCalls: boolean): Promise<void> {
     clientCapabilities: {},
   });
 
-  const session = await createAcpSession(
+  let session = await createAcpSession(
     connection,
     process.cwd(),
     client.getCurrentAgentSelection(),
@@ -411,8 +421,18 @@ async function runAcpCli(showToolCalls: boolean): Promise<void> {
       if (trimmed.length === 0) {
         continue;
       }
-      if (trimmed === "exit" || trimmed === "quit") {
+      if (isExitRequest(trimmed)) {
+        announceSessionId(client, session.sessionId);
         break;
+      }
+      if (isNewSessionRequest(trimmed)) {
+        session = await createAcpSession(
+          connection,
+          process.cwd(),
+          client.getCurrentAgentSelection(),
+        );
+        client.writeStatusLine(`[session] new ${session.sessionId}`);
+        continue;
       }
 
       const prompt = await maybeResolveInteractiveCommand(line, rl, client);
@@ -433,14 +453,17 @@ async function runAcpCli(showToolCalls: boolean): Promise<void> {
     }
   } finally {
     rl.close();
-    server.kill();
+    if (server.exitCode === null) {
+      server.kill();
+      await once(server, "exit");
+    }
   }
 }
 
 async function runHttpCli(serverUrl: string, showToolCalls: boolean): Promise<void> {
   const client = new OutputClient({ showToolCalls });
-  const tracker = new HttpRunTracker();
-  const session = await createHttpSession(
+  let tracker = new HttpRunTracker();
+  let session = await createHttpSession(
     serverUrl,
     process.cwd(),
     client.getCurrentAgentSelection(),
@@ -450,7 +473,7 @@ async function runHttpCli(serverUrl: string, showToolCalls: boolean): Promise<vo
   client.setCurrentAgentSelection(session.defaultAgentSelection);
   writeStartupBanner(`${session.buildLabel} ${session.agentLabel}`);
 
-  const stream = startSessionEventStream({
+  let stream = startSessionEventStream({
     baseUrl: serverUrl,
     sessionId: session.sessionId,
     onEvent: (event) => {
@@ -477,8 +500,35 @@ async function runHttpCli(serverUrl: string, showToolCalls: boolean): Promise<vo
       if (trimmed.length === 0) {
         continue;
       }
-      if (trimmed === "exit" || trimmed === "quit") {
+      if (isExitRequest(trimmed)) {
+        announceSessionId(client, session.sessionId);
         break;
+      }
+      if (isNewSessionRequest(trimmed)) {
+        stream.close();
+        tracker = new HttpRunTracker();
+        session = await createHttpSession(
+          serverUrl,
+          process.cwd(),
+          client.getCurrentAgentSelection(),
+        );
+        client.setCommands(session.commands);
+        client.setCurrentAgentBanner(session.agentLabel);
+        client.setCurrentAgentSelection(session.defaultAgentSelection);
+        stream = startSessionEventStream({
+          baseUrl: serverUrl,
+          sessionId: session.sessionId,
+          onEvent: (event) => {
+            tracker.observe(event);
+            client.handleFrontendEvent(event);
+          },
+          onError: (error) => {
+            const message = error instanceof Error ? error.message : String(error);
+            process.stderr.write(`[stream] ${message}\n`);
+          },
+        });
+        client.writeStatusLine(`[session] new ${session.sessionId}`);
+        continue;
       }
 
       const prompt = await maybeResolveInteractiveCommand(line, rl, client);
@@ -511,6 +561,22 @@ async function createAcpSession(
         }
       : undefined,
   });
+}
+
+function isExitRequest(trimmed: string): boolean {
+  return trimmed === "exit" || trimmed === "quit" || trimmed === "/end" || trimmed === "/quit" || trimmed === "/exit";
+}
+
+function isNewSessionRequest(trimmed: string): boolean {
+  return trimmed === "/new";
+}
+
+function announceSessionId(client: OutputClient, sessionId: string): void {
+  client.writeStatusLine(`nanoboss session id: ${sessionId}`);
+}
+
+function uniqueStrings(values: string[]): string[] {
+  return [...new Set(values)];
 }
 
 async function maybeResolveInteractiveCommand(
