@@ -182,7 +182,8 @@ const LOCAL_CLI_COMMANDS = ["/new", "/end", "/quit", "/exit"] as const;
 
 class OutputClient {
   availableCommands: string[] = [...LOCAL_CLI_COMMANDS];
-  private readonly toolTitles = new Map<string, string>();
+  private readonly toolMeta = new Map<string, { title: string; depth: number; isWrapper: boolean }>();
+  private readonly activeWrapperToolCallIds: string[] = [];
   private readonly responseWaiters: Array<() => void> = [];
   private readonly runStartedAt = new Map<string, number>();
   private readonly runLastHeartbeatLineAt = new Map<string, number>();
@@ -226,13 +227,12 @@ class OutputClient {
         break;
       case "tool_call":
         if (this.options.showToolCalls) {
-          this.toolTitles.set(update.toolCallId, update.title);
-          this.writeToolLine(`[tool] ${update.title}`);
+          this.startToolCall(update.toolCallId, update.title);
         }
         break;
       case "tool_call_update":
         if (this.options.showToolCalls && update.status) {
-          this.handleToolCallUpdate(update);
+          this.updateToolCall(update.toolCallId, update.status, update.title ?? undefined);
         }
         break;
       case "available_commands_update":
@@ -272,8 +272,7 @@ class OutputClient {
 
     if (isToolStartedEvent(event)) {
       if (this.options.showToolCalls) {
-        this.toolTitles.set(event.data.toolCallId, event.data.title);
-        this.writeToolLine(`[tool] ${event.data.title}`);
+        this.startToolCall(event.data.toolCallId, event.data.title);
       }
       return;
     }
@@ -283,21 +282,7 @@ class OutputClient {
         return;
       }
 
-      const title = event.data.title ?? this.toolTitles.get(event.data.toolCallId) ?? event.data.toolCallId;
-      if (event.data.status === "completed") {
-        this.toolTitles.delete(event.data.toolCallId);
-        return;
-      }
-      if (event.data.status === "pending") {
-        return;
-      }
-      if (event.data.status === "failed") {
-        this.toolTitles.delete(event.data.toolCallId);
-        this.writeToolLine(`[tool] ${title} failed`);
-        return;
-      }
-
-      this.writeToolLine(`[tool] ${title} ${event.data.status}`);
+      this.updateToolCall(event.data.toolCallId, event.data.status, event.data.title);
       return;
     }
 
@@ -431,25 +416,68 @@ class OutputClient {
     this.outputEndsWithNewline = true;
   }
 
-  private handleToolCallUpdate(update: Extract<acp.SessionUpdate, { sessionUpdate: "tool_call_update" }>): void {
-    const title = update.title ?? this.toolTitles.get(update.toolCallId) ?? update.toolCallId;
+  private startToolCall(toolCallId: string, title: string): void {
+    const depth = this.activeWrapperToolCallIds.length;
+    const isWrapper = isWrapperToolTitle(title);
+    this.toolMeta.set(toolCallId, { title, depth, isWrapper });
+    this.writeToolLine(formatToolTraceLine(depth, `[tool] ${title}`));
 
-    if (update.status === "completed") {
-      this.toolTitles.delete(update.toolCallId);
+    if (isWrapper) {
+      this.activeWrapperToolCallIds.push(toolCallId);
+    }
+  }
+
+  private updateToolCall(toolCallId: string, status: string, title?: string): void {
+    const existing = this.toolMeta.get(toolCallId);
+    const resolvedTitle = title ?? existing?.title ?? toolCallId;
+    const resolvedDepth = existing?.depth ?? this.activeWrapperToolCallIds.length;
+    const isWrapper = existing?.isWrapper ?? isWrapperToolTitle(resolvedTitle);
+
+    this.toolMeta.set(toolCallId, {
+      title: resolvedTitle,
+      depth: resolvedDepth,
+      isWrapper,
+    });
+
+    if (status === "completed") {
+      this.finishToolCall(toolCallId);
       return;
     }
 
-    if (update.status === "pending") {
+    if (status === "pending") {
       return;
     }
 
-    if (update.status === "failed") {
-      this.toolTitles.delete(update.toolCallId);
-      this.writeToolLine(`[tool] ${title} failed`);
+    if (status === "failed") {
+      this.writeToolLine(formatToolTraceLine(resolvedDepth, `[tool] ${resolvedTitle} failed`));
+      this.finishToolCall(toolCallId);
       return;
     }
 
-    this.writeToolLine(`[tool] ${title} ${update.status}`);
+    this.writeToolLine(formatToolTraceLine(resolvedDepth, `[tool] ${resolvedTitle} ${status}`));
+  }
+
+  private finishToolCall(toolCallId: string): void {
+    const existing = this.toolMeta.get(toolCallId);
+    if (existing?.isWrapper) {
+      removeFirstMatch(this.activeWrapperToolCallIds, toolCallId);
+    }
+    this.toolMeta.delete(toolCallId);
+  }
+}
+
+function isWrapperToolTitle(title: string): boolean {
+  return title.startsWith("callAgent") || title.startsWith("defaultSession:");
+}
+
+function formatToolTraceLine(depth: number, text: string): string {
+  return `${"│ ".repeat(depth)}${text}`;
+}
+
+function removeFirstMatch(values: string[], needle: string): void {
+  const index = values.indexOf(needle);
+  if (index >= 0) {
+    values.splice(index, 1);
   }
 }
 

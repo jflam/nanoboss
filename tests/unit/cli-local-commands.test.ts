@@ -117,3 +117,22 @@ test("renders markdown agent output through the terminal markdown renderer", asy
     }
   }
 }, 20_000);
+
+test("renders nested tool calls with rails under their parent wrapper", async () => {
+  const cli = spawnCli();
+
+  try {
+    await waitForContains(cli.stdout, "> ");
+    cli.process.stdin.write("nested tool trace demo\n");
+    await waitForContains(cli.stderr, "[tool] defaultSession: nested tool trace demo");
+    await waitForContains(cli.stderr, "│ [tool] Mock read README.md");
+
+    expect(cli.stderr()).toContain("[tool] defaultSession: nested tool trace demo");
+    expect(cli.stderr()).toContain("│ [tool] Mock read README.md");
+  } finally {
+    if (cli.process.exitCode === null) {
+      cli.process.kill();
+      await once(cli.process, "exit");
+    }
+  }
+}, 20_000);
