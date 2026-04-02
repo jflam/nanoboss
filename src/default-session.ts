@@ -1,10 +1,11 @@
-import * as acp from "@agentclientprotocol/sdk";
-import { appendFileSync, mkdirSync } from "node:fs";
-import { spawn, type ChildProcessByStdio } from "node:child_process";
-import { join } from "node:path";
-import { Readable, Writable } from "node:stream";
+import type * as acp from "@agentclientprotocol/sdk";
 
-import { getAgentTranscriptDir } from "./config.ts";
+import {
+  applyAcpSessionConfig,
+  closeAcpConnection,
+  openAcpConnection,
+  type OpenAcpConnection,
+} from "./acp-runtime.ts";
 import { buildSessionMcpServers } from "./mcp-attachment.ts";
 import type { CallAgentOptions, DownstreamAgentConfig } from "./types.ts";
 
@@ -19,17 +20,6 @@ interface DefaultSessionPromptResult {
   updates: acp.SessionUpdate[];
   durationMs: number;
 }
-
-interface OpenConnectionState {
-  child: ChildProcessByStdio<Writable, Readable, Readable>;
-  connection: acp.ClientSideConnection;
-  capabilities?: acp.AgentCapabilities;
-  cwd: string;
-  transcriptPath: string;
-  setSessionUpdateHandler(handler: SessionUpdateHandler | undefined): void;
-}
-
-type SessionUpdateHandler = (params: acp.SessionNotification) => Promise<void> | void;
 
 interface PromptCollector {
   raw: string;
@@ -132,9 +122,8 @@ class PersistentAcpSession {
   private closed = false;
 
   private constructor(
-    private readonly state: OpenConnectionState,
+    private readonly state: OpenAcpConnection,
     readonly sessionId: acp.SessionId,
-    private readonly config: DownstreamAgentConfig,
   ) {
     this.state.setSessionUpdateHandler((params) => this.handleSessionUpdate(params));
   }
@@ -144,7 +133,7 @@ class PersistentAcpSession {
     sessionId: string,
     rootDir?: string,
   ): Promise<PersistentAcpSession> {
-    const state = await openConnection(config);
+    const state = await openAcpConnection(config);
 
     try {
       const session = await state.connection.newSession({
@@ -156,11 +145,11 @@ class PersistentAcpSession {
           rootDir,
         }),
       });
-      const runtime = new PersistentAcpSession(state, session.sessionId, config);
-      await runtime.applySessionConfig();
+      const runtime = new PersistentAcpSession(state, session.sessionId);
+      await applyAcpSessionConfig(state.connection, session.sessionId, config);
       return runtime;
     } catch (error) {
-      closeOpenConnection(state);
+      closeAcpConnection(state);
       throw error;
     }
   }
@@ -171,11 +160,11 @@ class PersistentAcpSession {
     nanobossSessionId: string,
     rootDir?: string,
   ): Promise<PersistentAcpSession | undefined> {
-    const state = await openConnection(config);
+    const state = await openAcpConnection(config);
 
     try {
       if (!state.capabilities?.loadSession) {
-        closeOpenConnection(state);
+        closeAcpConnection(state);
         return undefined;
       }
 
@@ -190,11 +179,11 @@ class PersistentAcpSession {
         sessionId,
       });
 
-      const runtime = new PersistentAcpSession(state, sessionId, config);
-      await runtime.applySessionConfig();
+      const runtime = new PersistentAcpSession(state, sessionId);
+      await applyAcpSessionConfig(state.connection, sessionId, config);
       return runtime;
     } catch {
-      closeOpenConnection(state);
+      closeAcpConnection(state);
       return undefined;
     }
   }
@@ -257,36 +246,14 @@ class PersistentAcpSession {
     }
 
     this.closed = true;
-    this.state.setSessionUpdateHandler(undefined);
-    this.state.child.kill();
-  }
-
-  private async applySessionConfig(): Promise<void> {
-    if (this.config.model) {
-      await this.state.connection.unstable_setSessionModel({
-        sessionId: this.sessionId,
-        modelId: this.config.model,
-      });
-    }
-
-    if (this.config.reasoningEffort) {
-      await this.state.connection.setSessionConfigOption({
-        sessionId: this.sessionId,
-        configId: "reasoning_effort",
-        value: this.config.reasoningEffort,
-      });
-    }
+    closeAcpConnection(this.state);
   }
 
   private async handleSessionUpdate(params: acp.SessionNotification): Promise<void> {
-    appendAgentTranscript(
-      this.state.transcriptPath,
-      JSON.stringify({
-        timestamp: new Date().toISOString(),
-        event: "session_update",
-        update: params.update,
-      }),
-    );
+    this.state.writeEvent({
+      event: "session_update",
+      update: params.update,
+    });
 
     if (params.sessionId !== this.sessionId || !this.activeCollector) {
       return;
@@ -303,116 +270,6 @@ class PersistentAcpSession {
 
     await this.activeCollector.onUpdate?.(params.update);
   }
-}
-
-async function openConnection(config: DownstreamAgentConfig): Promise<OpenConnectionState> {
-  const cwd = config.cwd ?? process.cwd();
-  const transcriptPath = createTranscriptPath();
-  let sessionUpdateHandler: SessionUpdateHandler | undefined;
-
-  mkdirSync(getAgentTranscriptDir(), { recursive: true });
-  appendAgentTranscript(
-    transcriptPath,
-    JSON.stringify({
-      timestamp: new Date().toISOString(),
-      event: "spawn",
-      provider: config.provider,
-      model: config.model,
-      reasoningEffort: config.reasoningEffort,
-      command: config.command,
-      args: config.args,
-      cwd,
-    }),
-  );
-
-  const child: ChildProcessByStdio<Writable, Readable, Readable> = spawn(
-    config.command,
-    config.args,
-    {
-      cwd,
-      env: {
-        ...process.env,
-        ...config.env,
-      },
-      stdio: ["pipe", "pipe", "pipe"],
-    },
-  );
-
-  child.stderr.on("data", (chunk: Buffer | string) => {
-    appendAgentTranscript(
-      transcriptPath,
-      JSON.stringify({
-        timestamp: new Date().toISOString(),
-        stream: "stderr",
-        text: chunk.toString(),
-      }),
-    );
-  });
-
-  const stream = acp.ndJsonStream(
-    Writable.toWeb(child.stdin),
-    Readable.toWeb(child.stdout),
-  );
-
-  const client: acp.Client = {
-    async requestPermission(params) {
-      const selected =
-        params.options.find((option) => option.kind.startsWith("allow")) ??
-        params.options[0];
-
-      if (!selected) {
-        return { outcome: { outcome: "cancelled" } };
-      }
-
-      appendAgentTranscript(
-        transcriptPath,
-        JSON.stringify({
-          timestamp: new Date().toISOString(),
-          event: "permission",
-          toolCall: params.toolCall,
-          selected: selected.optionId,
-        }),
-      );
-
-      return {
-        outcome: {
-          outcome: "selected",
-          optionId: selected.optionId,
-        },
-      };
-    },
-    async sessionUpdate(params) {
-      await sessionUpdateHandler?.(params);
-    },
-  };
-
-  const connection = new acp.ClientSideConnection(() => client, stream);
-
-  try {
-    const initialized = await connection.initialize({
-      protocolVersion: acp.PROTOCOL_VERSION,
-      clientCapabilities: {},
-    });
-
-    return {
-      child,
-      connection,
-      capabilities: initialized.agentCapabilities,
-      cwd,
-      transcriptPath,
-      setSessionUpdateHandler(handler) {
-        sessionUpdateHandler = handler;
-      },
-    };
-  } catch (error) {
-    child.kill();
-    throw error;
-  }
-}
-
-function closeOpenConnection(state: OpenConnectionState): void {
-  state.setSessionUpdateHandler(undefined);
-  state.child.kill();
 }
 
 function sameAgentConfig(left: DownstreamAgentConfig, right: DownstreamAgentConfig): boolean {
@@ -447,10 +304,3 @@ function sameStringRecord(
   );
 }
 
-function createTranscriptPath(): string {
-  return join(getAgentTranscriptDir(), `${crypto.randomUUID()}.jsonl`);
-}
-
-function appendAgentTranscript(path: string, line: string): void {
-  appendFileSync(path, `${line}\n`, "utf8");
-}

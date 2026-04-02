@@ -28,6 +28,13 @@ import type {
 
 type ActiveCell = ReturnType<SessionStore["startCell"]>;
 
+interface StartedAgentRun {
+  childSpanId: string;
+  startedAt: number;
+  toolCallId: string;
+  childCell: ActiveCell;
+}
+
 export interface SessionUpdateEmitter {
   emit(update: acp.SessionUpdate): void;
   flush(): Promise<void>;
@@ -121,40 +128,16 @@ export class CommandContextImpl implements CommandContext {
       ? descriptorOrOptions
       : undefined;
     const options = (descriptor ? maybeOptions : descriptorOrOptions) as CommandCallAgentOptions | undefined;
-    const childSpanId = this.logger.newSpan(this.spanId);
-    const startedAt = Date.now();
-    const toolCallId = crypto.randomUUID();
-    const agentLabel = formatAgentLabel(options?.agent);
-    const childCell = this.store.startCell({
-      procedure: "callAgent",
-      input: prompt,
-      kind: "agent",
-      parentCellId: this.cell.cell.cellId,
-    });
-    const namedRefs = resolveNamedRefs(this.store, options?.refs);
-
-    this.logger.write({
-      spanId: childSpanId,
-      parentSpanId: this.spanId,
-      procedure: this.procedureName,
-      kind: "agent_start",
-      prompt,
-      agentProvider: options?.agent?.provider,
-      agentModel: options?.agent?.model,
-    });
-
-    this.emitter.emit({
-      sessionUpdate: "tool_call",
-      toolCallId,
-      title: `callAgent${agentLabel}: ${summarize(prompt)}`,
-      kind: "other",
-      status: "pending",
+    const started = this.beginAgentRun(prompt, {
+      title: `callAgent${formatAgentLabel(options?.agent)}: ${summarize(prompt)}`,
       rawInput: {
         prompt,
         agent: options?.agent,
         refs: options?.refs,
       },
+      agent: options?.agent,
     });
+    const namedRefs = resolveNamedRefs(this.store, options?.refs);
 
     try {
       const result = await invokeAgent(prompt, descriptor, {
@@ -175,63 +158,18 @@ export class CommandContextImpl implements CommandContext {
         },
       });
 
-      const finalized = this.store.finalizeCell(childCell, {
+      return this.completeAgentRun(started, {
         data: result.data,
-        display: result.raw,
+        raw: result.raw,
+        updates: result.updates,
+        durationMs: result.durationMs,
+        logFile: result.logFile,
         summary: summarizeAgentResult(result.data, result.raw),
-      }, {
-        stream: options?.stream === false ? undefined : collectStreamText(result.updates),
-        raw: result.raw,
+        streamText: options?.stream !== false,
+        agent: options?.agent,
       });
-
-      this.logger.write({
-        spanId: childSpanId,
-        parentSpanId: this.spanId,
-        procedure: this.procedureName,
-        kind: "agent_end",
-        durationMs: Date.now() - startedAt,
-        result: result.data,
-        raw: result.raw,
-        agentLogFile: result.logFile,
-        agentProvider: options?.agent?.provider,
-        agentModel: options?.agent?.model,
-      });
-
-      this.emitter.emit({
-        sessionUpdate: "tool_call_update",
-        toolCallId,
-        status: "completed",
-        rawOutput: {
-          cell: finalized.cell,
-          dataRef: finalized.dataRef,
-          durationMs: result.durationMs,
-          logFile: result.logFile,
-        },
-      });
-
-      return finalized;
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-
-      this.logger.write({
-        spanId: childSpanId,
-        parentSpanId: this.spanId,
-        procedure: this.procedureName,
-        kind: "agent_end",
-        durationMs: Date.now() - startedAt,
-        error: message,
-        agentProvider: options?.agent?.provider,
-        agentModel: options?.agent?.model,
-      });
-
-      this.emitter.emit({
-        sessionUpdate: "tool_call_update",
-        toolCallId,
-        status: "failed",
-        rawOutput: { error: message },
-      });
-
-      throw error;
+      return this.failAgentRun(started, error, options?.agent);
     }
   }
 
@@ -311,36 +249,13 @@ export class CommandContextImpl implements CommandContext {
       return this.callAgent(prompt);
     }
 
-    const childSpanId = this.logger.newSpan(this.spanId);
-    const startedAt = Date.now();
-    const toolCallId = crypto.randomUUID();
-    const childCell = this.store.startCell({
-      procedure: "callAgent",
-      input: prompt,
-      kind: "agent",
-      parentCellId: this.cell.cell.cellId,
-    });
-
-    this.logger.write({
-      spanId: childSpanId,
-      parentSpanId: this.spanId,
-      procedure: this.procedureName,
-      kind: "agent_start",
-      prompt,
-    });
-
-    this.emitter.emit({
-      sessionUpdate: "tool_call",
-      toolCallId,
+    const started = this.beginAgentRun(prompt, {
       title: `defaultSession: ${summarize(prompt)}`,
-      kind: "other",
-      status: "pending",
       rawInput: {
         prompt,
         sessionId: this.sessionId,
       },
     });
-
     const preparedPrompt = this.prepareDefaultPromptValue?.(prompt) ?? { prompt };
 
     try {
@@ -357,35 +272,15 @@ export class CommandContextImpl implements CommandContext {
         },
       });
 
-      const finalized = this.store.finalizeCell(childCell, {
+      const finalized = this.completeAgentRun(started, {
         data: result.raw,
-        display: result.raw,
+        raw: result.raw,
+        updates: result.updates,
+        durationMs: result.durationMs,
+        logFile: result.logFile,
         summary: summarizeText(result.raw),
-      }, {
-        stream: collectStreamText(result.updates),
-        raw: result.raw,
-      });
-
-      this.logger.write({
-        spanId: childSpanId,
-        parentSpanId: this.spanId,
-        procedure: this.procedureName,
-        kind: "agent_end",
-        durationMs: Date.now() - startedAt,
-        result: result.raw,
-        raw: result.raw,
-        agentLogFile: result.logFile,
-      });
-
-      this.emitter.emit({
-        sessionUpdate: "tool_call_update",
-        toolCallId,
-        status: "completed",
-        rawOutput: {
-          cell: finalized.cell,
-          dataRef: finalized.dataRef,
-          durationMs: result.durationMs,
-          logFile: result.logFile,
+        streamText: true,
+        rawOutputExtra: {
           sessionId: this.defaultConversation.currentSessionId,
         },
       });
@@ -393,26 +288,130 @@ export class CommandContextImpl implements CommandContext {
       preparedPrompt.markSubmitted?.();
       return finalized;
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-
-      this.logger.write({
-        spanId: childSpanId,
-        parentSpanId: this.spanId,
-        procedure: this.procedureName,
-        kind: "agent_end",
-        durationMs: Date.now() - startedAt,
-        error: message,
-      });
-
-      this.emitter.emit({
-        sessionUpdate: "tool_call_update",
-        toolCallId,
-        status: "failed",
-        rawOutput: { error: message },
-      });
-
-      throw error;
+      return this.failAgentRun(started, error);
     }
+  }
+
+  private beginAgentRun(
+    prompt: string,
+    params: {
+      title: string;
+      rawInput: unknown;
+      agent?: DownstreamAgentSelection;
+    },
+  ): StartedAgentRun {
+    const started: StartedAgentRun = {
+      childSpanId: this.logger.newSpan(this.spanId),
+      startedAt: Date.now(),
+      toolCallId: crypto.randomUUID(),
+      childCell: this.store.startCell({
+        procedure: "callAgent",
+        input: prompt,
+        kind: "agent",
+        parentCellId: this.cell.cell.cellId,
+      }),
+    };
+
+    this.logger.write({
+      spanId: started.childSpanId,
+      parentSpanId: this.spanId,
+      procedure: this.procedureName,
+      kind: "agent_start",
+      prompt,
+      agentProvider: params.agent?.provider,
+      agentModel: params.agent?.model,
+    });
+
+    this.emitter.emit({
+      sessionUpdate: "tool_call",
+      toolCallId: started.toolCallId,
+      title: params.title,
+      kind: "other",
+      status: "pending",
+      rawInput: params.rawInput,
+    });
+
+    return started;
+  }
+
+  private completeAgentRun<T extends KernelValue>(
+    started: StartedAgentRun,
+    params: {
+      data: T;
+      raw: string;
+      updates: acp.SessionUpdate[];
+      durationMs: number;
+      logFile?: string;
+      summary?: string;
+      streamText: boolean;
+      rawOutputExtra?: Record<string, unknown>;
+      agent?: DownstreamAgentSelection;
+    },
+  ): RunResult<T> {
+    const finalized = this.store.finalizeCell(started.childCell, {
+      data: params.data,
+      display: params.raw,
+      summary: params.summary,
+    }, {
+      stream: params.streamText ? collectStreamText(params.updates) : undefined,
+      raw: params.raw,
+    });
+
+    this.logger.write({
+      spanId: started.childSpanId,
+      parentSpanId: this.spanId,
+      procedure: this.procedureName,
+      kind: "agent_end",
+      durationMs: Date.now() - started.startedAt,
+      result: params.data,
+      raw: params.raw,
+      agentLogFile: params.logFile,
+      agentProvider: params.agent?.provider,
+      agentModel: params.agent?.model,
+    });
+
+    this.emitter.emit({
+      sessionUpdate: "tool_call_update",
+      toolCallId: started.toolCallId,
+      status: "completed",
+      rawOutput: {
+        cell: finalized.cell,
+        dataRef: finalized.dataRef,
+        durationMs: params.durationMs,
+        logFile: params.logFile,
+        ...params.rawOutputExtra,
+      },
+    });
+
+    return finalized;
+  }
+
+  private failAgentRun(
+    started: StartedAgentRun,
+    error: unknown,
+    agent?: DownstreamAgentSelection,
+  ): never {
+    const message = error instanceof Error ? error.message : String(error);
+
+    this.logger.write({
+      spanId: started.childSpanId,
+      parentSpanId: this.spanId,
+      procedure: this.procedureName,
+      kind: "agent_end",
+      durationMs: Date.now() - started.startedAt,
+      error: message,
+      agentProvider: agent?.provider,
+      agentModel: agent?.model,
+    });
+
+    this.emitter.emit({
+      sessionUpdate: "tool_call_update",
+      toolCallId: started.toolCallId,
+      status: "failed",
+      rawOutput: { error: message },
+    });
+
+    throw error;
   }
 
   print(text: string): void {

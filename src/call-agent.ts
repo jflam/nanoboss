@@ -1,10 +1,11 @@
-import * as acp from "@agentclientprotocol/sdk";
-import { appendFileSync, mkdirSync } from "node:fs";
-import { spawn, type ChildProcessByStdio } from "node:child_process";
-import { Readable, Writable } from "node:stream";
-import { join } from "node:path";
+import type * as acp from "@agentclientprotocol/sdk";
 
-import { getAgentTranscriptDir, resolveDownstreamAgentConfig } from "./config.ts";
+import {
+  applyAcpSessionConfig,
+  closeAcpConnection,
+  openAcpConnection,
+} from "./acp-runtime.ts";
+import { resolveDownstreamAgentConfig } from "./config.ts";
 import { buildSessionMcpServers } from "./mcp-attachment.ts";
 import { SessionStore, summarizeText } from "./session-store.ts";
 import type {
@@ -317,147 +318,54 @@ async function runAcpPrompt(
   options: CallAgentOptions,
 ): Promise<{ raw: string; logFile?: string; updates: acp.SessionUpdate[] }> {
   const config = options.config ?? resolveDownstreamAgentConfig();
-  const cwd = config.cwd ?? process.cwd();
-  const transcriptPath = createTranscriptPath();
+  const state = await openAcpConnection(config);
   const updates: acp.SessionUpdate[] = [];
   let raw = "";
-
-  mkdirSync(getAgentTranscriptDir(), { recursive: true });
-  appendAgentTranscript(
-    transcriptPath,
-    JSON.stringify({
-      timestamp: new Date().toISOString(),
-      event: "spawn",
-      provider: config.provider,
-      model: config.model,
-      reasoningEffort: config.reasoningEffort,
-      command: config.command,
-      args: config.args,
-      cwd,
-    }),
-  );
-
-  const child: ChildProcessByStdio<Writable, Readable, Readable> = spawn(config.command, config.args, {
-    cwd,
-    env: {
-      ...process.env,
-      ...config.env,
-    },
-    stdio: ["pipe", "pipe", "pipe"],
-  });
-
-  child.stderr.on("data", (chunk: Buffer | string) => {
-    appendAgentTranscript(
-      transcriptPath,
-      JSON.stringify({
-        timestamp: new Date().toISOString(),
-        stream: "stderr",
-        text: chunk.toString(),
-      }),
-    );
-  });
-
-  const stream = acp.ndJsonStream(
-    Writable.toWeb(child.stdin),
-    Readable.toWeb(child.stdout),
-  );
-
   let sessionId: acp.SessionId | undefined;
 
-  const client: acp.Client = {
-    async requestPermission(params) {
-      const selected =
-        params.options.find((option) => option.kind.startsWith("allow")) ??
-        params.options[0];
+  state.setSessionUpdateHandler(async (params) => {
+    updates.push(params.update);
+    state.writeEvent({
+      event: "session_update",
+      update: params.update,
+    });
 
-      if (!selected) {
-        return { outcome: { outcome: "cancelled" } };
-      }
+    if (
+      params.update.sessionUpdate === "agent_message_chunk" &&
+      params.update.content.type === "text"
+    ) {
+      raw += params.update.content.text;
+    }
 
-      appendAgentTranscript(
-        transcriptPath,
-        JSON.stringify({
-          timestamp: new Date().toISOString(),
-          event: "permission",
-          toolCall: params.toolCall,
-          selected: selected.optionId,
-        }),
-      );
+    await options.onUpdate?.(params.update);
+  });
 
-      return {
-        outcome: {
-          outcome: "selected",
-          optionId: selected.optionId,
-        },
-      };
-    },
-    async sessionUpdate(params) {
-      updates.push(params.update);
-      appendAgentTranscript(
-        transcriptPath,
-        JSON.stringify({
-          timestamp: new Date().toISOString(),
-          event: "session_update",
-          update: params.update,
-        }),
-      );
-
-      if (
-        params.update.sessionUpdate === "agent_message_chunk" &&
-        params.update.content.type === "text"
-      ) {
-        raw += params.update.content.text;
-      }
-
-      await options.onUpdate?.(params.update);
-    },
-  };
-
-  const connection = new acp.ClientSideConnection(() => client, stream);
   const abortListener = () => {
     if (sessionId !== undefined) {
-      void connection.cancel({ sessionId });
+      void state.connection.cancel({ sessionId });
     }
-    child.kill();
+    closeAcpConnection(state);
   };
 
   options.signal?.addEventListener("abort", abortListener);
 
   try {
-    await connection.initialize({
-      protocolVersion: acp.PROTOCOL_VERSION,
-      clientCapabilities: {},
-    });
-
-    const session = await connection.newSession({
-      cwd,
+    const session = await state.connection.newSession({
+      cwd: state.cwd,
       mcpServers: options.sessionMcp
         ? buildSessionMcpServers({
             config,
             sessionId: options.sessionMcp.sessionId,
-            cwd: options.sessionMcp.cwd ?? cwd,
+            cwd: options.sessionMcp.cwd ?? state.cwd,
             rootDir: options.sessionMcp.rootDir,
           })
         : [],
     });
     sessionId = session.sessionId;
 
-    if (config.model) {
-      await connection.unstable_setSessionModel({
-        sessionId,
-        modelId: config.model,
-      });
-    }
+    await applyAcpSessionConfig(state.connection, sessionId, config);
 
-    if (config.reasoningEffort) {
-      await connection.setSessionConfigOption({
-        sessionId,
-        configId: "reasoning_effort",
-        value: config.reasoningEffort,
-      });
-    }
-
-    await connection.prompt({
+    await state.connection.prompt({
       sessionId,
       prompt: [
         {
@@ -469,21 +377,13 @@ async function runAcpPrompt(
 
     return {
       raw,
-      logFile: transcriptPath,
+      logFile: state.transcriptPath,
       updates,
     };
   } finally {
     options.signal?.removeEventListener("abort", abortListener);
-    child.kill();
+    closeAcpConnection(state);
   }
-}
-
-function createTranscriptPath(): string {
-  return join(getAgentTranscriptDir(), `${crypto.randomUUID()}.jsonl`);
-}
-
-function appendAgentTranscript(path: string, line: string): void {
-  appendFileSync(path, `${line}\n`, "utf8");
 }
 
 function serializeNamedRef(value: unknown): string {
