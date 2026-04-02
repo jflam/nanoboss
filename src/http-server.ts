@@ -1,4 +1,4 @@
-import { getBuildLabel } from "./build-info.ts";
+import { getBuildCommit, getBuildLabel } from "./build-info.ts";
 import { DEFAULT_HTTP_SERVER_PORT } from "./defaults.ts";
 import type { FrontendEventEnvelope } from "./frontend-events.ts";
 import { NanobossService } from "./service.ts";
@@ -59,8 +59,9 @@ export async function runHttpServerCommand(argv: string[] = []): Promise<ReturnT
   const options = parseHttpServerOptions(argv);
   const service = await NanobossService.create();
   const encoder = new TextEncoder();
+  let server!: ReturnType<typeof Bun.serve>;
 
-  const server = Bun.serve({
+  server = Bun.serve({
     port: options.port,
     idleTimeout: options.idleTimeoutSeconds,
     async fetch(request) {
@@ -68,7 +69,17 @@ export async function runHttpServerCommand(argv: string[] = []): Promise<ReturnT
       const path = url.pathname;
 
       if (request.method === "GET" && path === "/v1/health") {
-        return json({ status: "ok" });
+        return json({
+          status: "ok",
+          buildLabel: getBuildLabel(),
+          buildCommit: getBuildCommit(),
+          pid: process.pid,
+        });
+      }
+
+      if (request.method === "POST" && path === "/v1/admin/shutdown") {
+        queueServerShutdown(server);
+        return json({ accepted: true });
       }
 
       if (request.method === "POST" && path === "/v1/sessions") {
@@ -214,6 +225,16 @@ function json(data: unknown, status = 200): Response {
 
 function error(status: number, message: string): Response {
   return json({ error: message }, status);
+}
+
+function queueServerShutdown(server: ReturnType<typeof Bun.serve>): void {
+  setTimeout(() => {
+    try {
+      server.stop(true);
+    } finally {
+      process.exit(0);
+    }
+  }, 50);
 }
 
 if (import.meta.main) {

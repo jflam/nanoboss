@@ -77,7 +77,9 @@ Launch the HTTP/SSE server:
 bun run nanoboss server
 ```
 
-Launch the CLI frontend. By default it connects to `http://localhost:6502`:
+Launch the CLI frontend. By default it connects to `http://localhost:6502`.
+If the local server is missing or running a different nanoboss commit, the CLI
+will start or restart it automatically in the background:
 
 ```bash
 bun run nanoboss cli

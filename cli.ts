@@ -156,6 +156,7 @@ import {
   startSessionEventStream,
 } from "./src/http-client.ts";
 import { DEFAULT_HTTP_SERVER_URL } from "./src/defaults.ts";
+import { ensureMatchingHttpServer } from "./src/http-server-supervisor.ts";
 import { StreamingTerminalMarkdownRenderer } from "./src/terminal-markdown.ts";
 import { parseCliOptions } from "./src/cli-options.ts";
 import {
@@ -582,6 +583,11 @@ async function runAcpCli(showToolCalls: boolean): Promise<void> {
 
 async function runHttpCli(serverUrl: string, showToolCalls: boolean): Promise<void> {
   const client = new OutputClient({ showToolCalls });
+  await ensureMatchingHttpServer(serverUrl, {
+    cwd: process.cwd(),
+    onStatus: (text) => client.writeStatusLine(text),
+  });
+
   let tracker = new HttpRunTracker();
   let session = await createHttpSession(
     serverUrl,

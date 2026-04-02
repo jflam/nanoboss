@@ -1,6 +1,13 @@
 import type { FrontendEventEnvelope } from "./frontend-events.ts";
 import type { DownstreamAgentSelection } from "./types.ts";
 
+export interface ServerHealthResponse {
+  status: string;
+  buildLabel?: string;
+  buildCommit?: string;
+  pid?: number;
+}
+
 interface SessionResponse {
   sessionId: string;
   cwd: string;
@@ -22,6 +29,24 @@ interface SseMessage {
 
 export interface SessionStreamHandle {
   close(): void;
+}
+
+export async function getServerHealth(baseUrl: string): Promise<ServerHealthResponse> {
+  const response = await fetch(new URL("/v1/health", baseUrl));
+  if (!response.ok) {
+    throw new Error(`Failed to get server health: ${response.status}`);
+  }
+
+  return response.json() as Promise<ServerHealthResponse>;
+}
+
+export async function requestServerShutdown(baseUrl: string): Promise<void> {
+  const response = await fetch(new URL("/v1/admin/shutdown", baseUrl), {
+    method: "POST",
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to request server shutdown: ${response.status}`);
+  }
 }
 
 export async function createHttpSession(

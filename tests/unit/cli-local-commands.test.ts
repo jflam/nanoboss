@@ -2,7 +2,9 @@ import { expect, test } from "bun:test";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { once } from "node:events";
 
-function spawnCli(): {
+import { reservePort } from "../e2e/helpers.ts";
+
+function spawnCli(baseUrl: string): {
   process: ChildProcessWithoutNullStreams;
   stdout: () => string;
   stderr: () => string;
@@ -11,6 +13,7 @@ function spawnCli(): {
     cwd: process.cwd(),
     env: {
       ...process.env,
+      NANOBOSS_SERVER_URL: baseUrl,
       NANOBOSS_AGENT_CMD: "bun",
       NANOBOSS_AGENT_ARGS: JSON.stringify(["run", "tests/fixtures/mock-agent.ts"]),
     },
@@ -48,8 +51,17 @@ async function waitForContains(producer: () => string, text: string, timeoutMs =
   }
 }
 
+async function shutdownServer(baseUrl: string): Promise<void> {
+  try {
+    await fetch(new URL("/v1/admin/shutdown", baseUrl), { method: "POST" });
+  } catch {
+    // Ignore cleanup failures.
+  }
+}
+
 test("/quit exits the local CLI and prints the session id", async () => {
-  const cli = spawnCli();
+  const baseUrl = `http://localhost:${await reservePort()}`;
+  const cli = spawnCli(baseUrl);
 
   try {
     await waitForContains(cli.stdout, "> ");
@@ -68,11 +80,13 @@ test("/quit exits the local CLI and prints the session id", async () => {
       cli.process.kill();
       await once(cli.process, "exit");
     }
+    await shutdownServer(baseUrl);
   }
 }, 20_000);
 
 test("/exit is accepted as an exit alias", async () => {
-  const cli = spawnCli();
+  const baseUrl = `http://localhost:${await reservePort()}`;
+  const cli = spawnCli(baseUrl);
 
   try {
     await waitForContains(cli.stdout, "> ");
@@ -92,11 +106,13 @@ test("/exit is accepted as an exit alias", async () => {
       cli.process.kill();
       await once(cli.process, "exit");
     }
+    await shutdownServer(baseUrl);
   }
 }, 20_000);
 
 test("renders markdown agent output through the terminal markdown renderer", async () => {
-  const cli = spawnCli();
+  const baseUrl = `http://localhost:${await reservePort()}`;
+  const cli = spawnCli(baseUrl);
 
   try {
     await waitForContains(cli.stdout, "> ");
@@ -115,11 +131,13 @@ test("renders markdown agent output through the terminal markdown renderer", asy
       cli.process.kill();
       await once(cli.process, "exit");
     }
+    await shutdownServer(baseUrl);
   }
 }, 20_000);
 
 test("renders nested tool calls with rails under their parent wrapper", async () => {
-  const cli = spawnCli();
+  const baseUrl = `http://localhost:${await reservePort()}`;
+  const cli = spawnCli(baseUrl);
 
   try {
     await waitForContains(cli.stdout, "> ");
@@ -134,5 +152,6 @@ test("renders nested tool calls with rails under their parent wrapper", async ()
       cli.process.kill();
       await once(cli.process, "exit");
     }
+    await shutdownServer(baseUrl);
   }
 }, 20_000);
