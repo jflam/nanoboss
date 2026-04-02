@@ -14,7 +14,7 @@ const result = await Bun.build({
     "globalThis.__NANOBOSS_BUILD_COMMIT__": JSON.stringify(buildCommit),
   },
   plugins: [
-    UnpluginTypia(),
+    UnpluginTypia({ log: false }),
   ],
   compile: {
     outfile,
