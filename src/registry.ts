@@ -1,5 +1,7 @@
 import type * as acp from "@agentclientprotocol/sdk";
-import { mkdirSync, readdirSync, writeFileSync } from "node:fs";
+import UnpluginTypia from "@ryoppippi/unplugin-typia/bun";
+import { mkdirSync, mkdtempSync, readdirSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
@@ -60,7 +62,7 @@ export class ProcedureRegistry implements ProcedureRegistryLike {
   }
 
   async loadProcedureFromPath(path: string): Promise<Procedure> {
-    const moduleUrl = `${pathToFileURL(path).href}?v=${Date.now()}`;
+    const moduleUrl = await this.buildProcedureModule(path);
     const loaded: unknown = await import(moduleUrl);
     const procedure = getDefaultExport(loaded);
     this.assertProcedure(procedure);
@@ -72,6 +74,32 @@ export class ProcedureRegistry implements ProcedureRegistryLike {
     const filePath = join(this.commandsDir, `${procedure.name}.ts`);
     writeFileSync(filePath, source, "utf8");
     return filePath;
+  }
+
+  private async buildProcedureModule(path: string): Promise<string> {
+    const outdir = mkdtempSync(join(tmpdir(), "nanoboss-procedure-"));
+    const result = await Bun.build({
+      entrypoints: [path],
+      outdir,
+      format: "esm",
+      plugins: [UnpluginTypia({ log: false })],
+      sourcemap: "inline",
+      target: "bun",
+    });
+
+    if (!result.success) {
+      throw new Error([
+        `Failed to compile procedure module: ${path}`,
+        ...formatBuildLogs(result.logs),
+      ].join("\n"));
+    }
+
+    const output = result.outputs[0];
+    if (!output) {
+      throw new Error(`Procedure build produced no output for ${path}`);
+    }
+
+    return `${pathToFileURL(output.path).href}?v=${Date.now()}`;
   }
 
   toAvailableCommands(): acp.AvailableCommand[] {
@@ -107,4 +135,28 @@ function getDefaultExport(module: unknown): unknown {
   }
 
   return module.default;
+}
+
+function formatBuildLogs(logs: unknown[]): string[] {
+  return logs.map((log) => {
+    if (typeof log === "string") {
+      return log;
+    }
+
+    if (!log || typeof log !== "object") {
+      return String(log);
+    }
+
+    const message = "message" in log && typeof log.message === "string"
+      ? log.message
+      : JSON.stringify(log);
+    const position = "position" in log && log.position && typeof log.position === "object"
+      ? log.position
+      : undefined;
+    const location = position && "file" in position && typeof position.file === "string"
+      ? position.file
+      : undefined;
+
+    return location ? `${location}: ${message}` : message;
+  });
 }

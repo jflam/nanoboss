@@ -26,6 +26,14 @@ describe("ProcedureRegistry", () => {
     expect(registry.get("hello")?.description).toBe("hello world");
   });
 
+  test("loads typia-based procedures through the runtime build pipeline", async () => {
+    const registry = new ProcedureRegistry(mkdtempSync(join(tmpdir(), "nab-commands-")));
+    const procedure = await registry.loadProcedureFromPath(join(process.cwd(), "commands", "second-opinion.ts"));
+
+    expect(procedure.name).toBe("second-opinion");
+    expect(procedure.description).toContain("Codex");
+  });
+
   test("get returns undefined for unknown procedures", () => {
     const registry = new ProcedureRegistry(mkdtempSync(join(tmpdir(), "nab-commands-")));
     expect(registry.get("missing")).toBeUndefined();

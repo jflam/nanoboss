@@ -16,6 +16,10 @@ const result = await Bun.build({
   plugins: [
     UnpluginTypia({ log: false }),
   ],
+  // unplugin-typia has an optional dynamic import of `svelte/compiler` for
+  // Svelte sources. nanoboss command modules are TypeScript-only, so keep that
+  // optional path external instead of forcing Bun to resolve Svelte at bundle time.
+  external: ["svelte/compiler"],
   compile: {
     outfile,
     autoloadBunfig: true,
