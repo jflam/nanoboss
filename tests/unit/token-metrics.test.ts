@@ -1,6 +1,17 @@
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
 import { expect, test } from "bun:test";
 
-import { collectTokenSnapshot, parseClaudeDebugMetrics, parseCopilotLogMetrics, parseCopilotSessionState } from "../../src/token-metrics.ts";
+import {
+  collectTokenSnapshot,
+  findCopilotLogsForPids,
+  parseClaudeDebugMetrics,
+  parseCopilotLogMetrics,
+  parseCopilotSessionState,
+  parseDescendantPidsFromPsOutput,
+} from "../../src/token-metrics.ts";
 
 test("collectTokenSnapshot uses ACP usage_update for codex", async () => {
   const snapshot = await collectTokenSnapshot({
@@ -113,6 +124,30 @@ test("parseCopilotLogMetrics extracts context and turn usage from telemetry logs
     cacheWriteTokens: 0,
     totalTokens: 21056,
   });
+});
+
+test("parseDescendantPidsFromPsOutput walks wrapper child processes", () => {
+  const psOutput = [
+    "  100   1 copilot --acp --allow-all-tools",
+    "  101 100 /opt/homebrew/Caskroom/copilot-cli/1.0.7/copilot --acp --allow-all-tools",
+    "  102 101 node helper.js",
+    "  200   1 unrelated",
+  ].join("\n");
+
+  expect(parseDescendantPidsFromPsOutput(psOutput, 100)).toEqual([101, 102]);
+});
+
+test("findCopilotLogsForPids matches descendant copilot logs", () => {
+  const dir = mkdtempSync(join(tmpdir(), "nanoboss-copilot-logs-"));
+  const entries = [
+    "process-1775161293564-99653.log",
+    "process-1775161261871-99467.log",
+    "process-1775161229038-99284.log",
+  ];
+
+  expect(findCopilotLogsForPids(dir, [99652, 99653], entries)).toEqual([
+    join(dir, "process-1775161293564-99653.log"),
+  ]);
 });
 
 test("parseCopilotSessionState falls back to shutdown metrics", () => {
