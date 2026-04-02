@@ -774,3 +774,99 @@ With this evidence, the burden of proof flips:
 - stdio is now the extra path
 - HTTP is the likely canonical path
 - the remaining work is validation, not architectural indecision
+
+---
+
+## Implementation changelog
+
+This plan has now been implemented.
+
+### Summary
+
+This series reduced overlap in the session retrieval surface, removed the redundant stdio MCP transport, unified MCP tool registration, aligned procedure-facing session APIs with the structural model, and extracted shared ACP runtime/bookkeeping code to shrink maintenance hotspots.
+
+### Key changes
+
+#### Session / MCP surface
+- Removed redundant MCP tools:
+  - `session_last`
+  - `cell_parent`
+  - `cell_children`
+- Kept and taught the canonical structural surface:
+  - `top_level_runs`
+  - `cell_descendants`
+  - `cell_ancestors`
+  - `cell_get`
+  - `ref_read`
+- Kept `session_recent`, `ref_stat`, `ref_write_to_file`, and `get_schema` as secondary helpers.
+- Updated guidance, prompts, and tests to teach only the structural retrieval path.
+
+#### MCP transport
+- Standardized session MCP attachment on **HTTP-only** for all providers:
+  - Claude
+  - Gemini
+  - Codex
+  - Copilot
+- Removed the internal stdio session MCP server path and CLI subcommand.
+- Centralized MCP initialize metadata and method dispatch.
+
+#### MCP implementation
+- Replaced parallel MCP tool list + switch dispatch with a single declarative tool registry.
+- Added a transport-level HTTP MCP unit test covering `tools/list` and `tools/call`.
+
+#### Session store / traversal
+- Removed redundant `SessionStore` helpers:
+  - `last()`
+  - `parent()`
+  - `children()`
+- Consolidated reverse-order summary collection.
+- Updated memory-card/top-level discovery to use `topLevelRuns()` internally.
+
+#### Procedure authoring API
+- Aligned `ctx.session` with the structural model:
+  - `recent(...)`
+  - `topLevelRuns(...)`
+  - `get(...)`
+  - `ancestors(...)`
+  - `descendants(...)`
+- Removed `ctx.session.last()` from the authoring surface.
+- Updated `/create` guidance accordingly.
+
+#### ACP runtime / agent plumbing
+- Extracted shared ACP runtime into:
+  - `src/acp-runtime.ts`
+- Extracted shared ACP update/text helpers into:
+  - `src/acp-updates.ts`
+- Reduced duplicated spawn/init/transcript/permission/session-config logic between:
+  - one-shot `callAgent`
+  - persistent `/default` session runtime
+- Reduced duplicated agent-run bookkeeping in `CommandContext`.
+
+#### Boilerplate cleanup
+- Converted handwritten descriptors to `typia` + `jsonType(...)` in:
+  - `src/create.ts`
+  - `commands/linter.ts`
+- Consolidated shared session query option types.
+
+#### E2E robustness
+- Hardened real-agent e2e checks by:
+  - increasing `/default` completion wait tolerance under slower full-suite conditions
+  - ignoring blank separator lines in passthrough multiline assertions
+
+### Validation
+
+Passed:
+- `bun run lint`
+- `bun run test`
+- `bun run test:e2e:real`
+
+Final real-agent e2e result:
+- **17 pass**
+- **0 fail**
+
+### Commit checkpoints
+- `628d444` — Simplify session MCP surface and unify HTTP transport
+- `d7a57f9` — Extract shared ACP runtime and agent bookkeeping
+- `a5ccce2` — Extract shared ACP update helpers
+- `1133cd8` — Consolidate shared session query option types
+- `d07ae39` — Harden real-agent e2e timing and multiline assertions
