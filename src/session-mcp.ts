@@ -10,19 +10,25 @@ import type {
   ValueRef,
 } from "./types.ts";
 
-const MCP_PROTOCOL_VERSION = "2024-11-05";
-
-interface JsonRpcRequest {
-  jsonrpc?: string;
-  id?: string | number | null;
-  method: string;
-  params?: unknown;
-}
+export const SESSION_MCP_PROTOCOL_VERSION = "2025-11-25";
+export const SESSION_MCP_SERVER_NAME = "nanoboss-session";
+export const SESSION_MCP_INSTRUCTIONS = "Use these tools to inspect durable nanoboss session cells and refs.";
 
 interface SessionMcpParams {
   sessionId: string;
   cwd: string;
   rootDir?: string;
+}
+
+interface SessionMcpToolMetadata {
+  name: string;
+  description: string;
+  inputSchema: object;
+}
+
+interface SessionMcpToolDefinition extends SessionMcpToolMetadata {
+  parseArgs(args: Record<string, unknown>): unknown;
+  call(api: SessionMcpApi, args: unknown): unknown;
 }
 
 export interface SessionSchemaResult {
@@ -34,10 +40,6 @@ export interface SessionSchemaResult {
 export class SessionMcpApi {
   constructor(private readonly params: SessionMcpParams) {}
 
-  sessionLast(): ReturnType<SessionStore["last"]> {
-    return this.createStore().last();
-  }
-
   sessionRecent(args: { procedure?: string; limit?: number } = {}): ReturnType<SessionStore["recent"]> {
     return this.createStore().recent(args);
   }
@@ -48,17 +50,6 @@ export class SessionMcpApi {
 
   cellGet(cellRef: CellRef): CellRecord {
     return this.createStore().readCell(cellRef);
-  }
-
-  cellParent(cellRef: CellRef): ReturnType<SessionStore["parent"]> {
-    return this.createStore().parent(cellRef);
-  }
-
-  cellChildren(
-    cellRef: CellRef,
-    args: CellFilterOptions = {},
-  ): ReturnType<SessionStore["children"]> {
-    return this.createStore().children(cellRef, args);
   }
 
   cellAncestors(
@@ -124,388 +115,304 @@ export function createSessionMcpApi(params: SessionMcpParams): SessionMcpApi {
   return new SessionMcpApi(params);
 }
 
-export async function runSessionMcpServerCommand(): Promise<void> {
-  const sessionId = process.env.NANOBOSS_SESSION_ID?.trim();
-  const cwd = process.env.NANOBOSS_SESSION_CWD?.trim();
-  const rootDir = process.env.NANOBOSS_SESSION_ROOT_DIR?.trim() || undefined;
+const CELL_REF_SCHEMA = {
+  type: "object",
+  properties: {
+    sessionId: { type: "string" },
+    cellId: { type: "string" },
+  },
+  required: ["sessionId", "cellId"],
+  additionalProperties: false,
+};
 
-  if (!sessionId) {
-    throw new Error("Missing NANOBOSS_SESSION_ID");
-  }
+const VALUE_REF_SCHEMA = {
+  type: "object",
+  properties: {
+    cell: CELL_REF_SCHEMA,
+    path: { type: "string" },
+  },
+  required: ["cell", "path"],
+  additionalProperties: false,
+};
 
-  if (!cwd) {
-    throw new Error("Missing NANOBOSS_SESSION_CWD");
-  }
+const CELL_KIND_SCHEMA = {
+  type: "string",
+  enum: ["top_level", "procedure", "agent"],
+};
 
-  const api = createSessionMcpApi({ sessionId, cwd, rootDir });
-  const server = new SessionMcpStdioServer(api);
-  server.start();
-  await server.closed;
+function defineTool<Args>(definition: {
+  name: string;
+  description: string;
+  inputSchema: object;
+  parseArgs(args: Record<string, unknown>): Args;
+  call(api: SessionMcpApi, args: Args): unknown;
+}): SessionMcpToolDefinition {
+  return {
+    name: definition.name,
+    description: definition.description,
+    inputSchema: definition.inputSchema,
+    parseArgs(args) {
+      return definition.parseArgs(args);
+    },
+    call(api, args) {
+      return definition.call(api, args as Args);
+    },
+  };
 }
 
-class SessionMcpStdioServer {
-  private buffer = Buffer.alloc(0);
-  private pending = Promise.resolve();
-  readonly closed: Promise<void>;
-
-  constructor(private readonly api: SessionMcpApi) {
-    this.closed = new Promise((resolve) => {
-      process.stdin.on("end", () => {
-        resolve();
-      });
-      process.stdin.on("close", () => {
-        resolve();
-      });
-      process.stdin.on("error", () => {
-        resolve();
-      });
-    });
-  }
-
-  start(): void {
-    process.stdin.on("data", (chunk: Buffer | string) => {
-      const nextChunk = typeof chunk === "string" ? Buffer.from(chunk) : chunk;
-      this.buffer = Buffer.concat([this.buffer, nextChunk]);
-      this.pending = this.pending.then(() => this.drain()).catch((error: unknown) => {
-        this.writeError(undefined, -32603, error instanceof Error ? error.message : String(error));
-      });
-    });
-  }
-
-  private async drain(): Promise<void> {
-    for (;;) {
-      const separatorIndex = this.buffer.indexOf("\r\n\r\n");
-      if (separatorIndex < 0) {
-        return;
-      }
-
-      const headers = this.buffer.subarray(0, separatorIndex).toString("utf8");
-      const contentLength = parseContentLength(headers);
-      if (contentLength === undefined) {
-        throw new Error("Missing Content-Length header");
-      }
-
-      const frameEnd = separatorIndex + 4 + contentLength;
-      if (this.buffer.length < frameEnd) {
-        return;
-      }
-
-      const body = this.buffer.subarray(separatorIndex + 4, frameEnd).toString("utf8");
-      this.buffer = this.buffer.subarray(frameEnd);
-      await this.handleMessage(body);
-    }
-  }
-
-  private async handleMessage(body: string): Promise<void> {
-    const message = JSON.parse(body) as JsonRpcRequest;
-    if (!message.method) {
-      return;
-    }
-
-    if (message.id === undefined || message.id === null) {
-      await this.handleNotification(message);
-      return;
-    }
-
-    try {
-      const result = await this.dispatch(message.method, message.params);
-      this.writeMessage({
-        jsonrpc: "2.0",
-        id: message.id,
-        result,
-      });
-    } catch (error) {
-      this.writeError(
-        message.id,
-        -32000,
-        error instanceof Error ? error.message : String(error),
-      );
-    }
-  }
-
-  private async handleNotification(message: JsonRpcRequest): Promise<void> {
-    if (message.method === "notifications/initialized") {
-      return;
-    }
-  }
-
-  private async dispatch(method: string, params: unknown): Promise<unknown> {
-    switch (method) {
-      case "initialize":
-        return {
-          protocolVersion: MCP_PROTOCOL_VERSION,
-          capabilities: {
-            tools: {},
-          },
-          serverInfo: {
-            name: "nanoboss-session",
-            version: getBuildLabel(),
-          },
-          instructions: "Use these tools to inspect durable nanoboss session cells and refs.",
-        };
-      case "ping":
-        return {};
-      case "tools/list":
-        return {
-          tools: listSessionMcpTools(),
-        };
-      case "tools/call": {
-        const args = asObject(params);
-        const name = asString(args.name, "name");
-        const toolArgs = asOptionalObject(args.arguments);
-        return formatSessionMcpToolResult(callSessionMcpTool(this.api, name, toolArgs));
-      }
-      default:
-        throw new Error(`Unsupported MCP method: ${method}`);
-    }
-  }
-
-  private writeMessage(message: unknown): void {
-    const body = Buffer.from(JSON.stringify(message), "utf8");
-    process.stdout.write(`Content-Length: ${body.length}\r\n\r\n`);
-    process.stdout.write(body);
-  }
-
-  private writeError(id: string | number | null | undefined, code: number, message: string): void {
-    this.writeMessage({
-      jsonrpc: "2.0",
-      id: id ?? null,
-      error: {
-        code,
-        message,
+const SESSION_MCP_TOOLS: SessionMcpToolDefinition[] = [
+  defineTool({
+    name: "top_level_runs",
+    description: "Return top-level completed runs in reverse chronological order. Use this to find prior chat-visible commands such as /default, /linter, or /second-opinion.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        procedure: { type: "string" },
+        limit: { type: "number" },
       },
-    });
-  }
-}
-
-export function listSessionMcpTools(): Array<{ name: string; description: string; inputSchema: object }> {
-  const cellRefSchema = {
-    type: "object",
-    properties: {
-      sessionId: { type: "string" },
-      cellId: { type: "string" },
+      additionalProperties: false,
     },
-    required: ["sessionId", "cellId"],
-    additionalProperties: false,
-  };
-  const valueRefSchema = {
-    type: "object",
-    properties: {
-      cell: cellRefSchema,
-      path: { type: "string" },
+    parseArgs(args) {
+      return {
+        procedure: asOptionalString(args.procedure),
+        limit: asOptionalNonNegativeNumber(args.limit, "limit"),
+      };
     },
-    required: ["cell", "path"],
-    additionalProperties: false,
-  };
-  const cellKindSchema = {
-    type: "string",
-    enum: ["top_level", "procedure", "agent"],
-  };
-
-  return [
-    {
-      name: "session_last",
-      description: "Return the most recent completed session cell summary.",
-      inputSchema: {
-        type: "object",
-        properties: {},
-        additionalProperties: false,
+    call(api, args) {
+      return api.topLevelRuns(args);
+    },
+  }),
+  defineTool({
+    name: "cell_descendants",
+    description: "Return descendant cell summaries in depth-first pre-order. Use maxDepth: 1 when you only want direct children.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        cellRef: CELL_REF_SCHEMA,
+        kind: CELL_KIND_SCHEMA,
+        procedure: { type: "string" },
+        maxDepth: { type: "number" },
+        limit: { type: "number" },
       },
+      required: ["cellRef"],
+      additionalProperties: false,
     },
-    {
-      name: "session_recent",
-      description: "Return recent completed session cell summaries.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          procedure: { type: "string" },
-          limit: { type: "number" },
+    parseArgs(args) {
+      return {
+        cellRef: parseCellRef(args.cellRef),
+        options: {
+          kind: asOptionalCellKind(args.kind),
+          procedure: asOptionalString(args.procedure),
+          maxDepth: asOptionalNonNegativeNumber(args.maxDepth, "maxDepth"),
+          limit: asOptionalNonNegativeNumber(args.limit, "limit"),
         },
-        additionalProperties: false,
-      },
+      };
     },
-    {
-      name: "top_level_runs",
-      description: "Return top-level completed runs in reverse chronological order. Use this for prior chat-visible commands such as /default, /linter, or /second-opinion.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          procedure: { type: "string" },
-          limit: { type: "number" },
+    call(api, args) {
+      return api.cellDescendants(args.cellRef, args.options);
+    },
+  }),
+  defineTool({
+    name: "cell_ancestors",
+    description: "Return ancestor cell summaries nearest-first. Set includeSelf to prepend the starting cell. Use limit: 1 when you only want the direct parent.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        cellRef: CELL_REF_SCHEMA,
+        includeSelf: { type: "boolean" },
+        limit: { type: "number" },
+      },
+      required: ["cellRef"],
+      additionalProperties: false,
+    },
+    parseArgs(args) {
+      return {
+        cellRef: parseCellRef(args.cellRef),
+        options: {
+          includeSelf: asOptionalBoolean(args.includeSelf),
+          limit: asOptionalNonNegativeNumber(args.limit, "limit"),
         },
-        additionalProperties: false,
-      },
+      };
     },
-    {
-      name: "cell_get",
-      description: "Return one exact stored cell record.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          cellRef: cellRefSchema,
-        },
-        required: ["cellRef"],
-        additionalProperties: false,
-      },
+    call(api, args) {
+      return api.cellAncestors(args.cellRef, args.options);
     },
-    {
-      name: "cell_parent",
-      description: "Return the direct parent cell summary for one cell, or undefined when the cell is top-level.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          cellRef: cellRefSchema,
-        },
-        required: ["cellRef"],
-        additionalProperties: false,
+  }),
+  defineTool({
+    name: "cell_get",
+    description: "Return one exact stored cell record.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        cellRef: CELL_REF_SCHEMA,
       },
+      required: ["cellRef"],
+      additionalProperties: false,
     },
-    {
-      name: "cell_children",
-      description: "Return direct child cell summaries in creation order. If limit is set, returns only the first matching children.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          cellRef: cellRefSchema,
-          kind: cellKindSchema,
-          procedure: { type: "string" },
-          limit: { type: "number" },
-        },
-        required: ["cellRef"],
-        additionalProperties: false,
+    parseArgs(args) {
+      return {
+        cellRef: parseCellRef(args.cellRef),
+      };
+    },
+    call(api, args) {
+      return api.cellGet(args.cellRef);
+    },
+  }),
+  defineTool({
+    name: "ref_read",
+    description: "Read the exact value at a durable session ref.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        valueRef: VALUE_REF_SCHEMA,
       },
+      required: ["valueRef"],
+      additionalProperties: false,
     },
-    {
-      name: "cell_ancestors",
-      description: "Return ancestor cell summaries nearest-first. Set includeSelf to prepend the starting cell.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          cellRef: cellRefSchema,
-          includeSelf: { type: "boolean" },
-          limit: { type: "number" },
-        },
-        required: ["cellRef"],
-        additionalProperties: false,
+    parseArgs(args) {
+      return {
+        valueRef: parseValueRef(args.valueRef),
+      };
+    },
+    call(api, args) {
+      return api.refRead(args.valueRef);
+    },
+  }),
+  defineTool({
+    name: "session_recent",
+    description: "Return recent completed session cell summaries from the whole session. Use this only for global recency scans, not as the primary structural retrieval path.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        procedure: { type: "string" },
+        limit: { type: "number" },
       },
+      additionalProperties: false,
     },
-    {
-      name: "cell_descendants",
-      description: "Return descendant cell summaries in depth-first pre-order. If limit is set, traversal stops after the first N matching descendants.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          cellRef: cellRefSchema,
-          kind: cellKindSchema,
-          procedure: { type: "string" },
-          maxDepth: { type: "number" },
-          limit: { type: "number" },
-        },
-        required: ["cellRef"],
-        additionalProperties: false,
+    parseArgs(args) {
+      return {
+        procedure: asOptionalString(args.procedure),
+        limit: asOptionalNonNegativeNumber(args.limit, "limit"),
+      };
+    },
+    call(api, args) {
+      return api.sessionRecent(args);
+    },
+  }),
+  defineTool({
+    name: "ref_stat",
+    description: "Return lightweight metadata for a durable session ref.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        valueRef: VALUE_REF_SCHEMA,
       },
+      required: ["valueRef"],
+      additionalProperties: false,
     },
-    {
-      name: "ref_read",
-      description: "Read the exact value at a durable session ref.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          valueRef: valueRefSchema,
-        },
-        required: ["valueRef"],
-        additionalProperties: false,
+    parseArgs(args) {
+      return {
+        valueRef: parseValueRef(args.valueRef),
+      };
+    },
+    call(api, args) {
+      return api.refStat(args.valueRef);
+    },
+  }),
+  defineTool({
+    name: "ref_write_to_file",
+    description: "Write a durable session ref to a workspace file.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        valueRef: VALUE_REF_SCHEMA,
+        path: { type: "string" },
       },
+      required: ["valueRef", "path"],
+      additionalProperties: false,
     },
-    {
-      name: "ref_stat",
-      description: "Return lightweight metadata for a durable session ref.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          valueRef: valueRefSchema,
-        },
-        required: ["valueRef"],
-        additionalProperties: false,
+    parseArgs(args) {
+      return {
+        valueRef: parseValueRef(args.valueRef),
+        path: asString(args.path, "path"),
+      };
+    },
+    call(api, args) {
+      return api.refWriteToFile(args.valueRef, args.path);
+    },
+  }),
+  defineTool({
+    name: "get_schema",
+    description: "Return compact shape metadata for a cell result or value ref.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        cellRef: CELL_REF_SCHEMA,
+        valueRef: VALUE_REF_SCHEMA,
       },
+      additionalProperties: false,
     },
-    {
-      name: "ref_write_to_file",
-      description: "Write a durable session ref to a workspace file.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          valueRef: valueRefSchema,
-          path: { type: "string" },
-        },
-        required: ["valueRef", "path"],
-        additionalProperties: false,
-      },
+    parseArgs(args) {
+      return {
+        cellRef: args.cellRef !== undefined ? parseCellRef(args.cellRef) : undefined,
+        valueRef: args.valueRef !== undefined ? parseValueRef(args.valueRef) : undefined,
+      };
     },
-    {
-      name: "get_schema",
-      description: "Return compact shape metadata for a cell result or value ref.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          cellRef: cellRefSchema,
-          valueRef: valueRefSchema,
-        },
-        additionalProperties: false,
-      },
+    call(api, args) {
+      return api.getSchema(args);
     },
-  ];
+  }),
+];
+
+export function listSessionMcpTools(): SessionMcpToolMetadata[] {
+  return SESSION_MCP_TOOLS.map(({ name, description, inputSchema }) => ({
+    name,
+    description,
+    inputSchema,
+  }));
 }
 
 export function callSessionMcpTool(api: SessionMcpApi, name: string, args: Record<string, unknown>): unknown {
-  switch (name) {
-    case "session_last":
-      return api.sessionLast();
-    case "session_recent":
-      return api.sessionRecent({
-        procedure: asOptionalString(args.procedure),
-        limit: asOptionalNonNegativeNumber(args.limit, "limit"),
-      });
-    case "top_level_runs":
-      return api.topLevelRuns({
-        procedure: asOptionalString(args.procedure),
-        limit: asOptionalNonNegativeNumber(args.limit, "limit"),
-      });
-    case "cell_get":
-      return api.cellGet(parseCellRef(args.cellRef));
-    case "cell_parent":
-      return api.cellParent(parseCellRef(args.cellRef));
-    case "cell_children":
-      return api.cellChildren(parseCellRef(args.cellRef), {
-        kind: asOptionalCellKind(args.kind),
-        procedure: asOptionalString(args.procedure),
-        limit: asOptionalNonNegativeNumber(args.limit, "limit"),
-      });
-    case "cell_ancestors":
-      return api.cellAncestors(parseCellRef(args.cellRef), {
-        includeSelf: asOptionalBoolean(args.includeSelf),
-        limit: asOptionalNonNegativeNumber(args.limit, "limit"),
-      });
-    case "cell_descendants":
-      return api.cellDescendants(parseCellRef(args.cellRef), {
-        kind: asOptionalCellKind(args.kind),
-        procedure: asOptionalString(args.procedure),
-        maxDepth: asOptionalNonNegativeNumber(args.maxDepth, "maxDepth"),
-        limit: asOptionalNonNegativeNumber(args.limit, "limit"),
-      });
-    case "ref_read":
-      return api.refRead(parseValueRef(args.valueRef));
-    case "ref_stat":
-      return api.refStat(parseValueRef(args.valueRef));
-    case "ref_write_to_file":
-      return api.refWriteToFile(parseValueRef(args.valueRef), asString(args.path, "path"));
-    case "get_schema":
-      return api.getSchema({
-        cellRef: args.cellRef !== undefined ? parseCellRef(args.cellRef) : undefined,
-        valueRef: args.valueRef !== undefined ? parseValueRef(args.valueRef) : undefined,
-      });
+  const tool = SESSION_MCP_TOOLS.find((candidate) => candidate.name === name);
+  if (!tool) {
+    throw new Error(`Unknown tool: ${name}`);
+  }
+
+  return tool.call(api, tool.parseArgs(args));
+}
+
+export function dispatchSessionMcpMethod(
+  api: SessionMcpApi,
+  method: string,
+  params: unknown,
+): unknown {
+  switch (method) {
+    case "initialize":
+      return {
+        protocolVersion: SESSION_MCP_PROTOCOL_VERSION,
+        capabilities: {
+          tools: {},
+        },
+        serverInfo: {
+          name: SESSION_MCP_SERVER_NAME,
+          version: getBuildLabel(),
+        },
+        instructions: SESSION_MCP_INSTRUCTIONS,
+      };
+    case "ping":
+      return {};
+    case "tools/list":
+      return {
+        tools: listSessionMcpTools(),
+      };
+    case "tools/call": {
+      const args = asObject(params);
+      const name = asString(args.name, "name");
+      const toolArgs = asOptionalObject(args.arguments);
+      return formatSessionMcpToolResult(callSessionMcpTool(api, name, toolArgs));
+    }
     default:
-      throw new Error(`Unknown tool: ${name}`);
+      throw new Error(`Unsupported MCP method: ${method}`);
   }
 }
 
@@ -531,16 +438,6 @@ function serializeToolResult(result: unknown): string {
   }
 
   return JSON.stringify(result, null, 2);
-}
-
-function parseContentLength(headers: string): number | undefined {
-  const match = headers.match(/(?:^|\r\n)Content-Length:\s*(\d+)/i);
-  if (!match) {
-    return undefined;
-  }
-
-  const value = Number(match[1]);
-  return Number.isFinite(value) ? value : undefined;
 }
 
 function parseCellRef(value: unknown): CellRef {

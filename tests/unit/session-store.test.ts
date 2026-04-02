@@ -71,18 +71,19 @@ describe("SessionStore", () => {
       text: "hi",
     });
 
-    const last = reloaded.last();
-    expect(last?.procedure).toBe("demo");
-    expect(last?.kind).toBe("top_level");
-    expect(last?.dataRef).toEqual(result.dataRef);
-    expect(last?.displayRef).toEqual(result.displayRef);
-    expect(last?.summary).toBe("demo summary");
-    expect(last?.memory).toBe("demo memory");
-    expect(last?.dataShape).toEqual({
+    const recent = reloaded.recent({ limit: 1 });
+    const latest = recent[0];
+    expect(latest?.procedure).toBe("demo");
+    expect(latest?.kind).toBe("top_level");
+    expect(latest?.dataRef).toEqual(result.dataRef);
+    expect(latest?.displayRef).toEqual(result.displayRef);
+    expect(latest?.summary).toBe("demo summary");
+    expect(latest?.memory).toBe("demo memory");
+    expect(latest?.dataShape).toEqual({
       count: "number",
       text: "hi",
     });
-    expect(last?.explicitDataSchema).toEqual({
+    expect(latest?.explicitDataSchema).toEqual({
       type: "object",
       properties: {
         count: { type: "number" },
@@ -177,17 +178,12 @@ describe("SessionStore", () => {
       rootDir,
     });
 
-    expect(reloaded.parent(nestedAgent.cell)?.cell).toEqual(childProcedure.cell);
-    expect(reloaded.children(review.cell).map((item) => item.cell.cellId)).toEqual([
-      childProcedure.cell.cellId,
-      siblingAgent.cell.cellId,
-    ]);
-    expect(reloaded.children(review.cell, { kind: "agent" }).map((item) => item.cell.cellId)).toEqual([
-      siblingAgent.cell.cellId,
-    ]);
     expect(reloaded.ancestors(nestedAgent.cell).map((item) => item.cell.cellId)).toEqual([
       childProcedure.cell.cellId,
       review.cell.cellId,
+    ]);
+    expect(reloaded.ancestors(nestedAgent.cell, { limit: 1 }).map((item) => item.cell.cellId)).toEqual([
+      childProcedure.cell.cellId,
     ]);
     expect(
       reloaded.ancestors(nestedAgent.cell, { includeSelf: true, limit: 2 }).map((item) => item.cell.cellId),
@@ -206,6 +202,9 @@ describe("SessionStore", () => {
     ]);
     expect(reloaded.descendants(review.cell, { maxDepth: 1 }).map((item) => item.cell.cellId)).toEqual([
       childProcedure.cell.cellId,
+      siblingAgent.cell.cellId,
+    ]);
+    expect(reloaded.descendants(review.cell, { kind: "agent", maxDepth: 1 }).map((item) => item.cell.cellId)).toEqual([
       siblingAgent.cell.cellId,
     ]);
     expect(reloaded.topLevelRuns().map((item) => item.procedure)).toEqual([

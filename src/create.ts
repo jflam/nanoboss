@@ -1,11 +1,13 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
+import typia from "typia";
+
 import { expectData } from "./run-result.ts";
+import { jsonType } from "./types.ts";
 import type {
   Procedure,
   ProcedureRegistryLike,
-  TypeDescriptor,
 } from "./types.ts";
 
 interface GeneratedProcedure {
@@ -13,25 +15,10 @@ interface GeneratedProcedure {
   source: string;
 }
 
-const GeneratedProcedureType: TypeDescriptor<GeneratedProcedure> = {
-  schema: {
-    type: "object",
-    properties: {
-      name: { type: "string" },
-      source: { type: "string" },
-    },
-    required: ["name", "source"],
-    additionalProperties: false,
-  },
-  validate(input: unknown): input is GeneratedProcedure {
-    return (
-      typeof input === "object" &&
-      input !== null &&
-      typeof (input as { name?: unknown }).name === "string" &&
-      typeof (input as { source?: unknown }).source === "string"
-    );
-  },
-};
+const GeneratedProcedureType = jsonType<GeneratedProcedure>(
+  typia.json.schema<GeneratedProcedure>(),
+  typia.createValidate<GeneratedProcedure>(),
+);
 
 export function createCreateProcedure(registry: ProcedureRegistryLike): Procedure {
   return {
@@ -55,7 +42,8 @@ export function createCreateProcedure(registry: ProcedureRegistryLike): Procedur
           "- `ctx.callAgent(prompt, { agent: { provider, model }, refs })` to choose a downstream agent per call and pass prior refs",
           "- `ctx.callProcedure(name, prompt)` for composing procedures and getting RunResult<T>",
           "- `ctx.getDefaultAgentConfig()` and `ctx.setDefaultAgentSelection(...)` to inspect or change the session's default downstream agent",
-          "- `ctx.session.last()` and `ctx.session.recent(...)` for discovery over prior cells",
+          "- `ctx.session.topLevelRuns(...)`, `ctx.session.descendants(...)`, `ctx.session.ancestors(...)`, and `ctx.session.get(...)` for structural discovery over prior cells",
+          "- `ctx.session.recent(...)` only for true global recency scans across the whole session",
           "- `ctx.refs.read(...)` and `ctx.refs.writeToFile(...)` for durable references",
           "- `ctx.print(text)` to stream progress back to the CLI",
           `- \`ctx.cwd\` for the current working directory (${ctx.cwd})`,

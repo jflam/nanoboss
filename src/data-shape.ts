@@ -56,7 +56,7 @@ export function inferDataShape(value: unknown, depth = 0): JsonValue {
     return shape;
   }
 
-  return String(value);
+  return typeof value;
 }
 
 export function stringifyCompactShape(value: JsonValue | undefined, maxLength = 240): string | undefined {

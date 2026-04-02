@@ -200,48 +200,11 @@ export class SessionStore {
     writeFileSync(targetPath, materializeForFile(value), "utf8");
   }
 
-  last(options: Omit<RecentOptions, "limit"> = {}): CellSummary | undefined {
-    return this.recent({ ...options, limit: 1 })[0];
-  }
-
   recent(options: RecentOptions = {}): CellSummary[] {
-    const limit = options.limit ?? 10;
-    const summaries: CellSummary[] = [];
-
-    for (let index = this.order.length - 1; index >= 0; index -= 1) {
-      const cellId = this.order[index];
-      if (!cellId || cellId === options.excludeCellId) {
-        continue;
-      }
-
-      const record = this.cells.get(cellId);
-      if (!record) {
-        continue;
-      }
-
-      if (options.procedure && record.procedure !== options.procedure) {
-        continue;
-      }
-
-      summaries.push(this.toSummary(record));
-      if (summaries.length >= limit) {
-        break;
-      }
-    }
-
-    return summaries;
-  }
-
-  parent(cellRef: CellRef): CellSummary | undefined {
-    const cell = this.readCell(cellRef);
-    const parentCellId = this.parentByCellId.get(cell.cellId);
-    return parentCellId ? this.toSummaryByCellId(parentCellId) : undefined;
-  }
-
-  children(cellRef: CellRef, options: CellFilterOptions = {}): CellSummary[] {
-    this.readCell(cellRef);
-    const childCellIds = this.childrenByCellId.get(cellRef.cellId) ?? [];
-    return this.collectSummaries(childCellIds, options);
+    return this.collectReverseSummaries(this.order, {
+      ...options,
+      limit: options.limit ?? 10,
+    });
   }
 
   ancestors(cellRef: CellRef, options: CellAncestorsOptions = {}): CellSummary[] {
@@ -314,35 +277,7 @@ export class SessionStore {
   }
 
   topLevelRuns(options: Omit<CellFilterOptions, "kind"> = {}): CellSummary[] {
-    const limit = normalizeLimit(options.limit);
-    if (limit === 0) {
-      return [];
-    }
-
-    const summaries: CellSummary[] = [];
-
-    for (let index = this.topLevelCellIds.length - 1; index >= 0; index -= 1) {
-      const cellId = this.topLevelCellIds[index];
-      if (!cellId) {
-        continue;
-      }
-
-      const record = this.cells.get(cellId);
-      if (!record) {
-        continue;
-      }
-
-      if (options.procedure && record.procedure !== options.procedure) {
-        continue;
-      }
-
-      summaries.push(this.toSummary(record));
-      if (limit !== undefined && summaries.length >= limit) {
-        break;
-      }
-    }
-
-    return summaries;
+    return this.collectReverseSummaries(this.topLevelCellIds, options);
   }
 
   readCell(cellRef: CellRef): CellRecord {
@@ -395,7 +330,10 @@ export class SessionStore {
     return this.toSummary(record);
   }
 
-  private collectSummaries(cellIds: string[], options: CellFilterOptions = {}): CellSummary[] {
+  private collectReverseSummaries(
+    cellIds: readonly string[],
+    options: RecentOptions = {},
+  ): CellSummary[] {
     const limit = normalizeLimit(options.limit);
     if (limit === 0) {
       return [];
@@ -403,9 +341,18 @@ export class SessionStore {
 
     const summaries: CellSummary[] = [];
 
-    for (const cellId of cellIds) {
+    for (let index = cellIds.length - 1; index >= 0; index -= 1) {
+      const cellId = cellIds[index];
+      if (!cellId || cellId === options.excludeCellId) {
+        continue;
+      }
+
       const record = this.cells.get(cellId);
-      if (!record || !matchesCell(record, options)) {
+      if (!record) {
+        continue;
+      }
+
+      if (options.procedure && record.procedure !== options.procedure) {
         continue;
       }
 

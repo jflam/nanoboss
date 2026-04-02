@@ -14,7 +14,7 @@ export function resolveSelfCommand(subcommand: string, args: string[] = []): Sel
     // Always resolve to nanoboss.ts, not process.argv[1]. When test scripts or other
     // entry points instantiate NanobossService directly, process.argv[1] points to
     // the caller rather than nanoboss.ts, which is the only entry point that implements
-    // full subcommand dispatch (e.g. session-mcp-server).
+    // full subcommand dispatch.
     const nanobossScript = resolve(dirname(fileURLToPath(import.meta.url)), "..", "nanoboss.ts");
     return {
       command: executable,

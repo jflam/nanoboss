@@ -26,7 +26,7 @@ export function collectUnsyncedProcedureMemoryCards(
   options: { maxCards?: number } = {},
 ): ProcedureMemoryCard[] {
   const maxCards = options.maxCards ?? DEFAULT_MAX_CARDS;
-  const summaries = store.recent({ limit: RECENT_SCAN_LIMIT });
+  const summaries = store.topLevelRuns({ limit: RECENT_SCAN_LIMIT });
   const unsynced: ProcedureMemoryCard[] = [];
 
   for (const summary of summaries) {
@@ -35,7 +35,7 @@ export function collectUnsyncedProcedureMemoryCards(
     }
 
     const record = store.readCell(summary.cell);
-    if (record.meta.kind !== "top_level" || record.procedure === "default") {
+    if (record.procedure === "default") {
       continue;
     }
 
@@ -121,10 +121,9 @@ export function renderProcedureMemoryPreamble(cards: ProcedureMemoryCard[]): str
 }
 
 export function hasTopLevelNonDefaultProcedureHistory(store: SessionStore): boolean {
-  const summaries = store.recent({ limit: RECENT_SCAN_LIMIT });
-  return summaries.some((summary) => {
+  return store.topLevelRuns({ limit: RECENT_SCAN_LIMIT }).some((summary) => {
     const record = store.readCell(summary.cell);
-    return record.meta.kind === "top_level" && record.procedure !== "default";
+    return record.procedure !== "default";
   });
 }
 
@@ -133,11 +132,11 @@ export function renderSessionToolGuidance(): string {
     "Nanoboss session tool guidance:",
     "- For prior stored procedure results, prefer the nanoboss session MCP tools over filesystem inspection.",
     "- Use top_level_runs(...) to find prior chat-visible commands such as /default, /linter, or /second-opinion.",
-    "- Use session_recent(...) only for recency-based discovery across the whole session; it is not a structural query.",
-    "- Use cell_children(...) or cell_descendants(...) to inspect nested procedure and agent calls under one run.",
-    "- Use cell_parent(...) or cell_ancestors(...) to identify which top-level run owns a nested cell.",
+    "- Use cell_descendants(...) to inspect nested procedure and agent calls under one run; set maxDepth: 1 when you only want direct children.",
+    "- Use cell_ancestors(...) to identify which top-level run owns a nested cell; set limit: 1 when you only want the direct parent.",
     "- After you find a candidate cell, use cell_get(...) for exact metadata and ref_read(...) for exact stored values.",
     "- If ref_read(...) returns nested refs such as critique or answer, call ref_read(...) on those refs too.",
+    "- Use session_recent(...) only for true global recency scans across the whole session; it is not the primary retrieval path.",
     "- Do not treat not-found results from a bounded scan as proof of absence unless the search scope was exhaustive.",
     "- Do not inspect ~/.nanoboss/sessions directly unless the session MCP tools fail.",
   ].join("\n");

@@ -1,10 +1,9 @@
 import type * as acp from "@agentclientprotocol/sdk";
 
 import {
+  SESSION_MCP_SERVER_NAME,
   createSessionMcpApi,
-  formatSessionMcpToolResult,
-  listSessionMcpTools,
-  callSessionMcpTool,
+  dispatchSessionMcpMethod,
 } from "./session-mcp.ts";
 import type { DownstreamAgentConfig } from "./types.ts";
 
@@ -21,7 +20,6 @@ interface LoopbackServerState {
 }
 
 const SESSION_HTTP_SERVERS = new Map<string, LoopbackServerState>();
-const MCP_PROTOCOL_VERSION = "2025-11-25";
 
 export function ensureSessionMcpHttpServer(
   params: SessionMcpAttachmentParams,
@@ -48,7 +46,7 @@ export function ensureSessionMcpHttpServer(
 
   return {
     type: "http",
-    name: "nanoboss-session",
+    name: SESSION_MCP_SERVER_NAME,
     url: existing.url,
     headers: [],
   };
@@ -60,7 +58,7 @@ export function disposeSessionMcpHttpServer(sessionId: string): void {
     return;
   }
 
-  state.server.stop(true);
+  void state.server.stop(true);
   SESSION_HTTP_SERVERS.delete(sessionId);
 }
 
@@ -120,41 +118,6 @@ async function handleSessionMcpHttpRequest(api: ReturnType<typeof createSessionM
   }
 }
 
-function dispatchSessionMcpMethod(
-  api: ReturnType<typeof createSessionMcpApi>,
-  method: string,
-  params: unknown,
-): unknown {
-  switch (method) {
-    case "initialize":
-      return {
-        protocolVersion: MCP_PROTOCOL_VERSION,
-        capabilities: {
-          tools: {},
-        },
-        serverInfo: {
-          name: "nanoboss-session",
-          version: "0.1.0",
-        },
-        instructions: "Use these tools to inspect durable nanoboss session cells and refs.",
-      };
-    case "ping":
-      return {};
-    case "tools/list":
-      return {
-        tools: listSessionMcpTools(),
-      };
-    case "tools/call": {
-      const args = asObject(params);
-      const name = asString(args.name, "name");
-      const toolArgs = asOptionalObject(args.arguments);
-      return formatSessionMcpToolResult(callSessionMcpTool(api, name, toolArgs));
-    }
-    default:
-      throw new Error(`Unsupported MCP method: ${method}`);
-  }
-}
-
 function jsonRpcResult(id: string | number | null, result: unknown): Response {
   return Response.json({
     jsonrpc: "2.0",
@@ -169,28 +132,4 @@ function jsonRpcError(id: string | number | null, code: number, message: string)
     id,
     error: { code, message },
   });
-}
-
-function asObject(value: unknown): Record<string, unknown> {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    throw new Error("Expected object");
-  }
-
-  return value as Record<string, unknown>;
-}
-
-function asOptionalObject(value: unknown): Record<string, unknown> {
-  if (value === undefined) {
-    return {};
-  }
-
-  return asObject(value);
-}
-
-function asString(value: unknown, name: string): string {
-  if (typeof value !== "string" || value.length === 0) {
-    throw new Error(`Expected ${name} to be a non-empty string`);
-  }
-
-  return value;
 }

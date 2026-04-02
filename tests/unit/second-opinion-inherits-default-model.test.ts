@@ -107,28 +107,35 @@ describe("/second-opinion", () => {
         .filter(Boolean)
         .map((line) => JSON.parse(line) as Record<string, unknown>);
 
-      expect(logEntries).toEqual(expect.arrayContaining([
-        expect.objectContaining({
-          kind: "set_model",
-          agentId: "first-pass",
-          modelId: "gemini-2.5-flash",
-        }),
-        expect.objectContaining({
-          kind: "prompt",
-          agentId: "first-pass",
-          modelId: "gemini-2.5-flash",
-        }),
-        expect.objectContaining({
-          kind: "set_model",
-          agentId: "codex",
-          modelId: "gpt-5.4/high",
-        }),
-      ]));
+      expect(hasLogEntry(logEntries, {
+        kind: "set_model",
+        agentId: "first-pass",
+        modelId: "gemini-2.5-flash",
+      })).toBe(true);
+      expect(hasLogEntry(logEntries, {
+        kind: "prompt",
+        agentId: "first-pass",
+        modelId: "gemini-2.5-flash",
+      })).toBe(true);
+      expect(hasLogEntry(logEntries, {
+        kind: "set_model",
+        agentId: "codex",
+        modelId: "gpt-5.4/high",
+      })).toBe(true);
     } finally {
       process.env.PATH = originalPath;
     }
   }, 30_000);
 });
+
+function hasLogEntry(
+  entries: ReadonlyArray<Record<string, unknown>>,
+  expected: Record<string, unknown>,
+): boolean {
+  return entries.some((entry) =>
+    Object.entries(expected).every(([key, value]) => entry[key] === value)
+  );
+}
 
 function buildWrapperScript(params: { agentId: string; logPath: string; targetScript: string }): string {
   return [

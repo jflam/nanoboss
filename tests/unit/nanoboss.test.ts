@@ -24,9 +24,9 @@ describe("parseNanobossArgs", () => {
     });
   });
 
-  test("accepts the MCP server alias", () => {
-    expect(parseNanobossArgs(["mcp-server"])).toEqual({
-      command: "session-mcp-server",
+  test("parses acp-server command", () => {
+    expect(parseNanobossArgs(["acp-server"])).toEqual({
+      command: "acp-server",
       args: [],
     });
   });

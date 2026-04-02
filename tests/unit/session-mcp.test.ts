@@ -163,17 +163,12 @@ describe("session MCP API", () => {
       "linter",
       "second-opinion",
     ]);
-    expect(api.cellParent(critiqueResult.cell)?.cell).toEqual(planResult.cell);
-    expect(api.cellChildren(reviewResult.cell).map((item) => item.cell.cellId)).toEqual([
-      planResult.cell.cellId,
-      summaryResult.cell.cellId,
-    ]);
-    expect(api.cellChildren(reviewResult.cell, { kind: "agent" }).map((item) => item.cell.cellId)).toEqual([
-      summaryResult.cell.cellId,
-    ]);
     expect(api.cellAncestors(critiqueResult.cell).map((item) => item.cell.cellId)).toEqual([
       planResult.cell.cellId,
       reviewResult.cell.cellId,
+    ]);
+    expect(api.cellAncestors(critiqueResult.cell, { limit: 1 }).map((item) => item.cell.cellId)).toEqual([
+      planResult.cell.cellId,
     ]);
     expect(api.cellAncestors(critiqueResult.cell, { includeSelf: true, limit: 2 }).map((item) => item.cell.cellId)).toEqual([
       critiqueResult.cell.cellId,
@@ -254,19 +249,22 @@ describe("session MCP API", () => {
 
     const toolNames = listSessionMcpTools().map((tool) => tool.name);
     expect(toolNames).toContain("top_level_runs");
-    expect(toolNames).toContain("cell_parent");
-    expect(toolNames).toContain("cell_children");
     expect(toolNames).toContain("cell_ancestors");
     expect(toolNames).toContain("cell_descendants");
+    expect(toolNames).toContain("cell_get");
+    expect(toolNames).toContain("ref_read");
+    expect(toolNames).not.toContain("session_last");
+    expect(toolNames).not.toContain("cell_parent");
+    expect(toolNames).not.toContain("cell_children");
 
     expect(
-      callSessionMcpTool(api, "cell_parent", {
+      callSessionMcpTool(api, "cell_ancestors", {
         cellRef: critiqueResult.cell,
+        limit: 1,
       }),
-    ).toMatchObject({
-      procedure: "review-plan",
-      kind: "procedure",
-    });
+    ).toMatchObject([
+      { procedure: "review-plan", kind: "procedure" },
+    ]);
 
     expect(
       callSessionMcpTool(api, "cell_descendants", {

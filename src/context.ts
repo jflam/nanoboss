@@ -10,6 +10,8 @@ import {
 } from "./session-store.ts";
 import type { SessionStore } from "./session-store.ts";
 import type {
+  CellAncestorsOptions,
+  CellDescendantsOptions,
   CellRef,
   CommandCallAgentOptions,
   CommandContext,
@@ -457,15 +459,27 @@ class CommandSession implements SessionApi {
     private readonly currentCellId: string,
   ) {}
 
-  async last() {
-    return this.store.last({ excludeCellId: this.currentCellId });
-  }
-
   async recent(options?: { procedure?: string; limit?: number }) {
     return this.store.recent({
       ...options,
       excludeCellId: this.currentCellId,
     });
+  }
+
+  async topLevelRuns(options?: { procedure?: string; limit?: number }) {
+    return this.store.topLevelRuns(options);
+  }
+
+  async get(cellRef: CellRef) {
+    return this.store.readCell(cellRef);
+  }
+
+  async ancestors(cellRef: CellRef, options?: CellAncestorsOptions) {
+    return this.store.ancestors(cellRef, options);
+  }
+
+  async descendants(cellRef: CellRef, options?: CellDescendantsOptions) {
+    return this.store.descendants(cellRef, options);
   }
 }
 

@@ -86,8 +86,11 @@ export interface RefsApi {
 }
 
 export interface SessionApi {
-  last(): Promise<CellSummary | undefined>;
   recent(options?: { procedure?: string; limit?: number }): Promise<CellSummary[]>;
+  topLevelRuns(options?: { procedure?: string; limit?: number }): Promise<CellSummary[]>;
+  get(cellRef: CellRef): Promise<CellRecord>;
+  ancestors(cellRef: CellRef, options?: CellAncestorsOptions): Promise<CellSummary[]>;
+  descendants(cellRef: CellRef, options?: CellDescendantsOptions): Promise<CellSummary[]>;
 }
 
 export interface DownstreamAgentConfig {
