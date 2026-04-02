@@ -14,6 +14,7 @@ const HTTP_RUN_START_TIMEOUT_MS = Number(process.env.NANOBOSS_HTTP_RUN_START_TIM
 const HTTP_RUN_IDLE_TIMEOUT_MS = Number(process.env.NANOBOSS_HTTP_RUN_IDLE_TIMEOUT_MS ?? "30000");
 const HTTP_RUN_HARD_TIMEOUT_MS = Number(process.env.NANOBOSS_HTTP_RUN_HARD_TIMEOUT_MS ?? String(30 * 60 * 1000));
 const MULTILINE_PASTE_DEBOUNCE_MS = Number(process.env.NANOBOSS_MULTILINE_PASTE_DEBOUNCE_MS ?? "25");
+const READLINE_CLOSED_MESSAGE = "readline was closed";
 
 interface PromptReader {
   off(event: "line" | "close", listener: (...args: unknown[]) => void): this;
@@ -699,7 +700,14 @@ export async function readPromptInput(
   const useTerminalMultilinePaste = options.useTerminalMultilinePaste ?? (process.stdin.isTTY && process.stdout.isTTY);
 
   if (!useTerminalMultilinePaste) {
-    return await rl.question(prompt);
+    try {
+      return await rl.question(prompt);
+    } catch (error) {
+      if (isReadlineClosedError(error)) {
+        throw new Error(READLINE_CLOSED_MESSAGE);
+      }
+      throw error;
+    }
   }
 
   rl.setPrompt(prompt);
@@ -740,7 +748,7 @@ export async function readPromptInput(
         resolve(lines.join("\n"));
         return;
       }
-      reject(new Error("readline was closed"));
+      reject(new Error(READLINE_CLOSED_MESSAGE));
     };
 
     rl.on("line", onLine);
@@ -792,7 +800,17 @@ async function runHttpCli(serverUrl: string, showToolCalls: boolean): Promise<vo
 
   try {
     for (;;) {
-      const line = await readPromptInput(rl);
+      let line: string;
+      try {
+        line = await readPromptInput(rl);
+      } catch (error) {
+        if (isReadlineClosedError(error)) {
+          announceSessionId(client, session.sessionId);
+          break;
+        }
+        throw error;
+      }
+
       const trimmed = line.trim();
       if (trimmed.length === 0) {
         continue;
@@ -847,6 +865,13 @@ async function runHttpCli(serverUrl: string, showToolCalls: boolean): Promise<vo
 
 function isExitRequest(trimmed: string): boolean {
   return trimmed === "exit" || trimmed === "quit" || trimmed === "/end" || trimmed === "/quit" || trimmed === "/exit";
+}
+
+function isReadlineClosedError(error: unknown): boolean {
+  return error instanceof Error && (
+    error.message === READLINE_CLOSED_MESSAGE ||
+    ("code" in error && error.code === "ERR_USE_AFTER_CLOSE")
+  );
 }
 
 function isNewSessionRequest(trimmed: string): boolean {

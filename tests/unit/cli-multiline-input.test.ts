@@ -7,9 +7,13 @@ import { readPromptInput } from "../../cli.ts";
 class FakePromptReader extends EventEmitter {
   promptCalls = 0;
   prompts: string[] = [];
+  questionError?: Error;
 
   async question(query: string): Promise<string> {
     this.prompts.push(query);
+    if (this.questionError) {
+      throw this.questionError;
+    }
     return "single line";
   }
 
@@ -51,5 +55,30 @@ describe("CLI multiline input", () => {
     await expect(pending).resolves.toBe("alpha\nbeta\ngamma");
     expect(reader.prompts).toEqual(["> "]);
     expect(reader.promptCalls).toBe(1);
+  });
+
+  test("normalizes readline close errors for non-terminal prompt reading", async () => {
+    const reader = new FakePromptReader();
+    const error = new Error("Interface is closed");
+    (error as Error & { code?: string }).code = "ERR_USE_AFTER_CLOSE";
+    reader.questionError = error;
+
+    await expect(readPromptInput(reader, {
+      prompt: "> ",
+      useTerminalMultilinePaste: false,
+    })).rejects.toThrow("readline was closed");
+  });
+
+  test("rejects with a stable close error when terminal input closes before any line", async () => {
+    const reader = new FakePromptReader();
+    const pending = readPromptInput(reader, {
+      prompt: "> ",
+      debounceMs: 5,
+      useTerminalMultilinePaste: true,
+    });
+
+    reader.emit("close");
+
+    await expect(pending).rejects.toThrow("readline was closed");
   });
 });
