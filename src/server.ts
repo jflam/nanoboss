@@ -2,6 +2,8 @@ import * as acp from "@agentclientprotocol/sdk";
 import { Readable, Writable } from "node:stream";
 
 import { getBuildLabel } from "./build-info.ts";
+import { SESSION_MCP_SERVER_NAME } from "./session-mcp.ts";
+import { sessionToolProcedures } from "./session-tool-procedures.ts";
 import { NanobossService } from "./service.ts";
 import type { DownstreamAgentSelection } from "./types.ts";
 
@@ -51,9 +53,12 @@ class Nanoboss implements acp.Agent {
   }
 
   async newSession(params: acp.NewSessionRequest): Promise<acp.NewSessionResponse> {
+    const requestedSessionId = extractNanobossSessionId(params);
+    const topLevelMcpAttached = hasTopLevelSessionMcp(params);
     const session = this.service.createSession({
       cwd: params.cwd,
       defaultAgentSelection: extractDefaultAgentSelection(params),
+      sessionId: requestedSessionId,
     });
 
     await this.connection.sessionUpdate({
@@ -64,7 +69,10 @@ class Nanoboss implements acp.Agent {
       },
     });
 
-    return { sessionId: session.sessionId };
+    return {
+      sessionId: session.sessionId,
+      _meta: buildTopLevelSessionMeta({ topLevelMcpAttached }),
+    };
   }
 
   async authenticate(_params: acp.AuthenticateRequest): Promise<acp.AuthenticateResponse> {
@@ -80,6 +88,37 @@ class Nanoboss implements acp.Agent {
   async cancel(params: acp.CancelNotification): Promise<void> {
     this.service.cancel(params.sessionId);
   }
+}
+
+export function buildTopLevelSessionMeta(
+  params: { topLevelMcpAttached: boolean },
+): NonNullable<acp.NewSessionResponse["_meta"]> {
+  return {
+    nanoboss: {
+      sessionInspection: {
+        topLevelMcpAttached: params.topLevelMcpAttached,
+        surface: params.topLevelMcpAttached ? "mcp+commands" : "commands",
+        commandNames: sessionToolProcedures.map((procedure) => procedure.name),
+        note: params.topLevelMcpAttached
+          ? "Session inspection is available through both top-level MCP tools and slash commands."
+          : "ACP top-level sessions can advertise availableCommands, but session MCP must be attached by the creating client through mcpServers.",
+      },
+    },
+  };
+}
+
+export function hasTopLevelSessionMcp(params: acp.NewSessionRequest): boolean {
+  return params.mcpServers.some((server) => server.name === SESSION_MCP_SERVER_NAME);
+}
+
+export function extractNanobossSessionId(params: acp.NewSessionRequest): string | undefined {
+  const record = params._meta;
+  if (!record || typeof record !== "object") {
+    return undefined;
+  }
+
+  const candidate = (record as Record<string, unknown>).nanobossSessionId;
+  return typeof candidate === "string" && candidate.length > 0 ? candidate : undefined;
 }
 
 function extractDefaultAgentSelection(params: acp.NewSessionRequest): DownstreamAgentSelection | undefined {

@@ -143,6 +143,20 @@ describe("NanobossService", () => {
     });
   });
 
+  test("createSession honors an explicit session id", () => {
+    const registry = new ProcedureRegistry(mkdtempSync(join(tmpdir(), "nab-service-")));
+    registry.loadBuiltins();
+
+    const service = new NanobossService(registry);
+    const session = service.createSession({
+      cwd: process.cwd(),
+      sessionId: "session-from-client",
+    });
+
+    expect(session.sessionId).toBe("session-from-client");
+    expect(service.getSession("session-from-client")?.sessionId).toBe("session-from-client");
+  });
+
   test("createSession exposes session inspection commands on the parent command surface", () => {
     const registry = new ProcedureRegistry(mkdtempSync(join(tmpdir(), "nab-service-")));
     registry.loadBuiltins();

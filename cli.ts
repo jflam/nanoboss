@@ -1,8 +1,4 @@
-import * as acp from "@agentclientprotocol/sdk";
-import { spawn, type ChildProcessByStdio } from "node:child_process";
-import { once } from "node:events";
 import readline from "node:readline/promises";
-import { Readable, Writable } from "node:stream";
 
 import {
   isCommandsUpdatedEvent,
@@ -177,7 +173,6 @@ import {
   getCliStartupBanner,
   getDefaultAgentBanner,
 } from "./src/runtime-banner.ts";
-import { resolveSelfCommand } from "./src/self-command.ts";
 import { getAgentTokenUsagePercent } from "./src/token-usage.ts";
 import type { AgentTokenUsage, DownstreamAgentSelection } from "./src/types.ts";
 
@@ -541,94 +536,6 @@ export async function runCliCommand(argv: string[] = []): Promise<void> {
   await runHttpCli(options.serverUrl, options.showToolCalls);
 }
 
-async function runAcpCli(showToolCalls: boolean): Promise<void> {
-  const serverCommand = resolveSelfCommand("acp-server");
-  const server: ChildProcessByStdio<Writable, Readable, null> = spawn(serverCommand.command, serverCommand.args, {
-    cwd: process.cwd(),
-    stdio: ["pipe", "pipe", "inherit"],
-  });
-
-  const client = new OutputClient({ showToolCalls });
-  const stream = acp.ndJsonStream(
-    Writable.toWeb(server.stdin),
-    Readable.toWeb(server.stdout),
-  );
-  const connection = new acp.ClientSideConnection(() => client, stream);
-
-  await connection.initialize({
-    protocolVersion: acp.PROTOCOL_VERSION,
-    clientCapabilities: {},
-  });
-
-  let session = await createAcpSession(
-    connection,
-    process.cwd(),
-    client.getCurrentAgentSelection(),
-  );
-
-  client.setCurrentAgentSelection(
-    client.getCurrentAgentSelection() ?? toDownstreamAgentSelection(resolveDownstreamAgentConfig(process.cwd())),
-  );
-  writeStartupBanner(getCliStartupBanner(process.cwd()));
-
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
-    terminal: true,
-    completer: client.completer,
-  });
-
-  try {
-    for (;;) {
-      const line = await rl.question("> ");
-      const trimmed = line.trim();
-      if (trimmed.length === 0) {
-        continue;
-      }
-      if (isExitRequest(trimmed)) {
-        announceSessionId(client, session.sessionId);
-        break;
-      }
-      if (isNewSessionRequest(trimmed)) {
-        session = await createAcpSession(
-          connection,
-          process.cwd(),
-          client.getCurrentAgentSelection(),
-        );
-        client.writeStatusLine(`[session] new ${session.sessionId}`);
-        continue;
-      }
-
-      const prompt = await maybeResolveInteractiveCommand(line, rl, client);
-      if (!prompt) {
-        continue;
-      }
-
-      client.beginResponse();
-      try {
-        await connection.prompt({
-          sessionId: session.sessionId,
-          prompt: [
-            {
-              type: "text",
-              text: prompt,
-            },
-          ],
-        });
-      } finally {
-        client.endResponse();
-      }
-      client.writeLineBreak();
-    }
-  } finally {
-    rl.close();
-    if (server.exitCode === null) {
-      server.kill();
-      await once(server, "exit");
-    }
-  }
-}
-
 async function runHttpCli(serverUrl: string, showToolCalls: boolean): Promise<void> {
   const client = new OutputClient({ showToolCalls });
   await ensureMatchingHttpServer(serverUrl, {
@@ -720,22 +627,6 @@ async function runHttpCli(serverUrl: string, showToolCalls: boolean): Promise<vo
     stream.close();
     rl.close();
   }
-}
-
-async function createAcpSession(
-  connection: acp.ClientSideConnection,
-  cwd: string,
-  defaultAgentSelection?: DownstreamAgentSelection,
-): Promise<{ sessionId: string }> {
-  return connection.newSession({
-    cwd,
-    mcpServers: [],
-    _meta: defaultAgentSelection
-      ? {
-          defaultAgentSelection,
-        }
-      : undefined,
-  });
 }
 
 function isExitRequest(trimmed: string): boolean {

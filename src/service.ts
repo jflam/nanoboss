@@ -114,8 +114,11 @@ export class NanobossService {
     return this.registry.toAvailableCommands();
   }
 
-  createSession(params: { cwd: string; defaultAgentSelection?: DownstreamAgentSelection }): SessionDescriptor {
-    const sessionId = crypto.randomUUID();
+  createSession(params: { cwd: string; defaultAgentSelection?: DownstreamAgentSelection; sessionId?: string }): SessionDescriptor {
+    const sessionId = params.sessionId ?? crypto.randomUUID();
+    if (this.sessions.has(sessionId)) {
+      throw new Error(`Session already exists: ${sessionId}`);
+    }
     const commands = toFrontendCommands(this.registry.toAvailableCommands());
     const defaultAgentConfig = this.resolveDefaultAgentConfig(params.cwd, params.defaultAgentSelection);
     const store = new SessionStore({
