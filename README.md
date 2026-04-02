@@ -79,7 +79,12 @@ bun run nanoboss server
 
 Launch the CLI frontend. By default it connects to `http://localhost:6502`.
 If the local server is missing or running a different nanoboss commit, the CLI
-will start or restart it automatically in the background:
+will start or restart it automatically in the background.
+
+When you run the installed `nanoboss` binary from the nanoboss repo working
+copy, the CLI also warns if the executable looks older than the current
+build-relevant files in that working tree, so it is easier to notice when you
+forgot to rebuild after local changes:
 
 ```bash
 bun run nanoboss cli
