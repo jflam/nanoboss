@@ -12,10 +12,10 @@ describe("/model command", () => {
         model: "gpt-5.2-codex",
         reasoningEffort: "xhigh",
       }),
-      getDefaultAgentTokenSnapshot: async () => ({
+      getDefaultAgentTokenUsage: async () => ({
         source: "acp_usage_update",
-        usedContextTokens: 12824,
-        contextWindowTokens: 258400,
+        currentContextTokens: 12824,
+        maxContextTokens: 258400,
       }),
     } as any);
 

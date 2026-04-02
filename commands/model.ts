@@ -7,7 +7,8 @@ import {
   listSelectableModelOptions,
 } from "../src/model-catalog.ts";
 import { formatAgentBanner } from "../src/runtime-banner.ts";
-import type { Procedure } from "../src/types.ts";
+import { getAgentTokenUsagePercent } from "../src/token-usage.ts";
+import type { AgentTokenUsage, Procedure } from "../src/types.ts";
 
 export default {
   name: "model",
@@ -19,14 +20,14 @@ export default {
     const currentBanner = formatAgentBanner(current);
 
     if (!trimmed) {
-      const snapshot = await ctx.getDefaultAgentTokenSnapshot();
-      const contextLine = formatObservedContext(snapshot);
+      const usage = await ctx.getDefaultAgentTokenUsage();
+      const contextLine = formatObservedContext(usage);
 
       return {
         display: [
           `Current default agent: ${currentBanner}`,
           contextLine,
-          contextLine ? `Context source: ${snapshot?.source}` : undefined,
+          contextLine ? `Context source: ${usage?.source}` : undefined,
           contextLine ? "" : undefined,
           "Use `/model <agent>` to list models.",
           "Use `/model <agent> <model>` to switch.",
@@ -107,26 +108,22 @@ export default {
   },
 } satisfies Procedure;
 
-function formatObservedContext(snapshot: { usedContextTokens?: number; contextWindowTokens?: number } | undefined): string | undefined {
-  if (!snapshot || snapshot.usedContextTokens === undefined) {
+function formatObservedContext(usage: AgentTokenUsage | undefined): string | undefined {
+  if (!usage || usage.currentContextTokens === undefined) {
     return undefined;
   }
 
-  if (snapshot.contextWindowTokens === undefined) {
-    return `Last observed context: ${formatInt(snapshot.usedContextTokens)} tokens in use`;
+  if (usage.maxContextTokens === undefined) {
+    return `Last observed context: ${formatInt(usage.currentContextTokens)} tokens in use`;
   }
 
-  return `Last observed context: ${formatInt(snapshot.usedContextTokens)} / ${formatInt(snapshot.contextWindowTokens)} tokens (${formatPercent(snapshot.usedContextTokens, snapshot.contextWindowTokens)})`;
+  return `Last observed context: ${formatInt(usage.currentContextTokens)} / ${formatInt(usage.maxContextTokens)} tokens (${formatPercent(getAgentTokenUsagePercent(usage) ?? 0)})`;
 }
 
 function formatInt(value: number): string {
   return new Intl.NumberFormat("en-US").format(value);
 }
 
-function formatPercent(used: number, total: number): string {
-  if (total <= 0) {
-    return "0.0%";
-  }
-
-  return `${((used / total) * 100).toFixed(1)}%`;
+function formatPercent(percent: number): string {
+  return `${percent.toFixed(1)}%`;
 }

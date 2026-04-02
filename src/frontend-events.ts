@@ -1,6 +1,7 @@
 import type * as acp from "@agentclientprotocol/sdk";
 
-import type { AgentTokenSnapshot, CellRef } from "./types.ts";
+import { normalizeAgentTokenUsage } from "./token-usage.ts";
+import type { AgentTokenUsage, CellRef } from "./types.ts";
 
 export interface FrontendCommand {
   name: string;
@@ -29,7 +30,7 @@ export type FrontendEvent =
   | {
       type: "token_snapshot";
       runId: string;
-      snapshot: AgentTokenSnapshot;
+      usage: AgentTokenUsage;
       sourceUpdate: "usage_update" | "tool_call_update";
       toolCallId?: string;
       status?: string;
@@ -202,12 +203,12 @@ export function mapSessionUpdateToFrontendEvents(
         },
       ];
 
-      const snapshot = extractTokenSnapshot(update.rawOutput);
-      if (snapshot) {
+      const usage = extractTokenUsage(update.rawOutput);
+      if (usage) {
         events.push({
           type: "token_snapshot",
           runId,
-          snapshot,
+          usage,
           sourceUpdate: "tool_call_update",
           toolCallId: update.toolCallId,
           status: update.status ?? undefined,
@@ -228,11 +229,11 @@ export function mapSessionUpdateToFrontendEvents(
         {
           type: "token_snapshot",
           runId,
-          snapshot: {
+          usage: normalizeAgentTokenUsage({
             source: "acp_usage_update",
             contextWindowTokens: update.size,
             usedContextTokens: update.used,
-          },
+          })!,
           sourceUpdate: "usage_update",
         },
       ];
@@ -241,21 +242,24 @@ export function mapSessionUpdateToFrontendEvents(
   }
 }
 
-function extractTokenSnapshot(rawOutput: unknown): AgentTokenSnapshot | undefined {
-  if (!rawOutput || typeof rawOutput !== "object" || !("tokenSnapshot" in rawOutput)) {
+function extractTokenUsage(rawOutput: unknown): AgentTokenUsage | undefined {
+  if (!rawOutput || typeof rawOutput !== "object") {
     return undefined;
   }
 
-  const snapshot = (rawOutput as { tokenSnapshot?: unknown }).tokenSnapshot;
-  if (!snapshot || typeof snapshot !== "object") {
+  if ("tokenUsage" in rawOutput) {
+    const usage = (rawOutput as { tokenUsage?: unknown }).tokenUsage;
+    if (usage && typeof usage === "object" && "source" in usage && typeof usage.source === "string") {
+      return usage as AgentTokenUsage;
+    }
+  }
+
+  if (!("tokenSnapshot" in rawOutput)) {
     return undefined;
   }
 
-  if (!("source" in snapshot) || typeof snapshot.source !== "string") {
-    return undefined;
-  }
-
-  return snapshot as AgentTokenSnapshot;
+  const snapshot = (rawOutput as { tokenSnapshot?: Parameters<typeof normalizeAgentTokenUsage>[0] }).tokenSnapshot;
+  return normalizeAgentTokenUsage(snapshot);
 }
 
 function withoutType(event: FrontendEvent): Omit<FrontendEvent, "type"> {

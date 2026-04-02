@@ -135,6 +135,24 @@ export interface AgentTokenSnapshot {
   totalTokens?: number;
 }
 
+export interface AgentTokenUsage {
+  provider?: DownstreamAgentProvider;
+  model?: string;
+  sessionId?: string;
+  source: AgentTokenSnapshot["source"];
+  capturedAt?: string;
+  currentContextTokens?: number;
+  maxContextTokens?: number;
+  systemTokens?: number;
+  conversationTokens?: number;
+  toolDefinitionsTokens?: number;
+  inputTokens?: number;
+  outputTokens?: number;
+  cacheReadTokens?: number;
+  cacheWriteTokens?: number;
+  totalTrackedTokens?: number;
+}
+
 export interface TypeDescriptor<T> {
   schema: object;
   validate: (input: unknown) => input is T;
@@ -221,6 +239,7 @@ export interface CommandContext {
   getDefaultAgentConfig(): DownstreamAgentConfig;
   setDefaultAgentSelection(selection: DownstreamAgentSelection): DownstreamAgentConfig;
   getDefaultAgentTokenSnapshot(): Promise<AgentTokenSnapshot | undefined>;
+  getDefaultAgentTokenUsage(): Promise<AgentTokenUsage | undefined>;
   callAgent(
     prompt: string,
     options?: CommandCallAgentOptions,

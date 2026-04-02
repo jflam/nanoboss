@@ -51,10 +51,10 @@ describe("frontend-events", () => {
       {
         type: "token_snapshot",
         runId: "run-1",
-        snapshot: {
+        usage: {
           source: "acp_usage_update",
-          contextWindowTokens: 258400,
-          usedContextTokens: 12824,
+          currentContextTokens: 12824,
+          maxContextTokens: 258400,
         },
         sourceUpdate: "usage_update",
       },
@@ -66,10 +66,10 @@ describe("frontend-events", () => {
         toolCallId: "tool-1",
         status: "completed",
         rawOutput: {
-          tokenSnapshot: {
+          tokenUsage: {
             source: "copilot_log",
-            usedContextTokens: 24236,
-            contextWindowTokens: 272000,
+            currentContextTokens: 24236,
+            maxContextTokens: 272000,
           },
         },
       }),
@@ -84,10 +84,10 @@ describe("frontend-events", () => {
       {
         type: "token_snapshot",
         runId: "run-1",
-        snapshot: {
+        usage: {
           source: "copilot_log",
-          usedContextTokens: 24236,
-          contextWindowTokens: 272000,
+          currentContextTokens: 24236,
+          maxContextTokens: 272000,
         },
         sourceUpdate: "tool_call_update",
         toolCallId: "tool-1",

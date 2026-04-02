@@ -1,5 +1,6 @@
 import { formatAgentBanner } from "../src/runtime-banner.ts";
-import type { AgentTokenSnapshot, Procedure } from "../src/types.ts";
+import { getAgentTokenUsagePercent } from "../src/token-usage.ts";
+import type { AgentTokenUsage, Procedure } from "../src/types.ts";
 
 export default {
   name: "tokens",
@@ -7,9 +8,9 @@ export default {
   async execute(_prompt, ctx) {
     const config = ctx.getDefaultAgentConfig();
     const banner = formatAgentBanner(config);
-    const snapshot = await ctx.getDefaultAgentTokenSnapshot();
+    const usage = await ctx.getDefaultAgentTokenUsage();
 
-    if (!snapshot) {
+    if (!usage) {
       return {
         display: [
           `Default agent: ${banner}`,
@@ -24,69 +25,69 @@ export default {
     }
 
     return {
-      data: snapshot,
-      display: renderSnapshot(banner, snapshot),
-      summary: summarizeSnapshot(banner, snapshot),
+      data: usage,
+      display: renderUsage(banner, usage),
+      summary: summarizeUsage(banner, usage),
     };
   },
 } satisfies Procedure;
 
-function renderSnapshot(banner: string, snapshot: AgentTokenSnapshot): string {
+function renderUsage(banner: string, usage: AgentTokenUsage): string {
   const lines = [
     `Default agent: ${banner}`,
-    `Source: ${snapshot.source}`,
+    `Source: ${usage.source}`,
   ];
 
-  if (snapshot.usedContextTokens !== undefined && snapshot.contextWindowTokens !== undefined) {
+  if (usage.currentContextTokens !== undefined && usage.maxContextTokens !== undefined) {
     lines.push(
-      `Context: ${formatInt(snapshot.usedContextTokens)} / ${formatInt(snapshot.contextWindowTokens)} tokens (${formatPercent(snapshot.usedContextTokens, snapshot.contextWindowTokens)})`,
+      `Context: ${formatInt(usage.currentContextTokens)} / ${formatInt(usage.maxContextTokens)} tokens (${formatPercent(getAgentTokenUsagePercent(usage) ?? 0)})`,
     );
-  } else if (snapshot.usedContextTokens !== undefined) {
-    lines.push(`Context: ${formatInt(snapshot.usedContextTokens)} tokens in use`);
+  } else if (usage.currentContextTokens !== undefined) {
+    lines.push(`Context: ${formatInt(usage.currentContextTokens)} tokens in use`);
   }
 
   if (
-    snapshot.inputTokens !== undefined ||
-    snapshot.outputTokens !== undefined ||
-    snapshot.cacheReadTokens !== undefined ||
-    snapshot.cacheWriteTokens !== undefined
+    usage.inputTokens !== undefined ||
+    usage.outputTokens !== undefined ||
+    usage.cacheReadTokens !== undefined ||
+    usage.cacheWriteTokens !== undefined
   ) {
     lines.push(
-      `Turn usage: input ${formatMaybe(snapshot.inputTokens)}, output ${formatMaybe(snapshot.outputTokens)}, cache read ${formatMaybe(snapshot.cacheReadTokens)}, cache write ${formatMaybe(snapshot.cacheWriteTokens)}`,
+      `Turn usage: input ${formatMaybe(usage.inputTokens)}, output ${formatMaybe(usage.outputTokens)}, cache read ${formatMaybe(usage.cacheReadTokens)}, cache write ${formatMaybe(usage.cacheWriteTokens)}`,
     );
   }
 
   const breakdown = [
-    snapshot.systemTokens !== undefined ? `system ${formatInt(snapshot.systemTokens)}` : undefined,
-    snapshot.conversationTokens !== undefined ? `conversation ${formatInt(snapshot.conversationTokens)}` : undefined,
-    snapshot.toolDefinitionsTokens !== undefined ? `tools ${formatInt(snapshot.toolDefinitionsTokens)}` : undefined,
+    usage.systemTokens !== undefined ? `system ${formatInt(usage.systemTokens)}` : undefined,
+    usage.conversationTokens !== undefined ? `conversation ${formatInt(usage.conversationTokens)}` : undefined,
+    usage.toolDefinitionsTokens !== undefined ? `tools ${formatInt(usage.toolDefinitionsTokens)}` : undefined,
   ].filter(Boolean);
   if (breakdown.length > 0) {
     lines.push(`Breakdown: ${breakdown.join(", ")}`);
   }
 
-  if (snapshot.totalTokens !== undefined) {
-    lines.push(`Cumulative tracked tokens: ${formatInt(snapshot.totalTokens)}`);
+  if (usage.totalTrackedTokens !== undefined) {
+    lines.push(`Cumulative tracked tokens: ${formatInt(usage.totalTrackedTokens)}`);
   }
 
-  if (snapshot.sessionId) {
-    lines.push(`ACP session: ${snapshot.sessionId}`);
+  if (usage.sessionId) {
+    lines.push(`ACP session: ${usage.sessionId}`);
   }
 
-  if (snapshot.capturedAt) {
-    lines.push(`Captured at: ${snapshot.capturedAt}`);
+  if (usage.capturedAt) {
+    lines.push(`Captured at: ${usage.capturedAt}`);
   }
 
   return `${lines.join("\n")}\n`;
 }
 
-function summarizeSnapshot(banner: string, snapshot: AgentTokenSnapshot): string {
-  if (snapshot.usedContextTokens !== undefined && snapshot.contextWindowTokens !== undefined) {
-    return `tokens: ${banner} ${snapshot.usedContextTokens}/${snapshot.contextWindowTokens}`;
+function summarizeUsage(banner: string, usage: AgentTokenUsage): string {
+  if (usage.currentContextTokens !== undefined && usage.maxContextTokens !== undefined) {
+    return `tokens: ${banner} ${usage.currentContextTokens}/${usage.maxContextTokens}`;
   }
 
-  if (snapshot.usedContextTokens !== undefined) {
-    return `tokens: ${banner} ${snapshot.usedContextTokens}`;
+  if (usage.currentContextTokens !== undefined) {
+    return `tokens: ${banner} ${usage.currentContextTokens}`;
   }
 
   return `tokens: ${banner}`;
@@ -100,10 +101,6 @@ function formatInt(value: number): string {
   return new Intl.NumberFormat("en-US").format(value);
 }
 
-function formatPercent(used: number, total: number): string {
-  if (total <= 0) {
-    return "0.0%";
-  }
-
-  return `${((used / total) * 100).toFixed(1)}%`;
+function formatPercent(percent: number): string {
+  return `${percent.toFixed(1)}%`;
 }

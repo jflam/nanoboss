@@ -5,6 +5,7 @@ import { invokeAgent } from "./call-agent.ts";
 import { resolveDownstreamAgentConfig } from "./config.ts";
 import type { DefaultConversationSession } from "./default-session.ts";
 import type { RunLogger } from "./logger.ts";
+import { normalizeAgentTokenUsage } from "./token-usage.ts";
 import {
   normalizeProcedureResult,
   summarizeText,
@@ -117,6 +118,13 @@ export class CommandContextImpl implements CommandContext {
     return await this.defaultConversation?.getCurrentTokenSnapshot();
   }
 
+  async getDefaultAgentTokenUsage() {
+    return normalizeAgentTokenUsage(
+      await this.defaultConversation?.getCurrentTokenSnapshot(),
+      this.getDefaultAgentConfigValue(),
+    );
+  }
+
   async callAgent(
     prompt: string,
     options?: CommandCallAgentOptions,
@@ -135,6 +143,9 @@ export class CommandContextImpl implements CommandContext {
       ? descriptorOrOptions
       : undefined;
     const options = (descriptor ? maybeOptions : descriptorOrOptions) as CommandCallAgentOptions | undefined;
+    const agentConfig = options?.agent
+      ? resolveDownstreamAgentConfig(this.cwd, options.agent)
+      : this.getDefaultAgentConfigValue();
     const started = this.beginAgentRun(prompt, {
       title: `callAgent${formatAgentLabel(options?.agent)}: ${summarize(prompt)}`,
       rawInput: {
@@ -148,9 +159,7 @@ export class CommandContextImpl implements CommandContext {
 
     try {
       const result = await invokeAgent(prompt, descriptor, {
-        config: options?.agent
-          ? resolveDownstreamAgentConfig(this.cwd, options.agent)
-          : this.getDefaultAgentConfigValue(),
+        config: agentConfig,
         namedRefs,
         signal: this.signal,
         sessionMcp: {
@@ -173,7 +182,12 @@ export class CommandContextImpl implements CommandContext {
         logFile: result.logFile,
         summary: summarizeAgentOutput(result.data, result.raw),
         streamText: options?.stream !== false,
-        rawOutputExtra: result.tokenSnapshot ? { tokenSnapshot: result.tokenSnapshot } : undefined,
+        rawOutputExtra: result.tokenSnapshot
+          ? {
+              tokenSnapshot: result.tokenSnapshot,
+              tokenUsage: normalizeAgentTokenUsage(result.tokenSnapshot, agentConfig),
+            }
+          : undefined,
         agent: options?.agent,
       });
     } catch (error) {
@@ -291,7 +305,12 @@ export class CommandContextImpl implements CommandContext {
         streamText: true,
         rawOutputExtra: {
           sessionId: this.defaultConversation.currentSessionId,
-          ...(result.tokenSnapshot ? { tokenSnapshot: result.tokenSnapshot } : {}),
+          ...(result.tokenSnapshot
+            ? {
+                tokenSnapshot: result.tokenSnapshot,
+                tokenUsage: normalizeAgentTokenUsage(result.tokenSnapshot, this.getDefaultAgentConfigValue()),
+              }
+            : {}),
         },
       });
 
