@@ -38,6 +38,20 @@ describe("parseNanobossArgs", () => {
     });
   });
 
+  test("parses doctor command", () => {
+    expect(parseNanobossArgs(["doctor", "--register"])).toEqual({
+      command: "doctor",
+      args: ["--register"],
+    });
+  });
+
+  test("parses mcp command", () => {
+    expect(parseNanobossArgs(["mcp", "proxy"])).toEqual({
+      command: "mcp",
+      args: ["proxy"],
+    });
+  });
+
   test("rejects unknown commands", () => {
     expect(() => parseNanobossArgs(["web"])).toThrow("Unknown nanoboss command: web");
   });

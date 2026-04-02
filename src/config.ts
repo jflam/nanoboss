@@ -14,7 +14,7 @@ interface ParsedModelSelection {
 }
 
 export function getNanobossHome(): string {
-  return join(homedir(), ".nanoboss");
+  return join(process.env.HOME?.trim() || homedir(), ".nanoboss");
 }
 
 export function getRunLogDir(): string {

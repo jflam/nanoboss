@@ -91,10 +91,25 @@ Override the server URL if needed:
 bun run nanoboss cli --server-url http://localhost:6503
 ```
 
+Inspect agent health and register the static top-level nanoboss MCP server with
+installed agents:
+
+```bash
+bun run nanoboss doctor
+bun run nanoboss doctor --register
+```
+
 The internal stdio ACP server is still available for local CLI mode:
 
 ```bash
 bun run nanoboss acp-server
+```
+
+The static MCP stdio server used by `doctor --register` is also available
+directly:
+
+```bash
+bun run nanoboss mcp proxy
 ```
 
 Tool call progress lines are shown by default. Hide them with:
