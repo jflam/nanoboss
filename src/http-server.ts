@@ -1,4 +1,5 @@
 import { getBuildLabel } from "./build-info.ts";
+import { DEFAULT_HTTP_SERVER_PORT } from "./defaults.ts";
 import type { FrontendEventEnvelope } from "./frontend-events.ts";
 import { NanobossService } from "./service.ts";
 import type { DownstreamAgentSelection } from "./types.ts";
@@ -10,7 +11,7 @@ export interface HttpServerOptions {
 }
 
 export function parseHttpServerOptions(argv: string[]): HttpServerOptions {
-  let port = Number(Bun.env.NANOBOSS_PORT ?? "3000");
+  let port = Number(Bun.env.NANOBOSS_PORT ?? String(DEFAULT_HTTP_SERVER_PORT));
   const idleTimeoutSeconds = Number(Bun.env.NANOBOSS_HTTP_IDLE_TIMEOUT_SECONDS ?? "30");
   const sseKeepAliveMs = Number(Bun.env.NANOBOSS_SSE_KEEPALIVE_MS ?? "10000");
 

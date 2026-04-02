@@ -155,6 +155,7 @@ import {
   sendSessionPrompt,
   startSessionEventStream,
 } from "./src/http-client.ts";
+import { DEFAULT_HTTP_SERVER_URL } from "./src/defaults.ts";
 import { StreamingTerminalMarkdownRenderer } from "./src/terminal-markdown.ts";
 import { parseCliOptions } from "./src/cli-options.ts";
 import {
@@ -488,12 +489,7 @@ export async function runCliCommand(argv: string[] = []): Promise<void> {
     return;
   }
 
-  if (options.serverUrl) {
-    await runHttpCli(options.serverUrl, options.showToolCalls);
-    return;
-  }
-
-  await runAcpCli(options.showToolCalls);
+  await runHttpCli(options.serverUrl, options.showToolCalls);
 }
 
 async function runAcpCli(showToolCalls: boolean): Promise<void> {
@@ -760,7 +756,7 @@ function printHelp(): void {
     "Options:",
     "  --tool-calls          Show tool call progress lines (default)",
     "  --no-tool-calls       Hide tool call progress lines",
-    "  --server-url <url>    Connect to nanoboss over HTTP/SSE",
+    `  --server-url <url>    Connect to nanoboss over HTTP/SSE (default: ${DEFAULT_HTTP_SERVER_URL})`,
     "  -h, --help            Show this help text",
     "",
   ].join("\n"));

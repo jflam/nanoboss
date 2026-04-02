@@ -1,13 +1,14 @@
 import { describe, expect, test } from "bun:test";
 
 import { parseCliOptions } from "../../src/cli-options.ts";
+import { DEFAULT_HTTP_SERVER_URL } from "../../src/defaults.ts";
 
 describe("parseCliOptions", () => {
   test("shows tool calls by default", () => {
     expect(parseCliOptions([])).toEqual({
       showToolCalls: true,
       showHelp: false,
-      serverUrl: undefined,
+      serverUrl: DEFAULT_HTTP_SERVER_URL,
     });
   });
 
@@ -15,7 +16,7 @@ describe("parseCliOptions", () => {
     expect(parseCliOptions(["--no-tool-calls"])).toEqual({
       showToolCalls: false,
       showHelp: false,
-      serverUrl: undefined,
+      serverUrl: DEFAULT_HTTP_SERVER_URL,
     });
   });
 
@@ -23,7 +24,7 @@ describe("parseCliOptions", () => {
     expect(parseCliOptions(["--tool-calls", "--help"])).toEqual({
       showToolCalls: true,
       showHelp: true,
-      serverUrl: undefined,
+      serverUrl: DEFAULT_HTTP_SERVER_URL,
     });
   });
 

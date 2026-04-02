@@ -1,13 +1,15 @@
+import { DEFAULT_HTTP_SERVER_URL } from "./defaults.ts";
+
 export interface CliOptions {
   showToolCalls: boolean;
   showHelp: boolean;
-  serverUrl?: string;
+  serverUrl: string;
 }
 
 export function parseCliOptions(argv: string[]): CliOptions {
   let showToolCalls = true;
   let showHelp = false;
-  let serverUrl: string | undefined;
+  let serverUrl = Bun.env.NANOBOSS_SERVER_URL ?? DEFAULT_HTTP_SERVER_URL;
 
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];

@@ -63,22 +63,22 @@ See [`docs/architecture.md`](docs/architecture.md) for a transport-level overvie
 
 ## Commands
 
-Launch the CLI frontend:
+Launch the HTTP/SSE server:
+
+```bash
+bun run nanoboss server
+```
+
+Launch the CLI frontend. By default it connects to `http://localhost:6502`:
 
 ```bash
 bun run nanoboss cli
 ```
 
-Launch the HTTP/SSE server:
+Override the server URL if needed:
 
 ```bash
-bun run nanoboss server --port 3000
-```
-
-Connect the CLI to a running server:
-
-```bash
-bun run nanoboss cli --server-url http://localhost:3000
+bun run nanoboss cli --server-url http://localhost:6503
 ```
 
 The internal stdio ACP server is still available for local CLI mode:

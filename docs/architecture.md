@@ -78,20 +78,20 @@ flowchart TD
 
 ---
 
-## Local CLI path
+## Default CLI path
 
-When you run `nanoboss cli` without `--server-url`, the CLI talks to nanoboss over **ACP on stdio**.
+When you run `nanoboss cli` without `--server-url`, the CLI connects to nanoboss over **HTTP/SSE** at `http://localhost:6502`.
 
 ```mermaid
 sequenceDiagram
   participant User
   participant CLI as CLI
-  participant ACP as nanoboss acp-server
+  participant Server as nanoboss server
   participant Service as NanobossService
 
   User->>CLI: type prompt / command
-  CLI->>ACP: ACP over stdio
-  ACP->>Service: createSession / prompt / cancel
+  CLI->>Server: HTTP + SSE
+  Server->>Service: createSession / prompt / cancel
   Service-->>ACP: session updates
   ACP-->>CLI: ACP session updates over stdio
   CLI-->>User: render output and tool traces

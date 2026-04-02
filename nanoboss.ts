@@ -1,4 +1,5 @@
 import { runCliCommand } from "./cli.ts";
+import { DEFAULT_HTTP_SERVER_PORT, DEFAULT_HTTP_SERVER_URL } from "./src/defaults.ts";
 import { runHttpServerCommand } from "./src/http-server.ts";
 import { runAcpServerCommand } from "./src/server.ts";
 
@@ -63,8 +64,9 @@ export function printHelp(): void {
     "  help               Show this help text",
     "",
     "Examples:",
-    "  nanoboss server --port 3000",
-    "  nanoboss cli --server-url http://localhost:3000",
+    `  nanoboss server --port ${DEFAULT_HTTP_SERVER_PORT}`,
+    "  nanoboss cli",
+    `  nanoboss cli --server-url ${DEFAULT_HTTP_SERVER_URL}`,
     "",
   ].join("\n"));
 }
