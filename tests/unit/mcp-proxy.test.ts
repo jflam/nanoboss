@@ -128,8 +128,7 @@ function writeMcpMessage(
   stdin: NodeJS.WritableStream,
   message: unknown,
 ): void {
-  const body = JSON.stringify(message);
-  stdin.write(`Content-Length: ${Buffer.byteLength(body, "utf8")}\r\n\r\n${body}`);
+  stdin.write(`${JSON.stringify(message)}\n`);
 }
 
 async function readMcpMessage(
@@ -187,39 +186,18 @@ class StdioFrameReader {
 
   private flush(): void {
     while (this.pending.length > 0) {
-      const body = tryReadFrame(this.buffer);
-      if (!body) {
+      const lineEnd = this.buffer.indexOf("\n");
+      if (lineEnd < 0) {
         return;
       }
 
-      this.buffer = body.rest;
-      this.pending.shift()?.resolve(body.text);
+      const line = this.buffer.subarray(0, lineEnd).toString("utf8").replace(/\r$/, "");
+      this.buffer = this.buffer.subarray(lineEnd + 1);
+      if (line.length === 0) {
+        continue;
+      }
+
+      this.pending.shift()?.resolve(line);
     }
   }
-}
-
-function tryReadFrame(buffer: Buffer): { text: string; rest: Buffer } | undefined {
-  const separator = "\r\n\r\n";
-  const headerEnd = buffer.indexOf(separator);
-  if (headerEnd < 0) {
-    return undefined;
-  }
-
-  const headers = buffer.subarray(0, headerEnd).toString("utf8");
-  const match = headers.match(/^content-length:\s*(\d+)\s*$/im);
-  if (!match) {
-    throw new Error("Missing Content-Length");
-  }
-
-  const contentLength = Number(match[1]);
-  const bodyStart = headerEnd + separator.length;
-  const bodyEnd = bodyStart + contentLength;
-  if (buffer.length < bodyEnd) {
-    return undefined;
-  }
-
-  return {
-    text: buffer.subarray(bodyStart, bodyEnd).toString("utf8"),
-    rest: buffer.subarray(bodyEnd),
-  };
 }

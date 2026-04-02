@@ -139,8 +139,7 @@ function writeMcpMessage(
   stdin: NodeJS.WritableStream,
   message: unknown,
 ): void {
-  const body = JSON.stringify(message);
-  stdin.write(`Content-Length: ${Buffer.byteLength(body, "utf8")}\r\n\r\n${body}`);
+  stdin.write(`${JSON.stringify(message)}\n`);
 }
 
 async function readMcpMessage(
@@ -225,7 +224,7 @@ class StdioFrameReader {
       };
       const onEnd = () => {
         cleanup();
-        reject(new Error("MCP stdio stream ended before a full frame was received"));
+        reject(new Error("MCP stdio stream ended before a full JSON-RPC line was received"));
       };
       const cleanup = () => {
         this.stdout.off("data", onData);
@@ -242,26 +241,13 @@ class StdioFrameReader {
   }
 
   private tryReadFrame(): string | undefined {
-    const headerEnd = this.buffer.indexOf("\r\n\r\n");
-    if (headerEnd < 0) {
+    const lineEnd = this.buffer.indexOf("\n");
+    if (lineEnd < 0) {
       return undefined;
     }
 
-    const header = this.buffer.subarray(0, headerEnd).toString("utf8");
-    const match = header.match(/^content-length:\s*(\d+)\s*$/im);
-    if (!match) {
-      throw new Error(`Missing Content-Length header: ${header}`);
-    }
-
-    const length = Number(match[1]);
-    const bodyStart = headerEnd + 4;
-    const bodyEnd = bodyStart + length;
-    if (this.buffer.length < bodyEnd) {
-      return undefined;
-    }
-
-    const body = this.buffer.subarray(bodyStart, bodyEnd).toString("utf8");
-    this.buffer = this.buffer.subarray(bodyEnd);
-    return body;
+    const line = this.buffer.subarray(0, lineEnd).toString("utf8").replace(/\r$/, "");
+    this.buffer = this.buffer.subarray(lineEnd + 1);
+    return line.length > 0 ? line : this.tryReadFrame();
   }
 }

@@ -3,22 +3,15 @@ import {
   createSessionMcpApi,
   listSessionMcpTools,
 } from "./session-mcp.ts";
+import { runStdioJsonRpcServer } from "./stdio-jsonrpc.ts";
 
-interface JsonRpcMessage {
-  id?: string | number | null;
-  method?: string;
-  params?: unknown;
-}
-
-const HEADER_SEPARATOR = "\r\n\r\n";
 const NANOBOSS_MCP_PROTOCOL_VERSION = "2025-11-25";
 
 export async function runMcpCommand(argv: string[] = []): Promise<void> {
   const [subcommand] = argv;
   if (!subcommand || subcommand === "proxy") {
     const api = createSessionMcpApi({ cwd: process.cwd() });
-    const server = new NanobossMcpProxyServer(api);
-    await server.listen();
+    await runStdioJsonRpcServer((method, params) => dispatchNanobossMcpMethod(api, method, params));
     return;
   }
 
@@ -40,126 +33,6 @@ export function printMcpHelp(): void {
   ].join("\n"));
 }
 
-class NanobossMcpProxyServer {
-  private buffer = Buffer.alloc(0);
-
-  constructor(private readonly api: ReturnType<typeof createSessionMcpApi>) {}
-
-  async listen(): Promise<void> {
-    process.stdin.on("data", (chunk: Buffer | string) => {
-      this.onData(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-    });
-    process.stdin.resume();
-
-    await new Promise<void>((resolve, reject) => {
-      process.stdin.once("end", resolve);
-      process.stdin.once("close", resolve);
-      process.stdin.once("error", reject);
-    });
-  }
-
-  private onData(chunk: Buffer): void {
-    this.buffer = Buffer.concat([this.buffer, chunk]);
-
-    for (;;) {
-      const body = this.tryReadMessageBody();
-      if (body === undefined) {
-        return;
-      }
-
-      this.handleMessageBody(body);
-    }
-  }
-
-  private tryReadMessageBody(): string | undefined {
-    const headerEnd = this.buffer.indexOf(HEADER_SEPARATOR);
-    if (headerEnd < 0) {
-      return undefined;
-    }
-
-    const headerBlock = this.buffer.subarray(0, headerEnd).toString("utf8");
-    const contentLength = parseContentLength(headerBlock);
-    if (contentLength === undefined) {
-      throw new Error("Missing Content-Length header");
-    }
-
-    const bodyStart = headerEnd + HEADER_SEPARATOR.length;
-    const bodyEnd = bodyStart + contentLength;
-    if (this.buffer.length < bodyEnd) {
-      return undefined;
-    }
-
-    const body = this.buffer.subarray(bodyStart, bodyEnd).toString("utf8");
-    this.buffer = this.buffer.subarray(bodyEnd);
-    return body;
-  }
-
-  private handleMessageBody(body: string): void {
-    let message: JsonRpcMessage;
-    try {
-      message = JSON.parse(body) as JsonRpcMessage;
-    } catch {
-      this.writeJsonRpc({
-        jsonrpc: "2.0",
-        id: null,
-        error: {
-          code: -32700,
-          message: "Parse error",
-        },
-      });
-      return;
-    }
-
-    if (!message.method) {
-      this.writeJsonRpc({
-        jsonrpc: "2.0",
-        id: message.id ?? null,
-        error: {
-          code: -32600,
-          message: "Invalid Request",
-        },
-      });
-      return;
-    }
-
-    if (message.method === "notifications/initialized") {
-      return;
-    }
-
-    try {
-      const result = dispatchNanobossMcpMethod(this.api, message.method, message.params);
-      if (message.id === undefined) {
-        return;
-      }
-
-      this.writeJsonRpc({
-        jsonrpc: "2.0",
-        id: message.id,
-        result,
-      });
-    } catch (error) {
-      if (message.id === undefined) {
-        return;
-      }
-
-      this.writeJsonRpc({
-        jsonrpc: "2.0",
-        id: message.id,
-        error: {
-          code: -32000,
-          message: error instanceof Error ? error.message : String(error),
-        },
-      });
-    }
-  }
-
-  private writeJsonRpc(message: unknown): void {
-    const body = JSON.stringify(message);
-    const header = `Content-Length: ${Buffer.byteLength(body, "utf8")}\r\n\r\n`;
-    process.stdout.write(header);
-    process.stdout.write(body);
-  }
-}
 
 function dispatchNanobossMcpMethod(
   api: ReturnType<typeof createSessionMcpApi>,
@@ -223,12 +96,3 @@ function asString(value: unknown, name: string): string {
   return value;
 }
 
-function parseContentLength(headers: string): number | undefined {
-  const match = headers.match(/^content-length:\s*(\d+)\s*$/im);
-  if (!match) {
-    return undefined;
-  }
-
-  const value = Number(match[1]);
-  return Number.isFinite(value) ? value : undefined;
-}
