@@ -117,6 +117,24 @@ export interface DownstreamAgentSelection {
   model?: string;
 }
 
+export interface AgentTokenSnapshot {
+  provider?: DownstreamAgentProvider;
+  model?: string;
+  sessionId?: string;
+  source: "acp_usage_update" | "acp_prompt_response" | "copilot_log" | "copilot_session_state" | "claude_debug";
+  capturedAt?: string;
+  contextWindowTokens?: number;
+  usedContextTokens?: number;
+  systemTokens?: number;
+  conversationTokens?: number;
+  toolDefinitionsTokens?: number;
+  inputTokens?: number;
+  outputTokens?: number;
+  cacheReadTokens?: number;
+  cacheWriteTokens?: number;
+  totalTokens?: number;
+}
+
 export interface TypeDescriptor<T> {
   schema: object;
   validate: (input: unknown) => input is T;
@@ -169,6 +187,7 @@ export interface AgentRunResult<T extends KernelValue = KernelValue> extends Run
   durationMs: number;
   raw: string;
   logFile?: string;
+  tokenSnapshot?: AgentTokenSnapshot;
 }
 
 export type AgentResult<T extends KernelValue = KernelValue> = AgentRunResult<T>;
@@ -201,6 +220,7 @@ export interface CommandContext {
   readonly session: SessionApi;
   getDefaultAgentConfig(): DownstreamAgentConfig;
   setDefaultAgentSelection(selection: DownstreamAgentSelection): DownstreamAgentConfig;
+  getDefaultAgentTokenSnapshot(): Promise<AgentTokenSnapshot | undefined>;
   callAgent(
     prompt: string,
     options?: CommandCallAgentOptions,
@@ -252,5 +272,6 @@ export interface CallAgentTransport {
     raw: string;
     logFile?: string;
     updates: acp.SessionUpdate[];
+    tokenSnapshot?: AgentTokenSnapshot;
   }>;
 }

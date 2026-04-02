@@ -9,8 +9,10 @@ import {
 import { resolveDownstreamAgentConfig } from "./config.ts";
 import { buildSessionMcpServers } from "./mcp-attachment.ts";
 import { SessionStore } from "./session-store.ts";
+import { collectTokenSnapshot } from "./token-metrics.ts";
 import type {
   AgentRunResult,
+  AgentTokenSnapshot,
   CallAgentOptions,
   CallAgentTransport,
   KernelValue,
@@ -25,6 +27,7 @@ interface InvokedAgentResult<T> {
   durationMs: number;
   raw: string;
   updates: acp.SessionUpdate[];
+  tokenSnapshot?: AgentTokenSnapshot;
 }
 
 export async function callAgent<T = string>(
@@ -58,6 +61,7 @@ export async function callAgent<T = string>(
     durationMs: result.durationMs,
     raw: result.raw,
     logFile: result.logFile,
+    tokenSnapshot: result.tokenSnapshot,
   };
 }
 
@@ -91,6 +95,7 @@ export async function invokeAgent<T = string>(
         durationMs: Date.now() - startedAt,
         raw: response.raw,
         updates: response.updates,
+        tokenSnapshot: response.tokenSnapshot,
       };
     }
 
@@ -102,6 +107,7 @@ export async function invokeAgent<T = string>(
         durationMs: Date.now() - startedAt,
         raw: response.raw,
         updates: response.updates,
+        tokenSnapshot: response.tokenSnapshot,
       };
     } catch (error) {
       lastError = error instanceof Error ? error.message : String(error);
@@ -317,7 +323,7 @@ const defaultTransport: CallAgentTransport = {
 async function runAcpPrompt(
   prompt: string,
   options: CallAgentOptions,
-): Promise<{ raw: string; logFile?: string; updates: acp.SessionUpdate[] }> {
+): Promise<{ raw: string; logFile?: string; updates: acp.SessionUpdate[]; tokenSnapshot?: AgentTokenSnapshot }> {
   const config = options.config ?? resolveDownstreamAgentConfig();
   const state = await openAcpConnection(config);
   const updates: acp.SessionUpdate[] = [];
@@ -366,7 +372,7 @@ async function runAcpPrompt(
 
     await applyAcpSessionConfig(state.connection, sessionId, config);
 
-    await state.connection.prompt({
+    const promptResponse = await state.connection.prompt({
       sessionId,
       prompt: [
         {
@@ -380,6 +386,13 @@ async function runAcpPrompt(
       raw,
       logFile: state.transcriptPath,
       updates,
+      tokenSnapshot: await collectTokenSnapshot({
+        childPid: state.child.pid,
+        config,
+        promptResponse,
+        sessionId,
+        updates,
+      }),
     };
   } finally {
     options.signal?.removeEventListener("abort", abortListener);

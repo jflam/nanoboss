@@ -7,7 +7,8 @@ import {
   type OpenAcpConnection,
 } from "./acp-runtime.ts";
 import { buildSessionMcpServers } from "./mcp-attachment.ts";
-import type { CallAgentOptions, DownstreamAgentConfig } from "./types.ts";
+import { collectTokenSnapshot } from "./token-metrics.ts";
+import type { AgentTokenSnapshot, CallAgentOptions, DownstreamAgentConfig } from "./types.ts";
 
 interface DefaultSessionPromptOptions {
   onUpdate?: CallAgentOptions["onUpdate"];
@@ -19,6 +20,7 @@ interface DefaultSessionPromptResult {
   logFile?: string;
   updates: acp.SessionUpdate[];
   durationMs: number;
+  tokenSnapshot?: AgentTokenSnapshot;
 }
 
 interface PromptCollector {
@@ -39,6 +41,7 @@ export class DefaultConversationSession {
   private readonly sessionId: string;
   private readonly rootDir?: string;
   private config: DownstreamAgentConfig;
+  private lastTokenSnapshot?: AgentTokenSnapshot;
 
   constructor(params: DefaultConversationSessionParams) {
     this.config = params.config;
@@ -48,6 +51,18 @@ export class DefaultConversationSession {
 
   get currentSessionId(): string | undefined {
     return this.persistedSessionId;
+  }
+
+  get currentTokenSnapshot(): AgentTokenSnapshot | undefined {
+    return this.liveSession?.currentTokenSnapshot ?? this.lastTokenSnapshot;
+  }
+
+  async getCurrentTokenSnapshot(): Promise<AgentTokenSnapshot | undefined> {
+    if (this.liveSession?.isAlive()) {
+      this.lastTokenSnapshot = await this.liveSession.refreshTokenSnapshot() ?? this.lastTokenSnapshot;
+    }
+
+    return this.liveSession?.currentTokenSnapshot ?? this.lastTokenSnapshot;
   }
 
   async prompt(
@@ -85,6 +100,7 @@ export class DefaultConversationSession {
     try {
       const result = await session.prompt(prompt, options);
       this.persistedSessionId = session.sessionId;
+      this.lastTokenSnapshot = result.tokenSnapshot ?? this.lastTokenSnapshot;
       return {
         ...result,
         durationMs: Date.now() - startedAt,
@@ -108,6 +124,7 @@ export class DefaultConversationSession {
 
     this.closeLiveSession();
     this.persistedSessionId = undefined;
+    this.lastTokenSnapshot = undefined;
     this.config = config;
   }
 
@@ -120,9 +137,11 @@ export class DefaultConversationSession {
 class PersistentAcpSession {
   private activeCollector?: PromptCollector;
   private closed = false;
+  private tokenSnapshot?: AgentTokenSnapshot;
 
   private constructor(
     private readonly state: OpenAcpConnection,
+    private readonly config: DownstreamAgentConfig,
     readonly sessionId: acp.SessionId,
   ) {
     this.state.setSessionUpdateHandler((params) => this.handleSessionUpdate(params));
@@ -145,7 +164,7 @@ class PersistentAcpSession {
           rootDir,
         }),
       });
-      const runtime = new PersistentAcpSession(state, session.sessionId);
+      const runtime = new PersistentAcpSession(state, config, session.sessionId);
       await applyAcpSessionConfig(state.connection, session.sessionId, config);
       return runtime;
     } catch (error) {
@@ -179,13 +198,28 @@ class PersistentAcpSession {
         sessionId,
       });
 
-      const runtime = new PersistentAcpSession(state, sessionId);
+      const runtime = new PersistentAcpSession(state, config, sessionId);
       await applyAcpSessionConfig(state.connection, sessionId, config);
       return runtime;
     } catch {
       closeAcpConnection(state);
       return undefined;
     }
+  }
+
+  get currentTokenSnapshot(): AgentTokenSnapshot | undefined {
+    return this.tokenSnapshot;
+  }
+
+  async refreshTokenSnapshot(): Promise<AgentTokenSnapshot | undefined> {
+    this.tokenSnapshot = await collectTokenSnapshot({
+      childPid: this.state.child.pid,
+      config: this.config,
+      sessionId: this.sessionId,
+      updates: [],
+    }) ?? this.tokenSnapshot;
+
+    return this.tokenSnapshot;
   }
 
   isAlive(): boolean {
@@ -195,7 +229,7 @@ class PersistentAcpSession {
   async prompt(
     prompt: string,
     options: DefaultSessionPromptOptions = {},
-  ): Promise<{ raw: string; logFile?: string; updates: acp.SessionUpdate[] }> {
+  ): Promise<{ raw: string; logFile?: string; updates: acp.SessionUpdate[]; tokenSnapshot?: AgentTokenSnapshot }> {
     if (!this.isAlive()) {
       throw new Error("Default ACP session is not available");
     }
@@ -219,7 +253,7 @@ class PersistentAcpSession {
     options.signal?.addEventListener("abort", abortListener);
 
     try {
-      await this.state.connection.prompt({
+      const promptResponse = await this.state.connection.prompt({
         sessionId: this.sessionId,
         prompt: [
           {
@@ -229,10 +263,19 @@ class PersistentAcpSession {
         ],
       });
 
+      this.tokenSnapshot = await collectTokenSnapshot({
+        childPid: this.state.child.pid,
+        config: this.config,
+        promptResponse,
+        sessionId: this.sessionId,
+        updates: collector.updates,
+      }) ?? this.tokenSnapshot;
+
       return {
         raw: collector.raw,
         logFile: this.state.transcriptPath,
         updates: collector.updates,
+        tokenSnapshot: this.tokenSnapshot,
       };
     } finally {
       options.signal?.removeEventListener("abort", abortListener);

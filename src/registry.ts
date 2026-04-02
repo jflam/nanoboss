@@ -10,6 +10,7 @@ import defaultProcedure from "../commands/default.ts";
 import linterProcedure from "../commands/linter.ts";
 import modelProcedure from "../commands/model.ts";
 import secondOpinionProcedure from "../commands/second-opinion.ts";
+import tokensProcedure from "../commands/tokens.ts";
 
 import { getNanobossHome } from "./config.ts";
 import { createCreateProcedure } from "./create.ts";
@@ -62,6 +63,7 @@ export class ProcedureRegistry implements ProcedureRegistryLike {
     this.register(commitProcedure);
     this.register(linterProcedure);
     this.register(modelProcedure);
+    this.register(tokensProcedure);
     this.register(secondOpinionProcedure);
   }
 

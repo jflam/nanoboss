@@ -113,6 +113,10 @@ export class CommandContextImpl implements CommandContext {
     return this.setDefaultAgentSelectionValue(selection);
   }
 
+  async getDefaultAgentTokenSnapshot() {
+    return await this.defaultConversation?.getCurrentTokenSnapshot();
+  }
+
   async callAgent(
     prompt: string,
     options?: CommandCallAgentOptions,
@@ -169,6 +173,7 @@ export class CommandContextImpl implements CommandContext {
         logFile: result.logFile,
         summary: summarizeAgentOutput(result.data, result.raw),
         streamText: options?.stream !== false,
+        rawOutputExtra: result.tokenSnapshot ? { tokenSnapshot: result.tokenSnapshot } : undefined,
         agent: options?.agent,
       });
     } catch (error) {
@@ -268,7 +273,8 @@ export class CommandContextImpl implements CommandContext {
           if (
             update.sessionUpdate === "agent_message_chunk" ||
             update.sessionUpdate === "tool_call" ||
-            update.sessionUpdate === "tool_call_update"
+            update.sessionUpdate === "tool_call_update" ||
+            update.sessionUpdate === "usage_update"
           ) {
             this.emitter.emit(update);
           }
@@ -285,6 +291,7 @@ export class CommandContextImpl implements CommandContext {
         streamText: true,
         rawOutputExtra: {
           sessionId: this.defaultConversation.currentSessionId,
+          ...(result.tokenSnapshot ? { tokenSnapshot: result.tokenSnapshot } : {}),
         },
       });
 
@@ -536,6 +543,10 @@ function shouldForwardNestedAgentUpdate(
     return streamText;
   }
 
-  return update.sessionUpdate === "tool_call" || update.sessionUpdate === "tool_call_update";
+  return (
+    update.sessionUpdate === "tool_call" ||
+    update.sessionUpdate === "tool_call_update" ||
+    update.sessionUpdate === "usage_update"
+  );
 }
 
