@@ -19,10 +19,15 @@ export default {
     const currentBanner = formatAgentBanner(current);
 
     if (!trimmed) {
+      const snapshot = await ctx.getDefaultAgentTokenSnapshot();
+      const contextLine = formatObservedContext(snapshot);
+
       return {
         display: [
           `Current default agent: ${currentBanner}`,
-          "",
+          contextLine,
+          contextLine ? `Context source: ${snapshot?.source}` : undefined,
+          contextLine ? "" : undefined,
           "Use `/model <agent>` to list models.",
           "Use `/model <agent> <model>` to switch.",
           "In the TTY CLI, plain `/model` opens an interactive picker.",
@@ -30,8 +35,8 @@ export default {
           "Available agents:",
           ...listKnownProviders().map((provider) => `- ${provider} (${getProviderLabel(provider)})`),
           "",
-        ].join("\n"),
-        summary: `model: ${currentBanner}`,
+        ].filter(Boolean).join("\n"),
+        summary: contextLine ? `model: ${currentBanner} ${contextLine}` : `model: ${currentBanner}`,
       };
     }
 
@@ -101,3 +106,27 @@ export default {
     };
   },
 } satisfies Procedure;
+
+function formatObservedContext(snapshot: { usedContextTokens?: number; contextWindowTokens?: number } | undefined): string | undefined {
+  if (!snapshot || snapshot.usedContextTokens === undefined) {
+    return undefined;
+  }
+
+  if (snapshot.contextWindowTokens === undefined) {
+    return `Last observed context: ${formatInt(snapshot.usedContextTokens)} tokens in use`;
+  }
+
+  return `Last observed context: ${formatInt(snapshot.usedContextTokens)} / ${formatInt(snapshot.contextWindowTokens)} tokens (${formatPercent(snapshot.usedContextTokens, snapshot.contextWindowTokens)})`;
+}
+
+function formatInt(value: number): string {
+  return new Intl.NumberFormat("en-US").format(value);
+}
+
+function formatPercent(used: number, total: number): string {
+  if (total <= 0) {
+    return "0.0%";
+  }
+
+  return `${((used / total) * 100).toFixed(1)}%`;
+}

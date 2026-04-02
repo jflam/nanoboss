@@ -1,6 +1,6 @@
 import type * as acp from "@agentclientprotocol/sdk";
 
-import type { CellRef } from "./types.ts";
+import type { AgentTokenSnapshot, CellRef } from "./types.ts";
 
 export interface FrontendCommand {
   name: string;
@@ -25,6 +25,14 @@ export type FrontendEvent =
       runId: string;
       text: string;
       stream: "agent";
+    }
+  | {
+      type: "token_snapshot";
+      runId: string;
+      snapshot: AgentTokenSnapshot;
+      sourceUpdate: "usage_update" | "tool_call_update";
+      toolCallId?: string;
+      status?: string;
     }
   | {
       type: "run_heartbeat";
@@ -78,6 +86,7 @@ export type CommandsUpdatedEventEnvelope = Extract<FrontendEventEnvelope, { type
 export type TextDeltaEventEnvelope = Extract<FrontendEventEnvelope, { type: "text_delta" }>;
 export type ToolStartedEventEnvelope = Extract<FrontendEventEnvelope, { type: "tool_started" }>;
 export type ToolUpdatedEventEnvelope = Extract<FrontendEventEnvelope, { type: "tool_updated" }>;
+export type TokenSnapshotEventEnvelope = Extract<FrontendEventEnvelope, { type: "token_snapshot" }>;
 export type RunFailedEventEnvelope = Extract<FrontendEventEnvelope, { type: "run_failed" }>;
 
 export class SessionEventLog {
@@ -137,6 +146,10 @@ export function isToolUpdatedEvent(event: FrontendEventEnvelope): event is ToolU
   return event.type === "tool_updated";
 }
 
+export function isTokenSnapshotEvent(event: FrontendEventEnvelope): event is TokenSnapshotEventEnvelope {
+  return event.type === "token_snapshot";
+}
+
 export function isRunFailedEvent(event: FrontendEventEnvelope): event is RunFailedEventEnvelope {
   return event.type === "run_failed";
 }
@@ -178,8 +191,8 @@ export function mapSessionUpdateToFrontendEvents(
           status: update.status ?? undefined,
         },
       ];
-    case "tool_call_update":
-      return [
+    case "tool_call_update": {
+      const events: FrontendEvent[] = [
         {
           type: "tool_updated",
           runId,
@@ -188,6 +201,21 @@ export function mapSessionUpdateToFrontendEvents(
           status: update.status ?? "pending",
         },
       ];
+
+      const snapshot = extractTokenSnapshot(update.rawOutput);
+      if (snapshot) {
+        events.push({
+          type: "token_snapshot",
+          runId,
+          snapshot,
+          sourceUpdate: "tool_call_update",
+          toolCallId: update.toolCallId,
+          status: update.status ?? undefined,
+        });
+      }
+
+      return events;
+    }
     case "available_commands_update":
       return [
         {
@@ -195,9 +223,39 @@ export function mapSessionUpdateToFrontendEvents(
           commands: toFrontendCommands(update.availableCommands),
         },
       ];
+    case "usage_update":
+      return [
+        {
+          type: "token_snapshot",
+          runId,
+          snapshot: {
+            source: "acp_usage_update",
+            contextWindowTokens: update.size,
+            usedContextTokens: update.used,
+          },
+          sourceUpdate: "usage_update",
+        },
+      ];
     default:
       return [];
   }
+}
+
+function extractTokenSnapshot(rawOutput: unknown): AgentTokenSnapshot | undefined {
+  if (!rawOutput || typeof rawOutput !== "object" || !("tokenSnapshot" in rawOutput)) {
+    return undefined;
+  }
+
+  const snapshot = (rawOutput as { tokenSnapshot?: unknown }).tokenSnapshot;
+  if (!snapshot || typeof snapshot !== "object") {
+    return undefined;
+  }
+
+  if (!("source" in snapshot) || typeof snapshot.source !== "string") {
+    return undefined;
+  }
+
+  return snapshot as AgentTokenSnapshot;
 }
 
 function withoutType(event: FrontendEvent): Omit<FrontendEvent, "type"> {

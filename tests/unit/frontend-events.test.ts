@@ -7,7 +7,7 @@ import {
 } from "../../src/frontend-events.ts";
 
 describe("frontend-events", () => {
-  test("maps commands and chunks into render events", () => {
+  test("maps commands, chunks, and token snapshots into render events", () => {
     const commands = toFrontendCommands([
       {
         name: "review",
@@ -38,6 +38,60 @@ describe("frontend-events", () => {
         runId: "run-1",
         text: "hello",
         stream: "agent",
+      },
+    ]);
+
+    expect(
+      mapSessionUpdateToFrontendEvents("run-1", {
+        sessionUpdate: "usage_update",
+        size: 258400,
+        used: 12824,
+      }),
+    ).toEqual([
+      {
+        type: "token_snapshot",
+        runId: "run-1",
+        snapshot: {
+          source: "acp_usage_update",
+          contextWindowTokens: 258400,
+          usedContextTokens: 12824,
+        },
+        sourceUpdate: "usage_update",
+      },
+    ]);
+
+    expect(
+      mapSessionUpdateToFrontendEvents("run-1", {
+        sessionUpdate: "tool_call_update",
+        toolCallId: "tool-1",
+        status: "completed",
+        rawOutput: {
+          tokenSnapshot: {
+            source: "copilot_log",
+            usedContextTokens: 24236,
+            contextWindowTokens: 272000,
+          },
+        },
+      }),
+    ).toEqual([
+      {
+        type: "tool_updated",
+        runId: "run-1",
+        toolCallId: "tool-1",
+        title: undefined,
+        status: "completed",
+      },
+      {
+        type: "token_snapshot",
+        runId: "run-1",
+        snapshot: {
+          source: "copilot_log",
+          usedContextTokens: 24236,
+          contextWindowTokens: 272000,
+        },
+        sourceUpdate: "tool_call_update",
+        toolCallId: "tool-1",
+        status: "completed",
       },
     ]);
   });
