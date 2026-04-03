@@ -224,7 +224,7 @@ function reduceFrontendEvent(state: UiState, event: FrontendEventEnvelope): UiSt
     case "tool_updated": {
       const existing = state.toolCalls.find((toolCall) => toolCall.id === event.data.toolCallId);
       const title = event.data.title ?? existing?.title ?? event.data.toolCallId;
-      const depth = existing?.depth ?? state.activeWrapperToolCallIds.length;
+      const depth = existing?.depth ?? getActiveWrapperDepth(state.activeWrapperToolCallIds, event.data.toolCallId);
       const isWrapper = existing?.isWrapper ?? (
         state.activeWrapperToolCallIds.includes(event.data.toolCallId) || isWrapperToolTitle(title)
       );
@@ -237,10 +237,14 @@ function reduceFrontendEvent(state: UiState, event: FrontendEventEnvelope): UiSt
         : suppressed && !state.hiddenToolCallIds.includes(event.data.toolCallId)
           ? [...state.hiddenToolCallIds, event.data.toolCallId]
           : state.hiddenToolCallIds;
+      const toolCalls = suppressed && isWrapper && isTerminalToolStatus(event.data.status)
+        ? collapseSuppressedWrapperBranch(state.toolCalls, depth)
+        : state.toolCalls;
 
       if (!state.showToolCalls || suppressed) {
         return {
           ...state,
+          toolCalls,
           activeWrapperToolCallIds,
           hiddenToolCallIds,
         };
@@ -489,6 +493,15 @@ function pruneReplacedCompletedToolCalls(toolCalls: UiToolCall[], depth: number)
   return toolCalls.filter((toolCall) => !(toolCall.depth === depth && !toolCall.isWrapper && toolCall.status === "completed"));
 }
 
+function collapseSuppressedWrapperBranch(toolCalls: UiToolCall[], depth: number): UiToolCall[] {
+  return toolCalls.map((toolCall) => toolCall.depth > depth
+    ? {
+        ...toolCall,
+        depth: toolCall.depth - 1,
+      }
+    : toolCall);
+}
+
 function removeCompletedWrapperBranch(toolCalls: UiToolCall[], toolCallId: string, depth: number): UiToolCall[] {
   return toolCalls.filter((toolCall) => toolCall.id !== toolCallId && toolCall.depth <= depth);
 }
@@ -504,6 +517,11 @@ function upsertToolCall(toolCalls: UiToolCall[], nextToolCall: UiToolCall): UiTo
 
 function uniqueStrings(values: string[]): string[] {
   return [...new Set(values)];
+}
+
+function getActiveWrapperDepth(activeWrapperToolCallIds: string[], toolCallId: string): number {
+  const depth = activeWrapperToolCallIds.indexOf(toolCallId);
+  return depth >= 0 ? depth : activeWrapperToolCallIds.length;
 }
 
 function isTerminalToolStatus(status: string): boolean {

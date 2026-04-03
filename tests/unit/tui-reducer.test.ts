@@ -201,7 +201,74 @@ describe("tui reducer", () => {
         id: "nested-child",
         title: "Mock read README.md",
         status: "pending",
-        depth: 1,
+        depth: 0,
+        isWrapper: false,
+      },
+    ]);
+  });
+
+  test("reparents retained activity after a suppressed wrapper completes", () => {
+    let state = createInitialUiState({ cwd: "/repo", showToolCalls: true });
+
+    state = reduceUiState(state, {
+      type: "frontend_event",
+      event: eventEnvelope("run_started", {
+        runId: "run-1",
+        procedure: "probe",
+        prompt: "",
+        startedAt: new Date(0).toISOString(),
+      }),
+    });
+    state = reduceUiState(state, {
+      type: "frontend_event",
+      event: eventEnvelope("tool_started", {
+        runId: "run-1",
+        toolCallId: "dispatch-wait",
+        title: "nanoboss-procedure_dispatch_wait",
+        kind: "other",
+      }),
+    });
+    state = reduceUiState(state, {
+      type: "frontend_event",
+      event: eventEnvelope("tool_started", {
+        runId: "run-1",
+        toolCallId: "nested-child",
+        title: "Mock read README.md",
+        kind: "read",
+      }),
+    });
+    state = reduceUiState(state, {
+      type: "frontend_event",
+      event: eventEnvelope("tool_updated", {
+        runId: "run-1",
+        toolCallId: "dispatch-wait",
+        status: "completed",
+      }),
+    });
+    state = reduceUiState(state, {
+      type: "frontend_event",
+      event: eventEnvelope("tool_updated", {
+        runId: "run-1",
+        toolCallId: "nested-child",
+        status: "completed",
+      }),
+    });
+    state = reduceUiState(state, {
+      type: "frontend_event",
+      event: eventEnvelope("tool_started", {
+        runId: "run-1",
+        toolCallId: "root-tool",
+        title: "Running tests",
+        kind: "thought",
+      }),
+    });
+
+    expect(state.toolCalls).toEqual([
+      {
+        id: "root-tool",
+        title: "Running tests",
+        status: "pending",
+        depth: 0,
         isWrapper: false,
       },
     ]);
