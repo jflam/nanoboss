@@ -378,6 +378,51 @@ describe("tui reducer", () => {
       markdown: "boom",
       status: "failed",
     });
+    expect(state.turns.at(-1)?.meta?.failureMessage).toBeUndefined();
+  });
+
+  test("preserves streamed assistant text on failure and stores the failure message separately", () => {
+    let state = createInitialUiState({ cwd: "/repo", showToolCalls: true });
+
+    state = reduceUiState(state, {
+      type: "local_user_submitted",
+      text: "hello",
+    });
+    state = reduceUiState(state, {
+      type: "frontend_event",
+      event: eventEnvelope("run_started", {
+        runId: "run-1",
+        procedure: "default",
+        prompt: "hello",
+        startedAt: new Date(0).toISOString(),
+      }),
+    });
+    state = reduceUiState(state, {
+      type: "frontend_event",
+      event: eventEnvelope("text_delta", {
+        runId: "run-1",
+        text: "partial useful answer",
+        stream: "agent",
+      }),
+    });
+    state = reduceUiState(state, {
+      type: "frontend_event",
+      event: eventEnvelope("run_failed", {
+        runId: "run-1",
+        procedure: "default",
+        completedAt: new Date(1).toISOString(),
+        error: "boom",
+      }),
+    });
+
+    expect(state.turns.at(-1)).toMatchObject({
+      role: "assistant",
+      markdown: "partial useful answer",
+      status: "failed",
+      meta: {
+        failureMessage: "boom",
+      },
+    });
   });
 
   test("session_ready resets transient run state and merges local slash commands with server commands", () => {

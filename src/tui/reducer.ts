@@ -310,6 +310,7 @@ function reduceFrontendEvent(state: UiState, event: FrontendEventEnvelope): UiSt
         ...finalizeAssistantTurn(state, {
           status: "failed",
           fallbackText: event.data.error,
+          failureMessage: event.data.error,
         }),
         activeRunId: undefined,
         activeAssistantTurnId: undefined,
@@ -364,6 +365,7 @@ function finalizeAssistantTurn(
     status: UiTurn["status"];
     fallbackText?: string;
     tokenUsageLine?: string;
+    failureMessage?: string;
   },
 ): UiState {
   const activeAssistantTurnId = state.activeAssistantTurnId;
@@ -381,9 +383,10 @@ function finalizeAssistantTurn(
           role: "assistant",
           markdown: params.fallbackText,
           status: params.status,
-          meta: params.tokenUsageLine
-            ? { tokenUsageLine: params.tokenUsageLine }
-            : undefined,
+          meta: buildAssistantTurnMeta({
+            tokenUsageLine: params.tokenUsageLine,
+            failureMessage: undefined,
+          }),
         },
       ],
     };
@@ -396,15 +399,17 @@ function finalizeAssistantTurn(
         return turn;
       }
 
-      const markdown = turn.markdown.length > 0 ? turn.markdown : (params.fallbackText ?? turn.markdown);
+      const hadStreamedText = turn.markdown.length > 0;
+      const markdown = hadStreamedText ? turn.markdown : (params.fallbackText ?? turn.markdown);
       return {
         ...turn,
         markdown,
         status: params.status,
-        meta: {
-          ...turn.meta,
-          tokenUsageLine: params.tokenUsageLine ?? turn.meta?.tokenUsageLine,
-        },
+        meta: buildAssistantTurnMeta({
+          existing: turn.meta,
+          tokenUsageLine: params.tokenUsageLine,
+          failureMessage: hadStreamedText ? params.failureMessage : undefined,
+        }),
       };
     }),
   };
@@ -415,6 +420,20 @@ function appendRuntimeLines(state: UiState, lines: string[]): UiState {
     ...state,
     runtimeNotes: [...state.runtimeNotes, ...lines].slice(-MAX_RUNTIME_NOTES),
   };
+}
+
+function buildAssistantTurnMeta(params: {
+  existing?: UiTurn["meta"];
+  tokenUsageLine?: string;
+  failureMessage?: string;
+}): UiTurn["meta"] | undefined {
+  const meta = {
+    ...params.existing,
+    tokenUsageLine: params.tokenUsageLine ?? params.existing?.tokenUsageLine,
+    failureMessage: params.failureMessage,
+  };
+
+  return meta.procedure || meta.tokenUsageLine || meta.failureMessage ? meta : undefined;
 }
 
 function pruneReplacedCompletedToolCalls(toolCalls: UiToolCall[], depth: number): UiToolCall[] {

@@ -152,9 +152,19 @@ function renderTurnBody(theme: NanobossTuiTheme, turn: UiTurn): Component {
       return new Text(theme.dim("…"));
     }
 
-    return new Markdown(turn.markdown, 0, 0, theme.markdown, {
-      color: turn.status === "failed" ? theme.error : theme.text,
+    const body = new Markdown(turn.markdown, 0, 0, theme.markdown, {
+      color: theme.text,
     });
+
+    if (!turn.meta?.failureMessage) {
+      return body;
+    }
+
+    const container = new Container();
+    container.addChild(body);
+    container.addChild(new Spacer(1));
+    container.addChild(new Text(theme.error(`Error: ${turn.meta.failureMessage}`), 0, 0));
+    return container;
   }
 
   if (turn.role === "system") {

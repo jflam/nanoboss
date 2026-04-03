@@ -8,6 +8,7 @@ export interface UiTurn {
   meta?: {
     procedure?: string;
     tokenUsageLine?: string;
+    failureMessage?: string;
   };
 }
 
