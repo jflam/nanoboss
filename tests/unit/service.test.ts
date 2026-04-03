@@ -208,6 +208,84 @@ describe("NanobossService", () => {
     });
   }, 30_000);
 
+  test("streams async dispatch assistant progress before the final slash-command result", async () => {
+    await withMockAgentEnv(async () => {
+      const { cwd, registry } = await createRegistryWithWorkspace({
+        slowreview: [
+          "export default {",
+          '  name: "slowreview",',
+          '  description: "slow async procedure",',
+          '  async execute(prompt) {',
+          '    await Bun.sleep(200);',
+          '    return {',
+          '      display: `completed: ${prompt}`,',
+          '    };',
+          '  },',
+          "};",
+        ].join("\n"),
+      });
+
+      const service = new NanobossService(registry);
+      const session = service.createSession({ cwd });
+
+      try {
+        await service.prompt(session.sessionId, "/slowreview patch");
+
+        const events = service.getSessionEvents(session.sessionId)?.after(-1) ?? [];
+        const firstProgressIndex = events.findIndex((event) => event.type === "text_delta" && event.data.text.includes("Running the dispatch through the session MCP implementation"));
+        const completedIndex = events.findIndex((event) => event.type === "run_completed" && event.data.procedure === "slowreview");
+
+        expect(firstProgressIndex).toBeGreaterThanOrEqual(0);
+        expect(completedIndex).toBeGreaterThan(firstProgressIndex);
+      } finally {
+        service.destroySession(session.sessionId);
+      }
+    }, {
+      MOCK_AGENT_STREAM_ASYNC_DISPATCH_PROGRESS: "1",
+    });
+  }, 30_000);
+
+  test("recovers async dispatch completion when the provider omits the terminal structured tool payload", async () => {
+    await withMockAgentEnv(async () => {
+      const { cwd, registry } = await createRegistryWithWorkspace({
+        slowreview: [
+          "export default {",
+          '  name: "slowreview",',
+          '  description: "slow async procedure",',
+          '  async execute(prompt) {',
+          '    await Bun.sleep(50);',
+          '    return {',
+          '      data: { subject: prompt, verdict: "completed" },',
+          '      display: `completed: ${prompt}`,',
+          '      summary: `completed ${prompt}`,',
+          '      memory: `Completed durable result for ${prompt}.`,',
+          '    };',
+          '  },',
+          "};",
+        ].join("\n"),
+      });
+
+      const service = new NanobossService(registry);
+      const session = service.createSession({ cwd });
+
+      try {
+        await service.prompt(session.sessionId, "/slowreview patch");
+
+        const events = service.getSessionEvents(session.sessionId)?.after(-1) ?? [];
+        const completed = events.findLast((event) => event.type === "run_completed" && event.data.procedure === "slowreview");
+        const failed = events.findLast((event) => event.type === "run_failed" && event.data.procedure === "slowreview");
+
+        expect(completed?.type).toBe("run_completed");
+        expect(completed?.data.display).toBe("completed: patch");
+        expect(failed).toBeUndefined();
+      } finally {
+        service.destroySession(session.sessionId);
+      }
+    }, {
+      MOCK_AGENT_STRIP_ASYNC_WAIT_RAW_OUTPUT: "1",
+    });
+  }, 30_000);
+
   test("long-running slash commands survive short per-request MCP deadlines via async dispatch polling", async () => {
     const sessionStoreDir = mkdtempSync(join(tmpdir(), "nab-service-recovery-agent-"));
     const { cwd, registry } = await createRegistryWithWorkspace({

@@ -26,6 +26,10 @@ import {
 } from "./stored-sessions.ts";
 import { startProcedureDispatchProgressBridge } from "./procedure-dispatch-progress.ts";
 import {
+  procedureDispatchResultFromRecoveredCell,
+  waitForRecoveredProcedureDispatchCell,
+} from "./procedure-dispatch-recovery.ts";
+import {
   buildRunCompletedEvent,
   executeTopLevelProcedure,
   TopLevelProcedureExecutionError,
@@ -360,7 +364,6 @@ export class NanobossService {
     procedurePrompt: string,
     emitter: CompositeSessionUpdateEmitter,
   ): Promise<{ result: ProcedureExecutionResult; tokenUsage?: AgentTokenUsage }> {
-    const bufferedTextUpdates: acp.SessionUpdate[] = [];
     const dispatchCorrelationId = crypto.randomUUID();
     const stopProgressBridge = startProcedureDispatchProgressBridge(
       session.store.rootDir,
@@ -379,12 +382,8 @@ export class NanobossService {
         {
           signal: session.abortController?.signal,
           onUpdate: async (update) => {
-            if (update.sessionUpdate === "agent_message_chunk") {
-              bufferedTextUpdates.push(update);
-              return;
-            }
-
             if (
+              update.sessionUpdate === "agent_message_chunk" ||
               update.sessionUpdate === "tool_call" ||
               update.sessionUpdate === "tool_call_update" ||
               update.sessionUpdate === "usage_update"
@@ -407,8 +406,18 @@ export class NanobossService {
         };
       }
 
-      for (const update of bufferedTextUpdates) {
-        emitter.emit(update);
+      const recoveredCell = await waitForRecoveredProcedureDispatchCell(session.store, {
+        procedureName,
+        dispatchCorrelationId,
+      });
+      if (recoveredCell) {
+        return {
+          result: procedureDispatchResultFromRecoveredCell(session.store.sessionId, recoveredCell),
+          tokenUsage: normalizeAgentTokenUsage(
+            promptResult.tokenSnapshot ?? await session.defaultConversation.getCurrentTokenSnapshot(),
+            session.defaultAgentConfig,
+          ),
+        };
       }
 
       const failureMessage = extractProcedureDispatchFailure(promptResult.updates);

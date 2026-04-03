@@ -33,6 +33,8 @@ const SUPPORT_LOAD_SESSION = process.env.MOCK_AGENT_SUPPORT_LOAD_SESSION === "1"
 const SESSION_STORE_DIR = process.env.MOCK_AGENT_SESSION_STORE_DIR?.trim() || undefined;
 const PROCEDURE_DISPATCH_TIMEOUT_MS = Number(process.env.MOCK_AGENT_PROCEDURE_DISPATCH_TIMEOUT_MS ?? "0");
 const KEEP_SESSION_MCP_RUNNING_ON_TIMEOUT = process.env.MOCK_AGENT_KEEP_SESSION_MCP_RUNNING_ON_TIMEOUT === "1";
+const STREAM_ASYNC_DISPATCH_PROGRESS = process.env.MOCK_AGENT_STREAM_ASYNC_DISPATCH_PROGRESS === "1";
+const STRIP_ASYNC_WAIT_RAW_OUTPUT = process.env.MOCK_AGENT_STRIP_ASYNC_WAIT_RAW_OUTPUT === "1";
 
 class MockAgent implements acp.Agent {
   private readonly sessions = new Map<string, LiveSession>();
@@ -340,6 +342,14 @@ async function callProcedureDispatchAsync(
   dispatch: InternalSlashDispatch,
 ): Promise<unknown> {
   const server = getSessionMcpServer(session);
+  if (STREAM_ASYNC_DISPATCH_PROGRESS) {
+    await emitAssistantChunk(
+      connection,
+      sessionId,
+      "Running the dispatch through the session MCP implementation and waiting on the final procedure result.",
+    );
+  }
+
   const startResult = await callNamedProcedureDispatchTool(connection, sessionId, server, {
     name: "procedure_dispatch_start",
     args: dispatch,
@@ -362,6 +372,14 @@ async function callProcedureDispatchAsync(
     const status = extractDispatchStatus(waitResult);
     if (status === "completed") {
       return waitResult;
+    }
+
+    if (STREAM_ASYNC_DISPATCH_PROGRESS && attempt === 0) {
+      await emitAssistantChunk(
+        connection,
+        sessionId,
+        "The dispatch is still running; I’m just waiting on the final procedure output now.",
+      );
     }
 
     if (status === "failed" || status === "cancelled") {
@@ -405,7 +423,7 @@ async function callNamedProcedureDispatchTool(
         sessionUpdate: "tool_call_update",
         toolCallId,
         status: "completed",
-        rawOutput: result,
+        rawOutput: STRIP_ASYNC_WAIT_RAW_OUTPUT && params.name === "procedure_dispatch_wait" ? undefined : result,
       },
     });
     return result;
@@ -422,6 +440,23 @@ async function callNamedProcedureDispatchTool(
     });
     throw error;
   }
+}
+
+async function emitAssistantChunk(
+  connection: acp.AgentSideConnection,
+  sessionId: string,
+  text: string,
+): Promise<void> {
+  await connection.sessionUpdate({
+    sessionId,
+    update: {
+      sessionUpdate: "agent_message_chunk",
+      content: {
+        type: "text",
+        text,
+      },
+    },
+  });
 }
 
 async function callStdioMcpTool(
