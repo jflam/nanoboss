@@ -1,6 +1,6 @@
 import readline from "node:readline/promises";
 
-import { runHttpCli } from "./cli.ts";
+import { runLegacyHttpCli } from "./src/http-cli-legacy.ts";
 import { promptForStoredSessionSelection } from "./src/tui/overlays/session-picker.ts";
 import { createNanobossTuiTheme } from "./src/tui/theme.ts";
 import { canUseNanobossTui, runTuiCli } from "./src/tui/run.ts";
@@ -41,7 +41,7 @@ export async function runResumeCommand(argv: string[] = []): Promise<void> {
     return;
   }
 
-  await runHttpCli({
+  await runLegacyHttpCli({
     serverUrl: options.serverUrl,
     showToolCalls: options.showToolCalls,
     sessionId: selected.sessionId,
