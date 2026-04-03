@@ -1,4 +1,4 @@
-import { buildModelCommand } from "../cli-model-picker.ts";
+import { buildModelCommand } from "../model-command.ts";
 import { resolveDownstreamAgentConfig } from "../config.ts";
 import { getBuildLabel } from "../build-info.ts";
 import { getBuildFreshnessNotice } from "../build-freshness.ts";

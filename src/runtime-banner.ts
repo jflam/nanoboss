@@ -1,5 +1,4 @@
 import { resolveDownstreamAgentConfig } from "./config.ts";
-import { getBuildLabel } from "./build-info.ts";
 import type { DownstreamAgentConfig } from "./types.ts";
 
 export function formatAgentBanner(config: DownstreamAgentConfig): string {
@@ -11,10 +10,6 @@ export function formatAgentBanner(config: DownstreamAgentConfig): string {
 
 export function getDefaultAgentBanner(cwd?: string): string {
   return formatAgentBanner(resolveDownstreamAgentConfig(cwd));
-}
-
-export function getCliStartupBanner(cwd?: string): string {
-  return `${getBuildLabel()} ${getDefaultAgentBanner(cwd)}`;
 }
 
 function formatReasoningEffort(value: string | undefined): string | undefined {

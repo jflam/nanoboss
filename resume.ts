@@ -7,6 +7,7 @@ import { canUseNanobossTui, runTuiCli } from "./src/tui/run.ts";
 import { readCurrentSessionPointer } from "./src/current-session.ts";
 import { DEFAULT_HTTP_SERVER_URL } from "./src/defaults.ts";
 import { parseResumeOptions } from "./src/resume-options.ts";
+import { formatSessionDetailLine, formatSessionLine } from "./src/session-picker-format.ts";
 import {
   findStoredSession,
   listStoredSessions,
@@ -153,56 +154,6 @@ async function selectStoredSessionByNumber(
   } finally {
     rl.close();
   }
-}
-
-function formatSessionLine(session: StoredSessionSummary, cwd: string): string {
-  const markers: string[] = [];
-  if (session.cwd === cwd) {
-    markers.push("here");
-  }
-  if (session.hasNativeResume) {
-    markers.push("native");
-  }
-
-  const prefix = markers.length > 0 ? `[${markers.join(",")}] ` : "";
-  const timestamp = formatTimestamp(session.updatedAt);
-  const prompt = summarize(session.initialPrompt ?? "(no turns yet)", 96);
-  return `${prefix}${timestamp} ${session.sessionId.slice(0, 8)} ${prompt}`;
-}
-
-function formatSessionDetailLine(session: StoredSessionSummary): string {
-  const parts = [session.cwd || "cwd unknown"];
-  if (session.defaultAgentSelection) {
-    parts.push(
-      session.defaultAgentSelection.model
-        ? `${session.defaultAgentSelection.provider}:${session.defaultAgentSelection.model}`
-        : session.defaultAgentSelection.provider,
-    );
-  }
-  return parts.join(" • ");
-}
-
-function formatTimestamp(value: string): string {
-  const timestamp = Date.parse(value);
-  if (!Number.isFinite(timestamp)) {
-    return value;
-  }
-
-  return new Intl.DateTimeFormat("en-US", {
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(timestamp));
-}
-
-function summarize(text: string, maxLength: number): string {
-  const compact = text.replace(/\s+/g, " ").trim();
-  if (compact.length <= maxLength) {
-    return compact;
-  }
-
-  return `${compact.slice(0, Math.max(0, maxLength - 3))}...`;
 }
 
 function printHelp(): void {

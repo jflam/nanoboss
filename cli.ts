@@ -169,11 +169,7 @@ import { getBuildFreshnessNotice } from "./src/build-freshness.ts";
 import { ensureMatchingHttpServer } from "./src/http-server-supervisor.ts";
 import { StreamingTerminalMarkdownRenderer } from "./src/terminal-markdown.ts";
 import { parseCliOptions } from "./src/cli-options.ts";
-import {
-  buildModelCommand,
-  isInteractiveModelPickerEnabled,
-  promptForModelCommand,
-} from "./src/cli-model-picker.ts";
+import { buildModelCommand } from "./src/model-command.ts";
 import {
   resolveDownstreamAgentConfig,
   toDownstreamAgentSelection,
@@ -184,7 +180,6 @@ import {
 } from "./src/model-catalog.ts";
 import {
   formatAgentBanner,
-  getCliStartupBanner,
   getDefaultAgentBanner,
 } from "./src/runtime-banner.ts";
 import { getAgentTokenUsagePercent } from "./src/token-usage.ts";
@@ -209,62 +204,6 @@ class OutputClient {
   );
 
   constructor(private readonly options: { showToolCalls: boolean }) {}
-
-  async requestPermission(
-    params: acp.RequestPermissionRequest,
-  ): Promise<acp.RequestPermissionResponse> {
-    const selected =
-      params.options.find((option) => option.kind.startsWith("allow")) ??
-      params.options[0];
-
-    if (!selected) {
-      return { outcome: { outcome: "cancelled" } };
-    }
-
-    return {
-      outcome: {
-        outcome: "selected",
-        optionId: selected.optionId,
-      },
-    };
-  }
-
-  async sessionUpdate(params: acp.SessionNotification): Promise<void> {
-    const update = params.update;
-
-    switch (update.sessionUpdate) {
-      case "agent_message_chunk":
-        if (update.content.type === "text") {
-          this.writeOutput(update.content.text);
-        }
-        break;
-      case "tool_call":
-        if (this.options.showToolCalls) {
-          this.startToolCall(update.toolCallId, update.title);
-        }
-        break;
-      case "tool_call_update":
-        if (update.status === "completed") {
-          const usage = extractTokenUsage(update.rawOutput);
-          if (usage) {
-            this.pendingTurnTokenUsage = usage;
-          }
-        }
-        if (this.options.showToolCalls && update.status) {
-          this.updateToolCall(update.toolCallId, update.status, update.title ?? undefined);
-        }
-        break;
-      case "available_commands_update":
-        this.setCommands(update.availableCommands.map((command) => ({
-          name: command.name,
-          description: command.description,
-          inputHint: command.input?.hint,
-        })));
-        break;
-      default:
-        break;
-    }
-  }
 
   handleFrontendEvent(event: FrontendEventEnvelope): void {
     if (isCommandsUpdatedEvent(event)) {
@@ -360,10 +299,6 @@ class OutputClient {
 
   setCurrentAgentBanner(text: string): void {
     this.currentAgentBanner = text;
-  }
-
-  getCurrentAgentBanner(): string {
-    return this.currentAgentBanner;
   }
 
   setCurrentAgentSelection(selection: DownstreamAgentSelection | undefined): void {
@@ -879,7 +814,7 @@ export async function runHttpCli(params: {
           continue;
         }
 
-        const prompt = await maybeResolveInteractiveCommand(line, rl, client);
+        const prompt = maybeResolveCommand(line, client);
         if (!prompt) {
           continue;
         }
@@ -923,25 +858,15 @@ function uniqueStrings(values: string[]): string[] {
   return [...new Set(values)];
 }
 
-async function maybeResolveInteractiveCommand(
+function maybeResolveCommand(
   line: string,
-  rl: { question(query: string): Promise<string> },
   client: OutputClient,
-): Promise<string | undefined> {
+): string {
   const trimmed = line.trim();
-  if (trimmed === "/model" && isInteractiveModelPickerEnabled()) {
-    const selection = await promptForModelCommand(rl, client.getCurrentAgentBanner());
-    if (!selection) {
-      return undefined;
-    }
-
-    client.setCurrentAgentSelection(selection);
-    return buildModelCommand(selection.provider, selection.model);
-  }
-
   const selection = parseModelSelectionCommand(trimmed);
   if (selection) {
     client.setCurrentAgentSelection(selection);
+    return buildModelCommand(selection.provider, selection.model);
   }
 
   return line;
