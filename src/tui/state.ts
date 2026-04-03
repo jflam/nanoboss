@@ -29,6 +29,7 @@ export interface UiState {
   turns: UiTurn[];
   toolCalls: UiToolCall[];
   activeWrapperToolCallIds: string[];
+  hiddenToolCallIds: string[];
   runtimeNotes: string[];
   activeRunId?: string;
   activeAssistantTurnId?: string;
@@ -55,6 +56,7 @@ export function createInitialUiState(params: {
     turns: [],
     toolCalls: [],
     activeWrapperToolCallIds: [],
+    hiddenToolCallIds: [],
     runtimeNotes: [],
     inputDisabled: false,
     showToolCalls: params.showToolCalls ?? true,

@@ -7,6 +7,7 @@ import {
   formatStoredMemoryCardLines,
   formatTokenUsageLine,
   isWrapperToolTitle,
+  shouldSuppressToolTraceTitle,
 } from "./format.ts";
 import { LOCAL_TUI_COMMANDS } from "./commands.ts";
 import { createInitialUiState, type UiState, type UiToolCall, type UiTurn } from "./state.ts";
@@ -75,6 +76,7 @@ export function reduceUiState(state: UiState, action: UiAction): UiState {
         runtimeNotes: [],
         toolCalls: [],
         activeWrapperToolCallIds: [],
+        hiddenToolCallIds: [],
         promptDiagnosticsLine: undefined,
         tokenUsageLine: undefined,
         statusLine: "[run] waiting for response",
@@ -97,6 +99,7 @@ export function reduceUiState(state: UiState, action: UiAction): UiState {
         runStartedAtMs: undefined,
         toolCalls: [],
         activeWrapperToolCallIds: [],
+        hiddenToolCallIds: [],
         statusLine: `[run] ${action.error}`,
         inputDisabled: false,
       };
@@ -141,6 +144,7 @@ function reduceFrontendEvent(state: UiState, event: FrontendEventEnvelope): UiSt
         ],
         toolCalls: [],
         activeWrapperToolCallIds: [],
+        hiddenToolCallIds: [],
         runtimeNotes: [],
         promptDiagnosticsLine: undefined,
         tokenUsageLine: undefined,
@@ -180,12 +184,24 @@ function reduceFrontendEvent(state: UiState, event: FrontendEventEnvelope): UiSt
       };
     }
     case "tool_started": {
-      if (!state.showToolCalls) {
-        return state;
-      }
-
       const depth = state.activeWrapperToolCallIds.length;
       const isWrapper = isWrapperToolTitle(event.data.title);
+      const suppressed = shouldSuppressToolTraceTitle(event.data.title);
+      const activeWrapperToolCallIds = isWrapper && !state.activeWrapperToolCallIds.includes(event.data.toolCallId)
+        ? [...state.activeWrapperToolCallIds, event.data.toolCallId]
+        : state.activeWrapperToolCallIds;
+      const hiddenToolCallIds = suppressed && !state.hiddenToolCallIds.includes(event.data.toolCallId)
+        ? [...state.hiddenToolCallIds, event.data.toolCallId]
+        : state.hiddenToolCallIds;
+
+      if (!state.showToolCalls || suppressed) {
+        return {
+          ...state,
+          activeWrapperToolCallIds,
+          hiddenToolCallIds,
+        };
+      }
+
       const existing = state.toolCalls.find((toolCall) => toolCall.id === event.data.toolCallId);
       const nextToolCall: UiToolCall = {
         id: event.data.toolCallId,
@@ -198,23 +214,34 @@ function reduceFrontendEvent(state: UiState, event: FrontendEventEnvelope): UiSt
       return {
         ...state,
         toolCalls: upsertToolCall(pruneReplacedCompletedToolCalls(state.toolCalls, nextToolCall.depth), nextToolCall),
-        activeWrapperToolCallIds: isWrapper && !state.activeWrapperToolCallIds.includes(event.data.toolCallId)
-          ? [...state.activeWrapperToolCallIds, event.data.toolCallId]
-          : state.activeWrapperToolCallIds,
+        activeWrapperToolCallIds,
+        hiddenToolCallIds,
       };
     }
     case "tool_updated": {
-      if (!state.showToolCalls) {
-        return state;
-      }
-
       const existing = state.toolCalls.find((toolCall) => toolCall.id === event.data.toolCallId);
       const title = event.data.title ?? existing?.title ?? event.data.toolCallId;
       const depth = existing?.depth ?? state.activeWrapperToolCallIds.length;
-      const isWrapper = existing?.isWrapper ?? isWrapperToolTitle(title);
-      const activeWrapperToolCallIds = isWrapper
+      const isWrapper = existing?.isWrapper ?? (
+        state.activeWrapperToolCallIds.includes(event.data.toolCallId) || isWrapperToolTitle(title)
+      );
+      const suppressed = state.hiddenToolCallIds.includes(event.data.toolCallId) || shouldSuppressToolTraceTitle(title);
+      const activeWrapperToolCallIds = isWrapper && isTerminalToolStatus(event.data.status)
         ? state.activeWrapperToolCallIds.filter((toolCallId) => toolCallId !== event.data.toolCallId)
         : state.activeWrapperToolCallIds;
+      const hiddenToolCallIds = suppressed && isTerminalToolStatus(event.data.status)
+        ? state.hiddenToolCallIds.filter((toolCallId) => toolCallId !== event.data.toolCallId)
+        : suppressed && !state.hiddenToolCallIds.includes(event.data.toolCallId)
+          ? [...state.hiddenToolCallIds, event.data.toolCallId]
+          : state.hiddenToolCallIds;
+
+      if (!state.showToolCalls || suppressed) {
+        return {
+          ...state,
+          activeWrapperToolCallIds,
+          hiddenToolCallIds,
+        };
+      }
 
       if (event.data.status === "completed") {
         if (isWrapper) {
@@ -222,6 +249,7 @@ function reduceFrontendEvent(state: UiState, event: FrontendEventEnvelope): UiSt
             ...state,
             toolCalls: removeCompletedWrapperBranch(state.toolCalls, event.data.toolCallId, depth),
             activeWrapperToolCallIds,
+            hiddenToolCallIds,
           };
         }
 
@@ -237,6 +265,7 @@ function reduceFrontendEvent(state: UiState, event: FrontendEventEnvelope): UiSt
           ...state,
           toolCalls: upsertToolCall(state.toolCalls, nextToolCall),
           activeWrapperToolCallIds,
+          hiddenToolCallIds,
         };
       }
 
@@ -252,6 +281,7 @@ function reduceFrontendEvent(state: UiState, event: FrontendEventEnvelope): UiSt
         ...state,
         toolCalls: upsertToolCall(state.toolCalls, nextToolCall),
         activeWrapperToolCallIds,
+        hiddenToolCallIds,
       };
     }
     case "run_completed": {
@@ -268,6 +298,7 @@ function reduceFrontendEvent(state: UiState, event: FrontendEventEnvelope): UiSt
         runStartedAtMs: undefined,
         toolCalls: [],
         activeWrapperToolCallIds: [],
+        hiddenToolCallIds: [],
         tokenUsageLine,
         statusLine: `[run] ${event.data.procedure} completed`,
         inputDisabled: false,
@@ -285,6 +316,7 @@ function reduceFrontendEvent(state: UiState, event: FrontendEventEnvelope): UiSt
         runStartedAtMs: undefined,
         toolCalls: [],
         activeWrapperToolCallIds: [],
+        hiddenToolCallIds: [],
         statusLine: `[run] ${event.data.error}`,
         inputDisabled: false,
       };
@@ -404,6 +436,10 @@ function upsertToolCall(toolCalls: UiToolCall[], nextToolCall: UiToolCall): UiTo
 
 function uniqueStrings(values: string[]): string[] {
   return [...new Set(values)];
+}
+
+function isTerminalToolStatus(status: string): boolean {
+  return status === "completed" || status === "failed" || status === "cancelled";
 }
 
 function nextTurnId(role: UiTurn["role"], index: number): string {

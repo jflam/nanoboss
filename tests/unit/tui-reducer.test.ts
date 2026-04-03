@@ -123,6 +123,90 @@ describe("tui reducer", () => {
     ]);
   });
 
+  test("suppresses async dispatch wait traces while preserving nested activity depth", () => {
+    let state = createInitialUiState({ cwd: "/repo", showToolCalls: true });
+
+    state = reduceUiState(state, {
+      type: "frontend_event",
+      event: eventEnvelope("run_started", {
+        runId: "run-1",
+        procedure: "probe",
+        prompt: "",
+        startedAt: new Date(0).toISOString(),
+      }),
+    });
+
+    state = reduceUiState(state, {
+      type: "frontend_event",
+      event: eventEnvelope("tool_started", {
+        runId: "run-1",
+        toolCallId: "dispatch-start",
+        title: "procedure_dispatch_start",
+        kind: "other",
+      }),
+    });
+    state = reduceUiState(state, {
+      type: "frontend_event",
+      event: eventEnvelope("tool_updated", {
+        runId: "run-1",
+        toolCallId: "dispatch-start",
+        status: "completed",
+      }),
+    });
+
+    state = reduceUiState(state, {
+      type: "frontend_event",
+      event: eventEnvelope("tool_started", {
+        runId: "run-1",
+        toolCallId: "dispatch-wait",
+        title: "nanoboss-procedure_dispatch_wait",
+        kind: "other",
+      }),
+    });
+    state = reduceUiState(state, {
+      type: "frontend_event",
+      event: eventEnvelope("tool_started", {
+        runId: "run-1",
+        toolCallId: "nested-child",
+        title: "Mock read README.md",
+        kind: "read",
+      }),
+    });
+
+    expect(state.toolCalls).toEqual([
+      {
+        id: "nested-child",
+        title: "Mock read README.md",
+        status: "pending",
+        depth: 1,
+        isWrapper: false,
+      },
+    ]);
+    expect(state.hiddenToolCallIds).toEqual(["dispatch-wait"]);
+    expect(state.activeWrapperToolCallIds).toEqual(["dispatch-wait"]);
+
+    state = reduceUiState(state, {
+      type: "frontend_event",
+      event: eventEnvelope("tool_updated", {
+        runId: "run-1",
+        toolCallId: "dispatch-wait",
+        status: "completed",
+      }),
+    });
+
+    expect(state.hiddenToolCallIds).toEqual([]);
+    expect(state.activeWrapperToolCallIds).toEqual([]);
+    expect(state.toolCalls).toEqual([
+      {
+        id: "nested-child",
+        title: "Mock read README.md",
+        status: "pending",
+        depth: 1,
+        isWrapper: false,
+      },
+    ]);
+  });
+
   test("stores prompt diagnostics and token usage lines from frontend events", () => {
     let state = createInitialUiState({ cwd: "/repo" });
 

@@ -9,6 +9,10 @@ export function isWrapperToolTitle(title: string): boolean {
   );
 }
 
+export function shouldSuppressToolTraceTitle(title: string): boolean {
+  return title.includes("procedure_dispatch_wait");
+}
+
 export function formatToolTraceLine(depth: number, text: string): string {
   return `${"│ ".repeat(depth)}${text}`;
 }
