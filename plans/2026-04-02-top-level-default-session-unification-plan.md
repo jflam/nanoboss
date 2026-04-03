@@ -94,11 +94,11 @@ That still leaves room for procedure implementations to spawn subagents internal
 ## Proposed end state
 
 1. **One persistent master/default downstream session** is the primary user-facing conversation.
-2. **Slash procedures are exposed through MCP as tools** to that session.
+2. **Procedures are exposed through a generic MCP dispatch surface** to that session.
 3. **Procedure results return into the same default session** as tool results.
 4. The nanoboss session store remains the durable system of record for:
    - exact results
-n   - refs
+   - refs
    - summaries
    - memory
    - traversal
@@ -118,7 +118,7 @@ Today, token footers after `/research` reflect one-shot subagent sessions, not t
 
 With the proposed model:
 
-- plain prompts and slash-command results both belong to the persistent master/default session
+- plain prompts and slash-command results both belong semantically to the persistent master/default session
 - token counts can be discussed in terms of one main session instead of unrelated subagent contexts
 
 ### Continuity becomes real
@@ -131,9 +131,9 @@ With the proposed model:
 - its result is immediately part of that session
 - later turns do not depend on delayed lossy reconciliation
 
-### Slash commands become first-class tools
+### Procedures become first-class tools
 
-This aligns slash commands with the same semantics as MCP or host tool calls.
+This aligns slash commands with the same semantics as MCP or host tool calls without exploding the tool namespace.
 
 ## Exact MCP API shape
 
@@ -191,89 +191,122 @@ The transport remains standard MCP JSON-RPC.
 
 Expose two categories of tools to the persistent default session.
 
-### A. Procedure tools
+### A. Generic procedure tools
 
-These are generated from the procedure registry and replace the semantic split.
+Do **not** expose one tool per procedure like `procedure_research`, `procedure_linter`, etc.
 
-#### `procedure_research`
+That would be a bad fit for nanoboss because procedures are dynamic:
+
+- built-in procedures
+- repo procedures
+- profile procedures
+- generated procedures
+
+A static tool per procedure would create tool explosion and make the MCP surface unstable.
+
+Instead expose a compact generic dispatch surface.
+
+### `procedure_list`
+
+Lists available procedures from the current registry.
 
 ```json
 {
-  "name": "procedure_research",
-  "description": "Research a topic with a cited report and abstract",
+  "name": "procedure_list",
+  "description": "List available nanoboss procedures that can be dispatched into the current master session.",
   "inputSchema": {
     "type": "object",
     "properties": {
-      "prompt": {
-        "type": "string",
-        "description": "Research question or topic"
-      }
+      "includeHidden": { "type": "boolean" }
     },
-    "required": ["prompt"],
     "additionalProperties": false
   }
 }
 ```
 
-#### `procedure_linter`
+#### Example result
 
 ```json
 {
-  "name": "procedure_linter",
-  "description": "Inspect and fix lint issues incrementally",
+  "content": [
+    {
+      "type": "text",
+      "text": "Available procedures: research, linter, second-opinion, tokens, ..."
+    }
+  ],
+  "structuredContent": {
+    "procedures": [
+      {
+        "name": "research",
+        "description": "Research a topic with a cited report and abstract",
+        "inputHint": "Research question or topic"
+      },
+      {
+        "name": "linter",
+        "description": "Inspect and fix lint issues incrementally",
+        "inputHint": "Lint goal or file scope"
+      }
+    ]
+  }
+}
+```
+
+### `procedure_get`
+
+Returns metadata for one procedure.
+
+```json
+{
+  "name": "procedure_get",
+  "description": "Return metadata for one nanoboss procedure.",
   "inputSchema": {
     "type": "object",
     "properties": {
-      "prompt": {
-        "type": "string",
-        "description": "Lint goal or file scope"
-      }
+      "name": { "type": "string" }
     },
-    "required": ["prompt"],
+    "required": ["name"],
     "additionalProperties": false
   }
 }
 ```
 
-#### `procedure_second_opinion`
+#### Example result
 
 ```json
 {
-  "name": "procedure_second_opinion",
-  "description": "Get a second-opinion critique of a task or answer",
+  "structuredContent": {
+    "name": "research",
+    "description": "Research a topic with a cited report and abstract",
+    "inputHint": "Research question or topic"
+  }
+}
+```
+
+### `procedure_dispatch`
+
+This is the main mechanism.
+
+```json
+{
+  "name": "procedure_dispatch",
+  "description": "Run a nanoboss procedure on behalf of the current persistent master session and return the result into that same conversation.",
   "inputSchema": {
     "type": "object",
     "properties": {
-      "prompt": {
-        "type": "string",
-        "description": "Question or task to critique"
-      }
+      "name": { "type": "string" },
+      "prompt": { "type": "string" }
     },
-    "required": ["prompt"],
+    "required": ["name", "prompt"],
     "additionalProperties": false
   }
 }
 ```
 
-#### `procedure_tokens`
+This single tool preserves dynamism while keeping the MCP surface compact.
 
-```json
-{
-  "name": "procedure_tokens",
-  "description": "Show the latest token/context metrics for the default agent session",
-  "inputSchema": {
-    "type": "object",
-    "properties": {},
-    "additionalProperties": false
-  }
-}
-```
+## Existing inspection/state tools to retain
 
-Additional user-facing procedures should follow the same pattern.
-
-### B. Session/state inspection tools
-
-These mostly already exist and should remain:
+These already mostly exist and should remain:
 
 - `top_level_runs`
 - `cell_descendants`
@@ -287,7 +320,7 @@ These mostly already exist and should remain:
 
 Representative schemas below.
 
-#### `top_level_runs`
+### `top_level_runs`
 
 ```json
 {
@@ -305,7 +338,7 @@ Representative schemas below.
 }
 ```
 
-#### `cell_descendants`
+### `cell_descendants`
 
 ```json
 {
@@ -337,7 +370,7 @@ Representative schemas below.
 }
 ```
 
-#### `cell_ancestors`
+### `cell_ancestors`
 
 ```json
 {
@@ -364,7 +397,7 @@ Representative schemas below.
 }
 ```
 
-#### `cell_get`
+### `cell_get`
 
 ```json
 {
@@ -389,7 +422,7 @@ Representative schemas below.
 }
 ```
 
-#### `ref_read`
+### `ref_read`
 
 ```json
 {
@@ -422,11 +455,11 @@ Representative schemas below.
 }
 ```
 
-## Proposed procedure-tool result shape
+## Proposed generic procedure-dispatch result shape
 
 A procedure tool call should return both readable text and structured references.
 
-Example `tools/call` result for `procedure_research`:
+Example `tools/call` result for `procedure_dispatch` with `name=research`:
 
 ```json
 {
@@ -481,6 +514,30 @@ This lets the persistent master session observe:
 - compact continuity metadata
 - optional token diagnostics
 
+## How slash commands should work semantically
+
+Because nanoboss controls the layer before calling into the default agent session, it can inject instructions like:
+
+- if the user invokes a slash command, treat it as a request to use `procedure_dispatch`
+- use `procedure_list` or `procedure_get` if you need to inspect available procedures first
+
+That lets the persistent default session behave as if procedures are tools, while nanoboss still owns:
+
+- command registry
+- execution
+- persistence
+- refs
+- logging
+
+So the semantic loop becomes:
+
+1. user types `/research how to write fizzbuzz in python`
+2. nanoboss passes a structured instruction into the persistent default session
+3. default session calls `procedure_dispatch`
+4. nanoboss executes the procedure
+5. returns the result back into the same persistent session as tool output
+6. future turns naturally continue with that result in-session
+
 ## Recommended implementation path
 
 ### Phase 1: establish one semantic master session
@@ -488,15 +545,17 @@ This lets the persistent master session observe:
 - keep `DefaultConversationSession` as the single persistent downstream master session
 - treat it as the primary conversation the user is actually talking to
 
-### Phase 2: expose procedures as MCP tools
+### Phase 2: expose procedures through generic MCP dispatch
 
-- generate MCP tools from the procedure registry for user-facing procedures
-- attach that MCP surface to the persistent default session
-- make slash-command semantics tool-like from the master session perspective
+- add `procedure_list`
+- add `procedure_get`
+- add `procedure_dispatch`
+- keep the procedure registry dynamic
+- do not generate one tool per procedure
 
 ### Phase 3: route slash commands into the master session as tool operations
 
-Instead of executing `/research` purely as a host-side side channel, nanoboss should make the persistent default session experience it as a tool invocation.
+Instead of executing `/research` purely as a host-side side channel, nanoboss should make the persistent default session experience it as a generic procedure tool invocation.
 
 The persistent session can still rely on host orchestration, but the result must come back into the same ongoing session immediately.
 
@@ -533,7 +592,7 @@ That is the architectural correction.
 The right target is:
 
 - one persistent master/default session
-- slash procedures exposed through MCP as tools
+- generic procedure MCP dispatch (`procedure_list`, `procedure_get`, `procedure_dispatch`)
 - immediate result flow back into that same session
 - session store and refs remain the durable source of truth
 - memory cards become secondary resilience infrastructure instead of the main continuity bridge
