@@ -11,6 +11,7 @@ import {
 const ALL_REASONS: SessionCleanupReason[] = [
   "empty_dir",
   "empty_session",
+  "unknown_cwd",
   "temp_cwd",
   "fixture_session_id",
   "fixture_prompt",

@@ -6,6 +6,7 @@ import { getNanobossHome } from "./config.ts";
 export type SessionCleanupReason =
   | "empty_dir"
   | "empty_session"
+  | "unknown_cwd"
   | "temp_cwd"
   | "fixture_session_id"
   | "fixture_prompt";
@@ -123,6 +124,7 @@ export function summarizeCleanupCandidates(candidates: SessionCleanupCandidate[]
   const summary = {
     empty_dir: 0,
     empty_session: 0,
+    unknown_cwd: 0,
     temp_cwd: 0,
     fixture_session_id: 0,
     fixture_prompt: 0,
@@ -193,6 +195,10 @@ function classifyCleanupReasons(params: {
 
   if (params.hasSessionJson && !hasText(params.initialPrompt) && params.cellCount === 0 && params.jobCount === 0) {
     reasons.push("empty_session");
+  }
+
+  if (!hasText(params.cwd)) {
+    reasons.push("unknown_cwd");
   }
 
   if (looksLikeTempCwd(params.cwd)) {

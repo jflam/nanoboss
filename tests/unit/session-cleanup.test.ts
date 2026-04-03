@@ -54,7 +54,7 @@ describe("session cleanup inspection", () => {
     expect(selected).toEqual(expect.arrayContaining([
       expect.objectContaining({
         sessionId: "empty-dir",
-        reasons: ["empty_dir"],
+        reasons: expect.arrayContaining(["empty_dir", "unknown_cwd"]),
       }),
       expect.objectContaining({
         sessionId: "temp-session",
@@ -67,7 +67,7 @@ describe("session cleanup inspection", () => {
       expect.objectContaining({
         sessionId: "legacy-fixture",
         initialPrompt: "/callAgent compute",
-        reasons: expect.arrayContaining(["fixture_prompt"]),
+        reasons: expect.arrayContaining(["fixture_prompt", "unknown_cwd"]),
       }),
     ]));
   });
