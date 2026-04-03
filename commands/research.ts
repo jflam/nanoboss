@@ -22,7 +22,6 @@ const ResearchResultType = jsonType<ResearchResult>(
 );
 
 const DESCRIPTION_WORD_COUNT = 3;
-const WRITE_REPORT_VERB = /\b(write(?:\s+up)?|save|export|persist|store)\b/i;
 
 export default {
   name: "research",
@@ -36,8 +35,6 @@ export default {
         summary: "research: missing prompt",
       };
     }
-
-    const shouldWriteReport = shouldWriteDetailedReport(trimmed);
 
     ctx.print("Starting research...\n");
 
@@ -57,12 +54,8 @@ export default {
     }
 
     const descriptionWords = normalizeDescriptionWords(research.descriptionWords);
-
-    let reportPath: string | null = null;
-    if (shouldWriteReport) {
-      reportPath = await writeReportToPlans(ctx, research.report, descriptionWords);
-      ctx.print(`Wrote detailed report to ${reportPath}.\n`);
-    }
+    const reportPath = await writeReportToPlans(ctx, research.report, descriptionWords);
+    ctx.print(`Wrote detailed report to ${reportPath}.\n`);
 
     ctx.print("Completed research.\n");
 
@@ -94,28 +87,6 @@ function buildResearchPrompt(prompt: string): string {
     "",
     `User request:\n${prompt}`,
   ].join("\n");
-}
-
-function shouldWriteDetailedReport(prompt: string): boolean {
-  const normalized = prompt.toLowerCase();
-
-  if (/\bplans?\b/.test(normalized)) {
-    return true;
-  }
-
-  if (/\b(detailed|full)\s+(research\s+)?report\b/.test(normalized) && WRITE_REPORT_VERB.test(normalized)) {
-    return true;
-  }
-
-  if (WRITE_REPORT_VERB.test(normalized) && /\b(report|research|memo|brief|markdown|file)\b/.test(normalized)) {
-    return true;
-  }
-
-  if (/\bwrite(?:\s+up)?\b/.test(normalized) && /\bout\b/.test(normalized)) {
-    return true;
-  }
-
-  return false;
 }
 
 async function writeReportToPlans(
@@ -181,25 +152,17 @@ function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&");
 }
 
-function renderDisplay(abstract: string, reportPath: string | null): string {
-  const lines = [abstract.trim()];
-
-  if (reportPath) {
-    lines.push("", `Detailed report written to ${reportPath}.`);
-  }
-
-  return `${lines.join("\n")}\n`;
+function renderDisplay(abstract: string, reportPath: string): string {
+  return `${abstract.trim()}\n\nDetailed report written to ${reportPath}.\n`;
 }
 
-function buildSummary(prompt: string, reportPath: string | null): string {
+function buildSummary(prompt: string, reportPath: string): string {
   const compact = prompt.replace(/\s+/g, " ").trim();
   const subject = compact.length > 60 ? `${compact.slice(0, 57)}...` : compact;
-  return reportPath ? `research: ${subject} -> ${reportPath}` : `research: ${subject}`;
+  return `research: ${subject} -> ${reportPath}`;
 }
 
-function buildMemory(prompt: string, reportPath: string | null): string {
+function buildMemory(prompt: string, reportPath: string): string {
   const compact = prompt.replace(/\s+/g, " ").trim();
-  return reportPath
-    ? `Research completed for ${compact}. The cited report was also written to ${reportPath}.`
-    : `Research completed for ${compact}. The detailed cited report is stored in the procedure result data.`;
+  return `Research completed for ${compact}. The cited report was also written to ${reportPath}.`;
 }
