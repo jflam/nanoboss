@@ -23,6 +23,7 @@ const reasons = args.reasons.length > 0 ? args.reasons : [
   "empty_session",
   "temp_cwd",
   "fixture_session_id",
+  "fixture_prompt",
 ];
 
 const candidates = inspectSessionCleanupCandidates(baseDir);
@@ -180,7 +181,7 @@ function printHelp(): void {
     "  bun run scripts/cleanup-sessions.ts",
     "  bun run scripts/cleanup-sessions.ts --reasons empty_dir,empty_session,temp_cwd,fixture_session_id,fixture_prompt",
     "  bun run scripts/cleanup-sessions.ts --keep-cwd /Users/jflam/agentboss/workspaces/nanoboss",
-    "  bun run scripts/cleanup-sessions.ts --apply --reasons empty_dir,empty_session,temp_cwd,fixture_session_id",
+    "  bun run scripts/cleanup-sessions.ts --apply --reasons empty_dir,empty_session,temp_cwd,fixture_session_id,fixture_prompt",
     "",
   ].join("\n"));
 }

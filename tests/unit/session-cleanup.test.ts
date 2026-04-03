@@ -31,6 +31,17 @@ describe("session cleanup inspection", () => {
       updatedAt: "2026-04-03T00:00:00.000Z",
     })}\n`);
 
+    const legacyFixtureDir = join(baseDir, "legacy-fixture");
+    mkdirSync(join(legacyFixtureDir, "cells"), { recursive: true });
+    writeFileSync(join(legacyFixtureDir, "cells", "001.json"), `${JSON.stringify({
+      procedure: "callAgent",
+      input: "compute",
+      meta: {
+        kind: "agent",
+        createdAt: "2026-04-03T00:00:00.000Z",
+      },
+    })}\n`);
+
     const candidates = inspectSessionCleanupCandidates(baseDir);
     const selected = selectCleanupCandidates(candidates, [
       "empty_dir",
@@ -52,6 +63,11 @@ describe("session cleanup inspection", () => {
       expect.objectContaining({
         sessionId: "session-from-client",
         reasons: expect.arrayContaining(["empty_session", "fixture_session_id"]),
+      }),
+      expect.objectContaining({
+        sessionId: "legacy-fixture",
+        initialPrompt: "/callAgent compute",
+        reasons: expect.arrayContaining(["fixture_prompt"]),
       }),
     ]));
   });
