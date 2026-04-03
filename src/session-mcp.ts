@@ -708,7 +708,7 @@ export async function dispatchSessionMcpMethod(
 export function formatSessionMcpToolResult(
   toolName: string,
   result: unknown,
-): { content: Array<{ type: "text"; text: string }>; structuredContent: unknown } {
+): { content: Array<{ type: "text"; text: string }>; structuredContent: Record<string, unknown> } {
   return {
     content: [
       {
@@ -716,8 +716,24 @@ export function formatSessionMcpToolResult(
         text: serializeToolResult(toolName, result),
       },
     ],
-    structuredContent: result,
+    structuredContent: toStructuredContentRecord(result),
   };
+}
+
+function toStructuredContentRecord(result: unknown): Record<string, unknown> {
+  if (result === undefined) {
+    return { value: null };
+  }
+
+  if (Array.isArray(result)) {
+    return { items: result };
+  }
+
+  if (result && typeof result === "object") {
+    return result as Record<string, unknown>;
+  }
+
+  return { value: result ?? null };
 }
 
 function serializeToolResult(toolName: string, result: unknown): string {

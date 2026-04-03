@@ -110,7 +110,7 @@ describe("static nanoboss MCP proxy", () => {
         },
       });
       const call = await readMcpMessage(frames);
-      expect(call.result?.structuredContent?.[0]).toMatchObject({
+      expect(call.result?.structuredContent?.items?.[0]).toMatchObject({
         cell: reviewCell.cell,
         procedure: "second-opinion",
         summary: "review summary",
@@ -156,11 +156,13 @@ async function readMcpMessage(
   result?: {
     serverInfo?: { name?: string };
     tools?: Array<{ name: string }>;
-    structuredContent?: Array<{
-      cell: { sessionId: string; cellId: string };
-      procedure: string;
-      summary?: string;
-    }>;
+    structuredContent?: {
+      items?: Array<{
+        cell: { sessionId: string; cellId: string };
+        procedure: string;
+        summary?: string;
+      }>;
+    };
   };
   error?: {
     message?: string;
@@ -171,11 +173,13 @@ async function readMcpMessage(
     result?: {
       serverInfo?: { name?: string };
       tools?: Array<{ name: string }>;
-      structuredContent?: Array<{
-        cell: { sessionId: string; cellId: string };
-        procedure: string;
-        summary?: string;
-      }>;
+      structuredContent?: {
+        items?: Array<{
+          cell: { sessionId: string; cellId: string };
+          procedure: string;
+          summary?: string;
+        }>;
+      };
     };
     error?: {
       message?: string;

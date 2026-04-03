@@ -106,7 +106,7 @@ describe("session MCP stdio transport", () => {
         },
       });
       const call = await readMcpMessage(frames);
-      const topLevelRuns = call.result?.structuredContent;
+      const topLevelRuns = call.result?.structuredContent?.items;
       expect(topLevelRuns).toHaveLength(1);
       expect(topLevelRuns?.[0]).toMatchObject({
         cell: reviewCell.cell,
@@ -149,29 +149,8 @@ async function readMcpMessage(
   result?: {
     serverInfo?: { name?: string };
     tools?: Array<{ name: string }>;
-    structuredContent?: Array<{
-      cell: { sessionId: string; cellId: string };
-      procedure: string;
-      kind: string;
-      summary?: string;
-      dataRef?: {
-        cell: { sessionId: string; cellId: string };
-        path: string;
-      };
-      displayRef?: {
-        cell: { sessionId: string; cellId: string };
-        path: string;
-      };
-      dataShape?: { verdict: string };
-    }>;
-  };
-}> {
-  const body = await frames.readFrame();
-  return JSON.parse(body) as {
-    result?: {
-      serverInfo?: { name?: string };
-      tools?: Array<{ name: string }>;
-      structuredContent?: Array<{
+    structuredContent?: {
+      items?: Array<{
         cell: { sessionId: string; cellId: string };
         procedure: string;
         kind: string;
@@ -186,6 +165,31 @@ async function readMcpMessage(
         };
         dataShape?: { verdict: string };
       }>;
+    };
+  };
+}> {
+  const body = await frames.readFrame();
+  return JSON.parse(body) as {
+    result?: {
+      serverInfo?: { name?: string };
+      tools?: Array<{ name: string }>;
+      structuredContent?: {
+        items?: Array<{
+          cell: { sessionId: string; cellId: string };
+          procedure: string;
+          kind: string;
+          summary?: string;
+          dataRef?: {
+            cell: { sessionId: string; cellId: string };
+            path: string;
+          };
+          displayRef?: {
+            cell: { sessionId: string; cellId: string };
+            path: string;
+          };
+          dataShape?: { verdict: string };
+        }>;
+      };
     };
   };
 }
