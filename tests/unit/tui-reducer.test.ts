@@ -466,6 +466,88 @@ describe("tui reducer", () => {
     expect(state.turns.at(-1)?.markdown).toBe("First sentence.\n\nSecond sentence.");
   });
 
+  test("does not insert a paragraph break when tool activity is hidden by preference", () => {
+    let state = createInitialUiState({ cwd: "/repo", showToolCalls: false });
+
+    state = reduceUiState(state, {
+      type: "frontend_event",
+      event: eventEnvelope("run_started", {
+        runId: "run-1",
+        procedure: "default",
+        prompt: "hello",
+        startedAt: new Date(0).toISOString(),
+      }),
+    });
+    state = reduceUiState(state, {
+      type: "frontend_event",
+      event: eventEnvelope("text_delta", {
+        runId: "run-1",
+        text: "First sentence.",
+        stream: "agent",
+      }),
+    });
+    state = reduceUiState(state, {
+      type: "frontend_event",
+      event: eventEnvelope("tool_started", {
+        runId: "run-1",
+        toolCallId: "tool-1",
+        title: "Mock read README.md",
+        kind: "read",
+      }),
+    });
+    state = reduceUiState(state, {
+      type: "frontend_event",
+      event: eventEnvelope("text_delta", {
+        runId: "run-1",
+        text: "Second sentence.",
+        stream: "agent",
+      }),
+    });
+
+    expect(state.turns.at(-1)?.markdown).toBe("First sentence.Second sentence.");
+  });
+
+  test("does not insert a paragraph break when tool activity is suppressed", () => {
+    let state = createInitialUiState({ cwd: "/repo", showToolCalls: true });
+
+    state = reduceUiState(state, {
+      type: "frontend_event",
+      event: eventEnvelope("run_started", {
+        runId: "run-1",
+        procedure: "default",
+        prompt: "hello",
+        startedAt: new Date(0).toISOString(),
+      }),
+    });
+    state = reduceUiState(state, {
+      type: "frontend_event",
+      event: eventEnvelope("text_delta", {
+        runId: "run-1",
+        text: "First sentence.",
+        stream: "agent",
+      }),
+    });
+    state = reduceUiState(state, {
+      type: "frontend_event",
+      event: eventEnvelope("tool_started", {
+        runId: "run-1",
+        toolCallId: "dispatch-wait",
+        title: "nanoboss-procedure_dispatch_wait",
+        kind: "other",
+      }),
+    });
+    state = reduceUiState(state, {
+      type: "frontend_event",
+      event: eventEnvelope("text_delta", {
+        runId: "run-1",
+        text: "Second sentence.",
+        stream: "agent",
+      }),
+    });
+
+    expect(state.turns.at(-1)?.markdown).toBe("First sentence.Second sentence.");
+  });
+
   test("session_ready resets transient run state and merges local slash commands with server commands", () => {
     let state = createInitialUiState({ cwd: "/repo", showToolCalls: true });
 

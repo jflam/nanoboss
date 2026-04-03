@@ -198,11 +198,11 @@ function reduceFrontendEvent(state: UiState, event: FrontendEventEnvelope): UiSt
         : state.hiddenToolCallIds;
 
       if (!state.showToolCalls || suppressed) {
-        return markAssistantTextBoundary({
+        return {
           ...state,
           activeWrapperToolCallIds,
           hiddenToolCallIds,
-        });
+        };
       }
 
       const existing = state.toolCalls.find((toolCall) => toolCall.id === event.data.toolCallId);
@@ -239,11 +239,11 @@ function reduceFrontendEvent(state: UiState, event: FrontendEventEnvelope): UiSt
           : state.hiddenToolCallIds;
 
       if (!state.showToolCalls || suppressed) {
-        return markAssistantTextBoundary({
+        return {
           ...state,
           activeWrapperToolCallIds,
           hiddenToolCallIds,
-        });
+        };
       }
 
       if (event.data.status === "completed") {
