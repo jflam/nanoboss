@@ -3,7 +3,7 @@ import type * as acp from "@agentclientprotocol/sdk";
 import { resolve } from "node:path";
 
 import { getBuildLabel } from "./build-info.ts";
-import { resolveDownstreamAgentConfig } from "./config.ts";
+import { resolveDownstreamAgentConfig, toDownstreamAgentSelection } from "./config.ts";
 import { CommandContextImpl, type SessionUpdateEmitter } from "./context.ts";
 import { readCurrentSessionPointer } from "./current-session.ts";
 import { inferDataShape } from "./data-shape.ts";
@@ -21,6 +21,7 @@ import type {
   CellKind,
   CellRecord,
   CellRef,
+  DownstreamAgentSelection,
   ProcedureRegistryLike,
   SessionRecentOptions,
   TopLevelRunsOptions,
@@ -59,7 +60,7 @@ interface SessionProcedureMetadata {
   inputHint?: string;
 }
 
-interface ProcedureDispatchResult {
+export interface ProcedureDispatchResult {
   procedure: string;
   cell: CellRef;
   summary?: string;
@@ -71,6 +72,7 @@ interface ProcedureDispatchResult {
   dataShape?: unknown;
   explicitDataSchema?: object;
   tokenUsage?: AgentTokenUsage;
+  defaultAgentSelection?: DownstreamAgentSelection;
 }
 
 export interface SessionSchemaResult {
@@ -173,11 +175,16 @@ export class SessionMcpApi {
     };
   }
 
-  async procedureDispatch(args: { name: string; prompt: string }): Promise<ProcedureDispatchResult> {
+  async procedureDispatch(args: { name: string; prompt: string; defaultAgentSelection?: DownstreamAgentSelection }): Promise<ProcedureDispatchResult> {
     if (args.name === "default") {
       throw new Error("procedure_dispatch cannot run default; continue the master conversation directly instead.");
     }
 
+    if (args.defaultAgentSelection) {
+      this.defaultAgentConfig = resolveDownstreamAgentConfig(this.params.cwd, args.defaultAgentSelection);
+    }
+
+    const beforeSelection = toDownstreamAgentSelection(this.defaultAgentConfig);
     const registry = await this.getRegistry();
     const procedure = registry.get(args.name);
     if (!procedure) {
@@ -233,6 +240,8 @@ export class SessionMcpApi {
         raw: result.display,
       });
 
+      const afterSelection = toDownstreamAgentSelection(this.defaultAgentConfig);
+
       return {
         procedure: procedure.name,
         cell: finalized.cell,
@@ -245,6 +254,9 @@ export class SessionMcpApi {
         dataShape: record.output.data !== undefined ? inferDataShape(record.output.data) : undefined,
         explicitDataSchema: record.output.explicitDataSchema,
         tokenUsage: emitter.currentTokenUsage,
+        defaultAgentSelection: JSON.stringify(afterSelection) === JSON.stringify(beforeSelection)
+          ? undefined
+          : afterSelection,
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -399,6 +411,15 @@ const SESSION_MCP_TOOLS: SessionMcpToolDefinition[] = [
       properties: {
         name: { type: "string" },
         prompt: { type: "string" },
+        defaultAgentSelection: {
+          type: "object",
+          properties: {
+            provider: { type: "string" },
+            model: { type: "string" },
+          },
+          required: ["provider"],
+          additionalProperties: false,
+        },
       },
       required: ["name", "prompt"],
       additionalProperties: false,
@@ -407,6 +428,9 @@ const SESSION_MCP_TOOLS: SessionMcpToolDefinition[] = [
       return {
         name: asString(args.name, "name"),
         prompt: typeof args.prompt === "string" ? args.prompt : "",
+        defaultAgentSelection: args.defaultAgentSelection === undefined
+          ? undefined
+          : parseDownstreamAgentSelection(args.defaultAgentSelection),
       };
     },
     async call(api, args) {
@@ -828,7 +852,7 @@ function isProcedureMetadata(value: unknown): value is SessionProcedureMetadata 
   );
 }
 
-function isProcedureDispatchResult(value: unknown): value is ProcedureDispatchResult {
+export function isProcedureDispatchResult(value: unknown): value is ProcedureDispatchResult {
   return (
     typeof value === "object" &&
     value !== null &&
@@ -908,4 +932,18 @@ function asOptionalNonNegativeNumber(value: unknown, name: string): number | und
   }
 
   return value;
+}
+
+function parseDownstreamAgentSelection(value: unknown): DownstreamAgentSelection {
+  const record = asObject(value);
+  const provider = asString(record.provider, "defaultAgentSelection.provider");
+  if (provider !== "claude" && provider !== "gemini" && provider !== "codex" && provider !== "copilot") {
+    throw new Error("Expected defaultAgentSelection.provider to be one of claude, gemini, codex, or copilot");
+  }
+
+  const model = record.model === undefined ? undefined : asString(record.model, "defaultAgentSelection.model");
+  return {
+    provider,
+    model,
+  };
 }

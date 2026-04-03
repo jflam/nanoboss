@@ -273,3 +273,22 @@ test("renders stored and injected memory cards around default turns", async () =
     }
   }
 }, 20_000);
+
+test("routes slash commands through procedure_dispatch in the master session", async () => {
+  const cli = spawnCli(baseUrl);
+
+  try {
+    await waitForContains(cli.stdout, "> ");
+    cli.process.stdin.write("/tokens\n");
+    await waitForContains(cli.stdout, "No live token metrics yet.");
+    await waitForContains(cli.stderr, "[tool] procedure_dispatch");
+
+    expect(cli.stderr()).toContain("[tool] procedure_dispatch");
+    expect(cli.stderr()).not.toContain("[memory] injecting 1 card");
+  } finally {
+    if (cli.process.exitCode === null) {
+      cli.process.kill();
+      await once(cli.process, "exit");
+    }
+  }
+}, 20_000);

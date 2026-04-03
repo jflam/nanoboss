@@ -1,13 +1,30 @@
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
-import { afterEach, describe, expect, test } from "bun:test";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { afterEach, beforeAll, describe, expect, test } from "bun:test";
+import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+const MOCK_AGENT_PATH = join(process.cwd(), "tests/fixtures/mock-agent.ts");
+const SELF_COMMAND_PATH = join(process.cwd(), "dist", "nanoboss");
+
 import { ProcedureRegistry } from "../../src/registry.ts";
 import { NanobossService } from "../../src/service.ts";
-import type { DownstreamAgentConfig, Procedure } from "../../src/types.ts";
+import type { DownstreamAgentConfig } from "../../src/types.ts";
 
 const tempDirs: string[] = [];
+
+beforeAll(() => {
+  const build = spawnSync("bun", ["run", "build"], {
+    cwd: process.cwd(),
+    env: process.env,
+    encoding: "utf8",
+    stdio: "pipe",
+  });
+
+  if (build.status !== 0) {
+    throw new Error([build.stdout, build.stderr].filter(Boolean).join("\n"));
+  }
+});
 
 afterEach(() => {
   while (tempDirs.length > 0) {
@@ -26,11 +43,12 @@ function createMockConfig(
 ): DownstreamAgentConfig {
   return {
     command: "bun",
-    args: ["run", "tests/fixtures/mock-agent.ts"],
+    args: ["run", MOCK_AGENT_PATH],
     cwd,
     env: {
       MOCK_AGENT_SUPPORT_LOAD_SESSION: "1",
       MOCK_AGENT_SESSION_STORE_DIR: options.sessionStoreDir,
+      NANOBOSS_SELF_COMMAND: SELF_COMMAND_PATH,
     },
   };
 }
@@ -50,64 +68,59 @@ function readStoredMockSession(sessionStoreDir: string): {
 }
 
 describe("default session memory bridge", () => {
-  test("syncs procedure results into the default session immediately and skips delayed memory injection", async () => {
-    const registry = new ProcedureRegistry(mkdtempSync(join(tmpdir(), "nab-memory-registry-")));
-    tempDirs.push(registry.commandsDir);
-    registry.loadBuiltins();
+  test("routes slash commands through procedure_dispatch and skips delayed memory injection", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "nab-memory-workspace-"));
+    const commandsDir = join(cwd, "commands");
+    mkdirSync(commandsDir, { recursive: true });
+    writeFileSync(join(commandsDir, "review.ts"), [
+      "export default {",
+      '  name: "review",',
+      '  description: "store a durable review result",',
+      '  async execute(prompt) {',
+      '    return {',
+      '      data: {',
+      '        subject: prompt,',
+      '        verdict: "mixed",',
+      '        critiqueMainIssue: `missing edge-case analysis for ${prompt}`,',
+      '      },',
+      '      display: "full rendered review output that should stay out of the default prompt",',
+      '      summary: `review summary for ${prompt}`,',
+      '      memory: `The most important issue for ${prompt} was missing edge-case analysis.`,',
+      '    };',
+      '  },',
+      "};",
+    ].join("\n"), "utf8");
+    tempDirs.push(cwd);
 
-    const reviewProcedure: Procedure = {
-      name: "review",
-      description: "store a durable review result",
-      async execute(prompt) {
-        return {
-          data: {
-            subject: prompt,
-            verdict: "mixed",
-            critiqueMainIssue: `missing edge-case analysis for ${prompt}`,
-          },
-          display: "full rendered review output that should stay out of the default prompt",
-          summary: `review summary for ${prompt}`,
-          memory: `The most important issue for ${prompt} was missing edge-case analysis.`,
-        };
-      },
-    };
-    registry.register(reviewProcedure);
+    const registry = new ProcedureRegistry(commandsDir);
+    registry.loadBuiltins();
+    await registry.loadFromDisk();
 
     const mockSessionStoreDir = mkdtempSync(join(tmpdir(), "nab-memory-agent-"));
     tempDirs.push(mockSessionStoreDir);
 
     const service = new NanobossService(
       registry,
-      (cwd) => createMockConfig(cwd, { sessionStoreDir: mockSessionStoreDir }),
+      (workspaceCwd) => createMockConfig(workspaceCwd, { sessionStoreDir: mockSessionStoreDir }),
     );
-    const session = service.createSession({ cwd: process.cwd() });
+    const session = service.createSession({ cwd });
 
     try {
       await service.prompt(session.sessionId, "/review the code");
 
       const storedAfterReview = readStoredMockSession(mockSessionStoreDir);
-      const syncPrompt = storedAfterReview.turns[0]?.text;
-      expect(syncPrompt).toContain("Nanoboss internal session synchronization.");
-      expect(syncPrompt).toContain("Procedure: /review");
-      expect(syncPrompt).toContain("Original input: the code");
-      expect(syncPrompt).toContain("Summary: review summary for the code");
-      expect(syncPrompt).toContain("Memory: The most important issue for the code was missing edge-case analysis.");
-      expect(syncPrompt).toContain("Data shape:");
-      expect(syncPrompt).toContain("critiqueMainIssue");
-      expect(syncPrompt).toContain("Use the attached nanoboss session MCP tools later if you need exact stored values.");
-      expect(syncPrompt).not.toContain("full rendered review output that should stay out of the default prompt");
+      const dispatchPrompt = storedAfterReview.turns[0]?.text;
+      expect(dispatchPrompt).toContain("Nanoboss internal slash-command dispatch.");
+      expect(dispatchPrompt).toContain('"name":"review"');
+      expect(dispatchPrompt).toContain('"prompt":"the code"');
+      expect(dispatchPrompt).not.toContain("Nanoboss internal session synchronization.");
+      expect(dispatchPrompt).not.toContain("full rendered review output that should stay out of the default prompt");
 
       await service.prompt(session.sessionId, "what mattered most?");
 
       const storedAfterFirstDefault = readStoredMockSession(mockSessionStoreDir);
       const firstUserPrompt = storedAfterFirstDefault.turns[2]?.text;
-      expect(firstUserPrompt).toContain("Nanoboss session tool guidance:");
-      expect(firstUserPrompt).toContain("Use top_level_runs(...) or /top_level_runs to find prior chat-visible commands");
-      expect(firstUserPrompt).toContain("Use session_recent(...) or /session_recent only for true global recency scans across the whole session; it is not the primary retrieval path.");
-      expect(firstUserPrompt).toContain("If ref_read(...) returns nested refs such as critique or answer, call ref_read(...) on those refs too.");
-      expect(firstUserPrompt).toContain("Do not treat not-found results from a bounded scan as proof of absence unless the search scope was exhaustive.");
-      expect(firstUserPrompt).toContain("Do not inspect ~/.nanoboss/sessions directly unless the session MCP tools fail.");
-      expect(firstUserPrompt).toContain("User message:\nwhat mattered most?");
+      expect(firstUserPrompt).toContain("what mattered most?");
       expect(firstUserPrompt).not.toContain("Nanoboss session memory update:");
       expect(firstUserPrompt).not.toContain("procedure: /review");
 
@@ -115,9 +128,7 @@ describe("default session memory bridge", () => {
 
       const storedAfterSecondDefault = readStoredMockSession(mockSessionStoreDir);
       const secondUserPrompt = storedAfterSecondDefault.turns[4]?.text;
-      expect(secondUserPrompt).toContain("Nanoboss session tool guidance:");
-      expect(secondUserPrompt).toContain("Use cell_descendants(...) or /cell_descendants to inspect nested procedure and agent calls under one run; set maxDepth=1 when you only want direct children.");
-      expect(secondUserPrompt).toContain("User message:\nand now?");
+      expect(secondUserPrompt).toContain("and now?");
       expect(secondUserPrompt).not.toContain("Nanoboss session memory update:");
     } finally {
       service.destroySession(session.sessionId);

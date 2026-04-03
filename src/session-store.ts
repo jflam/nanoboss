@@ -202,6 +202,7 @@ export class SessionStore {
   }
 
   recent(options: RecentOptions = {}): CellSummary[] {
+    this.loadExistingCells();
     return this.collectReverseSummaries(this.order, {
       ...options,
       limit: options.limit ?? 10,
@@ -209,6 +210,7 @@ export class SessionStore {
   }
 
   ancestors(cellRef: CellRef, options: CellAncestorsOptions = {}): CellSummary[] {
+    this.loadExistingCells();
     const cell = this.readCell(cellRef);
     const limit = normalizeLimit(options.limit);
     const ancestors: CellSummary[] = [];
@@ -226,6 +228,7 @@ export class SessionStore {
   }
 
   descendants(cellRef: CellRef, options: CellDescendantsOptions = {}): CellSummary[] {
+    this.loadExistingCells();
     this.readCell(cellRef);
     const limit = normalizeLimit(options.limit);
     const maxDepth = normalizeLimit(options.maxDepth);
@@ -278,10 +281,12 @@ export class SessionStore {
   }
 
   topLevelRuns(options: TopLevelRunsOptions = {}): CellSummary[] {
+    this.loadExistingCells();
     return this.collectReverseSummaries(this.topLevelCellIds, options);
   }
 
   readCell(cellRef: CellRef): CellRecord {
+    this.loadExistingCells();
     if (cellRef.sessionId !== this.sessionId) {
       throw new Error(`Unknown session: ${cellRef.sessionId}`);
     }
@@ -415,8 +420,9 @@ export class SessionStore {
         throw new Error(`Invalid cell record: ${filePath}`);
       }
 
-      if (this.cellFilePaths.has(record.cellId)) {
-        throw new Error(`Duplicate cell record: ${record.cellId}`);
+      const existingPath = this.cellFilePaths.get(record.cellId);
+      if (existingPath) {
+        continue;
       }
 
       this.storeCellRecord(record, filePath);

@@ -1,19 +1,44 @@
-import { describe, expect, test } from "bun:test";
-import { mkdtempSync } from "node:fs";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { spawnSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+const MOCK_AGENT_PATH = join(process.cwd(), "tests/fixtures/mock-agent.ts");
+const SELF_COMMAND_PATH = join(process.cwd(), "dist", "nanoboss");
+
 import { ProcedureRegistry } from "../../src/registry.ts";
 import { NanobossService } from "../../src/service.ts";
+
+beforeAll(() => {
+  const build = spawnSync("bun", ["run", "build"], {
+    cwd: process.cwd(),
+    env: process.env,
+    encoding: "utf8",
+    stdio: "pipe",
+  });
+
+  if (build.status !== 0) {
+    throw new Error([build.stdout, build.stderr].filter(Boolean).join("\n"));
+  }
+
+  process.env.NANOBOSS_SELF_COMMAND = SELF_COMMAND_PATH;
+});
+
+afterAll(() => {
+  delete process.env.NANOBOSS_SELF_COMMAND;
+});
 
 async function withMockAgentEnv(run: () => Promise<void>): Promise<void> {
   const originalCommand = process.env.NANOBOSS_AGENT_CMD;
   const originalArgs = process.env.NANOBOSS_AGENT_ARGS;
   const originalModel = process.env.NANOBOSS_AGENT_MODEL;
+  const originalSelfCommand = process.env.NANOBOSS_SELF_COMMAND;
 
   process.env.NANOBOSS_AGENT_CMD = "bun";
-  process.env.NANOBOSS_AGENT_ARGS = JSON.stringify(["run", "tests/fixtures/mock-agent.ts"]);
+  process.env.NANOBOSS_AGENT_ARGS = JSON.stringify(["run", MOCK_AGENT_PATH]);
   delete process.env.NANOBOSS_AGENT_MODEL;
+  process.env.NANOBOSS_SELF_COMMAND = SELF_COMMAND_PATH;
 
   try {
     await run();
@@ -35,7 +60,31 @@ async function withMockAgentEnv(run: () => Promise<void>): Promise<void> {
     } else {
       process.env.NANOBOSS_AGENT_MODEL = originalModel;
     }
+
+    if (originalSelfCommand === undefined) {
+      delete process.env.NANOBOSS_SELF_COMMAND;
+    } else {
+      process.env.NANOBOSS_SELF_COMMAND = originalSelfCommand;
+    }
   }
+}
+
+async function createRegistryWithWorkspace(commandFiles: Record<string, string> = {}): Promise<{
+  cwd: string;
+  registry: ProcedureRegistry;
+}> {
+  const cwd = mkdtempSync(join(tmpdir(), "nab-workspace-"));
+  const commandsDir = join(cwd, "commands");
+  mkdirSync(commandsDir, { recursive: true });
+
+  for (const [name, content] of Object.entries(commandFiles)) {
+    writeFileSync(join(commandsDir, `${name}.ts`), content, "utf8");
+  }
+
+  const registry = new ProcedureRegistry(commandsDir);
+  registry.loadBuiltins();
+  await registry.loadFromDisk();
+  return { cwd, registry };
 }
 
 describe("NanobossService", () => {
@@ -64,22 +113,23 @@ describe("NanobossService", () => {
     expect(textEvents[0]?.data.text).toBe("4");
   });
 
-  test("nested callAgent tool events remain visible when text streaming is disabled", async () => {
+  test("slash commands dispatch through procedure_dispatch inside the default session", async () => {
     await withMockAgentEnv(async () => {
-      const registry = new ProcedureRegistry(mkdtempSync(join(tmpdir(), "nab-service-")));
-      registry.register({
-        name: "probe",
-        description: "test nested tool trace forwarding",
-        async execute(_prompt, ctx) {
-          await ctx.callAgent("nested tool trace demo", { stream: false });
-          return {
-            display: "done",
-          };
-        },
+      const { cwd, registry } = await createRegistryWithWorkspace({
+        probe: [
+          "export default {",
+          '  name: "probe",',
+          '  description: "test procedure dispatch",',
+          '  async execute(_prompt, ctx) {',
+          '    await ctx.callAgent("nested tool trace demo", { stream: false });',
+          '    return { display: "done" };',
+          '  },',
+          "};",
+        ].join("\n"),
       });
 
       const service = new NanobossService(registry);
-      const session = service.createSession({ cwd: process.cwd() });
+      const session = service.createSession({ cwd });
 
       await service.prompt(session.sessionId, "/probe");
 
@@ -90,24 +140,10 @@ describe("NanobossService", () => {
       const textEvents = events
         .filter((event) => event.type === "text_delta")
         .map((event) => event.data.text);
-      const tokenUsageEvents = events.filter((event) => event.type === "token_usage");
       const completed = events.findLast((event) => event.type === "run_completed" && event.data.procedure === "probe");
 
-      expect(toolTitles).toContain("Mock read README.md");
-      expect(toolTitles.some((title) => title.startsWith("callAgent:"))).toBe(true);
+      expect(toolTitles).toContain("procedure_dispatch");
       expect(textEvents).toEqual(["done"]);
-      expect(tokenUsageEvents).toHaveLength(2);
-      expect(tokenUsageEvents[0]?.data.usage).toEqual({
-        source: "acp_usage_update",
-        currentContextTokens: 512,
-        maxContextTokens: 8192,
-      });
-      expect(tokenUsageEvents[1]?.data.usage).toMatchObject({
-        source: "acp_usage_update",
-        currentContextTokens: 512,
-        maxContextTokens: 8192,
-      });
-      expect(tokenUsageEvents[1]?.data.usage.sessionId).toEqual(expect.any(String));
       expect(completed?.type).toBe("run_completed");
       expect(completed?.data.tokenUsage).toMatchObject({
         source: "acp_usage_update",
@@ -119,19 +155,21 @@ describe("NanobossService", () => {
   }, 30_000);
 
   test("publishes prompt diagnostics for openai-compatible default prompts after immediate slash-command sync", async () => {
-    const registry = new ProcedureRegistry(mkdtempSync(join(tmpdir(), "nab-service-")));
-    registry.loadBuiltins();
-    registry.register({
-      name: "review",
-      description: "store a durable review result",
-      async execute(prompt) {
-        return {
-          data: { subject: prompt, verdict: "mixed" },
-          display: "review output",
-          summary: `review summary for ${prompt}`,
-          memory: `Most important issue for ${prompt} was missing edge-case analysis.`,
-        };
-      },
+    const { cwd, registry } = await createRegistryWithWorkspace({
+      review: [
+        "export default {",
+        '  name: "review",',
+        '  description: "store a durable review result",',
+        '  async execute(prompt) {',
+        '    return {',
+        '      data: { subject: prompt, verdict: "mixed" },',
+        '      display: "review output",',
+        '      summary: `review summary for ${prompt}`,',
+        '      memory: `Most important issue for ${prompt} was missing edge-case analysis.`,',
+        '    };',
+        '  },',
+        "};",
+      ].join("\n"),
     });
 
     const service = new NanobossService(
@@ -139,11 +177,11 @@ describe("NanobossService", () => {
       (cwd) => ({
         provider: "copilot",
         command: "bun",
-        args: ["run", "tests/fixtures/mock-agent.ts"],
+        args: ["run", MOCK_AGENT_PATH],
         cwd,
       }),
     );
-    const session = service.createSession({ cwd: process.cwd() });
+    const session = service.createSession({ cwd });
 
     try {
       await service.prompt(session.sessionId, "/review the code");
@@ -171,11 +209,10 @@ describe("NanobossService", () => {
 
   test("/model updates the session default agent banner", async () => {
     await withMockAgentEnv(async () => {
-      const registry = new ProcedureRegistry(mkdtempSync(join(tmpdir(), "nab-service-")));
-      registry.loadBuiltins();
+      const { cwd, registry } = await createRegistryWithWorkspace();
 
       const service = new NanobossService(registry);
-      const session = service.createSession({ cwd: process.cwd() });
+      const session = service.createSession({ cwd });
 
       await service.prompt(session.sessionId, "/model copilot gpt-5.4/xhigh");
 
@@ -231,25 +268,24 @@ describe("NanobossService", () => {
 
   test("session inspection commands can read current-session results", async () => {
     await withMockAgentEnv(async () => {
-      const registry = new ProcedureRegistry(mkdtempSync(join(tmpdir(), "nab-service-")));
-      registry.loadBuiltins();
-      registry.register({
-        name: "review",
-        description: "store a durable review result",
-        async execute(prompt) {
-          return {
-            data: {
-              subject: prompt,
-              verdict: "mixed",
-            },
-            display: "review stored",
-            summary: `review ${prompt}`,
-          };
-        },
+      const { cwd, registry } = await createRegistryWithWorkspace({
+        review: [
+          "export default {",
+          '  name: "review",',
+          '  description: "store a durable review result",',
+          '  async execute(prompt) {',
+          '    return {',
+          '      data: { subject: prompt, verdict: "mixed" },',
+          '      display: "review stored",',
+          '      summary: `review ${prompt}`,',
+          '    };',
+          '  },',
+          "};",
+        ].join("\n"),
       });
 
       const service = new NanobossService(registry);
-      const session = service.createSession({ cwd: process.cwd() });
+      const session = service.createSession({ cwd });
 
       await service.prompt(session.sessionId, "/review patch");
 
