@@ -1,7 +1,6 @@
 import { parseCliOptions } from "./src/cli-options.ts";
 import { DEFAULT_HTTP_SERVER_URL } from "./src/defaults.ts";
-import { runLegacyHttpCli } from "./src/http-cli-legacy.ts";
-import { canUseNanobossTui, runTuiCli } from "./src/tui/run.ts";
+import { assertInteractiveTty, runTuiCli } from "./src/tui/run.ts";
 
 export async function runCliCommand(argv: string[] = []): Promise<void> {
   const options = parseCliOptions(argv);
@@ -10,15 +9,9 @@ export async function runCliCommand(argv: string[] = []): Promise<void> {
     return;
   }
 
-  if (canUseNanobossTui()) {
-    await runTuiCli({
-      serverUrl: options.serverUrl,
-      showToolCalls: options.showToolCalls,
-    });
-    return;
-  }
+  assertInteractiveTty("cli");
 
-  await runLegacyHttpCli({
+  await runTuiCli({
     serverUrl: options.serverUrl,
     showToolCalls: options.showToolCalls,
   });
@@ -28,7 +21,7 @@ function printHelp(): void {
   process.stdout.write([
     "Usage: nanoboss cli [--tool-calls|--no-tool-calls] [--server-url <url>]",
     "",
-    "Interactive TTY sessions use the pi-tui frontend. Non-TTY sessions use the legacy line-based fallback.",
+    "Requires an interactive TTY. For automation, use nanoboss server, mcp, or acp-server.",
     "",
     "Options:",
     "  --tool-calls          Show tool call progress lines (default)",

@@ -4,7 +4,17 @@ import { parseCliOptions } from "../cli-options.ts";
 import { NanobossTuiApp, type NanobossTuiAppParams } from "./app.ts";
 
 export function canUseNanobossTui(): boolean {
-  return Boolean(process.stdin.isTTY && process.stdout.isTTY);
+  return process.stdin.isTTY && process.stdout.isTTY;
+}
+
+export function assertInteractiveTty(commandName: string): void {
+  if (canUseNanobossTui()) {
+    return;
+  }
+
+  throw new Error(
+    `nanoboss ${commandName} requires an interactive TTY; use the HTTP server, MCP, or ACP interfaces for automation.`,
+  );
 }
 
 export async function runTuiCli(params: NanobossTuiAppParams): Promise<void> {
@@ -21,6 +31,8 @@ export async function runTuiCommand(argv: string[] = []): Promise<void> {
     printHelp();
     return;
   }
+
+  assertInteractiveTty("tui");
 
   await runTuiCli({
     serverUrl: options.serverUrl,

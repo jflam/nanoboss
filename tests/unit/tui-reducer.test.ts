@@ -123,8 +123,115 @@ describe("tui reducer", () => {
     ]);
   });
 
-  test("merges local slash commands with server commands", () => {
-    let state = createInitialUiState();
+  test("stores prompt diagnostics and token usage lines from frontend events", () => {
+    let state = createInitialUiState({ cwd: "/repo" });
+
+    state = reduceUiState(state, {
+      type: "frontend_event",
+      event: eventEnvelope("prompt_diagnostics", {
+        runId: "run-1",
+        diagnostics: {
+          method: "tiktoken",
+          encoding: "o200k_base",
+          totalTokens: 321,
+          guidanceTokens: 21,
+          userMessageTokens: 100,
+          cards: [],
+        },
+      }),
+    });
+
+    state = reduceUiState(state, {
+      type: "frontend_event",
+      event: eventEnvelope("token_usage", {
+        runId: "run-1",
+        usage: {
+          source: "acp_usage_update",
+          currentContextTokens: 512,
+          maxContextTokens: 8192,
+        },
+        sourceUpdate: "usage_update",
+      }),
+    });
+
+    expect(state.promptDiagnosticsLine).toContain("[prompt]");
+    expect(state.promptDiagnosticsLine).toContain("321");
+    expect(state.tokenUsageLine).toContain("[tokens] 512 / 8,192");
+  });
+
+  test("removes completed wrapper tool calls and reenables input on run failure", () => {
+    let state = createInitialUiState({ cwd: "/repo", showToolCalls: true });
+
+    state = reduceUiState(state, {
+      type: "local_user_submitted",
+      text: "hello",
+    });
+    state = reduceUiState(state, {
+      type: "frontend_event",
+      event: eventEnvelope("run_started", {
+        runId: "run-1",
+        procedure: "default",
+        prompt: "hello",
+        startedAt: new Date(0).toISOString(),
+      }),
+    });
+    state = reduceUiState(state, {
+      type: "frontend_event",
+      event: eventEnvelope("tool_started", {
+        runId: "run-1",
+        toolCallId: "tool-parent",
+        title: "defaultSession: hello",
+        kind: "wrapper",
+      }),
+    });
+    state = reduceUiState(state, {
+      type: "frontend_event",
+      event: eventEnvelope("tool_updated", {
+        runId: "run-1",
+        toolCallId: "tool-parent",
+        status: "completed",
+      }),
+    });
+    state = reduceUiState(state, {
+      type: "frontend_event",
+      event: eventEnvelope("run_failed", {
+        runId: "run-1",
+        procedure: "default",
+        completedAt: new Date(1).toISOString(),
+        error: "boom",
+      }),
+    });
+
+    expect(state.toolCalls).toEqual([]);
+    expect(state.activeWrapperToolCallIds).toEqual([]);
+    expect(state.inputDisabled).toBe(false);
+    expect(state.turns.at(-1)).toMatchObject({
+      role: "assistant",
+      markdown: "boom",
+      status: "failed",
+    });
+  });
+
+  test("session_ready resets transient run state and merges local slash commands with server commands", () => {
+    let state = createInitialUiState({ cwd: "/repo", showToolCalls: true });
+
+    state = reduceUiState(state, {
+      type: "local_user_submitted",
+      text: "hello",
+    });
+    state = reduceUiState(state, {
+      type: "frontend_event",
+      event: eventEnvelope("tool_started", {
+        runId: "run-1",
+        toolCallId: "tool-parent",
+        title: "defaultSession: hello",
+        kind: "wrapper",
+      }),
+    });
+    state = reduceUiState(state, {
+      type: "local_status",
+      text: "stale status",
+    });
 
     state = reduceUiState(state, {
       type: "session_ready",
@@ -134,6 +241,9 @@ describe("tui reducer", () => {
       commands: [{ name: "tokens", description: "show tokens" }],
     });
 
+    expect(state.turns).toEqual([]);
+    expect(state.toolCalls).toEqual([]);
+    expect(state.statusLine).toBeUndefined();
     expect(state.availableCommands).toEqual([
       "/tokens",
       "/new",
