@@ -159,7 +159,74 @@ describe("tui reducer", () => {
     expect(state.tokenUsageLine).toContain("[tokens] 512 / 8,192");
   });
 
-  test("removes completed wrapper tool calls and reenables input on run failure", () => {
+  test("keeps the latest completed leaf tool visible until the next sibling replaces it", () => {
+    let state = createInitialUiState({ cwd: "/repo", showToolCalls: true });
+
+    state = reduceUiState(state, {
+      type: "frontend_event",
+      event: eventEnvelope("run_started", {
+        runId: "run-1",
+        procedure: "default",
+        prompt: "hello",
+        startedAt: new Date(0).toISOString(),
+      }),
+    });
+    state = reduceUiState(state, {
+      type: "frontend_event",
+      event: eventEnvelope("tool_started", {
+        runId: "run-1",
+        toolCallId: "tool-parent",
+        title: "defaultSession: hello",
+        kind: "wrapper",
+      }),
+    });
+    state = reduceUiState(state, {
+      type: "frontend_event",
+      event: eventEnvelope("tool_started", {
+        runId: "run-1",
+        toolCallId: "tool-leaf-1",
+        title: "Reviewing changed code",
+        kind: "thought",
+      }),
+    });
+    state = reduceUiState(state, {
+      type: "frontend_event",
+      event: eventEnvelope("tool_updated", {
+        runId: "run-1",
+        toolCallId: "tool-leaf-1",
+        status: "completed",
+      }),
+    });
+
+    expect(state.toolCalls).toContainEqual({
+      id: "tool-leaf-1",
+      title: "Reviewing changed code",
+      status: "completed",
+      depth: 1,
+      isWrapper: false,
+    });
+
+    state = reduceUiState(state, {
+      type: "frontend_event",
+      event: eventEnvelope("tool_started", {
+        runId: "run-1",
+        toolCallId: "tool-leaf-2",
+        title: "Running tests",
+        kind: "thought",
+      }),
+    });
+
+    expect(state.toolCalls.some((toolCall) => toolCall.id === "tool-leaf-1")).toBe(false);
+    expect(state.toolCalls).toContainEqual({
+      id: "tool-leaf-2",
+      title: "Running tests",
+      status: "pending",
+      depth: 1,
+      isWrapper: false,
+    });
+  });
+
+  test("removes completed wrapper tool calls, clears retained descendants, and reenables input on run failure", () => {
     let state = createInitialUiState({ cwd: "/repo", showToolCalls: true });
 
     state = reduceUiState(state, {
@@ -182,6 +249,23 @@ describe("tui reducer", () => {
         toolCallId: "tool-parent",
         title: "defaultSession: hello",
         kind: "wrapper",
+      }),
+    });
+    state = reduceUiState(state, {
+      type: "frontend_event",
+      event: eventEnvelope("tool_started", {
+        runId: "run-1",
+        toolCallId: "tool-leaf",
+        title: "Reviewing changed code",
+        kind: "thought",
+      }),
+    });
+    state = reduceUiState(state, {
+      type: "frontend_event",
+      event: eventEnvelope("tool_updated", {
+        runId: "run-1",
+        toolCallId: "tool-leaf",
+        status: "completed",
       }),
     });
     state = reduceUiState(state, {

@@ -189,7 +189,7 @@ function renderToolCallLine(toolCall: UiToolCall): string {
     return `[tool] ${toolCall.title} running`;
   }
 
-  if (toolCall.status === "pending") {
+  if (toolCall.status === "pending" || toolCall.status === "completed") {
     return `[tool] ${toolCall.title}`;
   }
 

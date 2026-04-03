@@ -197,7 +197,7 @@ function reduceFrontendEvent(state: UiState, event: FrontendEventEnvelope): UiSt
 
       return {
         ...state,
-        toolCalls: upsertToolCall(state.toolCalls, nextToolCall),
+        toolCalls: upsertToolCall(pruneReplacedCompletedToolCalls(state.toolCalls, nextToolCall.depth), nextToolCall),
         activeWrapperToolCallIds: isWrapper && !state.activeWrapperToolCallIds.includes(event.data.toolCallId)
           ? [...state.activeWrapperToolCallIds, event.data.toolCallId]
           : state.activeWrapperToolCallIds,
@@ -217,9 +217,25 @@ function reduceFrontendEvent(state: UiState, event: FrontendEventEnvelope): UiSt
         : state.activeWrapperToolCallIds;
 
       if (event.data.status === "completed") {
+        if (isWrapper) {
+          return {
+            ...state,
+            toolCalls: removeCompletedWrapperBranch(state.toolCalls, event.data.toolCallId, depth),
+            activeWrapperToolCallIds,
+          };
+        }
+
+        const nextToolCall: UiToolCall = {
+          id: event.data.toolCallId,
+          title,
+          status: event.data.status,
+          depth,
+          isWrapper,
+        };
+
         return {
           ...state,
-          toolCalls: state.toolCalls.filter((toolCall) => toolCall.id !== event.data.toolCallId),
+          toolCalls: upsertToolCall(state.toolCalls, nextToolCall),
           activeWrapperToolCallIds,
         };
       }
@@ -367,6 +383,14 @@ function appendRuntimeLines(state: UiState, lines: string[]): UiState {
     ...state,
     runtimeNotes: [...state.runtimeNotes, ...lines].slice(-MAX_RUNTIME_NOTES),
   };
+}
+
+function pruneReplacedCompletedToolCalls(toolCalls: UiToolCall[], depth: number): UiToolCall[] {
+  return toolCalls.filter((toolCall) => !(toolCall.depth === depth && !toolCall.isWrapper && toolCall.status === "completed"));
+}
+
+function removeCompletedWrapperBranch(toolCalls: UiToolCall[], toolCallId: string, depth: number): UiToolCall[] {
+  return toolCalls.filter((toolCall) => toolCall.id !== toolCallId && toolCall.depth <= depth);
 }
 
 function upsertToolCall(toolCalls: UiToolCall[], nextToolCall: UiToolCall): UiToolCall[] {
