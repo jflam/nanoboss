@@ -630,24 +630,82 @@ function buildProcedureDispatchPrompt(
   ].join("\n\n");
 }
 
-function extractProcedureDispatchResult(updates: acp.SessionUpdate[]): ProcedureDispatchResult | undefined {
+export function extractProcedureDispatchResult(updates: acp.SessionUpdate[]): ProcedureDispatchResult | undefined {
   for (const update of [...updates].reverse()) {
     if (update.sessionUpdate !== "tool_call_update" || update.status !== "completed") {
       continue;
     }
 
-    const rawOutput = update.rawOutput;
-    if (!rawOutput || typeof rawOutput !== "object") {
-      continue;
+    for (const candidate of collectProcedureDispatchCandidates(update)) {
+      const parsed = parseProcedureDispatchResultCandidate(candidate);
+      if (parsed) {
+        return parsed;
+      }
     }
+  }
 
-    const structuredContent = (rawOutput as { structuredContent?: unknown }).structuredContent;
-    if (isProcedureDispatchResult(structuredContent)) {
-      return structuredContent;
+  return undefined;
+}
+
+function collectProcedureDispatchCandidates(update: Extract<acp.SessionUpdate, { sessionUpdate: "tool_call_update" }>): unknown[] {
+  const rawOutput = update.rawOutput;
+  const candidates: unknown[] = [rawOutput];
+
+  if (rawOutput && typeof rawOutput === "object") {
+    candidates.push((rawOutput as { structuredContent?: unknown }).structuredContent);
+    candidates.push((rawOutput as { content?: unknown }).content);
+    candidates.push((rawOutput as { detailedContent?: unknown }).detailedContent);
+    candidates.push((rawOutput as { contents?: unknown }).contents);
+  }
+
+  if ("content" in update) {
+    candidates.push((update as { content?: unknown }).content);
+  }
+
+  return candidates;
+}
+
+function parseProcedureDispatchResultCandidate(value: unknown): ProcedureDispatchResult | undefined {
+  if (isProcedureDispatchResult(value)) {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value) as unknown;
+      return isProcedureDispatchResult(parsed) ? parsed : undefined;
+    } catch {
+      return undefined;
     }
+  }
 
-    if (isProcedureDispatchResult(rawOutput)) {
-      return rawOutput;
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const parsed = parseProcedureDispatchResultCandidate(item);
+      if (parsed) {
+        return parsed;
+      }
+    }
+    return undefined;
+  }
+
+  if (!value || typeof value !== "object") {
+    return undefined;
+  }
+
+  const contentText = (value as { text?: unknown }).text;
+  if (typeof contentText === "string") {
+    const parsed = parseProcedureDispatchResultCandidate(contentText);
+    if (parsed) {
+      return parsed;
+    }
+  }
+
+  const nestedContent = (value as { content?: unknown }).content;
+  if (nestedContent !== undefined) {
+    const parsed = parseProcedureDispatchResultCandidate(nestedContent);
+    if (parsed) {
+      return parsed;
     }
   }
 

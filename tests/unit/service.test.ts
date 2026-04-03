@@ -8,7 +8,7 @@ const MOCK_AGENT_PATH = join(process.cwd(), "tests/fixtures/mock-agent.ts");
 const SELF_COMMAND_PATH = join(process.cwd(), "dist", "nanoboss");
 
 import { ProcedureRegistry } from "../../src/registry.ts";
-import { NanobossService } from "../../src/service.ts";
+import { extractProcedureDispatchResult, NanobossService } from "../../src/service.ts";
 
 beforeAll(() => {
   const build = spawnSync("bun", ["run", "build"], {
@@ -88,6 +88,41 @@ async function createRegistryWithWorkspace(commandFiles: Record<string, string> 
 }
 
 describe("NanobossService", () => {
+  test("extracts procedure_dispatch results from copilot-style tool payloads", () => {
+    const parsed = extractProcedureDispatchResult([
+      {
+        sessionUpdate: "tool_call_update",
+        toolCallId: "call_123",
+        status: "completed",
+        rawOutput: {
+          content: '{"procedure":"research","cell":{"sessionId":"s1","cellId":"c1"},"display":"done"}',
+          detailedContent: '{"procedure":"research","cell":{"sessionId":"s1","cellId":"c1"},"display":"done"}',
+          contents: [
+            {
+              type: "text",
+              text: '{"procedure":"research","cell":{"sessionId":"s1","cellId":"c1"},"display":"done"}',
+            },
+          ],
+        },
+        content: [
+          {
+            type: "content",
+            content: {
+              type: "text",
+              text: '{"procedure":"research","cell":{"sessionId":"s1","cellId":"c1"},"display":"done"}',
+            },
+          },
+        ],
+      } as never,
+    ]);
+
+    expect(parsed).toEqual({
+      procedure: "research",
+      cell: { sessionId: "s1", cellId: "c1" },
+      display: "done",
+    });
+  });
+
   test("does not duplicate final display when the same text was already streamed", async () => {
     const registry = new ProcedureRegistry(mkdtempSync(join(tmpdir(), "nab-service-")));
     registry.register({
