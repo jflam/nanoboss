@@ -94,7 +94,7 @@ export class ProcedureDispatchJobManager {
     dispatchCorrelationId?: string;
   }): Promise<ProcedureDispatchStartResult> {
     if (args.name === "default") {
-      throw new Error("procedure_dispatch cannot run default; continue the master conversation directly instead.");
+      throw new Error("procedure dispatch cannot run default; continue the master conversation directly instead.");
     }
 
     const registry = await this.params.getRegistry();

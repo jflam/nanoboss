@@ -1,7 +1,7 @@
 import { resolve } from "node:path";
 
 import { getBuildLabel } from "./build-info.ts";
-import { resolveDownstreamAgentConfig } from "./config.ts";
+import { readCurrentSessionPointer } from "./current-session.ts";
 import { inferDataShape } from "./data-shape.ts";
 import { dispatchMcpToolsMethod, type JsonRpcToolMetadata } from "./mcp-jsonrpc.ts";
 import {
@@ -27,13 +27,14 @@ import type {
 
 export const SESSION_MCP_PROTOCOL_VERSION = "2025-11-25";
 export const SESSION_MCP_SERVER_NAME = "nanoboss-session";
-export const SESSION_MCP_INSTRUCTIONS = "Use these tools to dispatch nanoboss procedures and inspect durable session state for the current master session.";
+export const SESSION_MCP_INSTRUCTIONS = "These tools are already attached to the current nanoboss master session. Do not discover or pass a session id. Do not inspect repo files or ~/.nanoboss to figure out dispatch. For slash commands, first call procedure_dispatch_start once, then call procedure_dispatch_wait with the returned dispatch id until terminal status. The client may expose these tools under namespaced handles for the attached nanoboss-session server.";
 
 interface SessionMcpParams {
   sessionId?: string;
   cwd: string;
   rootDir?: string;
   registry?: ProcedureRegistryLike;
+  allowCurrentSessionFallback?: boolean;
 }
 
 interface SessionMcpToolDefinition extends JsonRpcToolMetadata {
@@ -62,15 +63,7 @@ export interface SessionSchemaResult {
 }
 
 export class SessionMcpApi {
-  private readonly registryPromise: Promise<ProcedureRegistryLike>;
-  private defaultAgentConfig: ReturnType<typeof resolveDownstreamAgentConfig>;
-
-  constructor(private readonly params: SessionMcpParams) {
-    this.registryPromise = params.registry
-      ? Promise.resolve(params.registry)
-      : loadSessionMcpRegistry(params.cwd);
-    this.defaultAgentConfig = resolveDownstreamAgentConfig(params.cwd);
-  }
+  constructor(private readonly params: SessionMcpParams) {}
 
   sessionRecent(args: SessionRecentOptions = {}): ReturnType<SessionStore["recent"]> {
     return this.createStore().recent(args);
@@ -161,10 +154,6 @@ export class SessionMcpApi {
     defaultAgentSelection?: DownstreamAgentSelection;
     dispatchCorrelationId?: string;
   }): Promise<ProcedureDispatchStartToolResult> {
-    if (args.defaultAgentSelection) {
-      this.defaultAgentConfig = resolveDownstreamAgentConfig(this.params.cwd, args.defaultAgentSelection);
-    }
-
     return await this.createDispatchJobManager().start(args);
   }
 
@@ -179,52 +168,24 @@ export class SessionMcpApi {
     return await this.createDispatchJobManager().wait(args.dispatchId, args.waitMs);
   }
 
-  async procedureDispatch(args: {
-    name: string;
-    prompt: string;
-    defaultAgentSelection?: DownstreamAgentSelection;
-    dispatchCorrelationId?: string;
-  }): Promise<ProcedureDispatchResult> {
-    const started = await this.procedureDispatchStart(args);
-
-    for (;;) {
-      const status = await this.procedureDispatchWait({
-        dispatchId: started.dispatchId,
-      });
-
-      if (status.status === "completed" && status.result) {
-        if (status.result.defaultAgentSelection) {
-          this.defaultAgentConfig = resolveDownstreamAgentConfig(this.params.cwd, status.result.defaultAgentSelection);
-        }
-        return status.result;
-      }
-
-      if (status.status === "failed") {
-        throw new Error(status.error ?? `Procedure dispatch failed: ${status.dispatchId}`);
-      }
-
-      if (status.status === "cancelled") {
-        throw new Error(`Procedure dispatch cancelled: ${status.dispatchId}`);
-      }
-    }
-  }
-
   private createStore(): SessionStore {
-    if (!this.params.sessionId) {
+    const context = this.resolveEffectiveContext();
+    if (!context.sessionId) {
       throw new Error("Session MCP requires an explicit sessionId.");
     }
 
     return new SessionStore({
-      sessionId: this.params.sessionId,
-      cwd: this.params.cwd,
-      rootDir: this.params.rootDir,
+      sessionId: context.sessionId,
+      cwd: context.cwd,
+      rootDir: context.rootDir,
     });
   }
 
   private createDispatchJobManager(): ProcedureDispatchJobManager {
+    const context = this.resolveEffectiveContext();
     const store = this.createStore();
     return new ProcedureDispatchJobManager({
-      cwd: this.params.cwd,
+      cwd: context.cwd,
       sessionId: store.sessionId,
       rootDir: store.rootDir,
       getRegistry: async () => await this.getRegistry(),
@@ -232,7 +193,37 @@ export class SessionMcpApi {
   }
 
   private async getRegistry(): Promise<ProcedureRegistryLike> {
-    return await this.registryPromise;
+    if (this.params.registry) {
+      return this.params.registry;
+    }
+
+    return await loadSessionMcpRegistry(this.resolveEffectiveContext().cwd);
+  }
+
+  private resolveEffectiveContext(): { sessionId?: string; cwd: string; rootDir?: string } {
+    if (this.params.sessionId) {
+      return {
+        sessionId: this.params.sessionId,
+        cwd: this.params.cwd,
+        rootDir: this.params.rootDir,
+      };
+    }
+
+    if (this.params.allowCurrentSessionFallback) {
+      const pointer = readCurrentSessionPointer();
+      if (pointer) {
+        return {
+          sessionId: pointer.sessionId,
+          cwd: pointer.cwd,
+          rootDir: pointer.rootDir,
+        };
+      }
+    }
+
+    return {
+      cwd: this.params.cwd,
+      rootDir: this.params.rootDir,
+    };
   }
 }
 
@@ -339,7 +330,7 @@ const SESSION_MCP_TOOLS: SessionMcpToolDefinition[] = [
   }),
   defineTool({
     name: "procedure_dispatch_start",
-    description: "Start a nanoboss procedure asynchronously on behalf of the current persistent master session and return a dispatch id quickly.",
+    description: "First step for slash-command dispatch on the already-attached current nanoboss session. Returns quickly with a dispatch id; then call procedure_dispatch_wait using the client-exposed handle for this attached server.",
     inputSchema: {
       type: "object",
       properties: {
@@ -375,7 +366,7 @@ const SESSION_MCP_TOOLS: SessionMcpToolDefinition[] = [
   }),
   defineTool({
     name: "procedure_dispatch_status",
-    description: "Return the current durable status for an async nanoboss procedure dispatch.",
+    description: "Optional non-blocking status check for an async nanoboss procedure dispatch on the attached current session. If you are already in the normal start/wait flow, prefer procedure_dispatch_wait.",
     inputSchema: {
       type: "object",
       properties: {
@@ -395,7 +386,7 @@ const SESSION_MCP_TOOLS: SessionMcpToolDefinition[] = [
   }),
   defineTool({
     name: "procedure_dispatch_wait",
-    description: "Wait for a short bounded interval for an async nanoboss procedure dispatch, then return either the final result or the latest running status.",
+    description: "Second/repeated step after procedure_dispatch_start on the attached current session. Wait briefly using the same dispatch id, then return either the latest running status or the final result.",
     inputSchema: {
       type: "object",
       properties: {
@@ -413,42 +404,6 @@ const SESSION_MCP_TOOLS: SessionMcpToolDefinition[] = [
     },
     async call(api, args) {
       return await api.procedureDispatchWait(args);
-    },
-  }),
-  defineTool({
-    name: "procedure_dispatch",
-    description: "Compatibility wrapper that runs a nanoboss procedure on behalf of the current persistent master session and waits for the final result.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        name: { type: "string" },
-        prompt: { type: "string" },
-        defaultAgentSelection: {
-          type: "object",
-          properties: {
-            provider: { type: "string" },
-            model: { type: "string" },
-          },
-          required: ["provider"],
-          additionalProperties: false,
-        },
-        dispatchCorrelationId: { type: "string" },
-      },
-      required: ["name", "prompt"],
-      additionalProperties: false,
-    },
-    parseArgs(args) {
-      return {
-        name: asString(args.name, "name"),
-        prompt: typeof args.prompt === "string" ? args.prompt : "",
-        defaultAgentSelection: args.defaultAgentSelection === undefined
-          ? undefined
-          : parseDownstreamAgentSelection(args.defaultAgentSelection),
-        dispatchCorrelationId: asOptionalString(args.dispatchCorrelationId),
-      };
-    },
-    async call(api, args) {
-      return await api.procedureDispatch(args);
     },
   }),
   defineTool({
@@ -739,10 +694,6 @@ function serializeToolResult(toolName: string, result: unknown): string {
       : `${result.name}: ${result.description}`;
   }
 
-  if (toolName === "procedure_dispatch" && isProcedureDispatchResult(result)) {
-    return serializeProcedureDispatchResult(result);
-  }
-
   if (
     (toolName === "procedure_dispatch_start" ||
       toolName === "procedure_dispatch_status" ||
@@ -753,7 +704,7 @@ function serializeToolResult(toolName: string, result: unknown): string {
   }
 
   if (toolName === "procedure_dispatch_start" && isProcedureDispatchStartResult(result)) {
-    return `Dispatch queued: ${result.dispatchId}`;
+    return `Dispatch started. dispatchId=${result.dispatchId}. Next call procedure_dispatch_wait with this same dispatch id.`;
   }
 
   if (typeof result === "string") {
@@ -883,7 +834,7 @@ function serializeProcedureDispatchStatus(result: ProcedureDispatchStatusToolRes
     return `${result.procedure} cancelled.`;
   }
 
-  return `${result.procedure} ${result.status}. dispatchId=${result.dispatchId}`;
+  return `${result.procedure} ${result.status}. dispatchId=${result.dispatchId}. Call procedure_dispatch_wait again with this same dispatch id.`;
 }
 
 function isCellRefLike(value: unknown): value is CellRef {

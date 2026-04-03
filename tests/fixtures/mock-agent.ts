@@ -191,9 +191,7 @@ async function answerForPrompt(
 ): Promise<string> {
   const dispatch = parseInternalSlashDispatch(prompt);
   if (dispatch) {
-    const result = prompt.includes("procedure_dispatch_start")
-      ? await callProcedureDispatchAsync(session, connection, sessionId, dispatch)
-      : await callProcedureDispatch(session, connection, sessionId, dispatch);
+    const result = await callProcedureDispatchAsync(session, connection, sessionId, dispatch);
     return extractToolResultText(result);
   }
 
@@ -282,57 +280,6 @@ function parseInternalSlashDispatch(prompt: string): InternalSlashDispatch | und
       : undefined,
     dispatchCorrelationId: typeof parsed.dispatchCorrelationId === "string" ? parsed.dispatchCorrelationId : undefined,
   };
-}
-
-async function callProcedureDispatch(
-  session: LiveSession,
-  connection: acp.AgentSideConnection,
-  sessionId: string,
-  dispatch: InternalSlashDispatch,
-): Promise<unknown> {
-  const server = getSessionMcpServer(session);
-
-  const toolCallId = crypto.randomUUID();
-  await connection.sessionUpdate({
-    sessionId,
-    update: {
-      sessionUpdate: "tool_call",
-      toolCallId,
-      title: "procedure_dispatch",
-      kind: "other",
-      status: "pending",
-      rawInput: dispatch,
-    },
-  });
-
-  try {
-    const result = await callStdioMcpTool(server, "procedure_dispatch", dispatch, {
-      timeoutMs: PROCEDURE_DISPATCH_TIMEOUT_MS > 0 ? PROCEDURE_DISPATCH_TIMEOUT_MS : undefined,
-      keepAliveOnTimeout: KEEP_SESSION_MCP_RUNNING_ON_TIMEOUT,
-    });
-    await connection.sessionUpdate({
-      sessionId,
-      update: {
-        sessionUpdate: "tool_call_update",
-        toolCallId,
-        status: "completed",
-        rawOutput: result,
-      },
-    });
-    return result;
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    await connection.sessionUpdate({
-      sessionId,
-      update: {
-        sessionUpdate: "tool_call_update",
-        toolCallId,
-        status: "failed",
-        rawOutput: { error: message },
-      },
-    });
-    throw error;
-  }
 }
 
 async function callProcedureDispatchAsync(

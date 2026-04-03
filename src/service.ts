@@ -727,19 +727,26 @@ function buildProcedureDispatchPrompt(
 ): string {
   return [
     "Nanoboss internal slash-command dispatch.",
-    "This is an internal control message for the current persistent master conversation.",
-    "Call `procedure_dispatch_start` exactly once with the following JSON arguments.",
+    "Internal control message for the current persistent master conversation.",
+    "A nanoboss MCP surface is available for this conversation.",
+    "Prefer the attached `nanoboss-session` MCP server when it is exposed. If the client does not expose the attached server tools, use the globally registered `nanoboss` MCP server instead.",
+    "Do not inspect repo files, CLI wiring, session pointer files, or ~/.nanoboss.",
+    "Do not try to discover a session id.",
+    "The client may expose the tools under bare names or namespaced handles such as `mcp__nanoboss-session__procedure_dispatch_start`, `mcp__nanoboss__procedure_dispatch_start`, or similar names that contain `procedure_dispatch_start` / `procedure_dispatch_wait`.",
+    "Use the available nanoboss MCP handle that contains `procedure_dispatch_start` for step 1 and the available nanoboss MCP handle that contains `procedure_dispatch_wait` for step 2.",
+    "Step 1: call the chosen `procedure_dispatch_start` tool exactly once with this JSON:",
     JSON.stringify({
       name: procedureName,
       prompt: procedurePrompt,
       defaultAgentSelection,
       dispatchCorrelationId,
     }),
-    "After start returns a dispatch id, repeatedly call `procedure_dispatch_wait` with that dispatch id until the returned status is `completed` or `failed`.",
-    "Use a short bounded wait on each poll. Do not use `procedure_dispatch`.",
+    "Step 2: after start returns a dispatch id, repeatedly call the chosen `procedure_dispatch_wait` tool with that dispatch id until status is `completed` or `failed`.",
+    "Use a short bounded wait on each poll.",
     "Do not answer from your own knowledge.",
     "If the final status is `completed`, reply with exactly the final tool result text and nothing else.",
     "If the final status is `failed`, reply with exactly the tool error text and nothing else.",
+    "No prefatory explanation.",
   ].join("\n\n");
 }
 

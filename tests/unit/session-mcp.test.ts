@@ -298,7 +298,6 @@ describe("session MCP API", () => {
     expect(toolNames).toContain("procedure_dispatch_start");
     expect(toolNames).toContain("procedure_dispatch_status");
     expect(toolNames).toContain("procedure_dispatch_wait");
-    expect(toolNames).toContain("procedure_dispatch");
 
     expect(
       await callSessionMcpTool(api, "cell_ancestors", {

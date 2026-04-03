@@ -80,7 +80,7 @@ function readStoredMockSession(sessionStoreDir: string): {
 }
 
 describe("default session memory bridge", () => {
-  test("routes slash commands through procedure_dispatch and skips delayed memory injection", async () => {
+  test("routes slash commands through async procedure dispatch polling and skips delayed memory injection", async () => {
     const cwd = mkdtempSync(join(tmpdir(), "nab-memory-workspace-"));
     const commandsDir = join(cwd, "commands");
     mkdirSync(commandsDir, { recursive: true });

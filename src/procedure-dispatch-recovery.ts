@@ -82,7 +82,7 @@ export function buildRecoveredProcedureSyncPrompt(sessionId: string, cell: CellR
 
   return [
     "Nanoboss internal recovered procedure synchronization.",
-    "A slash command finished durably after the outer procedure_dispatch MCP tool timed out.",
+    "A slash command finished durably after the outer async dispatch MCP polling path failed to deliver the terminal result.",
     "Treat the following as the authoritative stored result for future turns in this same persistent master conversation.",
     "Do not answer the user. Respond with exactly: OK",
     "",
