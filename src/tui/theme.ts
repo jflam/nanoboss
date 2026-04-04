@@ -63,16 +63,16 @@ export function createNanobossTuiTheme(): NanobossTuiTheme {
   const toolCardBody = text;
 
   const selectList: SelectListTheme = {
-    selectedPrefix: (value) => style(value, 1, 36),
-    selectedText: (value) => style(value, 1, 36),
+    selectedPrefix: (value) => style(value, [1, 36], [22, 39]),
+    selectedText: (value) => style(value, [1, 36], [22, 39]),
     description: muted,
     scrollInfo: dim,
     noMatch: warning,
   };
 
   const markdown: MarkdownTheme = {
-    heading: (value) => style(value, 1, 36),
-    link: (value) => style(value, 4, 36),
+    heading: (value) => style(value, [1, 36], [22, 39]),
+    link: (value) => style(value, [4, 36], [24, 39]),
     linkUrl: muted,
     code: (value) => warning(value),
     codeBlock: text,
