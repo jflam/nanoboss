@@ -7,9 +7,9 @@ import {
   SessionStore,
   createValueRef,
   normalizeProcedureResult,
-  summarizeText,
 } from "./session-store.ts";
 import { toDownstreamAgentSelection } from "./config.ts";
+import { summarizeText } from "./util/text.ts";
 import type {
   AgentTokenUsage,
   CellRecord,

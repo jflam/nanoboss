@@ -5,10 +5,8 @@
   "private": true,
   "scripts": {
     "nanoboss": "bun run nanoboss.ts",
-    "server": "bun run nanoboss.ts server",
-    "http": "bun run nanoboss.ts server",
+    "http": "bun run nanoboss.ts http",
     "cli": "bun run nanoboss.ts cli",
-    "tui": "bun run nanoboss.ts tui",
     "acp-server": "bun run nanoboss.ts acp-server",
     "build": "bun run build.ts",
     "lint": "eslint . --cache",

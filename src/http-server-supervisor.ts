@@ -26,11 +26,11 @@ export async function ensureMatchingHttpServer(
   const serverUrl = new URL(baseUrl);
   if (!isLoopbackServerUrl(serverUrl)) {
     if (!initialHealth) {
-      throw new Error(`Failed to reach nanoboss server at ${baseUrl}`);
+      throw new Error(`Failed to reach the nanoboss HTTP server at ${baseUrl}`);
     }
 
     throw new Error(
-      `nanoboss server at ${baseUrl} is ${initialHealth.buildLabel ?? "unknown"}, but this CLI is ${desiredLabel}. Restart the remote server manually.`,
+      `nanoboss HTTP server at ${baseUrl} is ${initialHealth.buildLabel ?? "unknown"}, but this CLI is ${desiredLabel}. Restart the remote server manually.`,
     );
   }
 
@@ -43,7 +43,7 @@ export async function ensureMatchingHttpServer(
       stopped = await waitForServerState(baseUrl, (health) => health === null, SERVER_STOP_TIMEOUT_MS);
     }
     if (!stopped) {
-      throw new Error(`Timed out waiting for the existing nanoboss server at ${baseUrl} to stop`);
+      throw new Error(`Timed out waiting for the existing nanoboss HTTP server at ${baseUrl} to stop`);
     }
   } else {
     options.onStatus?.(`[server] starting ${desiredLabel} at ${baseUrl}`);
@@ -57,7 +57,7 @@ export async function ensureMatchingHttpServer(
     SERVER_START_TIMEOUT_MS,
   );
   if (!ready) {
-    throw new Error(`Timed out waiting for nanoboss server ${desiredLabel} at ${baseUrl}`);
+    throw new Error(`Timed out waiting for nanoboss HTTP server ${desiredLabel} at ${baseUrl}`);
   }
 }
 

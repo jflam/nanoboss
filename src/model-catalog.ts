@@ -88,12 +88,6 @@ const AGENT_MODEL_CATALOG: Record<DownstreamAgentProvider, AgentCatalogEntry> = 
       { id: "gemini-2.5-flash-lite" },
       { id: "gemini-3-pro-preview" },
       { id: "gemini-3-flash-preview" },
-      { id: "auto", name: "auto", description: "Alias" },
-      { id: "pro", name: "pro", description: "Alias" },
-      { id: "flash", name: "flash", description: "Alias" },
-      { id: "flash-lite", name: "flash-lite", description: "Alias" },
-      { id: "auto-gemini-2.5", name: "auto-gemini-2.5", description: "Alias" },
-      { id: "auto-gemini-3", name: "auto-gemini-3", description: "Alias" },
     ],
   },
   codex: {

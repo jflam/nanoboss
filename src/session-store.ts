@@ -3,6 +3,7 @@ import { dirname, join, resolve } from "node:path";
 
 import { getSessionDir } from "./config.ts";
 import { inferDataShape } from "./data-shape.ts";
+import { summarizeText } from "./util/text.ts";
 import type {
   CellAncestorsOptions,
   CellDescendantsOptions,
@@ -67,15 +68,6 @@ export function normalizeProcedureResult<T extends KernelValue = KernelValue>(
   }
 
   return result === undefined ? {} : result;
-}
-
-export function summarizeText(text: string, maxLength = 80): string {
-  const compact = text.replace(/\s+/g, " ").trim();
-  if (!compact) {
-    return "";
-  }
-
-  return compact.length > maxLength ? `${compact.slice(0, maxLength - 3)}...` : compact;
 }
 
 export class SessionStore {

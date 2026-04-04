@@ -11,25 +11,25 @@ describe("resolveSelfCommandWithRuntime", () => {
     const scriptPath = join(tempDir, "some-test-runner.ts");
     writeFileSync(scriptPath, "export {};\n", "utf8");
 
-    const command = resolveSelfCommandWithRuntime("server", ["--port", "6502"], {
+    const command = resolveSelfCommandWithRuntime("http", ["--port", "6502"], {
       executable: "/usr/local/bin/bun",
       scriptPath,
     });
 
     expect(command.command).toBe("/usr/local/bin/bun");
     expect(command.args[0]?.endsWith("nanoboss.ts")).toBe(true);
-    expect(command.args.slice(1)).toEqual(["server", "--port", "6502"]);
+    expect(command.args.slice(1)).toEqual(["http", "--port", "6502"]);
   });
 
   test("uses the compiled executable directly for bunfs virtual scripts", () => {
-    const command = resolveSelfCommandWithRuntime("server", ["--port", "6502"], {
+    const command = resolveSelfCommandWithRuntime("http", ["--port", "6502"], {
       executable: "/Users/jflam/.local/bin/nanoboss",
       scriptPath: "/$bunfs/root/nanoboss.js",
     });
 
     expect(command).toEqual({
       command: "/Users/jflam/.local/bin/nanoboss",
-      args: ["server", "--port", "6502"],
+      args: ["http", "--port", "6502"],
     });
   });
 

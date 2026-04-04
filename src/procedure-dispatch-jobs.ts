@@ -29,6 +29,7 @@ import type {
   DownstreamAgentSelection,
   ProcedureRegistryLike,
 } from "./types.ts";
+import { requireValue } from "./util/argv.ts";
 
 const PROCEDURE_DISPATCH_JOBS_DIR = "procedure-dispatch-jobs";
 const DEFAULT_WAIT_MS = 1_000;
@@ -486,14 +487,6 @@ function parseProcedureDispatchWorkerArgs(argv: string[]): {
   }
 
   return { sessionId, cwd, rootDir, dispatchId };
-}
-
-function requireValue(value: string | undefined, flag: string): string {
-  if (!value) {
-    throw new Error(`Missing value for ${flag}`);
-  }
-
-  return value;
 }
 
 function clampWaitMs(value: number | undefined): number {

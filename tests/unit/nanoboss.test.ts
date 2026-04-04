@@ -17,10 +17,10 @@ describe("parseNanobossArgs", () => {
     });
   });
 
-  test("parses tui command", () => {
-    expect(parseNanobossArgs(["tui", "--server-url", "http://localhost:3000"])).toEqual({
-      command: "tui",
-      args: ["--server-url", "http://localhost:3000"],
+  test("parses http command", () => {
+    expect(parseNanobossArgs(["http", "--port", "3001"])).toEqual({
+      command: "http",
+      args: ["--port", "3001"],
     });
   });
 
@@ -28,13 +28,6 @@ describe("parseNanobossArgs", () => {
     expect(parseNanobossArgs(["resume", "session-123"])).toEqual({
       command: "resume",
       args: ["session-123"],
-    });
-  });
-
-  test("parses server command", () => {
-    expect(parseNanobossArgs(["server", "--port", "3001"])).toEqual({
-      command: "server",
-      args: ["--port", "3001"],
     });
   });
 
@@ -75,5 +68,10 @@ describe("parseNanobossArgs", () => {
 
   test("rejects unknown commands", () => {
     expect(() => parseNanobossArgs(["web"])).toThrow("Unknown nanoboss command: web");
+  });
+
+  test("rejects removed alias commands", () => {
+    expect(() => parseNanobossArgs(["tui"])).toThrow("Unknown nanoboss command: tui");
+    expect(() => parseNanobossArgs(["server"])).toThrow("Unknown nanoboss command: server");
   });
 });

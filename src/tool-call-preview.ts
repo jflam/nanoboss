@@ -1,4 +1,4 @@
-import { summarizeText } from "./session-store.ts";
+import { summarizeText } from "./util/text.ts";
 
 const MAX_INPUT_SUMMARY_LENGTH = 140;
 const MAX_OUTPUT_SUMMARY_LENGTH = 220;

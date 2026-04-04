@@ -89,7 +89,7 @@ nanoboss commit.
 sequenceDiagram
   participant User
   participant CLI as CLI
-  participant Server as nanoboss server
+  participant Server as nanoboss HTTP server
   participant Service as NanobossService
 
   User->>CLI: start
@@ -115,7 +115,7 @@ Relevant files:
 
 ## HTTP/SSE frontend path
 
-When you run `nanoboss server`, frontend clients talk to nanoboss over HTTP, and live updates come back over SSE.
+When you run `nanoboss http`, frontend clients talk to nanoboss over HTTP, and live updates come back over SSE.
 
 ```mermaid
 sequenceDiagram

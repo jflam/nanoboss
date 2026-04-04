@@ -1,18 +1,19 @@
 import { promptForStoredSessionSelection } from "./src/tui/overlays/session-picker.ts";
 import { createNanobossTuiTheme } from "./src/tui/theme.ts";
 import { assertInteractiveTty, runTuiCli } from "./src/tui/run.ts";
-import { readCurrentSessionPointer } from "./src/current-session.ts";
 import { DEFAULT_HTTP_SERVER_URL } from "./src/defaults.ts";
 import { parseResumeOptions } from "./src/resume-options.ts";
 import {
-  findStoredSession,
-  listStoredSessions,
-  resolveMostRecentStoredSession,
-  type StoredSessionSummary,
-} from "./src/stored-sessions.ts";
+  findSessionSummary,
+  listSessionSummaries,
+  readCurrentSessionMetadata,
+  resolveMostRecentSessionSummary,
+  toSessionSummary,
+  type SessionSummary,
+} from "./src/session/persistence.ts";
 
 export type StoredSessionSelectionResult =
-  | { kind: "selected"; session: StoredSessionSummary }
+  | { kind: "selected"; session: SessionSummary }
   | { kind: "cancelled" }
   | { kind: "empty" };
 
@@ -33,7 +34,7 @@ export async function runResumeCommand(
   const cwd = process.cwd();
   (deps.assertInteractiveTty ?? assertInteractiveTty)("resume");
 
-  let selected: StoredSessionSummary | undefined;
+  let selected: SessionSummary | undefined;
   if (options.sessionId) {
     selected = resolveExplicitSession(options.sessionId);
   } else if (options.list) {
@@ -50,6 +51,9 @@ export async function runResumeCommand(
   }
 
   if (!selected) {
+    if (options.sessionId) {
+      throw new Error(`Unknown session: ${options.sessionId}`);
+    }
     throw new Error(`No saved nanoboss sessions found for ${cwd}`);
   }
 
@@ -60,37 +64,21 @@ export async function runResumeCommand(
   });
 }
 
-function resolveExplicitSession(sessionId: string): StoredSessionSummary {
-  return findStoredSession(sessionId) ?? {
-    sessionId,
-    cwd: process.cwd(),
-    rootDir: "",
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    hasMetadata: false,
-    hasNativeResume: false,
-  };
+function resolveExplicitSession(sessionId: string): SessionSummary | undefined {
+  return findSessionSummary(sessionId);
 }
 
-function resolveDefaultSession(cwd: string): StoredSessionSummary | undefined {
-  const pointer = readCurrentSessionPointer();
-  if (pointer?.sessionId && pointer.cwd === cwd) {
-    return findStoredSession(pointer.sessionId) ?? {
-      sessionId: pointer.sessionId,
-      cwd: pointer.cwd,
-      rootDir: pointer.rootDir,
-      createdAt: pointer.updatedAt,
-      updatedAt: pointer.updatedAt,
-      hasMetadata: false,
-      hasNativeResume: false,
-    };
+function resolveDefaultSession(cwd: string): SessionSummary | undefined {
+  const current = readCurrentSessionMetadata();
+  if (current && current.cwd === cwd) {
+    return toSessionSummary(current);
   }
 
-  return resolveMostRecentStoredSession(cwd);
+  return resolveMostRecentSessionSummary(cwd);
 }
 
 async function selectStoredSession(cwd: string): Promise<StoredSessionSelectionResult> {
-  const sessions = orderSessions(cwd, withCurrentPointerSession(cwd, listStoredSessions()));
+  const sessions = orderSessions(cwd, withCurrentSession(cwd, listSessionSummaries()));
   if (sessions.length === 0) {
     return { kind: "empty" };
   }
@@ -101,27 +89,19 @@ async function selectStoredSession(cwd: string): Promise<StoredSessionSelectionR
     : { kind: "cancelled" };
 }
 
-function withCurrentPointerSession(cwd: string, sessions: StoredSessionSummary[]): StoredSessionSummary[] {
-  const pointer = readCurrentSessionPointer();
-  if (!pointer?.sessionId || pointer.cwd !== cwd || sessions.some((session) => session.sessionId === pointer.sessionId)) {
+function withCurrentSession(cwd: string, sessions: SessionSummary[]): SessionSummary[] {
+  const current = readCurrentSessionMetadata();
+  if (!current || current.cwd !== cwd || sessions.some((session) => session.sessionId === current.sessionId)) {
     return sessions;
   }
 
   return [
-    {
-      sessionId: pointer.sessionId,
-      cwd: pointer.cwd,
-      rootDir: pointer.rootDir,
-      createdAt: pointer.updatedAt,
-      updatedAt: pointer.updatedAt,
-      hasMetadata: false,
-      hasNativeResume: false,
-    },
+    toSessionSummary(current),
     ...sessions,
   ];
 }
 
-function orderSessions(cwd: string, sessions: StoredSessionSummary[]): StoredSessionSummary[] {
+function orderSessions(cwd: string, sessions: SessionSummary[]): SessionSummary[] {
   return [...sessions].sort((left, right) => {
     const cwdRank = Number(right.cwd === cwd) - Number(left.cwd === cwd);
     if (cwdRank !== 0) {
@@ -136,7 +116,7 @@ function printHelp(): void {
   process.stdout.write([
     "Usage: nanoboss resume [session-id] [--list] [--tool-calls|--no-tool-calls] [--server-url <url>]",
     "",
-    "Requires an interactive TTY. For automation, use nanoboss server, mcp, or acp-server.",
+    "Requires an interactive TTY. For automation, use nanoboss http, mcp, or acp-server.",
     "",
     "Options:",
     "  --list                Choose from saved sessions before resuming",

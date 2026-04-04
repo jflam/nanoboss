@@ -1,9 +1,10 @@
 import { normalizeAgentTokenUsage } from "./token-usage.ts";
 import type { DefaultConversationSession } from "./default-session.ts";
 import { buildProcedureExecutionResult, type ProcedureExecutionResult } from "./procedure-runner.ts";
-import { createValueRef, type SessionStore, summarizeText } from "./session-store.ts";
+import { createValueRef, type SessionStore } from "./session-store.ts";
 import { inferDataShape } from "./data-shape.ts";
 import type { AgentTokenUsage, CellRecord, DownstreamAgentConfig, ValueRef } from "./types.ts";
+import { summarizeText } from "./util/text.ts";
 
 export function isProcedureDispatchTimeout(message: string | undefined): boolean {
   return Boolean(message && /request timed out/i.test(message));

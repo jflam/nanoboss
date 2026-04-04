@@ -3,16 +3,16 @@ import {
   formatSessionInitialPrompt,
   formatSessionLine,
 } from "../../session-picker-format.ts";
-import type { StoredSessionSummary } from "../../stored-sessions.ts";
+import type { SessionSummary } from "../../session/persistence.ts";
 
 import type { NanobossTuiTheme } from "../theme.ts";
 import { promptWithSelectList } from "./select-overlay.ts";
 
 export async function promptForStoredSessionSelection(
   theme: NanobossTuiTheme,
-  sessions: StoredSessionSummary[],
+  sessions: SessionSummary[],
   cwd: string,
-): Promise<StoredSessionSummary | undefined> {
+): Promise<SessionSummary | undefined> {
   const selectedId = await promptWithSelectList(theme, {
     title: `Resume nanoboss session — ${cwd}`,
     items: sessions.map((session) => ({

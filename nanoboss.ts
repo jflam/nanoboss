@@ -8,7 +8,7 @@ import { runSessionMcpStdioCommand } from "./src/session-mcp-stdio.ts";
 import { runProcedureDispatchWorkerCommand } from "./src/procedure-dispatch-jobs.ts";
 import { runAcpServerCommand } from "./src/server.ts";
 
-export type NanobossSubcommand = "cli" | "tui" | "resume" | "server" | "acp-server" | "session-mcp" | "procedure-dispatch-worker" | "doctor" | "mcp" | "help";
+export type NanobossSubcommand = "cli" | "resume" | "http" | "acp-server" | "session-mcp" | "procedure-dispatch-worker" | "doctor" | "mcp" | "help";
 
 export interface NanobossArgs {
   command: NanobossSubcommand;
@@ -27,9 +27,8 @@ export function parseNanobossArgs(argv: string[]): NanobossArgs {
 
   if (
     first === "cli" ||
-    first === "tui" ||
     first === "resume" ||
-    first === "server" ||
+    first === "http" ||
     first === "acp-server" ||
     first === "doctor" ||
     first === "mcp" ||
@@ -50,13 +49,12 @@ export async function runNanoboss(argv: string[]): Promise<void> {
 
   switch (parsed.command) {
     case "cli":
-    case "tui":
       await runCliCommand(parsed.args);
       return;
     case "resume":
       await runResumeCommand(parsed.args);
       return;
-    case "server":
+    case "http":
       await runHttpServerCommand(parsed.args);
       return;
     case "acp-server":
@@ -86,9 +84,8 @@ export function printHelp(): void {
     "",
     "Commands:",
     "  cli                Launch the interactive frontend",
-    "  tui                Alias for the interactive pi-tui frontend",
     "  resume             Resume a saved CLI session",
-    "  server             Launch the HTTP/SSE server",
+    "  http               Launch the HTTP/SSE server",
     "  doctor             Show agent/session-MCP health and optionally register nanoboss MCP",
     "  mcp                Launch the global nanoboss MCP stdio server",
     "  acp-server         Launch the internal stdio ACP server",
@@ -97,9 +94,8 @@ export function printHelp(): void {
     "  help               Show this help text",
     "",
     "Examples:",
-    `  nanoboss server --port ${DEFAULT_HTTP_SERVER_PORT}`,
+    `  nanoboss http --port ${DEFAULT_HTTP_SERVER_PORT}`,
     "  nanoboss cli",
-    "  nanoboss tui",
     "  nanoboss resume",
     "  nanoboss doctor --register",
     `  nanoboss cli --server-url ${DEFAULT_HTTP_SERVER_URL}`,

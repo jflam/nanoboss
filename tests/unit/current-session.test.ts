@@ -5,10 +5,10 @@ import { join } from "node:path";
 import { afterEach, expect, test } from "bun:test";
 
 import {
-  getCurrentSessionPointerPath,
-  readCurrentSessionPointer,
-  writeCurrentSessionPointer,
-} from "../../src/current-session.ts";
+  getCurrentSessionMetadataPath,
+  readCurrentSessionMetadata,
+  writeCurrentSessionMetadata,
+} from "../../src/session/persistence.ts";
 
 let tempHome: string | undefined;
 
@@ -19,24 +19,26 @@ afterEach(() => {
   }
 });
 
-test("writes and reads the current session pointer", () => {
+test("writes and reads the current session metadata", () => {
   const originalHome = process.env.HOME;
   tempHome = mkdtempSync(join(tmpdir(), "nanoboss-current-session-"));
   process.env.HOME = tempHome;
 
   try {
-    writeCurrentSessionPointer({
+    writeCurrentSessionMetadata({
       sessionId: "session-123",
       cwd: "/repo",
       rootDir: "/repo/.nanoboss/session-123",
+      createdAt: "2026-04-01T10:00:00.000Z",
+      updatedAt: "2026-04-01T11:00:00.000Z",
     });
 
-    expect(readCurrentSessionPointer()).toMatchObject({
+    expect(readCurrentSessionMetadata()).toMatchObject({
       sessionId: "session-123",
       cwd: "/repo",
       rootDir: "/repo/.nanoboss/session-123",
     });
-    expect(readFileSync(getCurrentSessionPointerPath(), "utf8")).toContain("\"sessionId\": \"session-123\"");
+    expect(readFileSync(getCurrentSessionMetadataPath(), "utf8")).toContain("\"sessionId\": \"session-123\"");
   } finally {
     if (originalHome === undefined) {
       delete process.env.HOME;

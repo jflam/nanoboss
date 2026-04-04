@@ -210,8 +210,6 @@ export interface AgentRunResult<T extends KernelValue = KernelValue> extends Run
   tokenSnapshot?: AgentTokenSnapshot;
 }
 
-export type AgentResult<T extends KernelValue = KernelValue> = AgentRunResult<T>;
-
 export interface Procedure {
   name: string;
   description: string;

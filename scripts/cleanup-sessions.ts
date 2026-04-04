@@ -7,6 +7,7 @@ import {
   summarizeCleanupCandidates,
   type SessionCleanupReason,
 } from "../src/session-cleanup.ts";
+import { requireValue } from "../src/util/argv.ts";
 
 const ALL_REASONS: SessionCleanupReason[] = [
   "empty_dir",
@@ -153,13 +154,6 @@ function parseReasons(value: string): SessionCleanupReason[] {
     }
   }
   return parsed;
-}
-
-function requireValue(value: string | undefined, flag: string): string {
-  if (!value) {
-    throw new Error(`Missing value for ${flag}`);
-  }
-  return value;
 }
 
 function printHelp(): void {

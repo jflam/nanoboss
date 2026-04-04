@@ -74,7 +74,7 @@ See [`docs/architecture.md`](docs/architecture.md) for a transport-level overvie
 Launch the HTTP/SSE server:
 
 ```bash
-bun run nanoboss server
+bun run nanoboss http
 ```
 
 Launch the CLI frontend. By default it connects to `http://localhost:6502`.
@@ -122,11 +122,11 @@ Tool call progress lines are shown by default. Hide them with:
 bun run nanoboss cli --no-tool-calls
 ```
 
-For convenience, the old script names still route through the unified entrypoint:
+The package scripts mirror the canonical entrypoints:
 
 ```bash
 bun run cli
-bun run server
+bun run http
 ```
 
 By default the local REPL path spawns `copilot --acp --allow-all-tools`. In that default path,

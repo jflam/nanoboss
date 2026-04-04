@@ -1,6 +1,6 @@
 import type * as acp from "@agentclientprotocol/sdk";
 
-import { summarizeText } from "./session-store.ts";
+import { summarizeText } from "./util/text.ts";
 
 export function collectTextSessionUpdates(updates: acp.SessionUpdate[]): string | undefined {
   let text = "";

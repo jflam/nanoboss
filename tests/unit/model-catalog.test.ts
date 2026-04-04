@@ -49,3 +49,9 @@ test("parses reasoning selections only when the suffix is a known effort", () =>
     baseModel: "gemini-2.5-pro",
   });
 });
+
+test("requires canonical gemini model ids", () => {
+  expect(isKnownModelSelection("gemini", "gemini-2.5-pro")).toBe(true);
+  expect(isKnownModelSelection("gemini", "pro")).toBe(false);
+  expect(findSelectableModelOption("gemini", "flash")).toBeUndefined();
+});

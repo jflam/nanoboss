@@ -19,11 +19,12 @@ import {
   toFrontendCommands,
   type FrontendCommand,
 } from "./frontend-events.ts";
-import { writeCurrentSessionPointer } from "./current-session.ts";
 import {
-  readStoredSessionRecord,
-  writeStoredSessionRecord,
-} from "./stored-sessions.ts";
+  readSessionMetadata,
+  writeCurrentSessionMetadata,
+  writeSessionMetadata,
+  type SessionMetadata,
+} from "./session/persistence.ts";
 import { startProcedureDispatchProgressBridge } from "./procedure-dispatch-progress.ts";
 import {
   procedureDispatchResultFromRecoveredCell,
@@ -150,8 +151,7 @@ export class NanobossService {
     });
 
     this.sessions.set(sessionId, state);
-    this.touchCurrentSessionPointer(state);
-    this.persistSessionState(state);
+    this.touchCurrentSessionMetadata(this.persistSessionState(state));
     state.events.publish(sessionId, {
       type: "commands_updated",
       commands: state.commands,
@@ -167,11 +167,11 @@ export class NanobossService {
   }): SessionDescriptor {
     const existing = this.sessions.get(params.sessionId);
     if (existing) {
-      this.touchCurrentSessionPointer(existing);
+      this.touchCurrentSessionMetadata(this.persistSessionState(existing));
       return this.buildSessionDescriptor(params.sessionId, existing);
     }
 
-    const stored = readStoredSessionRecord(params.sessionId);
+    const stored = readSessionMetadata(params.sessionId);
     const cwd = stored?.cwd || params.cwd;
     if (!cwd) {
       throw new Error(`Unknown session: ${params.sessionId}`);
@@ -185,8 +185,7 @@ export class NanobossService {
     });
 
     this.sessions.set(params.sessionId, state);
-    this.touchCurrentSessionPointer(state);
-    this.persistSessionState(state);
+    this.touchCurrentSessionMetadata(this.persistSessionState(state));
     state.events.publish(params.sessionId, {
       type: "commands_updated",
       commands: state.commands,
@@ -247,12 +246,12 @@ export class NanobossService {
   private persistSessionState(
     session: SessionState,
     options: { prompt?: string; preserveDefaultAcpSessionId?: boolean } = {},
-  ): void {
-    const existing = readStoredSessionRecord(session.store.sessionId, session.store.rootDir);
+  ): SessionMetadata {
+    const existing = readSessionMetadata(session.store.sessionId, session.store.rootDir);
     const defaultAcpSessionId = session.defaultConversation.currentSessionId
       ?? (options.preserveDefaultAcpSessionId === false ? undefined : existing?.defaultAcpSessionId);
 
-    writeStoredSessionRecord({
+    return writeSessionMetadata({
       sessionId: session.store.sessionId,
       cwd: session.cwd,
       rootDir: session.store.rootDir,
@@ -265,12 +264,8 @@ export class NanobossService {
     });
   }
 
-  private touchCurrentSessionPointer(session: SessionState): void {
-    writeCurrentSessionPointer({
-      sessionId: session.store.sessionId,
-      cwd: session.cwd,
-      rootDir: session.store.rootDir,
-    });
+  private touchCurrentSessionMetadata(metadata: SessionMetadata): void {
+    writeCurrentSessionMetadata(metadata);
   }
 
   getSessionEvents(sessionId: string): SessionEventLog | undefined {
@@ -447,7 +442,9 @@ export class NanobossService {
     const nextConfig = this.resolveDefaultAgentConfig(session.cwd, selection);
     session.defaultAgentConfig = nextConfig;
     session.defaultConversation.updateConfig(nextConfig);
-    this.persistSessionState(session, { preserveDefaultAcpSessionId: false });
+    this.touchCurrentSessionMetadata(
+      this.persistSessionState(session, { preserveDefaultAcpSessionId: false }),
+    );
   }
 
   async prompt(
@@ -462,11 +459,10 @@ export class NanobossService {
 
     session.abortController?.abort();
     session.abortController = new AbortController();
-    this.touchCurrentSessionPointer(session);
 
     const text = promptText.trim();
     const { commandName, commandPrompt } = resolveCommand(text);
-    this.persistSessionState(session, { prompt: text });
+    this.touchCurrentSessionMetadata(this.persistSessionState(session, { prompt: text }));
     const procedure = this.registry.get(commandName);
     const procedureName = procedure?.name ?? commandName;
     const runId = crypto.randomUUID();
@@ -665,8 +661,7 @@ export class NanobossService {
         availableCommands: this.registry.toAvailableCommands(),
       });
       await emitter.flush();
-      this.persistSessionState(session);
-      this.touchCurrentSessionPointer(session);
+      this.touchCurrentSessionMetadata(this.persistSessionState(session));
       session.abortController = undefined;
     }
 

@@ -1,7 +1,6 @@
 import { resolve } from "node:path";
 
 import { getBuildLabel } from "./build-info.ts";
-import { readCurrentSessionPointer } from "./current-session.ts";
 import { inferDataShape } from "./data-shape.ts";
 import { dispatchMcpToolsMethod, type JsonRpcToolMetadata } from "./mcp-jsonrpc.ts";
 import {
@@ -11,6 +10,7 @@ import {
 } from "./procedure-dispatch-jobs.ts";
 import { type ProcedureExecutionResult } from "./procedure-runner.ts";
 import { ProcedureRegistry } from "./registry.ts";
+import { readCurrentSessionMetadata } from "./session/persistence.ts";
 import { SessionStore } from "./session-store.ts";
 import { shouldLoadDiskCommands } from "./runtime-mode.ts";
 import type {
@@ -210,12 +210,12 @@ export class SessionMcpApi {
     }
 
     if (this.params.allowCurrentSessionFallback) {
-      const pointer = readCurrentSessionPointer();
-      if (pointer) {
+      const current = readCurrentSessionMetadata();
+      if (current) {
         return {
-          sessionId: pointer.sessionId,
-          cwd: pointer.cwd,
-          rootDir: pointer.rootDir,
+          sessionId: current.sessionId,
+          cwd: current.cwd,
+          rootDir: current.rootDir,
         };
       }
     }

@@ -5,7 +5,7 @@ import { join } from "node:path";
 
 import { afterEach, describe, expect, test } from "bun:test";
 
-import { writeCurrentSessionPointer } from "../../src/current-session.ts";
+import { writeCurrentSessionMetadata } from "../../src/session/persistence.ts";
 import { resolveSelfCommand } from "../../src/self-command.ts";
 import { SessionStore } from "../../src/session-store.ts";
 
@@ -45,10 +45,12 @@ describe("global nanoboss MCP proxy", () => {
       display: "review display",
       summary: "review summary",
     });
-    writeCurrentSessionPointer({
+    writeCurrentSessionMetadata({
       sessionId,
       cwd: process.cwd(),
       rootDir,
+      createdAt: "2026-04-03T00:00:00.000Z",
+      updatedAt: "2026-04-03T00:00:00.000Z",
     });
 
     const command = resolveSelfCommand("mcp", ["proxy"]);

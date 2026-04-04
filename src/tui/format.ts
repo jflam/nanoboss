@@ -1,5 +1,6 @@
 import { getAgentTokenUsagePercent } from "../token-usage.ts";
 import type { AgentTokenUsage, ValueRef } from "../types.ts";
+import { summarizeText } from "../util/text.ts";
 
 export function isWrapperToolTitle(title: string): boolean {
   return (
@@ -33,14 +34,14 @@ export function formatMemoryCardsLines(cards: Array<{
 
   for (const card of cards) {
     lines.push(`│ /${card.procedure} @ ${card.createdAt}`);
-    lines.push(`│   input: ${summarizeInline(card.input, 140)}`);
+    lines.push(`│   input: ${summarizeText(card.input, 140)}`);
 
     if (card.summary) {
-      lines.push(`│   summary: ${summarizeInline(card.summary, 220)}`);
+      lines.push(`│   summary: ${summarizeText(card.summary, 220)}`);
     }
 
     if (card.memory) {
-      lines.push(`│   memory: ${summarizeInline(card.memory, 280)}`);
+      lines.push(`│   memory: ${summarizeText(card.memory, 280)}`);
     }
 
     if (card.dataRef) {
@@ -52,11 +53,11 @@ export function formatMemoryCardsLines(cards: Array<{
     }
 
     if (card.dataPreview) {
-      lines.push(`│   data_preview: ${summarizeInline(card.dataPreview, 220)}`);
+      lines.push(`│   data_preview: ${summarizeText(card.dataPreview, 220)}`);
     }
 
     if (card.dataShape !== undefined) {
-      lines.push(`│   data_shape: ${summarizeInline(JSON.stringify(card.dataShape), 220)}`);
+      lines.push(`│   data_shape: ${summarizeText(JSON.stringify(card.dataShape), 220)}`);
     }
 
     if (card.estimatedPromptTokens !== undefined) {
@@ -132,15 +133,6 @@ export function formatTokenUsageLine(usage: AgentTokenUsage): string {
 
 function formatValueRefInline(valueRef: ValueRef): string {
   return `session=${valueRef.cell.sessionId} cell=${valueRef.cell.cellId} path=${valueRef.path}`;
-}
-
-function summarizeInline(text: string, maxLength: number): string {
-  const compact = text.replace(/\s+/g, " ").trim();
-  if (compact.length <= maxLength) {
-    return compact;
-  }
-
-  return `${compact.slice(0, Math.max(0, maxLength - 3))}...`;
 }
 
 function formatInt(value: number): string {

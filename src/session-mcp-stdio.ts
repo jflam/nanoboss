@@ -3,6 +3,7 @@ import type * as acp from "@agentclientprotocol/sdk";
 import { resolveSelfCommand } from "./self-command.ts";
 import { SESSION_MCP_SERVER_NAME, createSessionMcpApi, dispatchSessionMcpMethod } from "./session-mcp.ts";
 import { runStdioJsonRpcServer } from "./stdio-jsonrpc.ts";
+import { requireValue } from "./util/argv.ts";
 
 interface SessionMcpStdioParams {
   sessionId: string;
@@ -73,12 +74,3 @@ function parseSessionMcpCommandArgs(argv: string[]): SessionMcpStdioParams {
 
   return { sessionId, cwd, rootDir };
 }
-
-function requireValue(value: string | undefined, flag: string): string {
-  if (!value) {
-    throw new Error(`Missing value for ${flag}`);
-  }
-
-  return value;
-}
-

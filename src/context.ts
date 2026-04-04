@@ -8,9 +8,9 @@ import type { RunLogger } from "./logger.ts";
 import { normalizeAgentTokenUsage } from "./token-usage.ts";
 import {
   normalizeProcedureResult,
-  summarizeText,
 } from "./session-store.ts";
 import type { SessionStore } from "./session-store.ts";
+import { summarizeText } from "./util/text.ts";
 import type {
   CellAncestorsOptions,
   CellDescendantsOptions,
@@ -147,7 +147,7 @@ export class CommandContextImpl implements CommandContext {
       ? resolveDownstreamAgentConfig(this.cwd, options.agent)
       : this.getDefaultAgentConfigValue();
     const started = this.beginAgentRun(prompt, {
-      title: `callAgent${formatAgentLabel(options?.agent)}: ${summarize(prompt)}`,
+      title: `callAgent${formatAgentLabel(options?.agent)}: ${summarizeText(prompt, 60)}`,
       rawInput: {
         prompt,
         agent: options?.agent,
@@ -272,7 +272,7 @@ export class CommandContextImpl implements CommandContext {
     }
 
     const started = this.beginAgentRun(prompt, {
-      title: `defaultSession: ${summarize(prompt)}`,
+      title: `defaultSession: ${summarizeText(prompt, 60)}`,
       rawInput: {
         prompt,
         sessionId: this.sessionId,
@@ -511,11 +511,6 @@ class CommandSession implements SessionApi {
   }
 }
 
-function summarize(prompt: string): string {
-  const compact = prompt.replace(/\s+/g, " ").trim();
-  return compact.length > 60 ? `${compact.slice(0, 57)}...` : compact;
-}
-
 function formatAgentLabel(agent?: DownstreamAgentSelection): string {
   if (!agent) {
     return "";
@@ -568,4 +563,3 @@ function shouldForwardNestedAgentUpdate(
     update.sessionUpdate === "usage_update"
   );
 }
-

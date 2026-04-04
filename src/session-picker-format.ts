@@ -1,6 +1,7 @@
-import type { StoredSessionSummary } from "./stored-sessions.ts";
+import type { SessionSummary } from "./session/persistence.ts";
+import { summarizeText } from "./util/text.ts";
 
-export function formatSessionLine(session: StoredSessionSummary, cwd: string): string {
+export function formatSessionLine(session: SessionSummary, cwd: string): string {
   const markers: string[] = [];
   if (session.cwd === cwd) {
     markers.push("here");
@@ -11,11 +12,11 @@ export function formatSessionLine(session: StoredSessionSummary, cwd: string): s
 
   const prefix = markers.length > 0 ? `[${markers.join(",")}] ` : "";
   const timestamp = formatTimestamp(session.updatedAt);
-  const prompt = summarize(session.initialPrompt ?? "(no turns yet)", 96);
+  const prompt = summarizeText(session.initialPrompt ?? "(no turns yet)", 96);
   return `${prefix}${timestamp} ${session.sessionId.slice(0, 8)} ${prompt}`;
 }
 
-export function formatSessionDetailLine(session: StoredSessionSummary): string {
+export function formatSessionDetailLine(session: SessionSummary): string {
   const parts = [session.cwd || "cwd unknown"];
   if (session.defaultAgentSelection) {
     parts.push(
@@ -27,7 +28,7 @@ export function formatSessionDetailLine(session: StoredSessionSummary): string {
   return parts.join(" • ");
 }
 
-export function formatSessionInitialPrompt(session: StoredSessionSummary): string {
+export function formatSessionInitialPrompt(session: SessionSummary): string {
   return session.initialPrompt?.trim().length
     ? session.initialPrompt.trim()
     : "(no turns yet)";
@@ -45,13 +46,4 @@ export function formatTimestamp(value: string): string {
     hour: "2-digit",
     minute: "2-digit",
   }).format(new Date(timestamp));
-}
-
-export function summarize(text: string, maxLength: number): string {
-  const compact = text.replace(/\s+/g, " ").trim();
-  if (compact.length <= maxLength) {
-    return compact;
-  }
-
-  return `${compact.slice(0, Math.max(0, maxLength - 3))}...`;
 }

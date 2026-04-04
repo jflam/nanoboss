@@ -5,10 +5,10 @@ import { join } from "node:path";
 import { afterEach, describe, expect, test } from "bun:test";
 
 import {
-  listStoredSessions,
-  resolveMostRecentStoredSession,
-  writeStoredSessionRecord,
-} from "../../src/stored-sessions.ts";
+  listSessionSummaries,
+  resolveMostRecentSessionSummary,
+  writeSessionMetadata,
+} from "../../src/session/persistence.ts";
 
 let tempHome: string | undefined;
 
@@ -19,14 +19,14 @@ afterEach(() => {
   }
 });
 
-describe("stored sessions", () => {
+describe("session persistence", () => {
   test("lists persisted session metadata", () => {
     const originalHome = process.env.HOME;
     tempHome = mkdtempSync(join(tmpdir(), "nanoboss-stored-sessions-"));
     process.env.HOME = tempHome;
 
     try {
-      writeStoredSessionRecord({
+      writeSessionMetadata({
         sessionId: "session-123",
         cwd: "/repo",
         rootDir: join(tempHome, ".nanoboss", "sessions", "session-123"),
@@ -36,16 +36,15 @@ describe("stored sessions", () => {
         defaultAcpSessionId: "acp-123",
       });
 
-      const sessions = listStoredSessions();
+      const sessions = listSessionSummaries();
       expect(sessions).toHaveLength(1);
       expect(sessions[0]).toMatchObject({
         sessionId: "session-123",
         cwd: "/repo",
         initialPrompt: "first prompt",
-        hasMetadata: true,
         hasNativeResume: true,
       });
-      expect(resolveMostRecentStoredSession("/repo")?.sessionId).toBe("session-123");
+      expect(resolveMostRecentSessionSummary("/repo")?.sessionId).toBe("session-123");
     } finally {
       if (originalHome === undefined) {
         delete process.env.HOME;
@@ -63,7 +62,7 @@ describe("stored sessions", () => {
     try {
       const sessionRoot = join(tempHome, ".nanoboss", "sessions", "session-fast");
       mkdirSync(sessionRoot, { recursive: true });
-      writeStoredSessionRecord({
+      writeSessionMetadata({
         sessionId: "session-fast",
         cwd: "/repo",
         rootDir: sessionRoot,
@@ -73,15 +72,14 @@ describe("stored sessions", () => {
       });
       writeFileSync(join(sessionRoot, "cells"), "not-a-directory\n", "utf8");
 
-      const sessions = listStoredSessions();
+      const sessions = listSessionSummaries();
       expect(sessions).toHaveLength(1);
       expect(sessions[0]).toMatchObject({
         sessionId: "session-fast",
         cwd: "/repo",
         initialPrompt: "first prompt",
-        hasMetadata: true,
       });
-      expect(resolveMostRecentStoredSession("/repo")?.sessionId).toBe("session-fast");
+      expect(resolveMostRecentSessionSummary("/repo")?.sessionId).toBe("session-fast");
     } finally {
       if (originalHome === undefined) {
         delete process.env.HOME;
@@ -91,9 +89,9 @@ describe("stored sessions", () => {
     }
   });
 
-  test("falls back to stored cells when metadata is missing", () => {
+  test("ignores sessions that have cells but no session metadata", () => {
     const originalHome = process.env.HOME;
-    tempHome = mkdtempSync(join(tmpdir(), "nanoboss-stored-fallback-"));
+    tempHome = mkdtempSync(join(tmpdir(), "nanoboss-metadata-required-"));
     process.env.HOME = tempHome;
 
     try {
@@ -123,20 +121,8 @@ describe("stored sessions", () => {
         },
       }, null, 2)}\n`);
 
-      const sessions = listStoredSessions();
-      expect(sessions).toHaveLength(1);
-      expect(sessions[0]).toMatchObject({
-        sessionId: "session-456",
-        initialPrompt: "hello world",
-        lastPrompt: "follow up",
-        hasMetadata: false,
-        hasNativeResume: false,
-        defaultAgentSelection: {
-          provider: "codex",
-          model: "gpt-5.4/high",
-        },
-      });
-      expect(sessions[0]?.updatedAt).toBe("2026-04-01T13:00:00.000Z");
+      expect(listSessionSummaries()).toEqual([]);
+      expect(resolveMostRecentSessionSummary("/repo")).toBeUndefined();
     } finally {
       if (originalHome === undefined) {
         delete process.env.HOME;

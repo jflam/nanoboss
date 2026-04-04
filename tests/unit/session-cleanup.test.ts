@@ -43,6 +43,7 @@ describe("session cleanup inspection", () => {
     })}\n`);
 
     const candidates = inspectSessionCleanupCandidates(baseDir);
+    const legacyFixture = candidates.find((candidate) => candidate.sessionId === "legacy-fixture");
     const selected = selectCleanupCandidates(candidates, [
       "empty_dir",
       "empty_session",
@@ -64,11 +65,11 @@ describe("session cleanup inspection", () => {
         sessionId: "session-from-client",
         reasons: expect.arrayContaining(["empty_session", "fixture_session_id"]),
       }),
-      expect.objectContaining({
-        sessionId: "legacy-fixture",
-        initialPrompt: "/callAgent compute",
-        reasons: expect.arrayContaining(["fixture_prompt", "unknown_cwd"]),
-      }),
     ]));
+    expect(legacyFixture).toMatchObject({
+      sessionId: "legacy-fixture",
+      reasons: expect.arrayContaining(["unknown_cwd"]),
+    });
+    expect(selected.some((candidate) => candidate.sessionId === "legacy-fixture")).toBe(false);
   });
 });
