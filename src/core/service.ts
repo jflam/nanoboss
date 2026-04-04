@@ -20,9 +20,7 @@ import {
   type FrontendCommand,
 } from "../http/frontend-events.ts";
 import {
-  readSessionMetadata,
-  writeCurrentSessionMetadata,
-  writeSessionMetadata,
+  sessionRepository,
   type SessionMetadata,
 } from "../session/index.ts";
 import { startProcedureDispatchProgressBridge } from "../procedure/dispatch-progress.ts";
@@ -171,7 +169,7 @@ export class NanobossService {
       return this.buildSessionDescriptor(params.sessionId, existing);
     }
 
-    const stored = readSessionMetadata(params.sessionId);
+    const stored = sessionRepository.readMetadata(params.sessionId);
     const cwd = stored?.cwd || params.cwd;
     if (!cwd) {
       throw new Error(`Unknown session: ${params.sessionId}`);
@@ -211,7 +209,7 @@ export class NanobossService {
   }): SessionState {
     const commands = toFrontendCommands(this.registry.toAvailableCommands());
     const defaultAgentConfig = this.resolveDefaultAgentConfig(params.cwd, params.defaultAgentSelection);
-    const store = new SessionStore({
+    const store = sessionRepository.openStore({
       sessionId: params.sessionId,
       cwd: params.cwd,
     });
@@ -247,11 +245,11 @@ export class NanobossService {
     session: SessionState,
     options: { prompt?: string; preserveDefaultAcpSessionId?: boolean } = {},
   ): SessionMetadata {
-    const existing = readSessionMetadata(session.store.sessionId, session.store.rootDir);
+    const existing = sessionRepository.readMetadata(session.store.sessionId, session.store.rootDir);
     const defaultAcpSessionId = session.defaultConversation.currentSessionId
       ?? (options.preserveDefaultAcpSessionId === false ? undefined : existing?.defaultAcpSessionId);
 
-    return writeSessionMetadata({
+    return sessionRepository.writeMetadata({
       sessionId: session.store.sessionId,
       cwd: session.cwd,
       rootDir: session.store.rootDir,
@@ -265,7 +263,7 @@ export class NanobossService {
   }
 
   private touchCurrentSessionMetadata(metadata: SessionMetadata): void {
-    writeCurrentSessionMetadata(metadata);
+    sessionRepository.writeCurrentMetadata(metadata);
   }
 
   getSessionEvents(sessionId: string): SessionEventLog | undefined {

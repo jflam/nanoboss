@@ -8,9 +8,10 @@ export {
 export type {
   SessionMetadata,
   SessionSummary,
-} from "./persistence.ts";
+} from "./repository.ts";
 
 export {
+  SessionRepository,
   findSessionSummary,
   getCurrentSessionMetadataPath,
   getSessionMetadataPath,
@@ -18,7 +19,8 @@ export {
   readCurrentSessionMetadata,
   readSessionMetadata,
   resolveMostRecentSessionSummary,
+  sessionRepository,
   toSessionSummary,
   writeCurrentSessionMetadata,
   writeSessionMetadata,
-} from "./persistence.ts";
+} from "./repository.ts";

@@ -10,8 +10,7 @@ import {
 } from "../procedure/dispatch-jobs.ts";
 import { type ProcedureExecutionResult } from "../procedure/runner.ts";
 import { ProcedureRegistry } from "../procedure/registry.ts";
-import { readCurrentSessionMetadata } from "../session/index.ts";
-import { SessionStore } from "../session/index.ts";
+import { sessionRepository, SessionStore } from "../session/index.ts";
 import { shouldLoadDiskCommands } from "../core/runtime-mode.ts";
 import type {
   CellDescendantsOptions,
@@ -210,7 +209,7 @@ export class SessionMcpApi {
     }
 
     if (this.params.allowCurrentSessionFallback) {
-      const current = readCurrentSessionMetadata();
+      const current = sessionRepository.readCurrentMetadata();
       if (current) {
         return {
           sessionId: current.sessionId,

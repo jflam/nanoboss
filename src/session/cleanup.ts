@@ -2,7 +2,7 @@ import { existsSync, readdirSync, rmSync, statSync } from "node:fs";
 import { join } from "node:path";
 
 import { getNanobossHome } from "../core/config.ts";
-import { readSessionMetadata } from "./persistence.ts";
+import { sessionRepository } from "./index.ts";
 
 export type SessionCleanupReason =
   | "empty_dir"
@@ -132,7 +132,7 @@ function inspectSessionDirectory(rootDir: string): SessionCleanupCandidate | und
   const cellsDir = join(rootDir, "cells");
   const jobsDir = join(rootDir, "procedure-dispatch-jobs");
   const hasSessionJson = existsSync(sessionJsonPath);
-  const metadata = readSessionMetadata(sessionId, rootDir);
+  const metadata = sessionRepository.readMetadata(sessionId, rootDir);
   const cellCount = countJsonFiles(cellsDir);
   const jobCount = countJsonFiles(jobsDir);
   const initialPrompt = metadata?.initialPrompt;

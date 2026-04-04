@@ -1,4 +1,4 @@
-import type { SessionSummary } from "./persistence.ts";
+import type { SessionSummary } from "./index.ts";
 import { summarizeText } from "../util/text.ts";
 
 export function formatSessionLine(session: SessionSummary, cwd: string): string {

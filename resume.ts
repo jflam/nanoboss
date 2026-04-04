@@ -4,11 +4,7 @@ import { assertInteractiveTty, runTuiCli } from "./src/tui/run.ts";
 import { DEFAULT_HTTP_SERVER_URL } from "./src/core/defaults.ts";
 import { parseResumeOptions } from "./src/options/resume.ts";
 import {
-  findSessionSummary,
-  listSessionSummaries,
-  readCurrentSessionMetadata,
-  resolveMostRecentSessionSummary,
-  toSessionSummary,
+  sessionRepository,
   type SessionSummary,
 } from "./src/session/index.ts";
 
@@ -65,20 +61,20 @@ export async function runResumeCommand(
 }
 
 function resolveExplicitSession(sessionId: string): SessionSummary | undefined {
-  return findSessionSummary(sessionId);
+  return sessionRepository.findSummary(sessionId);
 }
 
 function resolveDefaultSession(cwd: string): SessionSummary | undefined {
-  const current = readCurrentSessionMetadata();
+  const current = sessionRepository.readCurrentSummary();
   if (current && current.cwd === cwd) {
-    return toSessionSummary(current);
+    return current;
   }
 
-  return resolveMostRecentSessionSummary(cwd);
+  return sessionRepository.resolveMostRecentSummary(cwd);
 }
 
 async function selectStoredSession(cwd: string): Promise<StoredSessionSelectionResult> {
-  const sessions = orderSessions(cwd, withCurrentSession(cwd, listSessionSummaries()));
+  const sessions = orderSessions(cwd, withCurrentSession(cwd, sessionRepository.listSummaries()));
   if (sessions.length === 0) {
     return { kind: "empty" };
   }
@@ -90,13 +86,13 @@ async function selectStoredSession(cwd: string): Promise<StoredSessionSelectionR
 }
 
 function withCurrentSession(cwd: string, sessions: SessionSummary[]): SessionSummary[] {
-  const current = readCurrentSessionMetadata();
+  const current = sessionRepository.readCurrentSummary();
   if (!current || current.cwd !== cwd || sessions.some((session) => session.sessionId === current.sessionId)) {
     return sessions;
   }
 
   return [
-    toSessionSummary(current),
+    current,
     ...sessions,
   ];
 }
