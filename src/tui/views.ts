@@ -1,7 +1,8 @@
 import { Container, Markdown, Spacer, Text, TruncatedText, type Component, type Editor } from "./pi-tui.ts";
-import { formatToolTraceLine } from "./format.ts";
-import type { UiState, UiToolCall, UiTurn } from "./state.ts";
+import type { UiState, UiTurn } from "./state.ts";
 import type { NanobossTuiTheme } from "./theme.ts";
+
+import { ToolCardComponent } from "./components/tool-card.ts";
 
 export class NanobossAppView implements Component {
   private readonly container = new Container();
@@ -50,16 +51,31 @@ export class NanobossAppView implements Component {
   }
 
   private appendTranscript(): void {
-    if (this.state.turns.length === 0) {
+    if (this.state.transcriptItems.length === 0) {
       this.container.addChild(new Text(this.theme.dim("No turns yet. Send a prompt to start.")));
       this.container.addChild(new Spacer(1));
       return;
     }
 
-    for (const turn of this.state.turns) {
-      this.container.addChild(new TruncatedText(renderTurnLabel(this.theme, turn)));
-      this.container.addChild(renderTurnBody(this.theme, turn));
+    for (const item of this.state.transcriptItems) {
+      if (item.type === "turn") {
+        const turn = this.state.turns.find((candidate) => candidate.id === item.id);
+        if (!turn) {
+          continue;
+        }
 
+        this.container.addChild(new TruncatedText(renderTurnLabel(this.theme, turn)));
+        this.container.addChild(renderTurnBody(this.theme, turn));
+        this.container.addChild(new Spacer(1));
+        continue;
+      }
+
+      const toolCall = this.state.toolCalls.find((candidate) => candidate.id === item.id);
+      if (!toolCall) {
+        continue;
+      }
+
+      this.container.addChild(new ToolCardComponent(this.theme, toolCall));
       this.container.addChild(new Spacer(1));
     }
   }
@@ -184,10 +200,6 @@ function renderTurnBody(theme: NanobossTuiTheme, turn: UiTurn): Component {
 function buildPendingLines(state: UiState): string[] {
   const lines: string[] = [];
 
-  for (const toolCall of state.toolCalls) {
-    lines.push(formatToolTraceLine(toolCall.depth, renderToolCallLine(toolCall)));
-  }
-
   lines.push(...state.runtimeNotes);
 
   if (state.promptDiagnosticsLine) {
@@ -195,22 +207,6 @@ function buildPendingLines(state: UiState): string[] {
   }
 
   return lines;
-}
-
-function renderToolCallLine(toolCall: UiToolCall): string {
-  if (toolCall.status === "failed") {
-    return `[tool] ${toolCall.title} failed`;
-  }
-
-  if (toolCall.status === "running" || toolCall.status === "in_progress") {
-    return `[tool] ${toolCall.title} running`;
-  }
-
-  if (toolCall.status === "pending" || toolCall.status === "completed") {
-    return `[tool] ${toolCall.title}`;
-  }
-
-  return `[tool] ${toolCall.title} ${toolCall.status}`;
 }
 
 function styleStatusLine(theme: NanobossTuiTheme, line: string): string {
@@ -240,10 +236,6 @@ function styleRuntimeLine(theme: NanobossTuiTheme, line: string): string {
 
   if (line.startsWith("[prompt]") || line.startsWith("[memory]")) {
     return theme.dim(line);
-  }
-
-  if (line.includes("[tool]")) {
-    return theme.accent(line);
   }
 
   return theme.muted(line);

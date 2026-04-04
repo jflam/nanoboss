@@ -1,4 +1,5 @@
 export {
+  Box,
   CombinedAutocompleteProvider,
   Container,
   Editor,

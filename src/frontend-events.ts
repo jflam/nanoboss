@@ -1,8 +1,9 @@
 import type * as acp from "@agentclientprotocol/sdk";
 
-import { normalizeAgentTokenUsage } from "./token-usage.ts";
 import type { ProcedureMemoryCard } from "./memory-cards.ts";
 import type { PromptTokenDiagnostics } from "./prompt-diagnostics.ts";
+import { normalizeAgentTokenUsage } from "./token-usage.ts";
+import { summarizeToolCallStart, summarizeToolCallUpdate } from "./tool-call-preview.ts";
 import type { AgentTokenUsage, CellRef } from "./types.ts";
 
 export interface FrontendCommand {
@@ -67,6 +68,7 @@ export type FrontendEvent =
       title: string;
       kind: string;
       status?: string;
+      inputSummary?: string;
     }
   | {
       type: "tool_updated";
@@ -74,6 +76,9 @@ export type FrontendEvent =
       toolCallId: string;
       title?: string;
       status: string;
+      outputSummary?: string;
+      errorSummary?: string;
+      durationMs?: number;
     }
   | {
       type: "run_completed";
@@ -201,7 +206,12 @@ export function mapSessionUpdateToFrontendEvents(
           stream: "agent",
         },
       ];
-    case "tool_call":
+    case "tool_call": {
+      const preview = summarizeToolCallStart({
+        title: update.title,
+        kind: String(update.kind),
+      }, update.rawInput);
+
       return [
         {
           type: "tool_started",
@@ -210,9 +220,14 @@ export function mapSessionUpdateToFrontendEvents(
           title: update.title,
           kind: String(update.kind),
           status: update.status ?? undefined,
+          inputSummary: preview.inputSummary,
         },
       ];
+    }
     case "tool_call_update": {
+      const preview = summarizeToolCallUpdate({
+        title: update.title ?? undefined,
+      }, update.rawOutput);
       const events: FrontendEvent[] = [
         {
           type: "tool_updated",
@@ -220,6 +235,9 @@ export function mapSessionUpdateToFrontendEvents(
           toolCallId: update.toolCallId,
           title: update.title ?? undefined,
           status: update.status ?? "pending",
+          outputSummary: preview.outputSummary,
+          errorSummary: preview.errorSummary,
+          durationMs: preview.durationMs,
         },
       ];
 

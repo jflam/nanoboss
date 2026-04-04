@@ -1,4 +1,4 @@
-import type { FrontendEventEnvelope, FrontendCommand } from "../frontend-events.ts";
+import type { FrontendCommand, FrontendEventEnvelope } from "../frontend-events.ts";
 import type { DownstreamAgentSelection } from "../types.ts";
 
 import {
@@ -10,7 +10,13 @@ import {
   shouldSuppressToolTraceTitle,
 } from "./format.ts";
 import { LOCAL_TUI_COMMANDS } from "./commands.ts";
-import { createInitialUiState, type UiState, type UiToolCall, type UiTurn } from "./state.ts";
+import {
+  createInitialUiState,
+  type UiState,
+  type UiToolCall,
+  type UiTranscriptItem,
+  type UiTurn,
+} from "./state.ts";
 
 const MAX_RUNTIME_NOTES = 8;
 
@@ -61,50 +67,54 @@ export function reduceUiState(state: UiState, action: UiAction): UiState {
         defaultAgentSelection: action.defaultAgentSelection,
         availableCommands: mergeAvailableCommands(action.commands),
       };
-    case "local_user_submitted":
+    case "local_user_submitted": {
+      const nextTurn = createTurn({
+        id: nextTurnId("user", state.turns.length),
+        role: "user",
+        markdown: action.text,
+        status: "complete",
+      });
+
       return {
         ...state,
-        turns: [
-          ...state.turns,
-          {
-            id: nextTurnId("user", state.turns.length),
-            role: "user",
-            markdown: action.text,
-            status: "complete",
-          },
-        ],
+        turns: [...state.turns, nextTurn],
+        transcriptItems: appendTranscriptItem(state.transcriptItems, { type: "turn", id: nextTurn.id }),
         runtimeNotes: [],
-        toolCalls: [],
         activeWrapperToolCallIds: [],
         hiddenToolCallIds: [],
+        activeRunId: undefined,
+        activeProcedure: undefined,
+        activeAssistantTurnId: undefined,
+        assistantParagraphBreakPending: undefined,
         promptDiagnosticsLine: undefined,
         tokenUsageLine: undefined,
-        assistantParagraphBreakPending: undefined,
         statusLine: "[run] waiting for response",
         inputDisabled: true,
       };
-    case "local_send_failed":
+    }
+    case "local_send_failed": {
+      const nextTurn = createTurn({
+        id: nextTurnId("system", state.turns.length),
+        role: "system",
+        markdown: action.error,
+        status: "failed",
+      });
+
       return {
         ...state,
-        turns: [
-          ...state.turns,
-          {
-            id: nextTurnId("system", state.turns.length),
-            role: "system",
-            markdown: action.error,
-            status: "failed",
-          },
-        ],
+        turns: [...state.turns, nextTurn],
+        transcriptItems: appendTranscriptItem(state.transcriptItems, { type: "turn", id: nextTurn.id }),
         activeRunId: undefined,
+        activeProcedure: undefined,
         activeAssistantTurnId: undefined,
         assistantParagraphBreakPending: undefined,
         runStartedAtMs: undefined,
-        toolCalls: [],
         activeWrapperToolCallIds: [],
         hiddenToolCallIds: [],
         statusLine: `[run] ${action.error}`,
         inputDisabled: false,
       };
+    }
     case "local_status":
       return {
         ...state,
@@ -128,63 +138,49 @@ function reduceFrontendEvent(state: UiState, event: FrontendEventEnvelope): UiSt
         ...state,
         availableCommands: mergeAvailableCommands(event.data.commands),
       };
-    case "run_started": {
-      const assistantTurnId = nextTurnId("assistant", state.turns.length);
+    case "run_started":
       return {
         ...state,
-        turns: [
-          ...state.turns,
-          {
-            id: assistantTurnId,
-            role: "assistant",
-            markdown: "",
-            status: "streaming",
-            meta: {
-              procedure: event.data.procedure,
-            },
-          },
-        ],
-        toolCalls: [],
         activeWrapperToolCallIds: [],
         hiddenToolCallIds: [],
         runtimeNotes: [],
         promptDiagnosticsLine: undefined,
         tokenUsageLine: undefined,
         activeRunId: event.data.runId,
-        activeAssistantTurnId: assistantTurnId,
+        activeProcedure: event.data.procedure,
+        activeAssistantTurnId: undefined,
         assistantParagraphBreakPending: undefined,
         runStartedAtMs: Date.parse(event.data.startedAt) || Date.now(),
         statusLine: `[run] ${event.data.procedure} working…`,
         inputDisabled: true,
       };
-    }
     case "memory_cards":
-      return markAssistantTextBoundary(appendRuntimeLines(state, formatMemoryCardsLines(event.data.cards)));
+      return appendRuntimeLines(state, formatMemoryCardsLines(event.data.cards));
     case "memory_card_stored":
-      return markAssistantTextBoundary(appendRuntimeLines(state, formatStoredMemoryCardLines(event.data.card, {
+      return appendRuntimeLines(state, formatStoredMemoryCardLines(event.data.card, {
         method: event.data.estimateMethod,
         encoding: event.data.estimateEncoding,
-      })));
+      }));
     case "prompt_diagnostics":
-      return markAssistantTextBoundary({
+      return {
         ...state,
         promptDiagnosticsLine: formatPromptDiagnosticsLine(event.data.diagnostics),
-      });
+      };
     case "text_delta":
       return appendAssistantText(state, event.data.text);
     case "token_usage":
-      return markAssistantTextBoundary({
+      return {
         ...state,
         tokenUsageLine: formatTokenUsageLine(event.data.usage),
-      });
+      };
     case "run_heartbeat": {
       const now = Date.parse(event.data.at) || Date.now();
       const startedAt = state.runStartedAtMs ?? now;
       const elapsedSeconds = Math.max(1, Math.round((now - startedAt) / 1_000));
-      return markAssistantTextBoundary({
+      return {
         ...state,
         statusLine: `[run] ${event.data.procedure} still working (${elapsedSeconds}s)`,
-      });
+      };
     }
     case "tool_started": {
       const depth = state.activeWrapperToolCallIds.length;
@@ -208,18 +204,26 @@ function reduceFrontendEvent(state: UiState, event: FrontendEventEnvelope): UiSt
       const existing = state.toolCalls.find((toolCall) => toolCall.id === event.data.toolCallId);
       const nextToolCall: UiToolCall = {
         id: event.data.toolCallId,
+        runId: event.data.runId,
         title: event.data.title,
-        status: event.data.status ?? "pending",
+        kind: event.data.kind,
+        status: event.data.status ?? existing?.status ?? "pending",
         depth: existing?.depth ?? depth,
         isWrapper: existing?.isWrapper ?? isWrapper,
+        inputSummary: event.data.inputSummary ?? existing?.inputSummary,
+        outputSummary: existing?.outputSummary,
+        errorSummary: existing?.errorSummary,
+        durationMs: existing?.durationMs,
       };
 
-      return markAssistantTextBoundary({
+      const nextState = {
         ...state,
-        toolCalls: upsertToolCall(pruneReplacedCompletedToolCalls(state.toolCalls, nextToolCall.depth), nextToolCall),
+        toolCalls: upsertToolCall(state.toolCalls, nextToolCall),
+        transcriptItems: appendTranscriptItem(state.transcriptItems, { type: "tool_call", id: nextToolCall.id }),
         activeWrapperToolCallIds,
         hiddenToolCallIds,
-      });
+      };
+      return existing ? nextState : markAssistantTextBoundary(nextState);
     }
     case "tool_updated": {
       const existing = state.toolCalls.find((toolCall) => toolCall.id === event.data.toolCallId);
@@ -237,81 +241,73 @@ function reduceFrontendEvent(state: UiState, event: FrontendEventEnvelope): UiSt
         : suppressed && !state.hiddenToolCallIds.includes(event.data.toolCallId)
           ? [...state.hiddenToolCallIds, event.data.toolCallId]
           : state.hiddenToolCallIds;
-      const toolCalls = suppressed && isWrapper && isTerminalToolStatus(event.data.status)
-        ? collapseSuppressedWrapperBranch(state.toolCalls, depth)
+
+      let toolCalls = suppressed && isWrapper && isTerminalToolStatus(event.data.status)
+        ? collapseToolCallBranch(state.toolCalls, depth)
         : state.toolCalls;
+      let transcriptItems = state.transcriptItems;
 
       if (!state.showToolCalls || suppressed) {
         return {
           ...state,
           toolCalls,
+          transcriptItems,
           activeWrapperToolCallIds,
           hiddenToolCallIds,
         };
-      }
-
-      if (event.data.status === "completed") {
-        if (isWrapper) {
-          return markAssistantTextBoundary({
-            ...state,
-            toolCalls: removeCompletedWrapperBranch(state.toolCalls, event.data.toolCallId, depth),
-            activeWrapperToolCallIds,
-            hiddenToolCallIds,
-          });
-        }
-
-        const nextToolCall: UiToolCall = {
-          id: event.data.toolCallId,
-          title,
-          status: event.data.status,
-          depth,
-          isWrapper,
-        };
-
-        return markAssistantTextBoundary({
-          ...state,
-          toolCalls: upsertToolCall(state.toolCalls, nextToolCall),
-          activeWrapperToolCallIds,
-          hiddenToolCallIds,
-        });
       }
 
       const nextToolCall: UiToolCall = {
         id: event.data.toolCallId,
+        runId: event.data.runId,
         title,
+        kind: existing?.kind ?? "other",
         status: event.data.status,
         depth,
         isWrapper,
+        inputSummary: existing?.inputSummary,
+        outputSummary: event.data.outputSummary ?? existing?.outputSummary,
+        errorSummary: event.data.errorSummary ?? existing?.errorSummary,
+        durationMs: event.data.durationMs ?? existing?.durationMs,
       };
 
-      return markAssistantTextBoundary({
+      if (isWrapper && event.data.status === "completed") {
+        toolCalls = collapseToolCallBranch(removeToolCall(toolCalls, event.data.toolCallId), depth);
+        transcriptItems = removeTranscriptItem(transcriptItems, "tool_call", event.data.toolCallId);
+      } else {
+        toolCalls = upsertToolCall(toolCalls, nextToolCall);
+        transcriptItems = appendTranscriptItem(transcriptItems, { type: "tool_call", id: nextToolCall.id });
+      }
+
+      const nextState = {
         ...state,
-        toolCalls: upsertToolCall(state.toolCalls, nextToolCall),
+        toolCalls,
+        transcriptItems,
         activeWrapperToolCallIds,
         hiddenToolCallIds,
-      });
+      };
+      return existing || (isWrapper && event.data.status === "completed") ? nextState : markAssistantTextBoundary(nextState);
     }
     case "run_completed": {
       const tokenUsageLine = event.data.tokenUsage ? formatTokenUsageLine(event.data.tokenUsage) : state.tokenUsageLine;
-      let nextState = finalizeAssistantTurn(state, {
+      const nextState = finalizeAssistantTurn(state, {
         status: "complete",
         fallbackText: event.data.display,
         tokenUsageLine,
       });
-      nextState = {
+      return {
         ...nextState,
         activeRunId: undefined,
+        activeProcedure: undefined,
         activeAssistantTurnId: undefined,
         assistantParagraphBreakPending: undefined,
         runStartedAtMs: undefined,
-        toolCalls: [],
         activeWrapperToolCallIds: [],
         hiddenToolCallIds: [],
         tokenUsageLine,
         statusLine: `[run] ${event.data.procedure} completed`,
         inputDisabled: false,
       };
-      return nextState;
     }
     case "run_failed":
       return {
@@ -321,10 +317,10 @@ function reduceFrontendEvent(state: UiState, event: FrontendEventEnvelope): UiSt
           failureMessage: event.data.error,
         }),
         activeRunId: undefined,
+        activeProcedure: undefined,
         activeAssistantTurnId: undefined,
         assistantParagraphBreakPending: undefined,
         runStartedAtMs: undefined,
-        toolCalls: [],
         activeWrapperToolCallIds: [],
         hiddenToolCallIds: [],
         statusLine: `[run] ${event.data.error}`,
@@ -342,17 +338,22 @@ function mergeAvailableCommands(commands: FrontendCommand[]): string[] {
 
 function appendAssistantText(state: UiState, text: string): UiState {
   const activeAssistantTurnId = state.activeAssistantTurnId;
-  if (!activeAssistantTurnId) {
-    const assistantTurn: UiTurn = {
-      id: nextTurnId("assistant", state.turns.length),
-      role: "assistant",
-      markdown: text,
-      status: "streaming",
-    };
+  const activeTurn = activeAssistantTurnId
+    ? state.turns.find((turn) => turn.id === activeAssistantTurnId)
+    : undefined;
+
+  if (!activeTurn || state.assistantParagraphBreakPending) {
+    const turns = activeTurn
+      ? state.turns.map((turn) => turn.id === activeAssistantTurnId && turn.status === "streaming"
+        ? { ...turn, status: "complete" as const }
+        : turn)
+      : state.turns;
+    const assistantTurn = createAssistantTurn(state, text);
 
     return {
       ...state,
-      turns: [...state.turns, assistantTurn],
+      turns: [...turns, assistantTurn],
+      transcriptItems: appendTranscriptItem(state.transcriptItems, { type: "turn", id: assistantTurn.id }),
       activeAssistantTurnId: assistantTurn.id,
       assistantParagraphBreakPending: false,
     };
@@ -360,20 +361,12 @@ function appendAssistantText(state: UiState, text: string): UiState {
 
   return {
     ...state,
-    turns: state.turns.map((turn) => {
-      if (turn.id !== activeAssistantTurnId) {
-        return turn;
-      }
-
-      const separator = shouldInsertAssistantParagraphBreak(turn.markdown, text, state.assistantParagraphBreakPending)
-        ? "\n\n"
-        : "";
-
-      return {
-        ...turn,
-        markdown: `${turn.markdown}${separator}${text}`,
-      };
-    }),
+    turns: state.turns.map((turn) => turn.id === activeAssistantTurnId
+      ? {
+          ...turn,
+          markdown: `${turn.markdown}${text}`,
+        }
+      : turn),
     assistantParagraphBreakPending: false,
   };
 }
@@ -394,24 +387,6 @@ function markAssistantTextBoundary(state: UiState): UiState {
   };
 }
 
-function shouldInsertAssistantParagraphBreak(previousText: string, nextText: string, pendingBoundary?: boolean): boolean {
-  if (!pendingBoundary) {
-    return false;
-  }
-
-  const previousTrimmed = previousText.trimEnd();
-  const nextTrimmed = nextText.trimStart();
-  if (previousTrimmed.length === 0 || nextTrimmed.length === 0) {
-    return false;
-  }
-
-  if (/\n\s*$/.test(previousText) || /^\s/.test(nextText)) {
-    return false;
-  }
-
-  return /[.!?:]$/.test(previousTrimmed) && /^[A-Z0-9`"'/(\[]/.test(nextTrimmed);
-}
-
 function finalizeAssistantTurn(
   state: UiState,
   params: {
@@ -427,21 +402,23 @@ function finalizeAssistantTurn(
       return state;
     }
 
+    const turn = createTurn({
+      id: nextTurnId("assistant", state.turns.length),
+      role: "assistant",
+      markdown: params.fallbackText,
+      status: params.status,
+      runId: state.activeRunId,
+      meta: buildAssistantTurnMeta({
+        procedure: state.activeProcedure,
+        tokenUsageLine: params.tokenUsageLine,
+        failureMessage: undefined,
+      }),
+    });
+
     return {
       ...state,
-      turns: [
-        ...state.turns,
-        {
-          id: nextTurnId("assistant", state.turns.length),
-          role: "assistant",
-          markdown: params.fallbackText,
-          status: params.status,
-          meta: buildAssistantTurnMeta({
-            tokenUsageLine: params.tokenUsageLine,
-            failureMessage: undefined,
-          }),
-        },
-      ],
+      turns: [...state.turns, turn],
+      transcriptItems: appendTranscriptItem(state.transcriptItems, { type: "turn", id: turn.id }),
     };
   }
 
@@ -460,6 +437,7 @@ function finalizeAssistantTurn(
         status: params.status,
         meta: buildAssistantTurnMeta({
           existing: turn.meta,
+          procedure: turn.meta?.procedure ?? state.activeProcedure,
           tokenUsageLine: params.tokenUsageLine,
           failureMessage: hadStreamedText ? params.failureMessage : undefined,
         }),
@@ -477,11 +455,13 @@ function appendRuntimeLines(state: UiState, lines: string[]): UiState {
 
 function buildAssistantTurnMeta(params: {
   existing?: UiTurn["meta"];
+  procedure?: string;
   tokenUsageLine?: string;
   failureMessage?: string;
 }): UiTurn["meta"] | undefined {
   const meta = {
     ...params.existing,
+    procedure: params.procedure ?? params.existing?.procedure,
     tokenUsageLine: params.tokenUsageLine ?? params.existing?.tokenUsageLine,
     failureMessage: params.failureMessage,
   };
@@ -489,21 +469,13 @@ function buildAssistantTurnMeta(params: {
   return meta.procedure || meta.tokenUsageLine || meta.failureMessage ? meta : undefined;
 }
 
-function pruneReplacedCompletedToolCalls(toolCalls: UiToolCall[], depth: number): UiToolCall[] {
-  return toolCalls.filter((toolCall) => !(toolCall.depth === depth && !toolCall.isWrapper && toolCall.status === "completed"));
-}
-
-function collapseSuppressedWrapperBranch(toolCalls: UiToolCall[], depth: number): UiToolCall[] {
+function collapseToolCallBranch(toolCalls: UiToolCall[], depth: number): UiToolCall[] {
   return toolCalls.map((toolCall) => toolCall.depth > depth
     ? {
         ...toolCall,
         depth: toolCall.depth - 1,
       }
     : toolCall);
-}
-
-function removeCompletedWrapperBranch(toolCalls: UiToolCall[], toolCallId: string, depth: number): UiToolCall[] {
-  return toolCalls.filter((toolCall) => toolCall.id !== toolCallId && toolCall.depth <= depth);
 }
 
 function upsertToolCall(toolCalls: UiToolCall[], nextToolCall: UiToolCall): UiToolCall[] {
@@ -513,6 +485,23 @@ function upsertToolCall(toolCalls: UiToolCall[], nextToolCall: UiToolCall): UiTo
   }
 
   return toolCalls.map((toolCall, index) => index === existingIndex ? nextToolCall : toolCall);
+}
+
+function removeToolCall(toolCalls: UiToolCall[], toolCallId: string): UiToolCall[] {
+  return toolCalls.filter((toolCall) => toolCall.id !== toolCallId);
+}
+
+function appendTranscriptItem(items: UiTranscriptItem[], nextItem: UiTranscriptItem): UiTranscriptItem[] {
+  const exists = items.some((item) => item.type === nextItem.type && item.id === nextItem.id);
+  return exists ? items : [...items, nextItem];
+}
+
+function removeTranscriptItem(
+  items: UiTranscriptItem[],
+  type: UiTranscriptItem["type"],
+  id: string,
+): UiTranscriptItem[] {
+  return items.filter((item) => !(item.type === type && item.id === id));
 }
 
 function uniqueStrings(values: string[]): string[] {
@@ -526,6 +515,23 @@ function getActiveWrapperDepth(activeWrapperToolCallIds: string[], toolCallId: s
 
 function isTerminalToolStatus(status: string): boolean {
   return status === "completed" || status === "failed" || status === "cancelled";
+}
+
+function createAssistantTurn(state: UiState, markdown: string): UiTurn {
+  return createTurn({
+    id: nextTurnId("assistant", state.turns.length),
+    role: "assistant",
+    markdown,
+    status: "streaming",
+    runId: state.activeRunId,
+    meta: buildAssistantTurnMeta({
+      procedure: state.activeProcedure,
+    }),
+  });
+}
+
+function createTurn(turn: UiTurn): UiTurn {
+  return turn;
 }
 
 function nextTurnId(role: UiTurn["role"], index: number): string {

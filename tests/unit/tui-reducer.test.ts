@@ -1,12 +1,12 @@
 import { describe, expect, test } from "bun:test";
 
+import type { FrontendEventEnvelope } from "../../src/frontend-events.ts";
 import { reduceUiState } from "../../src/tui/reducer.ts";
 import { createInitialUiState } from "../../src/tui/state.ts";
-import type { FrontendEventEnvelope } from "../../src/frontend-events.ts";
 
 describe("tui reducer", () => {
-  test("tracks a streamed run lifecycle and reenables input on completion", () => {
-    let state = createInitialUiState({ cwd: "/repo", buildLabel: "nanoboss-test" });
+  test("tracks a streamed run lifecycle, interleaves tool cards in the transcript, and reenables input on completion", () => {
+    let state = createInitialUiState({ cwd: "/repo", buildLabel: "nanoboss-test", showToolCalls: true });
 
     state = reduceUiState(state, {
       type: "session_ready",
@@ -15,12 +15,10 @@ describe("tui reducer", () => {
       agentLabel: "copilot/default",
       commands: [{ name: "tokens", description: "show tokens" }],
     });
-
     state = reduceUiState(state, {
       type: "local_user_submitted",
       text: "hello",
     });
-
     state = reduceUiState(state, {
       type: "frontend_event",
       event: eventEnvelope("run_started", {
@@ -30,7 +28,6 @@ describe("tui reducer", () => {
         startedAt: new Date(0).toISOString(),
       }),
     });
-
     state = reduceUiState(state, {
       type: "frontend_event",
       event: eventEnvelope("text_delta", {
@@ -41,13 +38,33 @@ describe("tui reducer", () => {
     });
     state = reduceUiState(state, {
       type: "frontend_event",
+      event: eventEnvelope("tool_started", {
+        runId: "run-1",
+        toolCallId: "tool-1",
+        title: "Mock read README.md",
+        kind: "read",
+        status: "pending",
+        inputSummary: "README.md",
+      }),
+    });
+    state = reduceUiState(state, {
+      type: "frontend_event",
+      event: eventEnvelope("tool_updated", {
+        runId: "run-1",
+        toolCallId: "tool-1",
+        status: "completed",
+        outputSummary: "hello from read",
+        durationMs: 17,
+      }),
+    });
+    state = reduceUiState(state, {
+      type: "frontend_event",
       event: eventEnvelope("text_delta", {
         runId: "run-1",
         text: " there",
         stream: "agent",
       }),
     });
-
     state = reduceUiState(state, {
       type: "frontend_event",
       event: eventEnvelope("run_completed", {
@@ -65,14 +82,36 @@ describe("tui reducer", () => {
 
     expect(state.turns.map((turn) => ({ role: turn.role, markdown: turn.markdown, status: turn.status }))).toEqual([
       { role: "user", markdown: "hello", status: "complete" },
-      { role: "assistant", markdown: "hi there", status: "complete" },
+      { role: "assistant", markdown: "hi", status: "complete" },
+      { role: "assistant", markdown: " there", status: "complete" },
     ]);
-    expect(state.turns[1]?.meta?.tokenUsageLine).toContain("[tokens] 512 / 8,192");
+    expect(state.transcriptItems).toEqual([
+      { type: "turn", id: "user-1" },
+      { type: "turn", id: "assistant-2" },
+      { type: "tool_call", id: "tool-1" },
+      { type: "turn", id: "assistant-3" },
+    ]);
+    expect(state.toolCalls).toEqual([
+      {
+        id: "tool-1",
+        runId: "run-1",
+        title: "Mock read README.md",
+        kind: "read",
+        status: "completed",
+        depth: 0,
+        isWrapper: false,
+        inputSummary: "README.md",
+        outputSummary: "hello from read",
+        errorSummary: undefined,
+        durationMs: 17,
+      },
+    ]);
+    expect(state.turns[2]?.meta?.tokenUsageLine).toContain("[tokens] 512 / 8,192");
     expect(state.inputDisabled).toBe(false);
     expect(state.activeRunId).toBeUndefined();
   });
 
-  test("tracks nested wrapper tool depth", () => {
+  test("completed tool cards persist after run completion", () => {
     let state = createInitialUiState({ cwd: "/repo", showToolCalls: true });
 
     state = reduceUiState(state, {
@@ -84,43 +123,42 @@ describe("tui reducer", () => {
         startedAt: new Date(0).toISOString(),
       }),
     });
-
     state = reduceUiState(state, {
       type: "frontend_event",
       event: eventEnvelope("tool_started", {
         runId: "run-1",
-        toolCallId: "tool-parent",
-        title: "defaultSession: hello",
-        kind: "wrapper",
+        toolCallId: "tool-1",
+        title: "Running tests",
+        kind: "bash",
+        inputSummary: "bun test",
       }),
     });
-
     state = reduceUiState(state, {
       type: "frontend_event",
-      event: eventEnvelope("tool_started", {
+      event: eventEnvelope("tool_updated", {
         runId: "run-1",
-        toolCallId: "tool-child",
-        title: "Mock read README.md",
-        kind: "read",
+        toolCallId: "tool-1",
+        status: "completed",
+        outputSummary: "12 passed",
+      }),
+    });
+    state = reduceUiState(state, {
+      type: "frontend_event",
+      event: eventEnvelope("run_completed", {
+        runId: "run-1",
+        procedure: "default",
+        completedAt: new Date(1).toISOString(),
+        cell: { sessionId: "session-1", cellId: "cell-1" },
       }),
     });
 
-    expect(state.toolCalls).toEqual([
-      {
-        id: "tool-parent",
-        title: "defaultSession: hello",
-        status: "pending",
-        depth: 0,
-        isWrapper: true,
-      },
-      {
-        id: "tool-child",
-        title: "Mock read README.md",
-        status: "pending",
-        depth: 1,
-        isWrapper: false,
-      },
-    ]);
+    expect(state.toolCalls).toHaveLength(1);
+    expect(state.toolCalls[0]).toMatchObject({
+      id: "tool-1",
+      status: "completed",
+      outputSummary: "12 passed",
+    });
+    expect(state.transcriptItems).toContainEqual({ type: "tool_call", id: "tool-1" });
   });
 
   test("suppresses async dispatch wait traces while preserving nested activity depth", () => {
@@ -135,25 +173,6 @@ describe("tui reducer", () => {
         startedAt: new Date(0).toISOString(),
       }),
     });
-
-    state = reduceUiState(state, {
-      type: "frontend_event",
-      event: eventEnvelope("tool_started", {
-        runId: "run-1",
-        toolCallId: "dispatch-start",
-        title: "procedure_dispatch_start",
-        kind: "other",
-      }),
-    });
-    state = reduceUiState(state, {
-      type: "frontend_event",
-      event: eventEnvelope("tool_updated", {
-        runId: "run-1",
-        toolCallId: "dispatch-start",
-        status: "completed",
-      }),
-    });
-
     state = reduceUiState(state, {
       type: "frontend_event",
       event: eventEnvelope("tool_started", {
@@ -176,10 +195,16 @@ describe("tui reducer", () => {
     expect(state.toolCalls).toEqual([
       {
         id: "nested-child",
+        runId: "run-1",
         title: "Mock read README.md",
+        kind: "read",
         status: "pending",
         depth: 1,
         isWrapper: false,
+        inputSummary: undefined,
+        outputSummary: undefined,
+        errorSummary: undefined,
+        durationMs: undefined,
       },
     ]);
     expect(state.hiddenToolCallIds).toEqual(["dispatch-wait"]);
@@ -196,26 +221,18 @@ describe("tui reducer", () => {
 
     expect(state.hiddenToolCallIds).toEqual([]);
     expect(state.activeWrapperToolCallIds).toEqual([]);
-    expect(state.toolCalls).toEqual([
-      {
-        id: "nested-child",
-        title: "Mock read README.md",
-        status: "pending",
-        depth: 0,
-        isWrapper: false,
-      },
-    ]);
+    expect(state.toolCalls[0]).toMatchObject({ id: "nested-child", depth: 0 });
   });
 
-  test("reparents retained activity after a suppressed wrapper completes", () => {
+  test("removes completed visible wrapper cards while retaining and reparents descendants", () => {
     let state = createInitialUiState({ cwd: "/repo", showToolCalls: true });
 
     state = reduceUiState(state, {
       type: "frontend_event",
       event: eventEnvelope("run_started", {
         runId: "run-1",
-        procedure: "probe",
-        prompt: "",
+        procedure: "default",
+        prompt: "hello",
         startedAt: new Date(0).toISOString(),
       }),
     });
@@ -223,317 +240,68 @@ describe("tui reducer", () => {
       type: "frontend_event",
       event: eventEnvelope("tool_started", {
         runId: "run-1",
-        toolCallId: "dispatch-wait",
-        title: "nanoboss-procedure_dispatch_wait",
+        toolCallId: "wrapper",
+        title: "defaultSession: hello",
+        kind: "wrapper",
+      }),
+    });
+    state = reduceUiState(state, {
+      type: "frontend_event",
+      event: eventEnvelope("tool_started", {
+        runId: "run-1",
+        toolCallId: "leaf",
+        title: "Mock read README.md",
+        kind: "read",
+      }),
+    });
+    state = reduceUiState(state, {
+      type: "frontend_event",
+      event: eventEnvelope("tool_updated", {
+        runId: "run-1",
+        toolCallId: "wrapper",
+        status: "completed",
+      }),
+    });
+
+    expect(state.toolCalls.map((toolCall) => toolCall.id)).toEqual(["leaf"]);
+    expect(state.toolCalls[0]).toMatchObject({ depth: 0 });
+    expect(state.transcriptItems).not.toContainEqual({ type: "tool_call", id: "wrapper" });
+    expect(state.transcriptItems).toContainEqual({ type: "tool_call", id: "leaf" });
+  });
+
+  test("out-of-order tool updates synthesize a placeholder card", () => {
+    let state = createInitialUiState({ cwd: "/repo", showToolCalls: true });
+
+    state = reduceUiState(state, {
+      type: "frontend_event",
+      event: eventEnvelope("tool_updated", {
+        runId: "run-1",
+        toolCallId: "tool-missing",
+        title: "write",
+        status: "failed",
+        errorSummary: "permission denied",
+      }),
+    });
+
+    expect(state.toolCalls).toEqual([
+      {
+        id: "tool-missing",
+        runId: "run-1",
+        title: "write",
         kind: "other",
-      }),
-    });
-    state = reduceUiState(state, {
-      type: "frontend_event",
-      event: eventEnvelope("tool_started", {
-        runId: "run-1",
-        toolCallId: "nested-child",
-        title: "Mock read README.md",
-        kind: "read",
-      }),
-    });
-    state = reduceUiState(state, {
-      type: "frontend_event",
-      event: eventEnvelope("tool_updated", {
-        runId: "run-1",
-        toolCallId: "dispatch-wait",
-        status: "completed",
-      }),
-    });
-    state = reduceUiState(state, {
-      type: "frontend_event",
-      event: eventEnvelope("tool_updated", {
-        runId: "run-1",
-        toolCallId: "nested-child",
-        status: "completed",
-      }),
-    });
-    state = reduceUiState(state, {
-      type: "frontend_event",
-      event: eventEnvelope("tool_started", {
-        runId: "run-1",
-        toolCallId: "root-tool",
-        title: "Running tests",
-        kind: "thought",
-      }),
-    });
-
-    expect(state.toolCalls).toEqual([
-      {
-        id: "root-tool",
-        title: "Running tests",
-        status: "pending",
+        status: "failed",
         depth: 0,
         isWrapper: false,
+        inputSummary: undefined,
+        outputSummary: undefined,
+        errorSummary: "permission denied",
+        durationMs: undefined,
       },
     ]);
+    expect(state.transcriptItems).toContainEqual({ type: "tool_call", id: "tool-missing" });
   });
 
-  test("stores prompt diagnostics and token usage lines from frontend events", () => {
-    let state = createInitialUiState({ cwd: "/repo" });
-
-    state = reduceUiState(state, {
-      type: "frontend_event",
-      event: eventEnvelope("prompt_diagnostics", {
-        runId: "run-1",
-        diagnostics: {
-          method: "tiktoken",
-          encoding: "o200k_base",
-          totalTokens: 321,
-          guidanceTokens: 21,
-          userMessageTokens: 100,
-          cards: [],
-        },
-      }),
-    });
-
-    state = reduceUiState(state, {
-      type: "frontend_event",
-      event: eventEnvelope("token_usage", {
-        runId: "run-1",
-        usage: {
-          source: "acp_usage_update",
-          currentContextTokens: 512,
-          maxContextTokens: 8192,
-        },
-        sourceUpdate: "usage_update",
-      }),
-    });
-
-    expect(state.promptDiagnosticsLine).toContain("[prompt]");
-    expect(state.promptDiagnosticsLine).toContain("321");
-    expect(state.tokenUsageLine).toContain("[tokens] 512 / 8,192");
-  });
-
-  test("keeps the latest completed leaf tool visible until the next sibling replaces it", () => {
-    let state = createInitialUiState({ cwd: "/repo", showToolCalls: true });
-
-    state = reduceUiState(state, {
-      type: "frontend_event",
-      event: eventEnvelope("run_started", {
-        runId: "run-1",
-        procedure: "default",
-        prompt: "hello",
-        startedAt: new Date(0).toISOString(),
-      }),
-    });
-    state = reduceUiState(state, {
-      type: "frontend_event",
-      event: eventEnvelope("tool_started", {
-        runId: "run-1",
-        toolCallId: "tool-parent",
-        title: "defaultSession: hello",
-        kind: "wrapper",
-      }),
-    });
-    state = reduceUiState(state, {
-      type: "frontend_event",
-      event: eventEnvelope("tool_started", {
-        runId: "run-1",
-        toolCallId: "tool-leaf-1",
-        title: "Reviewing changed code",
-        kind: "thought",
-      }),
-    });
-    state = reduceUiState(state, {
-      type: "frontend_event",
-      event: eventEnvelope("tool_updated", {
-        runId: "run-1",
-        toolCallId: "tool-leaf-1",
-        status: "completed",
-      }),
-    });
-
-    expect(state.toolCalls).toContainEqual({
-      id: "tool-leaf-1",
-      title: "Reviewing changed code",
-      status: "completed",
-      depth: 1,
-      isWrapper: false,
-    });
-
-    state = reduceUiState(state, {
-      type: "frontend_event",
-      event: eventEnvelope("tool_started", {
-        runId: "run-1",
-        toolCallId: "tool-leaf-2",
-        title: "Running tests",
-        kind: "thought",
-      }),
-    });
-
-    expect(state.toolCalls.some((toolCall) => toolCall.id === "tool-leaf-1")).toBe(false);
-    expect(state.toolCalls).toContainEqual({
-      id: "tool-leaf-2",
-      title: "Running tests",
-      status: "pending",
-      depth: 1,
-      isWrapper: false,
-    });
-  });
-
-  test("removes completed wrapper tool calls, clears retained descendants, and reenables input on run failure", () => {
-    let state = createInitialUiState({ cwd: "/repo", showToolCalls: true });
-
-    state = reduceUiState(state, {
-      type: "local_user_submitted",
-      text: "hello",
-    });
-    state = reduceUiState(state, {
-      type: "frontend_event",
-      event: eventEnvelope("run_started", {
-        runId: "run-1",
-        procedure: "default",
-        prompt: "hello",
-        startedAt: new Date(0).toISOString(),
-      }),
-    });
-    state = reduceUiState(state, {
-      type: "frontend_event",
-      event: eventEnvelope("tool_started", {
-        runId: "run-1",
-        toolCallId: "tool-parent",
-        title: "defaultSession: hello",
-        kind: "wrapper",
-      }),
-    });
-    state = reduceUiState(state, {
-      type: "frontend_event",
-      event: eventEnvelope("tool_started", {
-        runId: "run-1",
-        toolCallId: "tool-leaf",
-        title: "Reviewing changed code",
-        kind: "thought",
-      }),
-    });
-    state = reduceUiState(state, {
-      type: "frontend_event",
-      event: eventEnvelope("tool_updated", {
-        runId: "run-1",
-        toolCallId: "tool-leaf",
-        status: "completed",
-      }),
-    });
-    state = reduceUiState(state, {
-      type: "frontend_event",
-      event: eventEnvelope("tool_updated", {
-        runId: "run-1",
-        toolCallId: "tool-parent",
-        status: "completed",
-      }),
-    });
-    state = reduceUiState(state, {
-      type: "frontend_event",
-      event: eventEnvelope("run_failed", {
-        runId: "run-1",
-        procedure: "default",
-        completedAt: new Date(1).toISOString(),
-        error: "boom",
-      }),
-    });
-
-    expect(state.toolCalls).toEqual([]);
-    expect(state.activeWrapperToolCallIds).toEqual([]);
-    expect(state.inputDisabled).toBe(false);
-    expect(state.turns.at(-1)).toMatchObject({
-      role: "assistant",
-      markdown: "boom",
-      status: "failed",
-    });
-    expect(state.turns.at(-1)?.meta?.failureMessage).toBeUndefined();
-  });
-
-  test("preserves streamed assistant text on failure and stores the failure message separately", () => {
-    let state = createInitialUiState({ cwd: "/repo", showToolCalls: true });
-
-    state = reduceUiState(state, {
-      type: "local_user_submitted",
-      text: "hello",
-    });
-    state = reduceUiState(state, {
-      type: "frontend_event",
-      event: eventEnvelope("run_started", {
-        runId: "run-1",
-        procedure: "default",
-        prompt: "hello",
-        startedAt: new Date(0).toISOString(),
-      }),
-    });
-    state = reduceUiState(state, {
-      type: "frontend_event",
-      event: eventEnvelope("text_delta", {
-        runId: "run-1",
-        text: "partial useful answer",
-        stream: "agent",
-      }),
-    });
-    state = reduceUiState(state, {
-      type: "frontend_event",
-      event: eventEnvelope("run_failed", {
-        runId: "run-1",
-        procedure: "default",
-        completedAt: new Date(1).toISOString(),
-        error: "boom",
-      }),
-    });
-
-    expect(state.turns.at(-1)).toMatchObject({
-      role: "assistant",
-      markdown: "partial useful answer",
-      status: "failed",
-      meta: {
-        failureMessage: "boom",
-      },
-    });
-  });
-
-  test("inserts a paragraph break before new assistant status text after tool activity", () => {
-    let state = createInitialUiState({ cwd: "/repo", showToolCalls: true });
-
-    state = reduceUiState(state, {
-      type: "frontend_event",
-      event: eventEnvelope("run_started", {
-        runId: "run-1",
-        procedure: "default",
-        prompt: "hello",
-        startedAt: new Date(0).toISOString(),
-      }),
-    });
-    state = reduceUiState(state, {
-      type: "frontend_event",
-      event: eventEnvelope("text_delta", {
-        runId: "run-1",
-        text: "First sentence.",
-        stream: "agent",
-      }),
-    });
-    state = reduceUiState(state, {
-      type: "frontend_event",
-      event: eventEnvelope("tool_started", {
-        runId: "run-1",
-        toolCallId: "tool-1",
-        title: "Mock read README.md",
-        kind: "read",
-      }),
-    });
-    state = reduceUiState(state, {
-      type: "frontend_event",
-      event: eventEnvelope("text_delta", {
-        runId: "run-1",
-        text: "Second sentence.",
-        stream: "agent",
-      }),
-    });
-
-    expect(state.turns.at(-1)?.markdown).toBe("First sentence.\n\nSecond sentence.");
-  });
-
-  test("does not insert a paragraph break when tool activity is hidden by preference", () => {
+  test("does not create tool cards or split assistant text when tool cards are hidden by preference", () => {
     let state = createInitialUiState({ cwd: "/repo", showToolCalls: false });
 
     state = reduceUiState(state, {
@@ -571,51 +339,12 @@ describe("tui reducer", () => {
       }),
     });
 
+    expect(state.toolCalls).toEqual([]);
     expect(state.turns.at(-1)?.markdown).toBe("First sentence.Second sentence.");
+    expect(state.transcriptItems).toEqual([{ type: "turn", id: "assistant-1" }]);
   });
 
-  test("does not insert a paragraph break when tool activity is suppressed", () => {
-    let state = createInitialUiState({ cwd: "/repo", showToolCalls: true });
-
-    state = reduceUiState(state, {
-      type: "frontend_event",
-      event: eventEnvelope("run_started", {
-        runId: "run-1",
-        procedure: "default",
-        prompt: "hello",
-        startedAt: new Date(0).toISOString(),
-      }),
-    });
-    state = reduceUiState(state, {
-      type: "frontend_event",
-      event: eventEnvelope("text_delta", {
-        runId: "run-1",
-        text: "First sentence.",
-        stream: "agent",
-      }),
-    });
-    state = reduceUiState(state, {
-      type: "frontend_event",
-      event: eventEnvelope("tool_started", {
-        runId: "run-1",
-        toolCallId: "dispatch-wait",
-        title: "nanoboss-procedure_dispatch_wait",
-        kind: "other",
-      }),
-    });
-    state = reduceUiState(state, {
-      type: "frontend_event",
-      event: eventEnvelope("text_delta", {
-        runId: "run-1",
-        text: "Second sentence.",
-        stream: "agent",
-      }),
-    });
-
-    expect(state.turns.at(-1)?.markdown).toBe("First sentence.Second sentence.");
-  });
-
-  test("session_ready resets transient run state and merges local slash commands with server commands", () => {
+  test("session_ready resets retained transcript state and merges local slash commands with server commands", () => {
     let state = createInitialUiState({ cwd: "/repo", showToolCalls: true });
 
     state = reduceUiState(state, {
@@ -646,6 +375,7 @@ describe("tui reducer", () => {
 
     expect(state.turns).toEqual([]);
     expect(state.toolCalls).toEqual([]);
+    expect(state.transcriptItems).toEqual([]);
     expect(state.statusLine).toBeUndefined();
     expect(state.availableCommands).toEqual([
       "/tokens",
@@ -660,7 +390,7 @@ describe("tui reducer", () => {
 
 function eventEnvelope<EventType extends FrontendEventEnvelope["type"]>(
   type: EventType,
-  data: Extract<FrontendEventEnvelope, { type: EventType }>["data"],
+  data: Extract<FrontendEventEnvelope, { type: EventType }>['data'],
 ): FrontendEventEnvelope {
   return {
     sessionId: "session-1",

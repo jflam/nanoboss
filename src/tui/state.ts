@@ -5,6 +5,7 @@ export interface UiTurn {
   role: "user" | "assistant" | "system";
   markdown: string;
   status?: "streaming" | "complete" | "failed";
+  runId?: string;
   meta?: {
     procedure?: string;
     tokenUsageLine?: string;
@@ -14,11 +15,21 @@ export interface UiTurn {
 
 export interface UiToolCall {
   id: string;
+  runId: string;
   title: string;
+  kind: string;
   status: string;
   depth: number;
   isWrapper: boolean;
+  inputSummary?: string;
+  outputSummary?: string;
+  errorSummary?: string;
+  durationMs?: number;
 }
+
+export type UiTranscriptItem =
+  | { type: "turn"; id: string }
+  | { type: "tool_call"; id: string };
 
 export interface UiState {
   cwd: string;
@@ -29,10 +40,12 @@ export interface UiState {
   availableCommands: string[];
   turns: UiTurn[];
   toolCalls: UiToolCall[];
+  transcriptItems: UiTranscriptItem[];
   activeWrapperToolCallIds: string[];
   hiddenToolCallIds: string[];
   runtimeNotes: string[];
   activeRunId?: string;
+  activeProcedure?: string;
   activeAssistantTurnId?: string;
   assistantParagraphBreakPending?: boolean;
   runStartedAtMs?: number;
@@ -57,6 +70,7 @@ export function createInitialUiState(params: {
     availableCommands: [],
     turns: [],
     toolCalls: [],
+    transcriptItems: [],
     activeWrapperToolCallIds: [],
     hiddenToolCallIds: [],
     runtimeNotes: [],

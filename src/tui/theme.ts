@@ -11,6 +11,13 @@ export interface NanobossTuiTheme {
   bold: (text: string) => string;
   italic: (text: string) => string;
   underline: (text: string) => string;
+  toolCardPendingBg: (text: string) => string;
+  toolCardSuccessBg: (text: string) => string;
+  toolCardErrorBg: (text: string) => string;
+  toolCardBorder: (text: string) => string;
+  toolCardTitle: (text: string) => string;
+  toolCardMeta: (text: string) => string;
+  toolCardBody: (text: string) => string;
   editor: EditorTheme;
   selectList: SelectListTheme;
   markdown: MarkdownTheme;
@@ -35,6 +42,13 @@ export function createNanobossTuiTheme(): NanobossTuiTheme {
   const bold = (value: string) => style(value, 1);
   const italic = (value: string) => style(value, 3);
   const underline = (value: string) => style(value, 4);
+  const toolCardPendingBg = (value: string) => value;
+  const toolCardSuccessBg = (value: string) => value;
+  const toolCardErrorBg = (value: string) => value;
+  const toolCardBorder = muted;
+  const toolCardTitle = bold;
+  const toolCardMeta = dim;
+  const toolCardBody = text;
 
   const selectList: SelectListTheme = {
     selectedPrefix: (value) => style(value, 1, 36),
@@ -72,6 +86,13 @@ export function createNanobossTuiTheme(): NanobossTuiTheme {
     bold,
     italic,
     underline,
+    toolCardPendingBg,
+    toolCardSuccessBg,
+    toolCardErrorBg,
+    toolCardBorder,
+    toolCardTitle,
+    toolCardMeta,
+    toolCardBody,
     editor: {
       borderColor: accent,
       selectList,

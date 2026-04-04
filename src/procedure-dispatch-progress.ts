@@ -4,6 +4,7 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync } from "nod
 import { dirname, join } from "node:path";
 
 import type { SessionUpdateEmitter } from "./context.ts";
+import { compactToolCallInput, compactToolCallOutput } from "./tool-call-preview.ts";
 import type { AgentTokenUsage } from "./types.ts";
 
 const PROCEDURE_DISPATCH_PROGRESS_DIR = "procedure-dispatch-progress";
@@ -127,7 +128,10 @@ function sanitizeProcedureDispatchProgressUpdate(update: acp.SessionUpdate): acp
       title: update.title,
       kind: update.kind,
       status: update.status,
-      rawInput: update.rawInput,
+      rawInput: compactToolCallInput({
+        title: update.title,
+        kind: String(update.kind),
+      }, update.rawInput),
     };
   }
 
@@ -137,7 +141,9 @@ function sanitizeProcedureDispatchProgressUpdate(update: acp.SessionUpdate): acp
       toolCallId: update.toolCallId,
       title: update.title,
       status: update.status,
-      rawOutput: undefined,
+      rawOutput: compactToolCallOutput({
+        title: update.title,
+      }, update.rawOutput),
     };
   }
 
