@@ -7,7 +7,7 @@ import {
   SessionStore,
   createValueRef,
   normalizeProcedureResult,
-} from "../session/store.ts";
+} from "../session/index.ts";
 import { toDownstreamAgentSelection } from "../core/config.ts";
 import { summarizeText } from "../util/text.ts";
 import type {

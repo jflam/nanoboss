@@ -5,9 +5,9 @@ import { join } from "node:path";
 
 import { afterEach, describe, expect, test } from "bun:test";
 
-import { writeCurrentSessionMetadata } from "../../src/session/persistence.ts";
+import { writeCurrentSessionMetadata } from "../../src/session/index.ts";
 import { resolveSelfCommand } from "../../src/core/self-command.ts";
-import { SessionStore } from "../../src/session/store.ts";
+import { SessionStore } from "../../src/session/index.ts";
 
 const tempDirs: string[] = [];
 

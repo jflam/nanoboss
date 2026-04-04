@@ -3,7 +3,7 @@ import {
   formatSessionInitialPrompt,
   formatSessionLine,
 } from "../../session/picker-format.ts";
-import type { SessionSummary } from "../../session/persistence.ts";
+import type { SessionSummary } from "../../session/index.ts";
 
 import type { NanobossTuiTheme } from "../theme.ts";
 import { promptWithSelectList } from "./select-overlay.ts";

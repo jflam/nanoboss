@@ -8,8 +8,8 @@ import type { RunLogger } from "./logger.ts";
 import { normalizeAgentTokenUsage } from "../agent/token-usage.ts";
 import {
   normalizeProcedureResult,
-} from "../session/store.ts";
-import type { SessionStore } from "../session/store.ts";
+} from "../session/index.ts";
+import type { SessionStore } from "../session/index.ts";
 import { summarizeText } from "../util/text.ts";
 import type {
   CellAncestorsOptions,

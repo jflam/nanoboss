@@ -63,7 +63,7 @@ export async function ensureMatchingHttpServer(
 
 function spawnBackgroundServer(serverUrl: URL, cwd: string): void {
   const port = resolveServerPort(serverUrl);
-  const command = resolveSelfCommand("server", ["--port", String(port)]);
+  const command = resolveSelfCommand("http", ["--port", String(port)]);
   const child = spawn(command.command, command.args, {
     cwd,
     env: process.env,

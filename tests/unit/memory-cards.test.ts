@@ -6,7 +6,7 @@ import {
   collectUnsyncedProcedureMemoryCards,
   renderProcedureMemoryPreamble,
 } from "../../src/core/memory-cards.ts";
-import { SessionStore } from "../../src/session/store.ts";
+import { SessionStore } from "../../src/session/index.ts";
 
 const tempDirs: string[] = [];
 

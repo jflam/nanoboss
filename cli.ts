@@ -21,7 +21,7 @@ function printHelp(): void {
   process.stdout.write([
     "Usage: nanoboss cli [--tool-calls|--no-tool-calls] [--server-url <url>]",
     "",
-    "Requires an interactive TTY. For automation, use nanoboss server or acp-server.",
+    "Requires an interactive TTY. For automation, use nanoboss http or acp-server.",
     "",
     "Options:",
     "  --tool-calls          Show tool call progress lines (default)",

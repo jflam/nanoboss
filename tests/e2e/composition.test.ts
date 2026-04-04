@@ -4,7 +4,7 @@ import typia from "typia";
 import { CommandContextImpl } from "../../src/core/context.ts";
 import { RunLogger } from "../../src/core/logger.ts";
 import { ProcedureRegistry } from "../../src/procedure/registry.ts";
-import { SessionStore } from "../../src/session/store.ts";
+import { SessionStore } from "../../src/session/index.ts";
 import { jsonType, type Procedure } from "../../src/core/types.ts";
 import { describeE2E } from "./helpers.ts";
 

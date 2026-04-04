@@ -1,7 +1,7 @@
 import { normalizeAgentTokenUsage } from "../agent/token-usage.ts";
 import type { DefaultConversationSession } from "../agent/default-session.ts";
 import { buildProcedureExecutionResult, type ProcedureExecutionResult } from "./runner.ts";
-import { createValueRef, type SessionStore } from "../session/store.ts";
+import { createValueRef, type SessionStore } from "../session/index.ts";
 import { inferDataShape } from "../core/data-shape.ts";
 import type { AgentTokenUsage, CellRecord, DownstreamAgentConfig, ValueRef } from "../core/types.ts";
 import { summarizeText } from "../util/text.ts";

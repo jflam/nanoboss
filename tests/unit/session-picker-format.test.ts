@@ -4,7 +4,7 @@ import {
   formatSessionInitialPrompt,
   formatSessionLine,
 } from "../../src/session/picker-format.ts";
-import type { SessionSummary } from "../../src/session/persistence.ts";
+import type { SessionSummary } from "../../src/session/index.ts";
 
 function session(overrides: Partial<SessionSummary> = {}): SessionSummary {
   return {

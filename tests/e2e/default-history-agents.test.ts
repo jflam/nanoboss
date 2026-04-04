@@ -45,7 +45,7 @@ describeE2E("/default multi-turn history (real agents)", () => {
         const port = await reservePort();
         const baseUrl = `http://127.0.0.1:${port}`;
         const server = spawnNanoboss([
-          "server",
+          "http",
           "--port",
           String(port),
         ], realAgentEnv(agent));

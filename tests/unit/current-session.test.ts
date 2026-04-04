@@ -8,7 +8,7 @@ import {
   getCurrentSessionMetadataPath,
   readCurrentSessionMetadata,
   writeCurrentSessionMetadata,
-} from "../../src/session/persistence.ts";
+} from "../../src/session/index.ts";
 
 let tempHome: string | undefined;
 

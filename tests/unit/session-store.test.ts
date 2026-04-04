@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, describe, expect, test } from "bun:test";
 
-import { SessionStore } from "../../src/session/store.ts";
+import { SessionStore } from "../../src/session/index.ts";
 
 const tempDirs: string[] = [];
 

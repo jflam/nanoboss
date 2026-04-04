@@ -24,7 +24,7 @@ describeAsyncDispatchE2E("async procedure dispatch (real agent opt-in)", () => {
     const port = await reservePort();
     const baseUrl = `http://127.0.0.1:${port}`;
     const server = spawnNanoboss([
-      "server",
+      "http",
       "--port",
       String(port),
     ], realAgentEnv());

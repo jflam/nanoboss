@@ -24,7 +24,7 @@ import {
   writeCurrentSessionMetadata,
   writeSessionMetadata,
   type SessionMetadata,
-} from "../session/persistence.ts";
+} from "../session/index.ts";
 import { startProcedureDispatchProgressBridge } from "../procedure/dispatch-progress.ts";
 import {
   procedureDispatchResultFromRecoveredCell,
@@ -40,7 +40,7 @@ import { ProcedureRegistry } from "../procedure/registry.ts";
 import { formatAgentBanner } from "./runtime-banner.ts";
 import { shouldLoadDiskCommands } from "./runtime-mode.ts";
 import { isProcedureDispatchResult, isProcedureDispatchStatusResult } from "../mcp/session.ts";
-import { SessionStore } from "../session/store.ts";
+import { SessionStore } from "../session/index.ts";
 import type {
   AgentTokenUsage,
   DownstreamAgentConfig,

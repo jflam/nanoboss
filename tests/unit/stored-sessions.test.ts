@@ -8,7 +8,7 @@ import {
   listSessionSummaries,
   resolveMostRecentSessionSummary,
   writeSessionMetadata,
-} from "../../src/session/persistence.ts";
+} from "../../src/session/index.ts";
 
 let tempHome: string | undefined;
 

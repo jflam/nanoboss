@@ -22,7 +22,7 @@ import {
   type ProcedureExecutionResult,
 } from "./runner.ts";
 import { ProcedureRegistry } from "./registry.ts";
-import { SessionStore } from "../session/store.ts";
+import { SessionStore } from "../session/index.ts";
 import { resolveSelfCommand } from "../core/self-command.ts";
 import type {
   CellRef,

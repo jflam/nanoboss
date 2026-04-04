@@ -1,6 +1,6 @@
 import { inferDataShape, stringifyCompactShape } from "./data-shape.ts";
-import { createValueRef } from "../session/store.ts";
-import type { SessionStore } from "../session/store.ts";
+import { createValueRef } from "../session/index.ts";
+import type { SessionStore } from "../session/index.ts";
 import type { CellRef, JsonValue, ValueRef } from "./types.ts";
 import { summarizeText } from "../util/text.ts";
 

@@ -10,7 +10,7 @@ import {
   resolveMostRecentSessionSummary,
   toSessionSummary,
   type SessionSummary,
-} from "./src/session/persistence.ts";
+} from "./src/session/index.ts";
 
 export type StoredSessionSelectionResult =
   | { kind: "selected"; session: SessionSummary }
@@ -116,7 +116,7 @@ function printHelp(): void {
   process.stdout.write([
     "Usage: nanoboss resume [session-id] [--list] [--tool-calls|--no-tool-calls] [--server-url <url>]",
     "",
-    "Requires an interactive TTY. For automation, use nanoboss server, mcp, or acp-server.",
+    "Requires an interactive TTY. For automation, use nanoboss http, mcp, or acp-server.",
     "",
     "Options:",
     "  --list                Choose from saved sessions before resuming",

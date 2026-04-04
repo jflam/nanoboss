@@ -10,8 +10,8 @@ import {
 } from "../procedure/dispatch-jobs.ts";
 import { type ProcedureExecutionResult } from "../procedure/runner.ts";
 import { ProcedureRegistry } from "../procedure/registry.ts";
-import { readCurrentSessionMetadata } from "../session/persistence.ts";
-import { SessionStore } from "../session/store.ts";
+import { readCurrentSessionMetadata } from "../session/index.ts";
+import { SessionStore } from "../session/index.ts";
 import { shouldLoadDiskCommands } from "../core/runtime-mode.ts";
 import type {
   CellDescendantsOptions,

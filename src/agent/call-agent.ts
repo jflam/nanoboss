@@ -8,7 +8,7 @@ import {
 } from "./acp-runtime.ts";
 import { resolveDownstreamAgentConfig } from "../core/config.ts";
 import { buildSessionMcpServers } from "../mcp/attachment.ts";
-import { SessionStore } from "../session/store.ts";
+import { SessionStore } from "../session/index.ts";
 import { collectTokenSnapshot } from "./token-metrics.ts";
 import type {
   AgentRunResult,
