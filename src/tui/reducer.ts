@@ -7,6 +7,7 @@ import {
   formatStoredMemoryCardLines,
   formatTokenUsageLine,
   isWrapperToolTitle,
+  shouldRemoveCompletedWrapperCard,
   shouldSuppressToolTraceTitle,
 } from "./format.ts";
 import { LOCAL_TUI_COMMANDS } from "./commands.ts";
@@ -280,7 +281,7 @@ function reduceFrontendEvent(state: UiState, event: FrontendEventEnvelope): UiSt
         durationMs: event.data.durationMs ?? existing?.durationMs,
       };
 
-      if (isWrapper && event.data.status === "completed") {
+      if (isWrapper && event.data.status === "completed" && shouldRemoveCompletedWrapperCard(title)) {
         toolCalls = collapseToolCallBranch(removeToolCall(toolCalls, event.data.toolCallId), depth);
         transcriptItems = removeTranscriptItem(transcriptItems, "tool_call", event.data.toolCallId);
       } else {
@@ -295,7 +296,9 @@ function reduceFrontendEvent(state: UiState, event: FrontendEventEnvelope): UiSt
         activeWrapperToolCallIds,
         hiddenToolCallIds,
       };
-      return existing || (isWrapper && event.data.status === "completed") ? nextState : markAssistantTextBoundary(nextState);
+      return existing || (isWrapper && event.data.status === "completed" && shouldRemoveCompletedWrapperCard(title))
+        ? nextState
+        : markAssistantTextBoundary(nextState);
     }
     case "run_completed": {
       const tokenUsageLine = event.data.tokenUsage ? formatTokenUsageLine(event.data.tokenUsage) : state.tokenUsageLine;

@@ -11,17 +11,21 @@ import {
 } from "../tool-card-format.ts";
 
 export function renderFallbackToolCard(theme: NanobossTuiTheme, toolCall: UiToolCall, expanded: boolean): RenderedToolCard {
+  const isProcedureCallMarker = (toolCall.callPreview?.header ?? toolCall.title).startsWith("Calling ");
+
   return {
     lines: joinToolContent(
       formatToolHeader(theme, toolCall.callPreview?.header, toolCall.title),
-      formatPreviewBody(theme, {
-        ...toolCall.callPreview,
-        header: undefined,
-      }, expanded),
-      formatPreviewBody(theme, toolCall.resultPreview, expanded),
+      isProcedureCallMarker
+        ? undefined
+        : formatPreviewBody(theme, {
+            ...toolCall.callPreview,
+            header: undefined,
+          }, expanded),
+      isProcedureCallMarker ? undefined : formatPreviewBody(theme, toolCall.resultPreview, expanded),
       formatErrorLines(theme, toolCall.errorPreview, expanded),
       formatWarnings(theme, toolCall.callPreview),
-      formatWarnings(theme, toolCall.resultPreview),
+      isProcedureCallMarker ? undefined : formatWarnings(theme, toolCall.resultPreview),
       formatWarnings(theme, toolCall.errorPreview),
       formatToolDurationLine(theme, toolCall),
     ),

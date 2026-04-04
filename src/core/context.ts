@@ -272,10 +272,11 @@ export class CommandContextImpl implements CommandContext {
     }
 
     const started = this.beginAgentRun(prompt, {
-      title: `defaultSession: ${summarizeText(prompt, 60)}`,
+      title: "Calling default procedure",
       rawInput: {
-        prompt,
-        sessionId: this.sessionId,
+        callPreview: {
+          header: "Calling default procedure",
+        },
       },
     });
     const preparedPrompt = this.prepareDefaultPromptValue?.(prompt) ?? { prompt };

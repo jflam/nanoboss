@@ -35,15 +35,17 @@ export function normalizeToolName(toolCall: Pick<UiToolCall, "kind" | "title">):
     return parts[1];
   }
 
-  if (title.startsWith("callagent") || title.startsWith("defaultsession:")) {
+  if (title.startsWith("callagent") || title.startsWith("defaultsession:") || title.startsWith("calling ")) {
     return "agent";
   }
 
-  return title.split(/[\s:(\[]/, 1)[0] || undefined;
+  const firstToken = title.split(/[\s:(\[]/, 1)[0] || "";
+  const lastSegment = firstToken.split(".").at(-1);
+  return lastSegment || firstToken || undefined;
 }
 
 export function formatToolHeader(theme: NanobossTuiTheme, header: string | undefined, fallbackTitle: string): string {
-  const text = header?.trim() || fallbackTitle;
+  const text = stripWrappingBackticks((header?.trim() || fallbackTitle).trim());
 
   if (text.startsWith("$ ")) {
     return `${theme.toolCardTitle("$")} ${theme.toolCardBody(text.slice(2))}`;
@@ -67,7 +69,11 @@ export function formatToolHeader(theme: NanobossTuiTheme, header: string | undef
     }
   }
 
-  return `${commandText} ${theme.accent(rest)}`;
+  return `${commandText} ${theme.accent(stripWrappingBackticks(rest))}`;
+}
+
+function stripWrappingBackticks(text: string): string {
+  return text.replace(/^`+|`+$/g, "");
 }
 
 export function formatPreviewBody(

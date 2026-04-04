@@ -224,6 +224,56 @@ describe("tui reducer", () => {
     expect(state.toolCalls[0]).toMatchObject({ id: "nested-child", depth: 0 });
   });
 
+  test("keeps completed default procedure cards visible", () => {
+    let state = createInitialUiState({ cwd: "/repo", showToolCalls: true });
+
+    state = reduceUiState(state, {
+      type: "frontend_event",
+      event: eventEnvelope("run_started", {
+        runId: "run-1",
+        procedure: "default",
+        prompt: "hello",
+        startedAt: new Date(0).toISOString(),
+      }),
+    });
+    state = reduceUiState(state, {
+      type: "frontend_event",
+      event: eventEnvelope("tool_started", {
+        runId: "run-1",
+        toolCallId: "default-proc",
+        title: "Calling default procedure",
+        kind: "other",
+        callPreview: { header: "Calling default procedure" },
+      }),
+    });
+    state = reduceUiState(state, {
+      type: "frontend_event",
+      event: eventEnvelope("tool_updated", {
+        runId: "run-1",
+        toolCallId: "default-proc",
+        status: "completed",
+        durationMs: 17,
+      }),
+    });
+
+    expect(state.toolCalls).toEqual([
+      {
+        id: "default-proc",
+        runId: "run-1",
+        title: "Calling default procedure",
+        kind: "other",
+        status: "completed",
+        depth: 0,
+        isWrapper: true,
+        callPreview: { header: "Calling default procedure" },
+        resultPreview: undefined,
+        errorPreview: undefined,
+        durationMs: 17,
+      },
+    ]);
+    expect(state.transcriptItems).toContainEqual({ type: "tool_call", id: "default-proc" });
+  });
+
   test("removes completed visible wrapper cards while retaining and reparents descendants", () => {
     let state = createInitialUiState({ cwd: "/repo", showToolCalls: true });
 

@@ -128,6 +128,31 @@ describe("frontend-events", () => {
     ]);
   });
 
+  test("normalizes namespaced bash tool titles to bash-like previews", () => {
+    const [started] = mapSessionUpdateToFrontendEvents("run-1", {
+      sessionUpdate: "tool_call",
+      toolCallId: "tool-bash",
+      title: "functions.bash",
+      kind: "other",
+      status: "pending",
+      rawInput: {
+        command: "git show --stat HEAD",
+      },
+    });
+
+    expect(started).toEqual({
+      type: "tool_started",
+      runId: "run-1",
+      toolCallId: "tool-bash",
+      title: "functions.bash",
+      kind: "other",
+      status: "pending",
+      callPreview: {
+        header: "$ git show --stat HEAD",
+      },
+    });
+  });
+
   test("tool previews are bounded and failed tool updates surface compact errors", () => {
     const [started] = mapSessionUpdateToFrontendEvents("run-1", {
       sessionUpdate: "tool_call",

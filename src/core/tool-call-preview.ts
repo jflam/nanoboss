@@ -613,11 +613,13 @@ function normalizeToolName(identity: ToolIdentity): string | undefined {
     return parts[1];
   }
 
-  if (title.startsWith("callagent") || title.startsWith("defaultsession:")) {
+  if (title.startsWith("callagent") || title.startsWith("defaultsession:") || title.startsWith("calling ")) {
     return "agent";
   }
 
-  return title.split(/[\s:(\[]/, 1)[0] || undefined;
+  const firstToken = title.split(/[\s:(\[]/, 1)[0] || "";
+  const lastSegment = firstToken.split(".").at(-1);
+  return lastSegment || firstToken || undefined;
 }
 
 function stripAnsi(text: string): string {

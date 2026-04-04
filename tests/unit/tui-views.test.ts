@@ -202,6 +202,39 @@ describe("NanobossAppView", () => {
     expect(headerLine).not.toContain("\u001b[0m");
   });
 
+  test("default procedure cards do not repeat the user prompt", () => {
+    const view = new NanobossAppView(
+      {
+        render: () => [""],
+        invalidate() {},
+      } as never,
+      createNanobossTuiTheme(),
+      {
+        ...createInitialUiState({ cwd: "/repo", showToolCalls: true }),
+        sessionId: "session-1",
+        toolCalls: [
+          {
+            id: "tool-1",
+            runId: "run-1",
+            title: "Calling default procedure",
+            kind: "other",
+            status: "completed",
+            depth: 0,
+            isWrapper: true,
+            callPreview: { header: "Calling default procedure" },
+            resultPreview: { bodyLines: ["explain to me what you fixed in the last commit"] },
+            durationMs: 17,
+          },
+        ],
+        transcriptItems: [{ type: "tool_call" as const, id: "tool-1" }],
+      },
+    );
+
+    const rendered = stripAnsi(view.render(120).join("\n"));
+    expect(rendered).toContain("Calling default procedure");
+    expect(rendered).not.toContain("explain to me what you fixed in the last commit");
+  });
+
   test("collapsed tool output can be expanded globally", () => {
     const lines = Array.from({ length: 12 }, (_, index) => `line ${index + 1}`);
     const collapsedView = new NanobossAppView(
