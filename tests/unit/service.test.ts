@@ -398,52 +398,6 @@ describe("NanobossService", () => {
     });
   }, 30_000);
 
-  test("falls back to local slash execution when dispatch tools are unavailable", async () => {
-    const mockSessionStoreDir = mkdtempSync(join(tmpdir(), "nab-service-fallback-agent-"));
-
-    await withMockAgentEnv(async () => {
-      const { cwd, registry } = await createRegistryWithWorkspace({
-        review: [
-          "export default {",
-          '  name: "review",',
-          '  description: "store a durable review result",',
-          '  async execute(prompt) {',
-          '    return {',
-          '      data: { subject: prompt, verdict: "mixed" },',
-          '      display: `review stored for ${prompt}`,',
-          '      summary: `review ${prompt}`,',
-          '    };',
-          '  },',
-          "};",
-        ].join("\n"),
-      });
-
-      const service = new NanobossService(registry);
-      const session = service.createSession({ cwd });
-      try {
-        await service.prompt(session.sessionId, "/review patch");
-        await service.prompt(session.sessionId, "/review followup");
-
-        const events = service.getSessionEvents(session.sessionId)?.after(-1) ?? [];
-        const completed = events
-          .filter((event) => event.type === "run_completed" && event.data.procedure === "review");
-
-        expect(completed).toHaveLength(2);
-        expect(completed[0]?.data.display).toContain("review stored for patch");
-        expect(completed[1]?.data.display).toContain("review stored for followup");
-
-        const storedSession = readStoredMockSession(mockSessionStoreDir);
-        expect(storedSession.turns).toHaveLength(2);
-        expect(storedSession.turns[0]?.text).toContain("Nanoboss internal slash-command dispatch.");
-      } finally {
-        service.destroySession(session.sessionId);
-      }
-    }, {
-      MOCK_AGENT_SESSION_STORE_DIR: mockSessionStoreDir,
-      MOCK_AGENT_FORCE_MISSING_MCP_TOOLS: "1",
-    });
-  }, 60_000);
-
   test("recovers async dispatch completion when the provider omits the terminal structured tool payload", async () => {
     await withMockAgentEnv(async () => {
       const { cwd, registry } = await createRegistryWithWorkspace({

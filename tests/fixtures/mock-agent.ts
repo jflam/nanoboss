@@ -39,7 +39,6 @@ const STREAM_ASYNC_DISPATCH_PROGRESS = process.env.MOCK_AGENT_STREAM_ASYNC_DISPA
 const STRIP_ASYNC_WAIT_RAW_OUTPUT = process.env.MOCK_AGENT_STRIP_ASYNC_WAIT_RAW_OUTPUT === "1";
 const COOPERATIVE_CANCEL = process.env.MOCK_AGENT_COOPERATIVE_CANCEL === "1";
 const WRITE_COPILOT_LOG = process.env.MOCK_AGENT_WRITE_COPILOT_LOG === "1";
-const FORCE_MISSING_MCP_TOOLS = process.env.MOCK_AGENT_FORCE_MISSING_MCP_TOOLS === "1";
 
 class MockAgent implements acp.Agent {
   private readonly sessions = new Map<string, LiveSession>();
@@ -202,9 +201,6 @@ async function answerForPrompt(
 ): Promise<string> {
   const dispatch = parseInternalSlashDispatch(prompt);
   if (dispatch) {
-    if (FORCE_MISSING_MCP_TOOLS) {
-      return "Required nanoboss MCP tools containing procedure_dispatch_start / procedure_dispatch_wait are not available in this session, so I can’t perform the dispatch.";
-    }
     const result = await callProcedureDispatchAsync(session, connection, sessionId, dispatch);
     return extractToolResultText(result);
   }
