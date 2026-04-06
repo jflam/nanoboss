@@ -14,6 +14,7 @@ import type {
   CellSummary,
   DownstreamAgentSelection,
   KernelValue,
+  PersistedFrontendEvent,
   ProcedureResult,
   RefStat,
   RunResult,
@@ -46,6 +47,7 @@ interface FinalizeCellOptions {
   stream?: string;
   summary?: string;
   raw?: string;
+  replayEvents?: PersistedFrontendEvent[];
   meta?: Partial<CellRecord["meta"]>;
 }
 
@@ -141,6 +143,9 @@ export class SessionStore {
         ...(stream !== undefined && stream.length > 0 ? { stream } : {}),
         ...(summary !== undefined && summary.length > 0 ? { summary } : {}),
         ...(memory !== undefined && memory.length > 0 ? { memory } : {}),
+        ...(options.replayEvents && options.replayEvents.length > 0
+          ? { replayEvents: options.replayEvents }
+          : {}),
         ...(result.explicitDataSchema !== undefined
           ? { explicitDataSchema: result.explicitDataSchema }
           : {}),
@@ -175,6 +180,37 @@ export class SessionStore {
       summary: record.output.summary,
       rawRef: options.raw !== undefined ? displayRef : undefined,
     };
+  }
+
+  patchCell(
+    cellRef: CellRef,
+    patch: {
+      output?: Partial<CellRecord["output"]>;
+      meta?: Partial<CellRecord["meta"]>;
+    },
+  ): CellRecord {
+    this.loadExistingCells();
+    const existing = this.readCell(cellRef);
+    const filePath = this.cellFilePaths.get(cellRef.cellId);
+    if (!filePath) {
+      throw new Error(`Unknown cell: ${cellRef.cellId}`);
+    }
+
+    const updated: CellRecord = {
+      ...existing,
+      output: {
+        ...existing.output,
+        ...patch.output,
+      },
+      meta: {
+        ...existing.meta,
+        ...patch.meta,
+      },
+    };
+
+    this.cells.set(cellRef.cellId, updated);
+    writeFileSync(filePath, `${JSON.stringify(updated, null, 2)}\n`, "utf8");
+    return updated;
   }
 
   readRef(valueRef: ValueRef): unknown {

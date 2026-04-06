@@ -17,6 +17,7 @@ import {
   SessionEventLog,
   toFrontendCommands,
   type FrontendEvent,
+  type FrontendEventEnvelope,
   type FrontendCommand,
 } from "../http/frontend-events.ts";
 import {
@@ -44,6 +45,7 @@ import type {
   CellRecord,
   DownstreamAgentConfig,
   DownstreamAgentSelection,
+  PersistedFrontendEvent,
 } from "./types.ts";
 
 interface SessionState {
@@ -247,7 +249,29 @@ export class NanobossService {
     const runs = session.store.topLevelRuns().reverse();
     for (const summary of runs) {
       const record = session.store.readCell(summary.cell);
-      session.events.publish(sessionId, restoredFrontendEventFromCell(sessionId, record));
+      const replayEvents = record.output.replayEvents;
+      const runId = replayEvents?.[0]?.runId ?? record.cellId;
+      const status = replayEvents?.some((event) => event.type === "run_failed") ? "failed" : "complete";
+
+      session.events.publish(sessionId, {
+        type: "run_restored",
+        runId,
+        procedure: record.procedure,
+        prompt: record.input,
+        completedAt: record.meta.createdAt,
+        cell: {
+          sessionId,
+          cellId: record.cellId,
+        },
+        status,
+        ...(replayEvents && replayEvents.length > 0
+          ? {}
+          : { text: record.output.display ?? record.output.summary }),
+      });
+
+      for (const replayEvent of replayEvents ?? []) {
+        session.events.publish(sessionId, replayEvent);
+      }
     }
   }
 
@@ -475,6 +499,14 @@ export class NanobossService {
     const procedureName = procedure?.name ?? commandName;
     const runId = crypto.randomUUID();
     const startedAt = Date.now();
+    let persistedTopLevelCell: { sessionId: string; cellId: string } | undefined;
+    const replayEvents: PersistedFrontendEvent[] = [];
+    const stopReplayCapture = session.events.subscribe((event) => {
+      const replayEvent = toPersistedReplayEvent(event, runId);
+      if (replayEvent) {
+        replayEvents.push(replayEvent);
+      }
+    });
 
     let lastRunActivityAt = Date.now();
     const markRunActivity = () => {
@@ -515,17 +547,18 @@ export class NanobossService {
       });
       await (delegate?.flush() ?? Promise.resolve());
 
-      session.events.publish(sessionId, {
-        type: "run_failed",
-        runId,
-        procedure: procedureName,
-        completedAt: new Date().toISOString(),
-        error,
-      });
-      markRunActivity();
-      clearInterval(heartbeatTimer);
+        session.events.publish(sessionId, {
+          type: "run_failed",
+          runId,
+          procedure: procedureName,
+          completedAt: new Date().toISOString(),
+          error,
+        });
+        markRunActivity();
+        stopReplayCapture();
+        clearInterval(heartbeatTimer);
 
-      return { stopReason: "end_turn", runId };
+        return { stopReason: "end_turn", runId };
     }
 
     const emitter = new CompositeSessionUpdateEmitter(
@@ -568,6 +601,7 @@ export class NanobossService {
           }),
         );
         markRunActivity();
+        persistedTopLevelCell = dispatched.result.cell;
       } else {
         try {
           const result = await executeTopLevelProcedure({
@@ -616,6 +650,7 @@ export class NanobossService {
             }),
           );
           markRunActivity();
+          persistedTopLevelCell = result.cell;
         } catch (error) {
           if (error instanceof TopLevelProcedureExecutionError) {
             session.events.publish(sessionId, {
@@ -627,6 +662,7 @@ export class NanobossService {
               cell: error.cell,
             });
             markRunActivity();
+            persistedTopLevelCell = error.cell;
           }
           throw error;
         }
@@ -669,6 +705,14 @@ export class NanobossService {
         availableCommands: this.registry.toAvailableCommands(),
       });
       await emitter.flush();
+      stopReplayCapture();
+      if (persistedTopLevelCell && replayEvents.length > 0) {
+        session.store.patchCell(persistedTopLevelCell, {
+          output: {
+            replayEvents,
+          },
+        });
+      }
       this.touchCurrentSessionMetadata(this.persistSessionState(session));
       session.abortController = undefined;
     }
@@ -782,25 +826,77 @@ export function extractProcedureDispatchResult(updates: acp.SessionUpdate[]): Pr
   return undefined;
 }
 
-function restoredFrontendEventFromCell(sessionId: string, cell: CellRecord): FrontendEvent {
-  const restoredText = cell.output.display ?? cell.output.summary;
-  const failed = cell.output.display === undefined
-    && typeof cell.output.summary === "string"
-    && /^Error:/i.test(cell.output.summary);
+function toPersistedReplayEvent(
+  event: FrontendEventEnvelope,
+  runId: string,
+): PersistedFrontendEvent | undefined {
+  if (!("runId" in event.data) || event.data.runId !== runId) {
+    return undefined;
+  }
 
-  return {
-    type: "run_restored",
-    runId: cell.cellId,
-    procedure: cell.procedure,
-    prompt: cell.input,
-    completedAt: cell.meta.createdAt,
-    cell: {
-      sessionId,
-      cellId: cell.cellId,
-    },
-    status: failed ? "failed" : "complete",
-    text: restoredText,
-  };
+  switch (event.type) {
+    case "text_delta":
+      return {
+        type: "text_delta",
+        runId: event.data.runId,
+        text: event.data.text,
+        stream: event.data.stream,
+      };
+    case "tool_started":
+      return {
+        type: "tool_started",
+        runId: event.data.runId,
+        toolCallId: event.data.toolCallId,
+        title: event.data.title,
+        kind: event.data.kind,
+        status: event.data.status,
+        callPreview: event.data.callPreview,
+        rawInput: event.data.rawInput,
+      };
+    case "tool_updated":
+      return {
+        type: "tool_updated",
+        runId: event.data.runId,
+        toolCallId: event.data.toolCallId,
+        title: event.data.title,
+        status: event.data.status,
+        resultPreview: event.data.resultPreview,
+        errorPreview: event.data.errorPreview,
+        durationMs: event.data.durationMs,
+        rawOutput: event.data.rawOutput,
+      };
+    case "token_usage":
+      return {
+        type: "token_usage",
+        runId: event.data.runId,
+        usage: event.data.usage,
+        sourceUpdate: event.data.sourceUpdate,
+        toolCallId: event.data.toolCallId,
+        status: event.data.status,
+      };
+    case "run_completed":
+      return {
+        type: "run_completed",
+        runId: event.data.runId,
+        procedure: event.data.procedure,
+        completedAt: event.data.completedAt,
+        cell: event.data.cell,
+        summary: event.data.summary,
+        display: event.data.display,
+        tokenUsage: event.data.tokenUsage,
+      };
+    case "run_failed":
+      return {
+        type: "run_failed",
+        runId: event.data.runId,
+        procedure: event.data.procedure,
+        completedAt: event.data.completedAt,
+        error: event.data.error,
+        cell: event.data.cell,
+      };
+    default:
+      return undefined;
+  }
 }
 
 function collectProcedureDispatchCandidates(update: Extract<acp.SessionUpdate, { sessionUpdate: "tool_call_update" }>): unknown[] {

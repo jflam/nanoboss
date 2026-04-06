@@ -303,8 +303,8 @@ describe("/default native session continuity", () => {
           const completed = (resumedService.getSessionEvents(resumed.sessionId)?.after(-1) ?? [])
             .filter((event) => event.type === "run_completed");
 
-          expect(completed).toHaveLength(1);
-          expect(completed[0]?.data.display).toBe("7");
+          expect(completed.length).toBeGreaterThanOrEqual(1);
+          expect(completed.at(-1)?.data.display).toBe("7");
         } finally {
           resumedService.destroySession(resumed.sessionId);
         }

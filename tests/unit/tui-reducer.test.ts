@@ -176,13 +176,49 @@ describe("tui reducer", () => {
     state = reduceUiState(state, {
       type: "frontend_event",
       event: eventEnvelope("run_restored", {
-        runId: "cell-1",
+        runId: "run-1",
         procedure: "default",
         prompt: "hello",
         completedAt: new Date(1).toISOString(),
         cell: { sessionId: "session-1", cellId: "cell-1" },
         status: "complete",
+      }),
+    });
+    state = reduceUiState(state, {
+      type: "frontend_event",
+      event: eventEnvelope("tool_started", {
+        runId: "run-1",
+        toolCallId: "tool-1",
+        title: "Mock read README.md",
+        kind: "read",
+        status: "pending",
+        callPreview: { header: "read README.md" },
+      }),
+    });
+    state = reduceUiState(state, {
+      type: "frontend_event",
+      event: eventEnvelope("tool_updated", {
+        runId: "run-1",
+        toolCallId: "tool-1",
+        status: "completed",
+        resultPreview: { bodyLines: ["hello from read"] },
+      }),
+    });
+    state = reduceUiState(state, {
+      type: "frontend_event",
+      event: eventEnvelope("text_delta", {
+        runId: "run-1",
         text: "hi",
+        stream: "agent",
+      }),
+    });
+    state = reduceUiState(state, {
+      type: "frontend_event",
+      event: eventEnvelope("run_completed", {
+        runId: "run-1",
+        procedure: "default",
+        completedAt: new Date(1).toISOString(),
+        cell: { sessionId: "session-1", cellId: "cell-1" },
       }),
     });
 
@@ -199,7 +235,7 @@ describe("tui reducer", () => {
         role: "assistant",
         markdown: "hi",
         status: "complete",
-        runId: "cell-1",
+        runId: "run-1",
         meta: {
           procedure: "default",
           tokenUsageLine: undefined,
@@ -209,7 +245,23 @@ describe("tui reducer", () => {
     ]);
     expect(state.transcriptItems).toEqual([
       { type: "turn", id: "user-1" },
+      { type: "tool_call", id: "tool-1" },
       { type: "turn", id: "assistant-2" },
+    ]);
+    expect(state.toolCalls).toEqual([
+      {
+        id: "tool-1",
+        runId: "run-1",
+        title: "Mock read README.md",
+        kind: "read",
+        status: "completed",
+        depth: 0,
+        isWrapper: false,
+        callPreview: { header: "read README.md" },
+        resultPreview: { bodyLines: ["hello from read"] },
+        errorPreview: undefined,
+        durationMs: undefined,
+      },
     ]);
   });
 

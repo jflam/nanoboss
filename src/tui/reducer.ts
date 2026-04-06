@@ -166,6 +166,10 @@ function reduceFrontendEvent(state: UiState, event: FrontendEventEnvelope): UiSt
           ...state,
           turns: nextTurns,
           transcriptItems: nextTranscriptItems,
+          activeRunId: event.data.runId,
+          activeProcedure: event.data.procedure,
+          activeAssistantTurnId: undefined,
+          assistantParagraphBreakPending: undefined,
         };
       }
 

@@ -1,4 +1,5 @@
 import type * as acp from "@agentclientprotocol/sdk";
+import type { ToolPreviewBlock } from "./tool-call-preview.ts";
 
 export type KernelScalar = null | boolean | number | string;
 export type JsonValue = KernelScalar | JsonValue[] | { [key: string]: JsonValue };
@@ -33,6 +34,7 @@ export interface CellRecord {
     summary?: string;
     memory?: string;
     explicitDataSchema?: object;
+    replayEvents?: PersistedFrontendEvent[];
   };
   meta: {
     createdAt: string;
@@ -154,6 +156,61 @@ export interface AgentTokenUsage {
   cacheWriteTokens?: number;
   totalTrackedTokens?: number;
 }
+
+export type PersistedFrontendEvent =
+  | {
+      type: "text_delta";
+      runId: string;
+      text: string;
+      stream: "agent";
+    }
+  | {
+      type: "tool_started";
+      runId: string;
+      toolCallId: string;
+      title: string;
+      kind: string;
+      status?: string;
+      callPreview?: ToolPreviewBlock;
+      rawInput?: unknown;
+    }
+  | {
+      type: "tool_updated";
+      runId: string;
+      toolCallId: string;
+      title?: string;
+      status: string;
+      resultPreview?: ToolPreviewBlock;
+      errorPreview?: ToolPreviewBlock;
+      durationMs?: number;
+      rawOutput?: unknown;
+    }
+  | {
+      type: "token_usage";
+      runId: string;
+      usage: AgentTokenUsage;
+      sourceUpdate: "usage_update" | "tool_call_update";
+      toolCallId?: string;
+      status?: string;
+    }
+  | {
+      type: "run_completed";
+      runId: string;
+      procedure: string;
+      completedAt: string;
+      cell: CellRef;
+      summary?: string;
+      display?: string;
+      tokenUsage?: AgentTokenUsage;
+    }
+  | {
+      type: "run_failed";
+      runId: string;
+      procedure: string;
+      completedAt: string;
+      error: string;
+      cell?: CellRef;
+    };
 
 export interface TypeDescriptor<T> {
   schema: object;
