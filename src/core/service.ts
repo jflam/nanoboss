@@ -261,6 +261,7 @@ export class NanobossService {
       const record = session.store.readCell(summary.cell);
       const replayEvents = record.output.replayEvents;
       const runId = replayEvents?.[0]?.runId ?? record.cellId;
+      const completedAt = getRestoredRunCompletedAt(replayEvents) ?? record.meta.createdAt;
       const status = replayEvents?.some((event) => event.type === "run_failed")
         ? "failed"
         : replayEvents?.some((event) => event.type === "run_cancelled")
@@ -272,7 +273,7 @@ export class NanobossService {
         runId,
         procedure: record.procedure,
         prompt: record.input,
-        completedAt: record.meta.createdAt,
+        completedAt,
         cell: {
           sessionId,
           cellId: record.cellId,
@@ -850,6 +851,16 @@ export class NanobossService {
 
     return { stopReason: "end_turn", runId };
   }
+}
+
+function getRestoredRunCompletedAt(replayEvents: PersistedFrontendEvent[] | undefined): string | undefined {
+  return [...(replayEvents ?? [])]
+    .reverse()
+    .find((event) =>
+      event.type === "run_completed"
+      || event.type === "run_failed"
+      || event.type === "run_cancelled"
+    )?.completedAt;
 }
 
 function getRunHeartbeatMs(): number {

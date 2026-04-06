@@ -199,9 +199,11 @@ describe("NanobossService", () => {
         const liveReplay = normalizeReplayEvents(
           service.getSessionEvents(session.sessionId)?.after(-1) ?? [],
         );
+        const liveCompletedAt = liveReplay.findLast((event) => event.type === "run_completed")?.data.completedAt;
 
         expect(liveReplay.some((event) => event.type === "tool_started")).toBe(true);
         expect(liveReplay.some((event) => event.type === "text_delta")).toBe(true);
+        expect(typeof liveCompletedAt).toBe("string");
 
         service.destroySession(session.sessionId);
 
@@ -223,7 +225,7 @@ describe("NanobossService", () => {
             runId: expect.any(String),
             procedure: "default",
             prompt: "nested tool trace demo",
-            completedAt: expect.any(String),
+            completedAt: liveCompletedAt,
             cell: {
               sessionId: session.sessionId,
               cellId: expect.any(String),
@@ -274,7 +276,9 @@ describe("NanobossService", () => {
         const liveReplay = normalizeReplayEvents(
           service.getSessionEvents(session.sessionId)?.after(-1) ?? [],
         );
+        const liveCancelledAt = liveReplay.findLast((event) => event.type === "run_cancelled")?.data.completedAt;
         expect(liveReplay.some((event) => event.type === "run_cancelled")).toBe(true);
+        expect(typeof liveCancelledAt).toBe("string");
 
         service.destroySession(session.sessionId);
 
@@ -295,7 +299,7 @@ describe("NanobossService", () => {
             runId: runStarted.data.runId,
             procedure: "default",
             prompt: "cooperative cancel demo",
-            completedAt: expect.any(String),
+            completedAt: liveCancelledAt,
             cell: {
               sessionId: session.sessionId,
               cellId: expect.any(String),
