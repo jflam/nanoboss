@@ -3,6 +3,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
+import { normalizeAgentTokenUsage } from "./token-usage.ts";
 import type { AgentTokenSnapshot, DownstreamAgentConfig } from "../core/types.ts";
 
 interface CollectTokenSnapshotParams {
@@ -43,13 +44,53 @@ export async function collectTokenSnapshot(
   return mergeTokenSnapshots(usageSnapshot, promptResponseSnapshot);
 }
 
+export async function enrichToolCallUpdateWithTokenUsage(
+  params: {
+    childPid?: number | undefined;
+    config: DownstreamAgentConfig;
+    sessionId: acp.SessionId;
+    update: acp.SessionUpdate;
+    updates: acp.SessionUpdate[];
+  },
+): Promise<{ update: acp.SessionUpdate; tokenSnapshot?: AgentTokenSnapshot }> {
+  if (!isTerminalToolCallUpdate(params.update)) {
+    return { update: params.update };
+  }
+
+  const tokenSnapshot = await collectTokenSnapshot({
+    childPid: params.childPid,
+    config: params.config,
+    sessionId: params.sessionId,
+    updates: params.updates,
+  });
+  if (!tokenSnapshot) {
+    return { update: params.update };
+  }
+
+  const rawOutput = attachTokenUsageToRawOutput(params.update.rawOutput, tokenSnapshot, params.config);
+  if (!rawOutput) {
+    return {
+      update: params.update,
+      tokenSnapshot,
+    };
+  }
+
+  return {
+    update: {
+      ...params.update,
+      rawOutput,
+    },
+    tokenSnapshot,
+  };
+}
+
 function snapshotFromUsageUpdate(
   config: DownstreamAgentConfig,
   sessionId: acp.SessionId,
   updates: acp.SessionUpdate[],
 ): AgentTokenSnapshot | undefined {
-  const last = [...updates].reverse().find((update) => update.sessionUpdate === "usage_update");
-  if (!last || last.sessionUpdate !== "usage_update") {
+  const last = [...updates].reverse().find(isUsageUpdate);
+  if (!last) {
     return undefined;
   }
 
@@ -135,10 +176,65 @@ function pickSnapshotField<T>(
   return undefined;
 }
 
+function isUsageUpdate(
+  update: acp.SessionUpdate,
+): update is Extract<acp.SessionUpdate, { sessionUpdate: "usage_update" }> {
+  return update.sessionUpdate === "usage_update";
+}
+
+function isTerminalToolCallUpdate(
+  update: acp.SessionUpdate,
+): update is Extract<acp.SessionUpdate, { sessionUpdate: "tool_call_update" }> {
+  return (
+    update.sessionUpdate === "tool_call_update"
+    && (
+      update.status === "completed"
+      || update.status === "failed"
+      || update.status === "cancelled"
+    )
+  );
+}
+
+function attachTokenUsageToRawOutput(
+  rawOutput: unknown,
+  tokenSnapshot: AgentTokenSnapshot,
+  config: DownstreamAgentConfig,
+): Record<string, unknown> | undefined {
+  const tokenUsage = normalizeAgentTokenUsage(tokenSnapshot, config);
+  if (!tokenUsage) {
+    return undefined;
+  }
+
+  if (rawOutput === undefined) {
+    return {
+      tokenSnapshot,
+      tokenUsage,
+    };
+  }
+
+  if (!isRecord(rawOutput)) {
+    return undefined;
+  }
+
+  return {
+    ...rawOutput,
+    tokenSnapshot,
+    tokenUsage,
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function resolveHomeDir(): string {
+  return process.env.HOME?.trim() || homedir();
+}
+
 async function collectClaudeTokenSnapshot(
   params: CollectTokenSnapshotParams,
 ): Promise<AgentTokenSnapshot | undefined> {
-  const path = join(homedir(), ".claude", "debug", `${params.sessionId}.txt`);
+  const path = join(resolveHomeDir(), ".claude", "debug", `${params.sessionId}.txt`);
 
   return await retryRead(() => {
     if (!existsSync(path)) {
@@ -152,7 +248,7 @@ async function collectClaudeTokenSnapshot(
 async function collectCopilotTokenSnapshot(
   params: CollectTokenSnapshotParams,
 ): Promise<AgentTokenSnapshot | undefined> {
-  const sessionStateDir = join(homedir(), ".copilot", "session-state", params.sessionId);
+  const sessionStateDir = join(resolveHomeDir(), ".copilot", "session-state", params.sessionId);
 
   const fromLog = await retryRead(() => {
     for (const processLogPath of findCopilotProcessLogs(params.childPid)) {
@@ -199,7 +295,7 @@ function findCopilotProcessLogs(childPid: number | undefined): string[] {
     return [];
   }
 
-  const dir = join(homedir(), ".copilot", "logs");
+  const dir = join(resolveHomeDir(), ".copilot", "logs");
   if (!existsSync(dir)) {
     return [];
   }
@@ -333,12 +429,12 @@ export function parseCopilotLogMetrics(
     return undefined;
   }
 
-  const cacheReadTokens = assistantUsage?.metrics?.cache_read_tokens ?? 0;
-  const cacheWriteTokens = assistantUsage?.metrics?.cache_write_tokens ?? 0;
+  const cacheReadTokens = assistantUsage ? assistantUsage.metrics.cache_read_tokens : 0;
+  const cacheWriteTokens = assistantUsage ? assistantUsage.metrics.cache_write_tokens : 0;
   const inputTokens = assistantUsage
     ? assistantUsage.metrics.input_tokens_uncached ?? Math.max(0, assistantUsage.metrics.input_tokens - cacheReadTokens)
     : undefined;
-  const outputTokens = assistantUsage?.metrics?.output_tokens;
+  const outputTokens = assistantUsage?.metrics.output_tokens;
 
   return {
     provider: config.provider,
@@ -346,11 +442,11 @@ export function parseCopilotLogMetrics(
     sessionId,
     source: "copilot_log",
     capturedAt: sessionUsage?.created_at ?? assistantUsage?.created_at,
-    contextWindowTokens: sessionUsage?.metrics?.token_limit,
-    usedContextTokens: sessionUsage?.metrics?.current_tokens,
-    systemTokens: sessionUsage?.metrics?.system_tokens,
-    conversationTokens: sessionUsage?.metrics?.conversation_tokens,
-    toolDefinitionsTokens: sessionUsage?.metrics?.tool_definitions_tokens,
+    contextWindowTokens: sessionUsage?.metrics.token_limit,
+    usedContextTokens: sessionUsage?.metrics.current_tokens,
+    systemTokens: sessionUsage?.metrics.system_tokens,
+    conversationTokens: sessionUsage?.metrics.conversation_tokens,
+    toolDefinitionsTokens: sessionUsage?.metrics.tool_definitions_tokens,
     inputTokens,
     outputTokens,
     cacheReadTokens: assistantUsage ? cacheReadTokens : undefined,

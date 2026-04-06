@@ -13,16 +13,28 @@ function createMockConfig(
   options: {
     supportLoadSession: boolean;
     sessionStoreDir: string;
+    provider?: DownstreamAgentConfig["provider"];
+    model?: string;
+    extraEnv?: Record<string, string | undefined>;
   },
 ): DownstreamAgentConfig {
+  const env: Record<string, string> = {
+    MOCK_AGENT_SUPPORT_LOAD_SESSION: options.supportLoadSession ? "1" : "0",
+    MOCK_AGENT_SESSION_STORE_DIR: options.sessionStoreDir,
+  };
+  for (const [key, value] of Object.entries(options.extraEnv ?? {})) {
+    if (value !== undefined) {
+      env[key] = value;
+    }
+  }
+
   return {
     command: "bun",
     args: ["run", "tests/fixtures/mock-agent.ts"],
     cwd,
-    env: {
-      MOCK_AGENT_SUPPORT_LOAD_SESSION: options.supportLoadSession ? "1" : "0",
-      MOCK_AGENT_SESSION_STORE_DIR: options.sessionStoreDir,
-    },
+    env,
+    provider: options.provider,
+    model: options.model,
   };
 }
 
@@ -147,6 +159,72 @@ describe("/default native session continuity", () => {
         expect(conversation.currentSessionId).not.toBe(firstSessionId);
       } finally {
         conversation.closeLiveSession();
+      }
+    },
+    30_000,
+  );
+
+  test(
+    "service publishes token usage from copilot logs after downstream tool calls",
+    async () => {
+      const previousHome = process.env.HOME;
+      process.env.HOME = mkdtempSync(join(tmpdir(), "nab-default-copilot-home-"));
+
+      try {
+        const registry = new ProcedureRegistry(mkdtempSync(join(tmpdir(), "nab-default-copilot-registry-")));
+        registry.loadBuiltins();
+
+        const sessionStoreDir = mkdtempSync(join(tmpdir(), "nab-default-copilot-agent-"));
+        const service = new NanobossService(
+          registry,
+          (cwd) => createMockConfig(cwd, {
+            supportLoadSession: true,
+            sessionStoreDir,
+            provider: "copilot",
+            extraEnv: {
+              MOCK_AGENT_WRITE_COPILOT_LOG: "1",
+            },
+          }),
+        );
+        const session = service.createSession({ cwd: process.cwd() });
+
+        try {
+          await service.prompt(session.sessionId, "nested tool trace demo");
+
+          const events = service.getSessionEvents(session.sessionId)?.after(-1) ?? [];
+          const tokenUsageIndex = events.findIndex((event) =>
+            event.type === "token_usage"
+            && event.data.sourceUpdate === "tool_call_update"
+            && event.data.toolCallId !== undefined
+          );
+          expect(tokenUsageIndex).toBeGreaterThanOrEqual(0);
+
+          const tokenEvent = events[tokenUsageIndex];
+          expect(tokenEvent?.type).toBe("token_usage");
+          if (tokenEvent?.type !== "token_usage") {
+            throw new Error("Expected token_usage event");
+          }
+
+          expect(tokenEvent.data.usage).toMatchObject({
+            provider: "copilot",
+            source: "copilot_log",
+            currentContextTokens: 24152,
+            maxContextTokens: 272000,
+            inputTokens: 19428,
+            outputTokens: 92,
+          });
+
+          const completedIndex = events.findIndex((event) => event.type === "run_completed");
+          expect(completedIndex).toBeGreaterThan(tokenUsageIndex);
+        } finally {
+          service.destroySession(session.sessionId);
+        }
+      } finally {
+        if (previousHome === undefined) {
+          delete process.env.HOME;
+        } else {
+          process.env.HOME = previousHome;
+        }
       }
     },
     30_000,

@@ -1,6 +1,7 @@
 import * as acp from "@agentclientprotocol/sdk";
 import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { createInterface } from "node:readline";
 import { join } from "node:path";
 import { Readable, Writable } from "node:stream";
@@ -38,6 +39,7 @@ const PROCEDURE_DISPATCH_TIMEOUT_MS = Number(process.env.MOCK_AGENT_PROCEDURE_DI
 const KEEP_MCP_RUNNING_ON_TIMEOUT = process.env.MOCK_AGENT_KEEP_MCP_RUNNING_ON_TIMEOUT === "1";
 const STREAM_ASYNC_DISPATCH_PROGRESS = process.env.MOCK_AGENT_STREAM_ASYNC_DISPATCH_PROGRESS === "1";
 const STRIP_ASYNC_WAIT_RAW_OUTPUT = process.env.MOCK_AGENT_STRIP_ASYNC_WAIT_RAW_OUTPUT === "1";
+const WRITE_COPILOT_LOG = process.env.MOCK_AGENT_WRITE_COPILOT_LOG === "1";
 
 class MockAgent implements acp.Agent {
   private readonly sessions = new Map<string, LiveSession>();
@@ -127,6 +129,7 @@ class MockAgent implements acp.Agent {
           },
         },
       });
+      writeMockCopilotTelemetryLog(params.sessionId);
       await this.connection.sessionUpdate({
         sessionId: params.sessionId,
         update: {
@@ -242,6 +245,50 @@ async function answerForPrompt(
   }
 
   return `mock:${prompt.trim()}`;
+}
+
+function writeMockCopilotTelemetryLog(sessionId: string): void {
+  if (!WRITE_COPILOT_LOG) {
+    return;
+  }
+
+  const createdAt = new Date().toISOString();
+  const dir = join(process.env.HOME?.trim() || homedir(), ".copilot", "logs");
+  mkdirSync(dir, { recursive: true });
+
+  writeFileSync(
+    join(dir, `process-${Date.now()}-${process.pid}.log`),
+    [
+      `${createdAt} [INFO] [Telemetry] cli.telemetry:`,
+      JSON.stringify({
+        kind: "session_usage_info",
+        created_at: createdAt,
+        session_id: sessionId,
+        metrics: {
+          token_limit: 272000,
+          current_tokens: 24152,
+          messages_length: 4,
+          system_tokens: 8011,
+          conversation_tokens: 2178,
+          tool_definitions_tokens: 13963,
+        },
+      }, null, 2),
+      `${createdAt} [INFO] [Telemetry] cli.telemetry:`,
+      JSON.stringify({
+        kind: "assistant_usage",
+        created_at: createdAt,
+        session_id: sessionId,
+        metrics: {
+          input_tokens: 20964,
+          input_tokens_uncached: 19428,
+          output_tokens: 92,
+          cache_read_tokens: 1536,
+          cache_write_tokens: 0,
+        },
+      }, null, 2),
+    ].join("\n"),
+    "utf8",
+  );
 }
 
 function parseInternalSlashDispatch(prompt: string): InternalSlashDispatch | undefined {
