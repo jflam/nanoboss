@@ -89,6 +89,38 @@ describe("session persistence", () => {
     }
   });
 
+  test("does not fall back to a newer session from another workspace", () => {
+    const originalHome = process.env.HOME;
+    tempHome = mkdtempSync(join(tmpdir(), "nanoboss-stored-sessions-isolated-"));
+    process.env.HOME = tempHome;
+
+    try {
+      writeSessionMetadata({
+        sessionId: "session-one",
+        cwd: "/repo-one",
+        rootDir: join(tempHome, ".nanoboss", "sessions", "session-one"),
+        createdAt: "2026-04-01T10:00:00.000Z",
+        updatedAt: "2026-04-01T11:00:00.000Z",
+      });
+      writeSessionMetadata({
+        sessionId: "session-two",
+        cwd: "/repo-two",
+        rootDir: join(tempHome, ".nanoboss", "sessions", "session-two"),
+        createdAt: "2026-04-01T12:00:00.000Z",
+        updatedAt: "2026-04-01T13:00:00.000Z",
+      });
+
+      expect(resolveMostRecentSessionSummary("/repo-one")?.sessionId).toBe("session-one");
+      expect(resolveMostRecentSessionSummary("/repo-three")).toBeUndefined();
+    } finally {
+      if (originalHome === undefined) {
+        delete process.env.HOME;
+      } else {
+        process.env.HOME = originalHome;
+      }
+    }
+  });
+
   test("ignores sessions that have cells but no session metadata", () => {
     const originalHome = process.env.HOME;
     tempHome = mkdtempSync(join(tmpdir(), "nanoboss-metadata-required-"));

@@ -8,11 +8,13 @@ import {
 import { join } from "node:path";
 
 import { getNanobossHome, getSessionDir } from "../core/config.ts";
+import { resolveWorkspaceKey } from "../core/workspace-identity.ts";
 import type { DownstreamAgentProvider, DownstreamAgentSelection } from "../core/types.ts";
 import { SessionStore } from "./store.ts";
 
 const SESSION_METADATA_FILE = "session.json";
 const CURRENT_SESSION_FILE = "current-session.json";
+const CURRENT_SESSION_INDEX_FILE = "current-sessions.json";
 
 export interface SessionMetadata {
   sessionId: string;
@@ -81,12 +83,17 @@ export class SessionRepository {
   }
 
   resolveMostRecentSummary(cwd: string): SessionSummary | undefined {
+    const workspaceKey = resolveWorkspaceKey(cwd);
     const summaries = this.listSummaries();
-    return summaries.find((session) => session.cwd === cwd) ?? summaries[0];
+    return summaries.find((session) => resolveWorkspaceKey(session.cwd) === workspaceKey);
   }
 
   getCurrentMetadataPath(): string {
     return join(getNanobossHome(), CURRENT_SESSION_FILE);
+  }
+
+  getCurrentMetadataIndexPath(): string {
+    return join(getNanobossHome(), CURRENT_SESSION_INDEX_FILE);
   }
 
   writeCurrentMetadata(metadata: SessionMetadata): SessionMetadata {
@@ -96,22 +103,37 @@ export class SessionRepository {
       `${JSON.stringify(metadata, null, 2)}\n`,
       "utf8",
     );
+    this.writeCurrentWorkspaceIndex(metadata);
     return metadata;
   }
 
-  readCurrentMetadata(): SessionMetadata | undefined {
+  readCurrentMetadata(cwd?: string): SessionMetadata | undefined {
+    if (cwd) {
+      const indexed = this.readCurrentWorkspaceMetadata(cwd);
+      if (indexed) {
+        return indexed;
+      }
+    }
+
     try {
       const raw = JSON.parse(readFileSync(this.getCurrentMetadataPath(), "utf8")) as Record<string, unknown>;
-      return parseSessionMetadata(raw, {
+      const metadata = parseSessionMetadata(raw, {
         allowMissingCreatedAt: true,
       });
+      if (!metadata || !cwd) {
+        return metadata;
+      }
+
+      return resolveWorkspaceKey(metadata.cwd) === resolveWorkspaceKey(cwd)
+        ? metadata
+        : undefined;
     } catch {
       return undefined;
     }
   }
 
-  readCurrentSummary(): SessionSummary | undefined {
-    const metadata = this.readCurrentMetadata();
+  readCurrentSummary(cwd?: string): SessionSummary | undefined {
+    const metadata = this.readCurrentMetadata(cwd);
     return metadata ? this.toSummary(metadata) : undefined;
   }
 
@@ -120,6 +142,39 @@ export class SessionRepository {
       ...metadata,
       hasNativeResume: Boolean(metadata.defaultAcpSessionId),
     };
+  }
+
+  private writeCurrentWorkspaceIndex(metadata: SessionMetadata): void {
+    const nextIndex = this.readCurrentWorkspaceIndex();
+    nextIndex[resolveWorkspaceKey(metadata.cwd)] = metadata;
+    writeFileSync(
+      this.getCurrentMetadataIndexPath(),
+      `${JSON.stringify({ workspaces: nextIndex }, null, 2)}\n`,
+      "utf8",
+    );
+  }
+
+  private readCurrentWorkspaceMetadata(cwd: string): SessionMetadata | undefined {
+    const index = this.readCurrentWorkspaceIndex();
+    return index[resolveWorkspaceKey(cwd)];
+  }
+
+  private readCurrentWorkspaceIndex(): Record<string, SessionMetadata> {
+    try {
+      const raw = JSON.parse(readFileSync(this.getCurrentMetadataIndexPath(), "utf8")) as Record<string, unknown>;
+      const workspaces = asRecord(raw.workspaces);
+      if (!workspaces) {
+        return {};
+      }
+
+      return Object.fromEntries(
+        Object.entries(workspaces)
+          .map(([key, value]) => [key, parseSessionMetadata(asRecord(value) ?? {}, { allowMissingCreatedAt: true })] as const)
+          .filter((entry): entry is [string, SessionMetadata] => entry[1] !== undefined),
+      );
+    } catch {
+      return {};
+    }
   }
 }
 
@@ -157,8 +212,8 @@ export function writeCurrentSessionMetadata(metadata: SessionMetadata): SessionM
   return sessionRepository.writeCurrentMetadata(metadata);
 }
 
-export function readCurrentSessionMetadata(): SessionMetadata | undefined {
-  return sessionRepository.readCurrentMetadata();
+export function readCurrentSessionMetadata(cwd?: string): SessionMetadata | undefined {
+  return sessionRepository.readCurrentMetadata(cwd);
 }
 
 export function toSessionSummary(metadata: SessionMetadata): SessionSummary {
