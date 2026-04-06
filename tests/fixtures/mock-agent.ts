@@ -6,8 +6,6 @@ import { createInterface } from "node:readline";
 import { join } from "node:path";
 import { Readable, Writable } from "node:stream";
 
-import { resolveSelfCommand } from "../../src/core/self-command.ts";
-
 interface StoredTurn {
   role: "user" | "assistant";
   text: string;
@@ -355,7 +353,10 @@ async function callProcedureDispatchAsync(
   sessionId: string,
   dispatch: InternalSlashDispatch,
 ): Promise<unknown> {
-  const server = getGlobalMcpServer();
+  const server = findNanobossMcpServer(session);
+  if (!server) {
+    throw new Error("nanoboss MCP tools are not available in this session.");
+  }
   if (STREAM_ASYNC_DISPATCH_PROGRESS) {
     await emitAssistantChunk(
       connection,
@@ -587,15 +588,14 @@ async function callStdioMcpTool(
   }
 }
 
-function getGlobalMcpServer(): Extract<acp.NewSessionRequest["mcpServers"][number], { type: "stdio" }> {
-  const command = resolveSelfCommand("mcp", ["proxy"]);
-  return {
-    type: "stdio",
-    name: "nanoboss",
-    command: command.command,
-    args: command.args,
-    env: [],
-  };
+function findNanobossMcpServer(
+  session: LiveSession,
+): Extract<acp.NewSessionRequest["mcpServers"][number], { type: "stdio" }> | undefined {
+  return session.mcpServers?.find((server) =>
+    server.type === "stdio"
+    && typeof server.name === "string"
+    && server.name.toLowerCase() === "nanoboss"
+  ) as Extract<acp.NewSessionRequest["mcpServers"][number], { type: "stdio" }> | undefined;
 }
 
 function extractDispatchId(value: unknown): string | undefined {

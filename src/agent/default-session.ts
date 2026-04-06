@@ -6,6 +6,7 @@ import {
   openAcpConnection,
   type OpenAcpConnection,
 } from "./acp-runtime.ts";
+import { buildGlobalMcpStdioServer } from "../mcp/registration.ts";
 import { RunCancelledError, defaultCancellationMessage } from "../core/cancellation.ts";
 import { collectTokenSnapshot, enrichToolCallUpdateWithTokenUsage } from "./token-metrics.ts";
 import type { AgentTokenSnapshot, CallAgentOptions, DownstreamAgentConfig } from "../core/types.ts";
@@ -160,7 +161,7 @@ class PersistentAcpSession {
     try {
       const session = await state.connection.newSession({
         cwd: state.cwd,
-        mcpServers: [],
+        mcpServers: [buildGlobalMcpStdioServer()],
       });
       const runtime = new PersistentAcpSession(state, config, session.sessionId);
       await applyAcpSessionConfig(state.connection, session.sessionId, config);
@@ -187,7 +188,7 @@ class PersistentAcpSession {
 
       await state.connection.loadSession({
         cwd: state.cwd,
-        mcpServers: [],
+        mcpServers: [buildGlobalMcpStdioServer()],
         sessionId,
       });
 

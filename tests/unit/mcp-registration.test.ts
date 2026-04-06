@@ -5,6 +5,7 @@ import { dirname, join } from "node:path";
 import { afterEach, describe, expect, test } from "bun:test";
 
 import {
+  buildGlobalMcpStdioServer,
   registerMcpClaude,
   registerMcpCodex,
   registerMcpCopilot,
@@ -24,6 +25,22 @@ afterEach(() => {
 });
 
 describe("mcp registration", () => {
+  test("builds the session-attached nanoboss stdio MCP server config", () => {
+    const scriptPath = join(process.cwd(), "nanoboss.ts");
+    const command = resolveSelfCommandWithRuntime("mcp", ["proxy"], {
+      executable: "bun",
+      scriptPath,
+    });
+
+    expect(buildGlobalMcpStdioServer(command)).toEqual({
+      type: "stdio",
+      name: "nanoboss",
+      command: "bun",
+      args: [scriptPath, "mcp", "proxy"],
+      env: [],
+    });
+  });
+
   test("writes gemini and copilot registration configs", () => {
     const home = mkdtempSync(join(tmpdir(), "nanoboss-mcp-home-"));
     tempDirs.push(home);

@@ -1,3 +1,5 @@
+import type * as acp from "@agentclientprotocol/sdk";
+
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { homedir } from "node:os";
@@ -24,6 +26,18 @@ type JsonValue = null | boolean | number | string | JsonObject | JsonValue[];
 
 export function resolveMcpProxyCommand(): SelfCommand {
   return resolveSelfCommand("mcp", ["proxy"]);
+}
+
+export function buildGlobalMcpStdioServer(
+  command = resolveMcpProxyCommand(),
+): Extract<acp.NewSessionRequest["mcpServers"][number], { type: "stdio" }> {
+  return {
+    type: "stdio",
+    name: REGISTERED_MCP_SERVER_NAME,
+    command: command.command,
+    args: command.args,
+    env: [],
+  };
 }
 
 export function registerSupportedAgentMcp(command = resolveMcpProxyCommand()): McpRegistrationResult[] {

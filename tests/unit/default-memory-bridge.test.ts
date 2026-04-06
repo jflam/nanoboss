@@ -67,6 +67,7 @@ function createMockConfig(
 
 function readStoredMockSession(sessionStoreDir: string): {
   turns: Array<{ role: "user" | "assistant"; text: string }>;
+  mcpServers?: Array<{ name?: string; type?: string }>;
 } {
   const files = readdirSync(sessionStoreDir).filter((file) => file.endsWith(".json"));
   expect(files).toHaveLength(1);
@@ -76,6 +77,7 @@ function readStoredMockSession(sessionStoreDir: string): {
   }
   return JSON.parse(readFileSync(join(sessionStoreDir, fileName), "utf8")) as {
     turns: Array<{ role: "user" | "assistant"; text: string }>;
+    mcpServers?: Array<{ name?: string; type?: string }>;
   };
 }
 
@@ -122,6 +124,7 @@ describe("default session memory bridge", () => {
 
       const storedAfterReview = readStoredMockSession(mockSessionStoreDir);
       const dispatchPrompt = storedAfterReview.turns[0]?.text;
+      expect(storedAfterReview.mcpServers?.some((server) => server.name === "nanoboss" && server.type === "stdio")).toBe(true);
       expect(dispatchPrompt).toContain("Nanoboss internal slash-command dispatch.");
       expect(dispatchPrompt).toContain('"name":"review"');
       expect(dispatchPrompt).toContain('"prompt":"the code"');

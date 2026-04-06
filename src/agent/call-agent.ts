@@ -6,6 +6,7 @@ import {
   closeAcpConnection,
   openAcpConnection,
 } from "./acp-runtime.ts";
+import { buildGlobalMcpStdioServer } from "../mcp/registration.ts";
 import { RunCancelledError, defaultCancellationMessage } from "../core/cancellation.ts";
 import { resolveDownstreamAgentConfig } from "../core/config.ts";
 import { SessionStore } from "../session/index.ts";
@@ -381,7 +382,7 @@ async function runAcpPrompt(
   try {
     const session = await state.connection.newSession({
       cwd: state.cwd,
-      mcpServers: [],
+      mcpServers: [buildGlobalMcpStdioServer()],
     });
     sessionId = session.sessionId;
 
