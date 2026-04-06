@@ -28,7 +28,7 @@ export type FrontendEvent =
       prompt: string;
       completedAt: string;
       cell: CellRef;
-      status: "complete" | "failed";
+      status: "complete" | "failed" | "cancelled";
       text?: string;
     }
   | {

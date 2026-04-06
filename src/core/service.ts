@@ -261,7 +261,11 @@ export class NanobossService {
       const record = session.store.readCell(summary.cell);
       const replayEvents = record.output.replayEvents;
       const runId = replayEvents?.[0]?.runId ?? record.cellId;
-      const status = replayEvents?.some((event) => event.type === "run_failed") ? "failed" : "complete";
+      const status = replayEvents?.some((event) => event.type === "run_failed")
+        ? "failed"
+        : replayEvents?.some((event) => event.type === "run_cancelled")
+          ? "cancelled"
+          : "complete";
 
       session.events.publish(sessionId, {
         type: "run_restored",
@@ -1011,6 +1015,15 @@ function toPersistedReplayEvent(
         procedure: event.data.procedure,
         completedAt: event.data.completedAt,
         error: event.data.error,
+        cell: event.data.cell,
+      };
+    case "run_cancelled":
+      return {
+        type: "run_cancelled",
+        runId: event.data.runId,
+        procedure: event.data.procedure,
+        completedAt: event.data.completedAt,
+        message: event.data.message,
         cell: event.data.cell,
       };
     default:

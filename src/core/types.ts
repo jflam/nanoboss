@@ -210,6 +210,14 @@ export type PersistedFrontendEvent =
       completedAt: string;
       error: string;
       cell?: CellRef;
+    }
+  | {
+      type: "run_cancelled";
+      runId: string;
+      procedure: string;
+      completedAt: string;
+      message: string;
+      cell?: CellRef;
     };
 
 export interface TypeDescriptor<T> {

@@ -243,6 +243,77 @@ describe("NanobossService", () => {
     });
   }, 30_000);
 
+  test("reconstructed resume preserves cancelled runs as cancelled", async () => {
+    const sessionStoreDir = mkdtempSync(join(tmpdir(), "nab-resume-cancelled-agent-"));
+
+    await withMockAgentEnv(async () => {
+      const registry = new ProcedureRegistry(mkdtempSync(join(tmpdir(), "nab-resume-cancelled-reg-")));
+      registry.loadBuiltins();
+      const createService = () => new NanobossService(registry);
+
+      const service = createService();
+      const session = service.createSession({ cwd: process.cwd() });
+
+      try {
+        const promptPromise = service.prompt(session.sessionId, "cooperative cancel demo");
+
+        await waitForCondition(() => {
+          const events = service.getSessionEvents(session.sessionId)?.after(-1) ?? [];
+          return events.some((event) => event.type === "run_started");
+        });
+
+        const runStarted = service.getSessionEvents(session.sessionId)?.after(-1)
+          .findLast((event) => event.type === "run_started");
+        if (runStarted?.type !== "run_started") {
+          throw new Error("Missing run_started event");
+        }
+
+        service.cancel(session.sessionId, runStarted.data.runId);
+        await promptPromise;
+
+        const liveReplay = normalizeReplayEvents(
+          service.getSessionEvents(session.sessionId)?.after(-1) ?? [],
+        );
+        expect(liveReplay.some((event) => event.type === "run_cancelled")).toBe(true);
+
+        service.destroySession(session.sessionId);
+
+        const resumedService = createService();
+        resumedService.resumeSession({
+          sessionId: session.sessionId,
+          cwd: process.cwd(),
+        });
+
+        const resumedEvents = resumedService.getSessionEvents(session.sessionId)?.after(-1) ?? [];
+        const restored = resumedEvents.find((event) => event.type === "run_restored");
+
+        expect(restored).toEqual({
+          sessionId: session.sessionId,
+          seq: 1,
+          type: "run_restored",
+          data: {
+            runId: runStarted.data.runId,
+            procedure: "default",
+            prompt: "cooperative cancel demo",
+            completedAt: expect.any(String),
+            cell: {
+              sessionId: session.sessionId,
+              cellId: expect.any(String),
+            },
+            status: "cancelled",
+          },
+        });
+        expect(normalizeReplayEvents(resumedEvents.slice(1))).toEqual(liveReplay);
+      } finally {
+        service.destroySession(session.sessionId);
+      }
+    }, {
+      MOCK_AGENT_SUPPORT_LOAD_SESSION: "1",
+      MOCK_AGENT_SESSION_STORE_DIR: sessionStoreDir,
+      MOCK_AGENT_COOPERATIVE_CANCEL: "1",
+    });
+  }, 30_000);
+
   test("slash commands dispatch through async procedure dispatch tools inside the default session", async () => {
     await withMockAgentEnv(async () => {
       const { cwd, registry } = await createRegistryWithWorkspace({
@@ -711,6 +782,7 @@ function normalizeReplayEvents(events: Array<{ type: string; data: Record<string
     "token_usage",
     "run_completed",
     "run_failed",
+    "run_cancelled",
   ]);
 
   return events
