@@ -133,7 +133,7 @@ function parseArgs(argv: string[]): {
       case "-h":
       case "--help":
         printHelp();
-        process.exit(0);
+        return process.exit(0);
       default:
         throw new Error(`Unknown arg: ${arg}`);
     }
