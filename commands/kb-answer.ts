@@ -17,7 +17,7 @@ import {
   writeDatedKnowledgeMarkdown,
   type AnswerManifestEntry,
   type KnowledgeBaseAnswerData,
-} from "../src/knowledge-base/repository.ts";
+} from "./kb/lib/repository.ts";
 
 interface KnowledgeAnswerResult {
   title: string;

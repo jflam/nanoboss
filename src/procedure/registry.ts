@@ -7,8 +7,12 @@ import { pathToFileURL } from "node:url";
 import commitProcedure from "../../commands/commit.ts";
 import defaultProcedure from "../../commands/default.ts";
 import kbAnswerProcedure from "../../commands/kb-answer.ts";
+import kbCompileConceptsProcedure from "../../commands/kb-compile-concepts.ts";
 import kbCompileSourceProcedure from "../../commands/kb-compile-source.ts";
+import kbHealthProcedure from "../../commands/kb-health.ts";
 import kbIngestProcedure from "../../commands/kb-ingest.ts";
+import kbLinkProcedure from "../../commands/kb-link.ts";
+import kbRenderProcedure from "../../commands/kb-render.ts";
 import kbRefreshProcedure from "../../commands/kb-refresh.ts";
 import linterProcedure from "../../commands/linter.ts";
 import modelProcedure from "../../commands/model.ts";
@@ -68,6 +72,10 @@ export class ProcedureRegistry implements ProcedureRegistryLike {
     this.register(commitProcedure);
     this.register(kbIngestProcedure);
     this.register(kbCompileSourceProcedure);
+    this.register(kbCompileConceptsProcedure);
+    this.register(kbLinkProcedure);
+    this.register(kbRenderProcedure);
+    this.register(kbHealthProcedure);
     this.register(kbRefreshProcedure);
     this.register(kbAnswerProcedure);
     this.register(linterProcedure);
@@ -250,14 +258,14 @@ function resolveProcedureWorkspaceRoot(path: string): string {
 }
 
 function resolveProcedureBuildNodeModulesPath(): string {
-  const installedRuntimeNodeModulesPath = join(getProcedureRuntimeDir(), "node_modules");
-  if (existsSync(installedRuntimeNodeModulesPath)) {
-    return installedRuntimeNodeModulesPath;
-  }
-
   const sourceNodeModulesPath = resolve(import.meta.dir, "..", "..", "node_modules");
   if (existsSync(sourceNodeModulesPath)) {
     return sourceNodeModulesPath;
+  }
+
+  const installedRuntimeNodeModulesPath = join(getProcedureRuntimeDir(), "node_modules");
+  if (existsSync(installedRuntimeNodeModulesPath)) {
+    return installedRuntimeNodeModulesPath;
   }
 
   throw new Error(

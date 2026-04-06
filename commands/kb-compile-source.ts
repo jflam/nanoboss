@@ -19,7 +19,7 @@ import {
   summarizeList,
   type KnowledgeBaseCompileData,
   type SourceManifestEntry,
-} from "../src/knowledge-base/repository.ts";
+} from "./kb/lib/repository.ts";
 
 interface CompiledSourceResult {
   title: string;

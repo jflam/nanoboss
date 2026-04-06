@@ -54,10 +54,14 @@ The profile directory is the default place for user-defined dynamic commands.
 When `/create` runs inside the nanoboss repo, it writes into the repo's
 `commands/` directory. Otherwise it writes into `~/.nanoboss/commands`.
 
-Built-in commands now also include the initial knowledge-base workflow:
+Built-in commands now also include the knowledge-base workflow:
 
 - `/kb-ingest`
 - `/kb-compile-source`
+- `/kb-compile-concepts`
+- `/kb-link`
+- `/kb-render`
+- `/kb-health`
 - `/kb-refresh`
 - `/kb-answer`
 

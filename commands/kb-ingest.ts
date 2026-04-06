@@ -11,7 +11,7 @@ import {
   scanRawSources,
   summarizeList,
   type KnowledgeBaseIngestData,
-} from "../src/knowledge-base/repository.ts";
+} from "./kb/lib/repository.ts";
 
 interface IngestOptions {
   path?: string;

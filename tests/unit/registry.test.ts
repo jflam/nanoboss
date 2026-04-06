@@ -184,6 +184,10 @@ describe("ProcedureRegistry", () => {
     expect(registry.get("model")).toBeDefined();
     expect(registry.get("kb-ingest")).toBeDefined();
     expect(registry.get("kb-compile-source")).toBeDefined();
+    expect(registry.get("kb-compile-concepts")).toBeDefined();
+    expect(registry.get("kb-link")).toBeDefined();
+    expect(registry.get("kb-render")).toBeDefined();
+    expect(registry.get("kb-health")).toBeDefined();
     expect(registry.get("kb-refresh")).toBeDefined();
     expect(registry.get("kb-answer")).toBeDefined();
     expect(registry.get("top_level_runs")).toBeDefined();
@@ -193,6 +197,10 @@ describe("ProcedureRegistry", () => {
     expect(registry.toAvailableCommands().some((command) => command.name === "model")).toBe(true);
     expect(registry.toAvailableCommands().some((command) => command.name === "kb-ingest")).toBe(true);
     expect(registry.toAvailableCommands().some((command) => command.name === "kb-compile-source")).toBe(true);
+    expect(registry.toAvailableCommands().some((command) => command.name === "kb-compile-concepts")).toBe(true);
+    expect(registry.toAvailableCommands().some((command) => command.name === "kb-link")).toBe(true);
+    expect(registry.toAvailableCommands().some((command) => command.name === "kb-render")).toBe(true);
+    expect(registry.toAvailableCommands().some((command) => command.name === "kb-health")).toBe(true);
     expect(registry.toAvailableCommands().some((command) => command.name === "kb-refresh")).toBe(true);
     expect(registry.toAvailableCommands().some((command) => command.name === "kb-answer")).toBe(true);
     expect(registry.toAvailableCommands().some((command) => command.name === "top_level_runs")).toBe(true);

@@ -4,16 +4,19 @@ import {
   optionalBoolean,
   optionalString,
   parseStructuredInput,
-  rebuildKnowledgeBaseIndex,
   summarizeList,
+  type KnowledgeBaseCompileConceptsData,
   type KnowledgeBaseCompileData,
+  type KnowledgeBaseHealthData,
   type KnowledgeBaseIngestData,
+  type KnowledgeBaseLinkData,
   type KnowledgeBaseRefreshData,
-} from "../src/knowledge-base/repository.ts";
+} from "./kb/lib/repository.ts";
 
 interface RefreshOptions {
   path?: string;
   force: boolean;
+  health: boolean;
 }
 
 export default {
@@ -56,18 +59,56 @@ export default {
       }
     }
 
-    const indexPath = await rebuildKnowledgeBaseIndex(ctx.cwd);
+    const conceptResult = await ctx.callProcedure<KnowledgeBaseCompileConceptsData>(
+      "kb-compile-concepts",
+      JSON.stringify({
+        force: options.force,
+        suppressLog: true,
+        refreshIndex: false,
+      }),
+    );
+    const conceptData = conceptResult.data;
+    if (!conceptData) {
+      throw new Error("kb-compile-concepts returned no data");
+    }
+
+    const linkResult = await ctx.callProcedure<KnowledgeBaseLinkData>(
+      "kb-link",
+      JSON.stringify({
+        suppressLog: true,
+      }),
+    );
+    const linkData = linkResult.data;
+    if (!linkData) {
+      throw new Error("kb-link returned no data");
+    }
+
+    let healthIssueCount: number | undefined;
+    if (options.health) {
+      const healthResult = await ctx.callProcedure<KnowledgeBaseHealthData>("kb-health", "");
+      const healthData = healthResult.data;
+      if (!healthData) {
+        throw new Error("kb-health returned no data");
+      }
+      healthIssueCount = healthData.issueCount;
+    }
+
     const logPath = await appendKnowledgeBaseLog(
       ctx.cwd,
       "refresh",
       targetSourceIds.length === 0
         ? "no source changes"
-        : `${compiledSourceIds.length} source(s) updated`,
+        : `${compiledSourceIds.length} source(s), ${conceptData.touchedConceptIds.length} concept page(s) updated`,
       [
         `indexed sources: ${ingestData.sourceCount}`,
         `changed sources: ${ingestData.changedSourceIds.length > 0 ? summarizeList(ingestData.changedSourceIds) : "none"}`,
         `compiled sources: ${compiledSourceIds.length > 0 ? summarizeList(compiledSourceIds) : "none"}`,
-        `index: \`${indexPath}\``,
+        `compiled concepts: ${conceptData.touchedConceptIds.length > 0 ? summarizeList(conceptData.touchedConceptIds) : "none"}`,
+        `index: \`${linkData.indexPath}\``,
+        `concept index: \`${linkData.conceptIndexPath}\``,
+        `backlinks: \`${linkData.backlinksPath}\``,
+        `maintenance: \`${linkData.maintenancePath}\``,
+        ...(healthIssueCount === undefined ? [] : [`health issues: ${healthIssueCount}`]),
       ],
     );
 
@@ -77,8 +118,14 @@ export default {
       sourceCount: ingestData.sourceCount,
       changedSourceIds: ingestData.changedSourceIds,
       compiledSourceIds,
-      indexPath,
+      conceptCount: conceptData.conceptCount,
+      touchedConceptIds: conceptData.touchedConceptIds,
+      indexPath: linkData.indexPath,
+      conceptIndexPath: linkData.conceptIndexPath,
+      backlinksPath: linkData.backlinksPath,
+      maintenancePath: linkData.maintenancePath,
       logPath,
+      healthIssueCount,
     };
 
     return {
@@ -88,7 +135,11 @@ export default {
         compiledSourceIds.length === 0
           ? "No source pages needed recompilation."
           : `Compiled ${compiledSourceIds.length} source page(s).`,
-        `Index updated at ${indexPath}.`,
+        conceptData.touchedConceptIds.length === 0
+          ? `Concept manifest remains at ${conceptData.conceptCount} page(s).`
+          : `Compiled ${conceptData.touchedConceptIds.length} concept page(s).`,
+        `Index updated at ${linkData.indexPath}.`,
+        ...(healthIssueCount === undefined ? [] : [`Health check found ${healthIssueCount} issue(s).`]),
       ].join("\n"),
       summary: `kb-refresh: ${compiledSourceIds.length} compiled`,
     };
@@ -102,11 +153,13 @@ function parseRefreshOptions(prompt: string): RefreshOptions {
     return {
       path,
       force: false,
+      health: false,
     };
   }
 
   return {
     path: optionalString(structured.path) ?? optionalString(structured.rawPath),
     force: optionalBoolean(structured.force, "force") ?? false,
+    health: optionalBoolean(structured.health, "health") ?? false,
   };
 }

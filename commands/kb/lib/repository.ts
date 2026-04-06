@@ -6,12 +6,23 @@ export interface KnowledgeBasePaths {
   rawDir: string;
   wikiDir: string;
   sourcesDir: string;
+  conceptsDir: string;
   answersDir: string;
+  indexesDir: string;
+  derivedDir: string;
+  reportsDir: string;
+  slidesDir: string;
   manifestsDir: string;
+  queuesDir: string;
+  stateDir: string;
   indexPath: string;
   logPath: string;
   sourcesManifestPath: string;
+  conceptsManifestPath: string;
   answersManifestPath: string;
+  rendersManifestPath: string;
+  linkStatePath: string;
+  healthQueuePath: string;
 }
 
 export interface RawSourceFile {
@@ -50,6 +61,50 @@ export interface AnswerManifestEntry {
   citedPages: string[];
 }
 
+export interface ConceptManifestEntry {
+  conceptId: string;
+  conceptName: string;
+  title: string;
+  abstract: string;
+  pagePath: string;
+  compiledAt: string;
+  sourceIds: string[];
+  relatedConceptIds: string[];
+  sourceFingerprint: string;
+}
+
+export type KnowledgeRenderKind = "report" | "deck";
+
+export interface RenderManifestEntry {
+  renderId: string;
+  kind: KnowledgeRenderKind;
+  title: string;
+  abstract: string;
+  outputPath: string;
+  createdAt: string;
+  sourcePages: string[];
+}
+
+export interface LinkStateRecord {
+  generatedAt: string;
+  indexPath: string;
+  conceptIndexPath: string;
+  backlinksPath: string;
+  maintenancePath: string;
+  orphanSourceIds: string[];
+  orphanConceptIds: string[];
+  duplicateConcepts: string[][];
+}
+
+export interface HealthRepairIssue {
+  severity: "error" | "warning";
+  code: string;
+  message: string;
+  pagePath?: string;
+  sourceId?: string;
+  conceptId?: string;
+}
+
 export interface KnowledgeBaseIngestData {
   manifestPath: string;
   indexPath: string;
@@ -74,28 +129,81 @@ export interface KnowledgeBaseAnswerData {
   citedPages: string[];
 }
 
+export interface KnowledgeBaseCompileConceptsData {
+  manifestPath: string;
+  conceptCount: number;
+  touchedConceptIds: string[];
+  indexPath: string;
+}
+
+export interface KnowledgeBaseLinkData {
+  indexPath: string;
+  conceptIndexPath: string;
+  backlinksPath: string;
+  maintenancePath: string;
+  orphanSourceIds: string[];
+  orphanConceptIds: string[];
+  duplicateConcepts: string[][];
+}
+
+export interface KnowledgeBaseRenderData {
+  renderId: string;
+  kind: KnowledgeRenderKind;
+  outputPath: string;
+  title: string;
+  sourcePages: string[];
+}
+
+export interface KnowledgeBaseHealthData {
+  issueCount: number;
+  errorCount: number;
+  warningCount: number;
+  reportPath: string;
+  queuePath: string;
+}
+
 export interface KnowledgeBaseRefreshData {
   sourceCount: number;
   changedSourceIds: string[];
   compiledSourceIds: string[];
+  conceptCount: number;
+  touchedConceptIds: string[];
   indexPath: string;
+  conceptIndexPath: string;
+  backlinksPath: string;
+  maintenancePath: string;
   logPath: string;
+  healthIssueCount?: number;
 }
 
 export function getKnowledgeBasePaths(cwd: string): KnowledgeBasePaths {
   const rawDir = join(cwd, "raw");
   const wikiDir = join(cwd, "wiki");
+  const derivedDir = join(cwd, "derived");
   const manifestsDir = join(cwd, ".kb", "manifests");
+  const queuesDir = join(cwd, ".kb", "queues");
+  const stateDir = join(cwd, ".kb", "state");
   return {
     rawDir,
     wikiDir,
     sourcesDir: join(wikiDir, "sources"),
+    conceptsDir: join(wikiDir, "concepts"),
     answersDir: join(wikiDir, "answers"),
+    indexesDir: join(wikiDir, "indexes"),
+    derivedDir,
+    reportsDir: join(derivedDir, "reports"),
+    slidesDir: join(derivedDir, "slides"),
     manifestsDir,
+    queuesDir,
+    stateDir,
     indexPath: join(wikiDir, "index.md"),
     logPath: join(wikiDir, "log.md"),
     sourcesManifestPath: join(manifestsDir, "sources.json"),
+    conceptsManifestPath: join(manifestsDir, "concepts.json"),
     answersManifestPath: join(manifestsDir, "answers.json"),
+    rendersManifestPath: join(manifestsDir, "renders.json"),
+    linkStatePath: join(stateDir, "link.json"),
+    healthQueuePath: join(queuesDir, "health-repair.json"),
   };
 }
 
@@ -104,14 +212,24 @@ export async function ensureKnowledgeBaseLayout(cwd: string): Promise<KnowledgeB
   await Promise.all([
     mkdir(paths.rawDir, { recursive: true }),
     mkdir(paths.sourcesDir, { recursive: true }),
+    mkdir(paths.conceptsDir, { recursive: true }),
     mkdir(paths.answersDir, { recursive: true }),
+    mkdir(paths.indexesDir, { recursive: true }),
     mkdir(paths.manifestsDir, { recursive: true }),
+    mkdir(paths.reportsDir, { recursive: true }),
+    mkdir(paths.slidesDir, { recursive: true }),
+    mkdir(paths.queuesDir, { recursive: true }),
+    mkdir(paths.stateDir, { recursive: true }),
   ]);
 
   await ensureFile(paths.sourcesManifestPath, "[]\n");
+  await ensureFile(paths.conceptsManifestPath, "[]\n");
   await ensureFile(paths.answersManifestPath, "[]\n");
+  await ensureFile(paths.rendersManifestPath, "[]\n");
   await ensureFile(paths.indexPath, "# Knowledge Base Index\n\n");
   await ensureFile(paths.logPath, "# Knowledge Base Log\n\n");
+  await ensureFile(paths.linkStatePath, "{}\n");
+  await ensureFile(paths.healthQueuePath, "[]\n");
 
   return paths;
 }
@@ -143,6 +261,25 @@ export async function readAnswersManifest(cwd: string): Promise<AnswerManifestEn
     .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
 }
 
+export async function readConceptsManifest(cwd: string): Promise<ConceptManifestEntry[]> {
+  const paths = await ensureKnowledgeBaseLayout(cwd);
+  const raw = await readJsonArrayFile<ConceptManifestEntry>(paths.conceptsManifestPath);
+  return raw
+    .map(normalizeConceptManifestEntry)
+    .sort((left, right) => left.conceptId.localeCompare(right.conceptId));
+}
+
+export async function saveConceptsManifest(
+  cwd: string,
+  entries: ConceptManifestEntry[],
+): Promise<void> {
+  const paths = await ensureKnowledgeBaseLayout(cwd);
+  const sorted = entries
+    .map(normalizeConceptManifestEntry)
+    .sort((left, right) => left.conceptId.localeCompare(right.conceptId));
+  await writeJsonFile(paths.conceptsManifestPath, sorted);
+}
+
 export async function saveAnswersManifest(
   cwd: string,
   entries: AnswerManifestEntry[],
@@ -152,6 +289,25 @@ export async function saveAnswersManifest(
     .map(normalizeAnswerManifestEntry)
     .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
   await writeJsonFile(paths.answersManifestPath, sorted);
+}
+
+export async function readRendersManifest(cwd: string): Promise<RenderManifestEntry[]> {
+  const paths = await ensureKnowledgeBaseLayout(cwd);
+  const raw = await readJsonArrayFile<RenderManifestEntry>(paths.rendersManifestPath);
+  return raw
+    .map(normalizeRenderManifestEntry)
+    .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+}
+
+export async function saveRendersManifest(
+  cwd: string,
+  entries: RenderManifestEntry[],
+): Promise<void> {
+  const paths = await ensureKnowledgeBaseLayout(cwd);
+  const sorted = entries
+    .map(normalizeRenderManifestEntry)
+    .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+  await writeJsonFile(paths.rendersManifestPath, sorted);
 }
 
 export async function scanRawSources(
@@ -218,6 +374,14 @@ export function normalizeTagList(values: string[]): string[] {
   return normalizeStringList(values.map((value) => value.toLowerCase()));
 }
 
+export function normalizeConceptId(value: string): string {
+  return slugify(collapseWhitespace(value)) || "concept";
+}
+
+export function normalizeConceptIdList(values: string[]): string[] {
+  return normalizeStringList(values.map((value) => normalizeConceptId(value)));
+}
+
 export function normalizeWikiPathList(values: string[]): string[] {
   return normalizeStringList(
     values
@@ -259,6 +423,10 @@ export function sourceSummaryPath(sourceId: string): string {
   return toPosix(join("wiki", "sources", `${sourceId}.md`));
 }
 
+export function conceptPagePath(conceptId: string): string {
+  return toPosix(join("wiki", "concepts", `${normalizeConceptId(conceptId)}.md`));
+}
+
 export async function writeDatedKnowledgeMarkdown(
   cwd: string,
   relativeDirectory: string,
@@ -280,7 +448,9 @@ export async function writeDatedKnowledgeMarkdown(
 export async function rebuildKnowledgeBaseIndex(cwd: string): Promise<string> {
   const paths = await ensureKnowledgeBaseLayout(cwd);
   const sources = await readSourcesManifest(cwd);
+  const concepts = await readConceptsManifest(cwd);
   const answers = await readAnswersManifest(cwd);
+  const renders = await readRendersManifest(cwd);
 
   const lines = [
     "# Knowledge Base Index",
@@ -319,6 +489,24 @@ export async function rebuildKnowledgeBaseIndex(cwd: string): Promise<string> {
     lines.push("");
   }
 
+  lines.push(`## Concepts (${concepts.length})`, "");
+
+  if (concepts.length === 0) {
+    lines.push("_No compiled concept pages yet._", "");
+  } else {
+    for (const concept of concepts) {
+      const label = collapseWhitespace(concept.title) || concept.conceptName || concept.conceptId;
+      const summary = collapseWhitespace(concept.abstract) || "No abstract recorded.";
+      lines.push(`- [${escapeMarkdownLabel(label)}](${linkFromWiki(paths.wikiDir, cwd, concept.pagePath)}) — ${summary}`);
+      lines.push(`  - concept: \`${concept.conceptId}\`; sources: ${concept.sourceIds.length}`);
+      if (concept.relatedConceptIds.length > 0) {
+        lines.push(`  - related: ${concept.relatedConceptIds.map((conceptId) => `\`${conceptId}\``).join(", ")}`);
+      }
+    }
+
+    lines.push("");
+  }
+
   lines.push(`## Answers (${answers.length})`, "");
 
   if (answers.length === 0) {
@@ -331,6 +519,24 @@ export async function rebuildKnowledgeBaseIndex(cwd: string): Promise<string> {
       lines.push(`  - question: ${truncateText(answer.question, 120)}`);
       if (answer.citedPages.length > 0) {
         lines.push(`  - cites: ${answer.citedPages.map((page) => `\`${page}\``).join(", ")}`);
+      }
+    }
+
+    lines.push("");
+  }
+
+  lines.push(`## Derived Outputs (${renders.length})`, "");
+
+  if (renders.length === 0) {
+    lines.push("_No derived outputs yet._", "");
+  } else {
+    for (const render of renders) {
+      const title = collapseWhitespace(render.title) || render.renderId;
+      const summary = collapseWhitespace(render.abstract) || "No abstract recorded.";
+      lines.push(`- [${escapeMarkdownLabel(title)}](${linkFromWiki(paths.wikiDir, cwd, render.outputPath)}) — ${summary}`);
+      lines.push(`  - kind: \`${render.kind}\``);
+      if (render.sourcePages.length > 0) {
+        lines.push(`  - source pages: ${render.sourcePages.map((page) => `\`${page}\``).join(", ")}`);
       }
     }
 
@@ -417,6 +623,10 @@ export function answerIdFromPath(answerPath: string): string {
   return basename(answerPath, extname(answerPath));
 }
 
+export function renderIdFromPath(outputPath: string): string {
+  return basename(outputPath, extname(outputPath));
+}
+
 function normalizeSourceManifestEntry(entry: SourceManifestEntry): SourceManifestEntry {
   return {
     sourceId: collapseWhitespace(entry.sourceId),
@@ -445,6 +655,32 @@ function normalizeAnswerManifestEntry(entry: AnswerManifestEntry): AnswerManifes
     answerPath: toPosix(entry.answerPath),
     createdAt: entry.createdAt,
     citedPages: normalizeWikiPathList(entry.citedPages),
+  };
+}
+
+function normalizeConceptManifestEntry(entry: ConceptManifestEntry): ConceptManifestEntry {
+  return {
+    conceptId: normalizeConceptId(entry.conceptId),
+    conceptName: collapseWhitespace(entry.conceptName),
+    title: collapseWhitespace(entry.title),
+    abstract: collapseWhitespace(entry.abstract),
+    pagePath: toPosix(entry.pagePath),
+    compiledAt: entry.compiledAt,
+    sourceIds: normalizeStringList(entry.sourceIds),
+    relatedConceptIds: normalizeConceptIdList(entry.relatedConceptIds),
+    sourceFingerprint: collapseWhitespace(entry.sourceFingerprint),
+  };
+}
+
+function normalizeRenderManifestEntry(entry: RenderManifestEntry): RenderManifestEntry {
+  return {
+    renderId: collapseWhitespace(entry.renderId),
+    kind: normalizeRenderKind(entry.kind),
+    title: collapseWhitespace(entry.title),
+    abstract: collapseWhitespace(entry.abstract),
+    outputPath: toPosix(entry.outputPath),
+    createdAt: entry.createdAt,
+    sourcePages: normalizeWikiPathList(entry.sourcePages),
   };
 }
 
@@ -606,6 +842,10 @@ function truncateText(value: string, maxLength: number): string {
 
 function ensureTrailingNewline(value: string): string {
   return value.endsWith("\n") ? value : `${value}\n`;
+}
+
+function normalizeRenderKind(kind: KnowledgeRenderKind): KnowledgeRenderKind {
+  return kind === "deck" ? "deck" : "report";
 }
 
 function escapeRegExp(value: string): string {
