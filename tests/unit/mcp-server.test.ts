@@ -14,6 +14,7 @@ import { SessionStore } from "../../src/session/index.ts";
 const tempDirs: string[] = [];
 const SELF_COMMAND_PATH = join(process.cwd(), "dist", "nanoboss");
 let originalSelfCommand = process.env.NANOBOSS_SELF_COMMAND;
+const BUILD_HOOK_TIMEOUT_MS = 15_000;
 
 beforeAll(() => {
   const build = spawnSync("bun", ["run", "build"], {
@@ -29,7 +30,7 @@ beforeAll(() => {
 
   originalSelfCommand = process.env.NANOBOSS_SELF_COMMAND;
   process.env.NANOBOSS_SELF_COMMAND = SELF_COMMAND_PATH;
-});
+}, BUILD_HOOK_TIMEOUT_MS);
 
 afterAll(() => {
   if (originalSelfCommand === undefined) {
