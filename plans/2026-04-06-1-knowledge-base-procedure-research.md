@@ -198,8 +198,10 @@ Purpose: answer a research question against the compiled corpus.
 Expected responsibilities:
 
 - plan the query against source summaries and concept pages
+- read `wiki/index.md` first as the default discovery surface, then drill into candidate pages
 - gather exact refs used in the answer
 - write the answer to `outputs/` or another chosen destination
+- optionally file durable, high-value answers back into the wiki as new analysis pages
 - keep `data` small and provenance-heavy
 
 Why it matters:
@@ -306,6 +308,45 @@ These should not replace `.kb/` bookkeeping. They complement it:
 - `index.md` and `log.md` are human/agent-readable navigation surfaces inside the wiki itself
 
 That split feels well aligned with nanoboss's "small typed data, rich markdown display" model.
+
+### Index-first retrieval is a real design point, not just documentation
+
+The gist adds a useful operational detail: at moderate scale, `index.md` is not merely a table of contents. It can be the **default retrieval surface** for question-answering:
+
+- read `index.md` first to identify candidate pages
+- drill into those pages for synthesis
+- avoid introducing embedding-heavy RAG infrastructure too early
+
+That is worth preserving in the design because it suggests a concrete staged strategy:
+
+1. start with deterministic wiki files plus `index.md`
+2. use file-based retrieval against the compiled corpus
+3. add specialized search only when scale demands it
+
+This is especially aligned with nanoboss because the early version can stay simple, inspectable, and local.
+
+### Optional search tooling belongs in the "later scale" story
+
+The gist also usefully calls out that a wiki-local search layer may become desirable once the corpus grows past what `index.md` alone can comfortably support.
+
+That suggests an explicit non-goal / later-phase note for implementation:
+
+- **initial design:** no mandatory vector database or external RAG stack
+- **later option:** add local markdown search tooling (for example qmd-style BM25/vector/rerank search) behind a procedure or tool boundary
+
+That keeps the thin slice simpler while still leaving a path to better retrieval once the corpus is large.
+
+### Multimodal sources need an explicit asset-handling convention
+
+One genuinely new operational point from the gist is that web-clipped sources may include images that should be downloaded into the repo if they matter.
+
+That is relevant here because the proposed source types already include image sets. The schema/config should therefore be able to specify:
+
+- where source-linked assets live (for example `raw/assets/`)
+- whether image downloads are required, optional, or ignored
+- whether source compilation may involve a two-pass read: text first, then selected images
+
+This should stay optional, but it is worth naming so the design does not silently assume all sources are text-only.
 
 ---
 
@@ -510,6 +551,15 @@ Then add concept synthesis, linking, rendering, and health checks once the deter
 
 8. **The default ingest UX should be supervised and per-source.**  
    Human-in-the-loop ingest is the best initial posture; high-throughput batching should be additive, not foundational.
+
+9. **`wiki/index.md` should double as the default retrieval surface until corpus scale justifies a dedicated search layer.**  
+   Early query behavior should prefer deterministic file navigation over adding RAG infrastructure prematurely.
+
+10. **A later search layer should be optional and local-first.**  
+    If the corpus outgrows `index.md`, add markdown-native search behind a clean boundary instead of making retrieval infrastructure foundational from day one.
+
+11. **Image and other source-linked assets should have an explicit repo convention when multimodal ingest matters.**  
+    Asset location and read workflow should be defined by schema, not improvised per session.
 
 ---
 

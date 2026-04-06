@@ -6,6 +6,10 @@ import { pathToFileURL } from "node:url";
 
 import commitProcedure from "../../commands/commit.ts";
 import defaultProcedure from "../../commands/default.ts";
+import kbAnswerProcedure from "../../commands/kb-answer.ts";
+import kbCompileSourceProcedure from "../../commands/kb-compile-source.ts";
+import kbIngestProcedure from "../../commands/kb-ingest.ts";
+import kbRefreshProcedure from "../../commands/kb-refresh.ts";
 import linterProcedure from "../../commands/linter.ts";
 import modelProcedure from "../../commands/model.ts";
 import secondOpinionProcedure from "../../commands/second-opinion.ts";
@@ -62,6 +66,10 @@ export class ProcedureRegistry implements ProcedureRegistryLike {
     this.register(defaultProcedure);
     this.register(createCreateProcedure(this));
     this.register(commitProcedure);
+    this.register(kbIngestProcedure);
+    this.register(kbCompileSourceProcedure);
+    this.register(kbRefreshProcedure);
+    this.register(kbAnswerProcedure);
     this.register(linterProcedure);
     this.register(modelProcedure);
     this.register(tokensProcedure);
