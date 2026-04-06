@@ -180,16 +180,20 @@ const AGENT_MODEL_CATALOG: Record<DownstreamAgentProvider, AgentCatalogEntry> = 
       {
         id: "claude-opus-4.6",
         supportedReasoningEfforts: ["low", "medium", "high"],
-        defaultReasoningEffort: "high",
+        defaultReasoningEffort: "medium",
       },
       {
-        id: "claude-opus-4.6-fast",
+        id: "claude-opus-4.6-1m",
         supportedReasoningEfforts: ["low", "medium", "high"],
-        defaultReasoningEffort: "high",
+        defaultReasoningEffort: "medium",
       },
       { id: "claude-opus-4.5" },
       { id: "claude-sonnet-4" },
-      { id: "gemini-3-pro-preview" },
+      {
+        id: "goldeneye",
+        supportedReasoningEfforts: ["low", "medium", "high"],
+        defaultReasoningEffort: "medium",
+      },
       {
         id: "gpt-5.4",
         supportedReasoningEfforts: ["low", "medium", "high", "xhigh"],
@@ -203,16 +207,6 @@ const AGENT_MODEL_CATALOG: Record<DownstreamAgentProvider, AgentCatalogEntry> = 
       {
         id: "gpt-5.2-codex",
         supportedReasoningEfforts: ["low", "medium", "high", "xhigh"],
-        defaultReasoningEffort: "high",
-      },
-      {
-        id: "gpt-5.1-codex-max",
-        supportedReasoningEfforts: ["low", "medium", "high", "xhigh"],
-        defaultReasoningEffort: "medium",
-      },
-      {
-        id: "gpt-5.1-codex",
-        supportedReasoningEfforts: ["low", "medium", "high"],
         defaultReasoningEffort: "medium",
       },
       {
@@ -226,8 +220,8 @@ const AGENT_MODEL_CATALOG: Record<DownstreamAgentProvider, AgentCatalogEntry> = 
         defaultReasoningEffort: "medium",
       },
       {
-        id: "gpt-5.1-codex-mini",
-        supportedReasoningEfforts: ["low", "medium", "high"],
+        id: "gpt-5.4-mini",
+        supportedReasoningEfforts: ["low", "medium", "high", "xhigh"],
         defaultReasoningEffort: "medium",
       },
       {

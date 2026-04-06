@@ -8,6 +8,7 @@ import type { DefaultConversationSession } from "../agent/default-session.ts";
 import type { FrontendEvent } from "../http/frontend-events.ts";
 import { RunLogger } from "../core/logger.ts";
 import { inferDataShape } from "../core/data-shape.ts";
+import { formatErrorMessage } from "../core/error-format.ts";
 import {
   SessionStore,
   createValueRef,
@@ -169,7 +170,7 @@ export async function executeTopLevelProcedure(params: {
       throw new TopLevelProcedureCancelledError(cancelled.message, finalized.cell, cancelled.reason);
     }
 
-    const message = error instanceof Error ? error.message : String(error);
+    const message = formatErrorMessage(error);
     const errorText = `Error: ${message}\n`;
 
     logger.write({

@@ -4,6 +4,7 @@ import { getBuildLabel } from "./build-info.ts";
 import { RunCancelledError, defaultCancellationMessage, normalizeRunCancelledError } from "./cancellation.ts";
 import { resolveDownstreamAgentConfig, toDownstreamAgentSelection } from "./config.ts";
 import { type SessionUpdateEmitter } from "./context.ts";
+import { formatErrorMessage } from "./error-format.ts";
 import { DefaultConversationSession } from "../agent/default-session.ts";
 import { normalizeAgentTokenUsage } from "../agent/token-usage.ts";
 import {
@@ -792,7 +793,7 @@ export class NanobossService {
         error,
         activeRun.softStopRequested ? "soft_stop" : "abort",
       );
-      const message = cancelled?.message ?? (error instanceof Error ? error.message : String(error));
+      const message = cancelled?.message ?? formatErrorMessage(error);
       if (!emitter.hasAnyStreamedText) {
         emitter.emit({
           sessionUpdate: "agent_message_chunk",

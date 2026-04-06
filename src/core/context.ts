@@ -4,6 +4,7 @@ import { collectTextSessionUpdates, summarizeAgentOutput } from "../agent/acp-up
 import { invokeAgent } from "../agent/call-agent.ts";
 import { RunCancelledError, defaultCancellationMessage, normalizeRunCancelledError } from "./cancellation.ts";
 import { resolveDownstreamAgentConfig } from "./config.ts";
+import { formatErrorMessage } from "./error-format.ts";
 import type { DefaultConversationSession } from "../agent/default-session.ts";
 import type { RunLogger } from "./logger.ts";
 import { normalizeAgentTokenUsage } from "../agent/token-usage.ts";
@@ -266,7 +267,7 @@ export class CommandContextImpl implements CommandContext {
         procedure: name,
         kind: "procedure_end",
         durationMs: Date.now() - startedAt,
-        error: error instanceof Error ? error.message : String(error),
+        error: formatErrorMessage(error),
       });
       throw error;
     }
@@ -434,7 +435,7 @@ export class CommandContextImpl implements CommandContext {
       error,
       this.softStopSignal?.aborted ? "soft_stop" : "abort",
     );
-    const message = cancelled?.message ?? (error instanceof Error ? error.message : String(error));
+    const message = cancelled?.message ?? formatErrorMessage(error);
 
     this.logger.write({
       spanId: started.childSpanId,
