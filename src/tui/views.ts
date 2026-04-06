@@ -171,7 +171,9 @@ function renderTurnLabel(theme: NanobossTuiTheme, turn: UiTurn): string {
     case "assistant":
       return turn.status === "failed"
         ? theme.error("nanoboss")
-        : theme.success("nanoboss");
+        : turn.status === "cancelled"
+          ? theme.warning("nanoboss")
+          : theme.success("nanoboss");
     case "system":
       return theme.warning("system");
   }

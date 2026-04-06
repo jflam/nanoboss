@@ -38,9 +38,11 @@ const PROCEDURE_DISPATCH_TIMEOUT_MS = Number(process.env.MOCK_AGENT_PROCEDURE_DI
 const KEEP_MCP_RUNNING_ON_TIMEOUT = process.env.MOCK_AGENT_KEEP_MCP_RUNNING_ON_TIMEOUT === "1";
 const STREAM_ASYNC_DISPATCH_PROGRESS = process.env.MOCK_AGENT_STREAM_ASYNC_DISPATCH_PROGRESS === "1";
 const STRIP_ASYNC_WAIT_RAW_OUTPUT = process.env.MOCK_AGENT_STRIP_ASYNC_WAIT_RAW_OUTPUT === "1";
+const COOPERATIVE_CANCEL = process.env.MOCK_AGENT_COOPERATIVE_CANCEL === "1";
 
 class MockAgent implements acp.Agent {
   private readonly sessions = new Map<string, LiveSession>();
+  private readonly cancelledSessions = new Set<string>();
 
   constructor(private readonly connection: acp.AgentSideConnection) {}
 
@@ -104,8 +106,11 @@ class MockAgent implements acp.Agent {
 
     let text: string;
     try {
-      text = await answerForPrompt(prompt, session, this.connection, params.sessionId);
+      text = await answerForPrompt(prompt, session, this.connection, params.sessionId, this.cancelledSessions);
     } catch (error) {
+      if (error instanceof Error && error.message === "mock-agent-cooperative-cancelled") {
+        throw error;
+      }
       text = `mock-agent-error:${error instanceof Error ? error.message : String(error)}`;
     }
     session.turns.push({ role: "user", text: prompt });
@@ -163,8 +168,8 @@ class MockAgent implements acp.Agent {
     return { stopReason: "end_turn" };
   }
 
-  async cancel(_params: acp.CancelNotification): Promise<void> {
-    // no-op
+  async cancel(params: acp.CancelNotification): Promise<void> {
+    this.cancelledSessions.add(params.sessionId);
   }
 
   private getSession(sessionId: string): LiveSession {
@@ -191,6 +196,7 @@ async function answerForPrompt(
   session: LiveSession,
   connection: acp.AgentSideConnection,
   sessionId: string,
+  cancelledSessions: Set<string>,
 ): Promise<string> {
   const dispatch = parseInternalSlashDispatch(prompt);
   if (dispatch) {
@@ -202,6 +208,15 @@ async function answerForPrompt(
 
   if (normalized.includes("simulate-long-run")) {
     await Bun.sleep(3_500);
+  }
+
+  if (COOPERATIVE_CANCEL && normalized.includes("cooperative cancel demo")) {
+    while (!cancelledSessions.has(sessionId)) {
+      await Bun.sleep(25);
+    }
+
+    cancelledSessions.delete(sessionId);
+    throw new Error("mock-agent-cooperative-cancelled");
   }
 
   if (normalized.includes("what is 2+2") || normalized.includes("what is 2 + 2")) {

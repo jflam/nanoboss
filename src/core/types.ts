@@ -279,6 +279,7 @@ export interface CallAgentOptions {
   namedRefs?: Record<string, unknown>;
   onUpdate?: (update: acp.SessionUpdate) => Promise<void> | void;
   signal?: AbortSignal;
+  softStopSignal?: AbortSignal;
 }
 
 export interface CallAgentTransport {

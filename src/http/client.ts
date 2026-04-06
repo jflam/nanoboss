@@ -125,14 +125,17 @@ export async function sendSessionPrompt(
 export async function cancelSessionRun(
   baseUrl: string,
   sessionId: string,
+  runId: string,
 ): Promise<void> {
   const response = await fetch(
     new URL(`/v1/sessions/${sessionId}/cancel`, baseUrl),
     {
       method: "POST",
       headers: {
+        "content-type": "application/json",
         connection: "close",
       },
+      body: JSON.stringify({ runId }),
     },
   );
 

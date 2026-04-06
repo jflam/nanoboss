@@ -161,6 +161,63 @@ describe("tui reducer", () => {
     expect(state.transcriptItems).toContainEqual({ type: "tool_call", id: "tool-1" });
   });
 
+  test("latches a local stop request, preserves it across heartbeats, and finishes the run as cancelled", () => {
+    let state = createInitialUiState({ cwd: "/repo", showToolCalls: true });
+
+    state = reduceUiState(state, {
+      type: "local_user_submitted",
+      text: "hello",
+    });
+    state = reduceUiState(state, {
+      type: "local_stop_requested",
+    });
+
+    expect(state.pendingStopRequest).toBe(true);
+    expect(state.statusLine).toBe("[run] ESC received - stopping at next tool boundary...");
+
+    state = reduceUiState(state, {
+      type: "frontend_event",
+      event: eventEnvelope("run_started", {
+        runId: "run-1",
+        procedure: "default",
+        prompt: "hello",
+        startedAt: new Date(0).toISOString(),
+      }),
+    });
+    state = reduceUiState(state, {
+      type: "frontend_event",
+      event: eventEnvelope("run_heartbeat", {
+        runId: "run-1",
+        procedure: "default",
+        at: new Date(1_000).toISOString(),
+      }),
+    });
+
+    expect(state.pendingStopRequest).toBe(false);
+    expect(state.stopRequestedRunId).toBe("run-1");
+    expect(state.statusLine).toBe("[run] ESC received - stopping at next tool boundary...");
+
+    state = reduceUiState(state, {
+      type: "frontend_event",
+      event: eventEnvelope("run_cancelled", {
+        runId: "run-1",
+        procedure: "default",
+        completedAt: new Date(2_000).toISOString(),
+        message: "Stopped.",
+      }),
+    });
+
+    expect(state.turns.at(-1)).toMatchObject({
+      role: "assistant",
+      markdown: "Stopped.",
+      status: "cancelled",
+    });
+    expect(state.pendingStopRequest).toBe(false);
+    expect(state.stopRequestedRunId).toBeUndefined();
+    expect(state.statusLine).toBe("[run] default stopped");
+    expect(state.inputDisabled).toBe(false);
+  });
+
   test("suppresses async dispatch wait traces while preserving nested activity depth", () => {
     let state = createInitialUiState({ cwd: "/repo", showToolCalls: true });
 

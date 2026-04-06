@@ -103,6 +103,14 @@ export type FrontendEvent =
       completedAt: string;
       error: string;
       cell?: CellRef;
+    }
+  | {
+      type: "run_cancelled";
+      runId: string;
+      procedure: string;
+      completedAt: string;
+      message: string;
+      cell?: CellRef;
     };
 
 export type FrontendEventEnvelope = {

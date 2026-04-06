@@ -283,8 +283,9 @@ describe("NanobossTuiController", () => {
     await runPromise;
   });
 
-  test("escape-triggered cancel forwards a cancel request for the active session", async () => {
-    const cancelCalls: string[] = [];
+  test("escape-triggered cancel latches a soft stop and debounces repeated requests", async () => {
+    const cancelCalls: Array<{ sessionId: string; runId: string }> = [];
+    const streams: FakeStreamRecord[] = [];
     const controller = new NanobossTuiController(
       {
         serverUrl: "http://localhost:3000",
@@ -294,10 +295,10 @@ describe("NanobossTuiController", () => {
         ensureMatchingHttpServer: async () => {},
         createHttpSession: async () => createSession("session-1"),
         sendSessionPrompt: async () => {},
-        cancelSessionRun: async (_baseUrl, sessionId) => {
-          cancelCalls.push(sessionId);
+        cancelSessionRun: async (_baseUrl, sessionId, runId) => {
+          cancelCalls.push({ sessionId, runId });
         },
-        startSessionEventStream: ({ sessionId, onEvent }) => createFakeStream([], sessionId, onEvent),
+        startSessionEventStream: ({ sessionId, onEvent }) => createFakeStream(streams, sessionId, onEvent),
       },
     );
 
@@ -306,11 +307,66 @@ describe("NanobossTuiController", () => {
 
     await controller.handleSubmit("hello");
     expect(controller.getState().inputDisabled).toBe(true);
+    streams[0]?.emit(eventEnvelope("run_started", {
+      runId: "run-1",
+      procedure: "default",
+      prompt: "hello",
+      startedAt: new Date(0).toISOString(),
+    }));
 
     await controller.cancelActiveRun();
+    await controller.cancelActiveRun();
 
-    expect(cancelCalls).toEqual(["session-1"]);
-    expect(controller.getState().statusLine).toBe("[run] cancelling…");
+    expect(cancelCalls).toEqual([{ sessionId: "session-1", runId: "run-1" }]);
+    expect(controller.getState().statusLine).toBe("[run] ESC received - stopping at next tool boundary...");
+
+    controller.requestExit();
+    await expect(runPromise).resolves.toBe("session-1");
+  });
+
+  test("escape before run_started waits for the run id and clears the latch on cancel failure", async () => {
+    const cancelCalls: Array<{ sessionId: string; runId: string }> = [];
+    const streams: FakeStreamRecord[] = [];
+    const controller = new NanobossTuiController(
+      {
+        serverUrl: "http://localhost:3000",
+        showToolCalls: true,
+      },
+      {
+        ensureMatchingHttpServer: async () => {},
+        createHttpSession: async () => createSession("session-1"),
+        sendSessionPrompt: async () => {},
+        cancelSessionRun: async (_baseUrl, sessionId, runId) => {
+          cancelCalls.push({ sessionId, runId });
+          throw new Error("network down");
+        },
+        startSessionEventStream: ({ sessionId, onEvent }) => createFakeStream(streams, sessionId, onEvent),
+      },
+    );
+
+    const runPromise = controller.run();
+    await waitFor(() => controller.getState().sessionId === "session-1");
+
+    await controller.handleSubmit("hello");
+    await controller.cancelActiveRun();
+
+    expect(cancelCalls).toEqual([]);
+    expect(controller.getState().pendingStopRequest).toBe(true);
+    expect(controller.getState().statusLine).toBe("[run] ESC received - stopping at next tool boundary...");
+
+    streams[0]?.emit(eventEnvelope("run_started", {
+      runId: "run-1",
+      procedure: "default",
+      prompt: "hello",
+      startedAt: new Date(0).toISOString(),
+    }));
+
+    await waitFor(() => cancelCalls.length === 1);
+
+    expect(cancelCalls).toEqual([{ sessionId: "session-1", runId: "run-1" }]);
+    expect(controller.getState().pendingStopRequest).toBe(false);
+    expect(controller.getState().stopRequestedRunId).toBeUndefined();
+    expect(controller.getState().statusLine).toBe("[run] cancel failed: network down");
 
     controller.requestExit();
     await expect(runPromise).resolves.toBe("session-1");

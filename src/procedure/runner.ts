@@ -1,4 +1,9 @@
 import { CommandContextImpl, type SessionUpdateEmitter } from "../core/context.ts";
+import {
+  RunCancelledError,
+  type RunCancellationReason,
+  normalizeRunCancelledError,
+} from "../core/cancellation.ts";
 import type { DefaultConversationSession } from "../agent/default-session.ts";
 import type { FrontendEvent } from "../http/frontend-events.ts";
 import { RunLogger } from "../core/logger.ts";
@@ -52,6 +57,17 @@ export class TopLevelProcedureExecutionError extends Error {
   }
 }
 
+export class TopLevelProcedureCancelledError extends RunCancelledError {
+  constructor(
+    message: string,
+    readonly cell: CellRef,
+    reason: RunCancellationReason = "soft_stop",
+  ) {
+    super(message, reason);
+    this.name = "TopLevelProcedureCancelledError";
+  }
+}
+
 export async function executeTopLevelProcedure(params: {
   cwd: string;
   sessionId: string;
@@ -61,12 +77,14 @@ export async function executeTopLevelProcedure(params: {
   prompt: string;
   emitter: ProcedureRunnerEmitter;
   signal?: AbortSignal;
+  softStopSignal?: AbortSignal;
   defaultConversation?: DefaultConversationSession;
   getDefaultAgentConfig: () => DownstreamAgentConfig;
   setDefaultAgentSelection: (selection: DownstreamAgentSelection) => DownstreamAgentConfig;
   prepareDefaultPrompt?: (prompt: string) => PreparedDefaultPrompt;
   onError?: (ctx: CommandContextImpl, errorText: string) => void | Promise<void>;
   dispatchCorrelationId?: string;
+  assertCanStartBoundary?: () => void;
 }): Promise<ProcedureExecutionResult> {
   const logger = new RunLogger();
   const rootSpanId = logger.newSpan();
@@ -90,10 +108,12 @@ export async function executeTopLevelProcedure(params: {
     store: params.store,
     cell: rootCell,
     signal: params.signal,
+    softStopSignal: params.softStopSignal,
     defaultConversation: params.defaultConversation,
     getDefaultAgentConfig: params.getDefaultAgentConfig,
     setDefaultAgentSelection: params.setDefaultAgentSelection,
     prepareDefaultPrompt: params.prepareDefaultPrompt,
+    assertCanStartBoundary: params.assertCanStartBoundary,
   });
 
   logger.write({
@@ -129,6 +149,26 @@ export async function executeTopLevelProcedure(params: {
       defaultAgentSelection: changedSelection,
     });
   } catch (error) {
+    const cancelled = normalizeRunCancelledError(
+      error,
+      params.softStopSignal?.aborted ? "soft_stop" : "abort",
+    );
+    if (cancelled) {
+      logger.write({
+        spanId: rootSpanId,
+        procedure: params.procedure.name,
+        kind: "procedure_end",
+        durationMs: Date.now() - startedAt,
+        error: cancelled.message,
+      });
+
+      const finalized = params.store.finalizeCell(rootCell, {
+        display: cancelled.message,
+        summary: summarizeText(cancelled.message),
+      });
+      throw new TopLevelProcedureCancelledError(cancelled.message, finalized.cell, cancelled.reason);
+    }
+
     const message = error instanceof Error ? error.message : String(error);
     const errorText = `Error: ${message}\n`;
 
@@ -190,6 +230,23 @@ export function buildRunCompletedEvent(params: {
     summary: params.result.summary,
     display: params.result.display,
     tokenUsage: params.tokenUsage,
+  };
+}
+
+export function buildRunCancelledEvent(params: {
+  runId: string;
+  procedure: string;
+  message: string;
+  cell?: CellRef;
+  completedAt?: string;
+}): Extract<FrontendEvent, { type: "run_cancelled" }> {
+  return {
+    type: "run_cancelled",
+    runId: params.runId,
+    procedure: params.procedure,
+    completedAt: params.completedAt ?? new Date().toISOString(),
+    message: params.message,
+    cell: params.cell,
   };
 }
 

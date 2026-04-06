@@ -6,12 +6,14 @@ import {
   openAcpConnection,
   type OpenAcpConnection,
 } from "./acp-runtime.ts";
+import { RunCancelledError, defaultCancellationMessage } from "../core/cancellation.ts";
 import { collectTokenSnapshot } from "./token-metrics.ts";
 import type { AgentTokenSnapshot, CallAgentOptions, DownstreamAgentConfig } from "../core/types.ts";
 
 interface DefaultSessionPromptOptions {
   onUpdate?: CallAgentOptions["onUpdate"];
   signal?: AbortSignal;
+  softStopSignal?: AbortSignal;
 }
 
 interface DefaultSessionPromptResult {
@@ -225,6 +227,15 @@ class PersistentAcpSession {
       throw new Error("Default ACP session is not available");
     }
 
+    if (options.softStopSignal?.aborted) {
+      throw new RunCancelledError(defaultCancellationMessage("soft_stop"), "soft_stop");
+    }
+
+    if (options.signal?.aborted) {
+      this.close();
+      throw new RunCancelledError(defaultCancellationMessage("abort"), "abort");
+    }
+
     const collector: PromptCollector = {
       raw: "",
       updates: [],
@@ -232,27 +243,36 @@ class PersistentAcpSession {
     };
     this.activeCollector = collector;
 
-    const abortListener = () => {
+    const softStopListener = () => {
       void this.state.connection.cancel({ sessionId: this.sessionId }).catch(() => {});
+    };
+
+    const abortListener = () => {
+      softStopListener();
       this.close();
     };
 
-    if (options.signal?.aborted) {
-      abortListener();
-    }
-
+    options.softStopSignal?.addEventListener("abort", softStopListener);
     options.signal?.addEventListener("abort", abortListener);
 
     try {
-      const promptResponse = await this.state.connection.prompt({
-        sessionId: this.sessionId,
-        prompt: [
-          {
-            type: "text",
-            text: prompt,
-          },
-        ],
-      });
+      let promptResponse: acp.PromptResponse;
+      try {
+        promptResponse = await this.state.connection.prompt({
+          sessionId: this.sessionId,
+          prompt: [
+            {
+              type: "text",
+              text: prompt,
+            },
+          ],
+        });
+      } catch (error) {
+        if (options.softStopSignal?.aborted) {
+          throw new RunCancelledError(defaultCancellationMessage("soft_stop"), "soft_stop");
+        }
+        throw error;
+      }
 
       this.tokenSnapshot = await collectTokenSnapshot({
         childPid: this.state.child.pid,
@@ -269,6 +289,7 @@ class PersistentAcpSession {
         tokenSnapshot: this.tokenSnapshot,
       };
     } finally {
+      options.softStopSignal?.removeEventListener("abort", softStopListener);
       options.signal?.removeEventListener("abort", abortListener);
       this.activeCollector = undefined;
     }
@@ -337,4 +358,3 @@ function sameStringRecord(
     })
   );
 }
-

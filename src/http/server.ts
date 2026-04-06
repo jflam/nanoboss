@@ -154,7 +154,13 @@ export async function runHttpServerCommand(argv: string[] = []): Promise<ReturnT
           return error(404, `Unknown session: ${sessionId}`);
         }
 
-        service.cancel(sessionId);
+        const body = await readJson<{ runId?: string }>(request);
+        const runId = body.runId?.trim();
+        if (!runId) {
+          return error(400, "runId is required");
+        }
+
+        service.cancel(sessionId, runId);
         return json({ cancelled: true });
       }
 

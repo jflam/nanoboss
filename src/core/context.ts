@@ -2,6 +2,7 @@ import type * as acp from "@agentclientprotocol/sdk";
 
 import { collectTextSessionUpdates, summarizeAgentOutput } from "../agent/acp-updates.ts";
 import { invokeAgent } from "../agent/call-agent.ts";
+import { RunCancelledError, defaultCancellationMessage, normalizeRunCancelledError } from "./cancellation.ts";
 import { resolveDownstreamAgentConfig } from "./config.ts";
 import type { DefaultConversationSession } from "../agent/default-session.ts";
 import type { RunLogger } from "./logger.ts";
@@ -60,10 +61,12 @@ interface CommandContextParams {
   store: SessionStore;
   cell: ActiveCell;
   signal?: AbortSignal;
+  softStopSignal?: AbortSignal;
   defaultConversation?: DefaultConversationSession;
   getDefaultAgentConfig?: () => DownstreamAgentConfig;
   setDefaultAgentSelection?: (selection: DownstreamAgentSelection) => DownstreamAgentConfig;
   prepareDefaultPrompt?: (prompt: string) => PreparedDefaultPrompt;
+  assertCanStartBoundary?: () => void;
 }
 
 export class CommandContextImpl implements CommandContext {
@@ -78,12 +81,14 @@ export class CommandContextImpl implements CommandContext {
   private readonly spanId: string;
   private readonly emitter: SessionUpdateEmitter;
   private readonly signal?: AbortSignal;
+  private readonly softStopSignal?: AbortSignal;
   private readonly store: SessionStore;
   private readonly cell: ActiveCell;
   private readonly defaultConversation?: DefaultConversationSession;
   private readonly getDefaultAgentConfigValue: () => DownstreamAgentConfig;
   private readonly setDefaultAgentSelectionValue: (selection: DownstreamAgentSelection) => DownstreamAgentConfig;
   private readonly prepareDefaultPromptValue?: (prompt: string) => PreparedDefaultPrompt;
+  private readonly assertCanStartBoundaryValue?: () => void;
 
   constructor(params: CommandContextParams) {
     this.cwd = params.cwd;
@@ -94,6 +99,7 @@ export class CommandContextImpl implements CommandContext {
     this.spanId = params.spanId;
     this.emitter = params.emitter;
     this.signal = params.signal;
+    this.softStopSignal = params.softStopSignal;
     this.store = params.store;
     this.cell = params.cell;
     this.defaultConversation = params.defaultConversation;
@@ -102,6 +108,7 @@ export class CommandContextImpl implements CommandContext {
     this.setDefaultAgentSelectionValue = params.setDefaultAgentSelection
       ?? ((selection) => resolveDownstreamAgentConfig(this.cwd, selection));
     this.prepareDefaultPromptValue = params.prepareDefaultPrompt;
+    this.assertCanStartBoundaryValue = params.assertCanStartBoundary;
     this.refs = new CommandRefs(this.store, this.cwd);
     this.session = new CommandSession(this.store, this.cell.cell.cellId);
   }
@@ -162,6 +169,7 @@ export class CommandContextImpl implements CommandContext {
         config: agentConfig,
         namedRefs,
         signal: this.signal,
+        softStopSignal: this.softStopSignal,
         onUpdate: async (update) => {
           if (shouldForwardNestedAgentUpdate(update, options?.stream !== false)) {
             this.emitter.emit(update);
@@ -201,6 +209,7 @@ export class CommandContextImpl implements CommandContext {
 
     const childSpanId = this.logger.newSpan(this.spanId);
     const startedAt = Date.now();
+    this.assertCanStartBoundary();
     const childCell = this.store.startCell({
       procedure: name,
       input: prompt,
@@ -228,10 +237,12 @@ export class CommandContextImpl implements CommandContext {
         store: this.store,
         cell: childCell,
         signal: this.signal,
+        softStopSignal: this.softStopSignal,
         defaultConversation: this.defaultConversation,
         getDefaultAgentConfig: this.getDefaultAgentConfigValue,
         setDefaultAgentSelection: this.setDefaultAgentSelectionValue,
         prepareDefaultPrompt: this.prepareDefaultPromptValue,
+        assertCanStartBoundary: this.assertCanStartBoundaryValue,
       });
       const rawResult = await procedure.execute(prompt, childContext);
       const result = normalizeProcedureResult(rawResult);
@@ -279,6 +290,7 @@ export class CommandContextImpl implements CommandContext {
     try {
       const result = await this.defaultConversation.prompt(preparedPrompt.prompt, {
         signal: this.signal,
+        softStopSignal: this.softStopSignal,
         onUpdate: async (update) => {
           if (
             update.sessionUpdate === "agent_message_chunk" ||
@@ -325,6 +337,8 @@ export class CommandContextImpl implements CommandContext {
       agent?: DownstreamAgentSelection;
     },
   ): StartedAgentRun {
+    this.assertCanStartBoundary();
+
     const started: StartedAgentRun = {
       childSpanId: this.logger.newSpan(this.spanId),
       startedAt: Date.now(),
@@ -416,7 +430,11 @@ export class CommandContextImpl implements CommandContext {
     error: unknown,
     agent?: DownstreamAgentSelection,
   ): never {
-    const message = error instanceof Error ? error.message : String(error);
+    const cancelled = normalizeRunCancelledError(
+      error,
+      this.softStopSignal?.aborted ? "soft_stop" : "abort",
+    );
+    const message = cancelled?.message ?? (error instanceof Error ? error.message : String(error));
 
     this.logger.write({
       spanId: started.childSpanId,
@@ -432,11 +450,23 @@ export class CommandContextImpl implements CommandContext {
     this.emitter.emit({
       sessionUpdate: "tool_call_update",
       toolCallId: started.toolCallId,
-      status: "failed",
+      status: cancelled ? "cancelled" : "failed",
       rawOutput: { error: message },
     });
 
-    throw error;
+    throw cancelled ?? error;
+  }
+
+  private assertCanStartBoundary(): void {
+    this.assertCanStartBoundaryValue?.();
+
+    if (this.softStopSignal?.aborted) {
+      throw new RunCancelledError(defaultCancellationMessage("soft_stop"), "soft_stop");
+    }
+
+    if (this.signal?.aborted) {
+      throw new RunCancelledError(defaultCancellationMessage("abort"), "abort");
+    }
   }
 
   print(text: string): void {

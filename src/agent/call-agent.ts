@@ -6,6 +6,7 @@ import {
   closeAcpConnection,
   openAcpConnection,
 } from "./acp-runtime.ts";
+import { RunCancelledError, defaultCancellationMessage } from "../core/cancellation.ts";
 import { resolveDownstreamAgentConfig } from "../core/config.ts";
 import { SessionStore } from "../session/index.ts";
 import { collectTokenSnapshot } from "./token-metrics.ts";
@@ -323,6 +324,14 @@ async function runAcpPrompt(
   prompt: string,
   options: CallAgentOptions,
 ): Promise<{ raw: string; logFile?: string; updates: acp.SessionUpdate[]; tokenSnapshot?: AgentTokenSnapshot }> {
+  if (options.softStopSignal?.aborted) {
+    throw new RunCancelledError(defaultCancellationMessage("soft_stop"), "soft_stop");
+  }
+
+  if (options.signal?.aborted) {
+    throw new RunCancelledError(defaultCancellationMessage("abort"), "abort");
+  }
+
   const config = options.config ?? resolveDownstreamAgentConfig();
   const state = await openAcpConnection(config);
   const updates: acp.SessionUpdate[] = [];
@@ -346,13 +355,18 @@ async function runAcpPrompt(
     await options.onUpdate?.(params.update);
   });
 
-  const abortListener = () => {
+  const softStopListener = () => {
     if (sessionId !== undefined) {
-      void state.connection.cancel({ sessionId });
+      void state.connection.cancel({ sessionId }).catch(() => {});
     }
+  };
+
+  const abortListener = () => {
+    softStopListener();
     closeAcpConnection(state);
   };
 
+  options.softStopSignal?.addEventListener("abort", softStopListener);
   options.signal?.addEventListener("abort", abortListener);
 
   try {
@@ -364,15 +378,28 @@ async function runAcpPrompt(
 
     await applyAcpSessionConfig(state.connection, sessionId, config);
 
-    const promptResponse = await state.connection.prompt({
-      sessionId,
-      prompt: [
-        {
-          type: "text",
-          text: prompt,
-        },
-      ],
-    });
+    if (options.softStopSignal?.aborted) {
+      softStopListener();
+      throw new RunCancelledError(defaultCancellationMessage("soft_stop"), "soft_stop");
+    }
+
+    let promptResponse: acp.PromptResponse;
+    try {
+      promptResponse = await state.connection.prompt({
+        sessionId,
+        prompt: [
+          {
+            type: "text",
+            text: prompt,
+          },
+        ],
+      });
+    } catch (error) {
+      if (options.softStopSignal?.aborted) {
+        throw new RunCancelledError(defaultCancellationMessage("soft_stop"), "soft_stop");
+      }
+      throw error;
+    }
 
     return {
       raw,
@@ -387,6 +414,7 @@ async function runAcpPrompt(
       }),
     };
   } finally {
+    options.softStopSignal?.removeEventListener("abort", softStopListener);
     options.signal?.removeEventListener("abort", abortListener);
     closeAcpConnection(state);
   }
@@ -404,4 +432,3 @@ function serializeNamedRef(value: unknown): string {
   const serialized = JSON.stringify(value, null, 2);
   return typeof serialized === "string" ? serialized : "[unserializable]";
 }
-

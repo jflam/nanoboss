@@ -172,16 +172,20 @@ export class NanobossTuiController {
       return;
     }
 
-    this.dispatch({ type: "local_status", text: "[run] cancelling…" });
+    const activeRunId = this.state.activeRunId;
+    const stopAlreadyLatched = this.state.pendingStopRequest
+      || (activeRunId !== undefined && this.state.stopRequestedRunId === activeRunId);
+    if (stopAlreadyLatched) {
+      return;
+    }
 
-    try {
-      await (this.deps.cancelSessionRun ?? cancelSessionRun)(
-        this.params.serverUrl,
-        this.state.sessionId,
-      );
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      this.dispatch({ type: "local_status", text: `[run] cancel failed: ${message}` });
+    this.dispatch({
+      type: "local_stop_requested",
+      runId: activeRunId,
+    });
+
+    if (activeRunId) {
+      await this.sendStopRequest(activeRunId);
     }
   }
 
@@ -236,12 +240,43 @@ export class NanobossTuiController {
       sessionId: session.sessionId,
       onEvent: (event) => {
         this.dispatch({ type: "frontend_event", event });
+        this.maybeSendLatchedStopRequest(event);
       },
       onError: (error) => {
         const message = error instanceof Error ? error.message : String(error);
         this.dispatch({ type: "local_status", text: `[stream] ${message}` });
       },
     });
+  }
+
+  private maybeSendLatchedStopRequest(event: FrontendEventEnvelope): void {
+    if (event.type !== "run_started" || this.state.stopRequestedRunId !== event.data.runId) {
+      return;
+    }
+
+    void this.sendStopRequest(event.data.runId);
+  }
+
+  private async sendStopRequest(runId: string): Promise<void> {
+    const sessionId = this.state.sessionId;
+    if (!sessionId) {
+      return;
+    }
+
+    try {
+      await (this.deps.cancelSessionRun ?? cancelSessionRun)(
+        this.params.serverUrl,
+        sessionId,
+        runId,
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.dispatch({
+        type: "local_stop_request_failed",
+        runId,
+        text: `[run] cancel failed: ${message}`,
+      });
+    }
   }
 
   private async createNewSession(): Promise<void> {

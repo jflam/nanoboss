@@ -5,7 +5,7 @@ export interface UiTurn {
   id: string;
   role: "user" | "assistant" | "system";
   markdown: string;
-  status?: "streaming" | "complete" | "failed";
+  status?: "streaming" | "complete" | "failed" | "cancelled";
   runId?: string;
   meta?: {
     procedure?: string;
@@ -52,6 +52,8 @@ export interface UiState {
   activeAssistantTurnId?: string;
   assistantParagraphBreakPending?: boolean;
   runStartedAtMs?: number;
+  pendingStopRequest: boolean;
+  stopRequestedRunId?: string;
   statusLine?: string;
   promptDiagnosticsLine?: string;
   tokenUsageLine?: string;
@@ -79,6 +81,7 @@ export function createInitialUiState(params: {
     activeWrapperToolCallIds: [],
     hiddenToolCallIds: [],
     runtimeNotes: [],
+    pendingStopRequest: false,
     inputDisabled: false,
     showToolCalls: params.showToolCalls ?? true,
     expandedToolOutput: params.expandedToolOutput ?? false,

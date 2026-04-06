@@ -1,6 +1,7 @@
 import type * as acp from "@agentclientprotocol/sdk";
 
 import { getBuildLabel } from "./build-info.ts";
+import { RunCancelledError, defaultCancellationMessage, normalizeRunCancelledError } from "./cancellation.ts";
 import { resolveDownstreamAgentConfig, toDownstreamAgentSelection } from "./config.ts";
 import { type SessionUpdateEmitter } from "./context.ts";
 import { DefaultConversationSession } from "../agent/default-session.ts";
@@ -28,8 +29,10 @@ import {
   waitForRecoveredProcedureDispatchCell,
 } from "../procedure/dispatch-recovery.ts";
 import {
+  buildRunCancelledEvent,
   buildRunCompletedEvent,
   executeTopLevelProcedure,
+  TopLevelProcedureCancelledError,
   TopLevelProcedureExecutionError,
   type ProcedureExecutionResult,
 } from "../procedure/runner.ts";
@@ -37,12 +40,19 @@ import { ProcedureRegistry } from "../procedure/registry.ts";
 import { formatAgentBanner } from "./runtime-banner.ts";
 import { shouldLoadDiskCommands } from "./runtime-mode.ts";
 import { isProcedureDispatchResult, isProcedureDispatchStatusResult } from "../mcp/server.ts";
-import { SessionStore } from "../session/index.ts";
+import type { SessionStore } from "../session/index.ts";
 import type {
   AgentTokenUsage,
   DownstreamAgentConfig,
   DownstreamAgentSelection,
 } from "./types.ts";
+
+interface ActiveRunState {
+  runId: string;
+  abortController: AbortController;
+  softStopController: AbortController;
+  softStopRequested: boolean;
+}
 
 interface SessionState {
   cwd: string;
@@ -52,7 +62,7 @@ interface SessionState {
   defaultConversation: DefaultConversationSession;
   syncedProcedureMemoryCellIds: Set<string>;
   recentRecoverySyncAtMs?: number;
-  abortController?: AbortController;
+  activeRun?: ActiveRunState;
   commands: FrontendCommand[];
 }
 
@@ -269,8 +279,18 @@ export class NanobossService {
     return this.sessions.get(sessionId)?.events;
   }
 
-  cancel(sessionId: string): void {
-    this.sessions.get(sessionId)?.abortController?.abort();
+  cancel(sessionId: string, runId?: string): void {
+    const activeRun = this.sessions.get(sessionId)?.activeRun;
+    if (!activeRun) {
+      return;
+    }
+
+    if ((runId && activeRun.runId !== runId) || activeRun.softStopRequested) {
+      return;
+    }
+
+    activeRun.softStopRequested = true;
+    activeRun.softStopController.abort();
   }
 
   destroySession(sessionId: string): void {
@@ -279,7 +299,8 @@ export class NanobossService {
       return;
     }
 
-    session.abortController?.abort();
+    session.activeRun?.abortController.abort();
+    session.activeRun?.softStopController.abort();
     session.defaultConversation.closeLiveSession();
     this.sessions.delete(sessionId);
   }
@@ -354,6 +375,11 @@ export class NanobossService {
     procedureName: string,
     procedurePrompt: string,
     emitter: CompositeSessionUpdateEmitter,
+    options: {
+      signal?: AbortSignal;
+      softStopSignal?: AbortSignal;
+      assertCanStartBoundary?: () => void;
+    } = {},
   ): Promise<{ result: ProcedureExecutionResult; tokenUsage?: AgentTokenUsage }> {
     const dispatchCorrelationId = crypto.randomUUID();
     const stopProgressBridge = startProcedureDispatchProgressBridge(
@@ -363,6 +389,7 @@ export class NanobossService {
     );
 
     try {
+      options.assertCanStartBoundary?.();
       const promptResult = await session.defaultConversation.prompt(
         buildProcedureDispatchPrompt(
           session.store.sessionId,
@@ -372,7 +399,8 @@ export class NanobossService {
           dispatchCorrelationId,
         ),
         {
-          signal: session.abortController?.signal,
+          signal: options.signal,
+          softStopSignal: options.softStopSignal,
           onUpdate: async (update) => {
             if (
               update.sessionUpdate === "agent_message_chunk" ||
@@ -444,6 +472,89 @@ export class NanobossService {
     );
   }
 
+  private emitDisplayIfNeeded(
+    emitter: CompositeSessionUpdateEmitter,
+    display: string | undefined,
+  ): void {
+    if (!display || emitter.hasStreamedText(display)) {
+      return;
+    }
+
+    emitter.emit({
+      sessionUpdate: "agent_message_chunk",
+      content: {
+        type: "text",
+        text: display,
+      },
+    });
+  }
+
+  private publishRunCompleted(params: {
+    session: SessionState;
+    sessionId: string;
+    runId: string;
+    procedure: string;
+    result: ProcedureExecutionResult;
+    tokenUsage?: AgentTokenUsage;
+    emitter: CompositeSessionUpdateEmitter;
+    markRunActivity: () => void;
+  }): void {
+    this.applyDefaultAgentSelection(params.session, params.result.defaultAgentSelection);
+    this.emitDisplayIfNeeded(params.emitter, params.result.display);
+    publishStoredMemoryCard(params.session, params.sessionId, params.runId, params.result.cell);
+    params.session.events.publish(
+      params.sessionId,
+      buildRunCompletedEvent({
+        runId: params.runId,
+        procedure: params.procedure,
+        result: params.result,
+        tokenUsage: params.tokenUsage,
+      }),
+    );
+    params.markRunActivity();
+  }
+
+  private publishRunFailed(params: {
+    session: SessionState;
+    sessionId: string;
+    runId: string;
+    procedure: string;
+    error: string;
+    markRunActivity: () => void;
+    cell?: { sessionId: string; cellId: string };
+  }): void {
+    params.session.events.publish(params.sessionId, {
+      type: "run_failed",
+      runId: params.runId,
+      procedure: params.procedure,
+      completedAt: new Date().toISOString(),
+      error: params.error,
+      cell: params.cell,
+    });
+    params.markRunActivity();
+  }
+
+  private publishRunCancelled(params: {
+    session: SessionState;
+    sessionId: string;
+    runId: string;
+    procedure: string;
+    message: string;
+    markRunActivity: () => void;
+    cell?: { sessionId: string; cellId: string };
+  }): void {
+    params.session.events.publish(
+      params.sessionId,
+      buildRunCancelledEvent({
+        runId: params.runId,
+        procedure: params.procedure,
+        message: params.message,
+        cell: params.cell,
+      }),
+    );
+    params.markRunActivity();
+  }
+
   async prompt(
     sessionId: string,
     promptText: string,
@@ -454,16 +565,32 @@ export class NanobossService {
       throw new Error(`Unknown session: ${sessionId}`);
     }
 
-    session.abortController?.abort();
-    session.abortController = new AbortController();
+    session.activeRun?.abortController.abort();
+    session.activeRun?.softStopController.abort();
 
     const text = promptText.trim();
     const { commandName, commandPrompt } = resolveCommand(text);
     this.touchCurrentSessionMetadata(this.persistSessionState(session, { prompt: text }));
     const procedure = this.registry.get(commandName);
     const procedureName = procedure?.name ?? commandName;
-    const runId = crypto.randomUUID();
+    const activeRun: ActiveRunState = {
+      runId: crypto.randomUUID(),
+      abortController: new AbortController(),
+      softStopController: new AbortController(),
+      softStopRequested: false,
+    };
+    session.activeRun = activeRun;
+    const runId = activeRun.runId;
     const startedAt = Date.now();
+    const assertCanStartBoundary = () => {
+      if (activeRun.softStopRequested) {
+        throw new RunCancelledError(defaultCancellationMessage("soft_stop"), "soft_stop");
+      }
+
+      if (activeRun.abortController.signal.aborted) {
+        throw new RunCancelledError(defaultCancellationMessage("abort"), "abort");
+      }
+    };
 
     let lastRunActivityAt = Date.now();
     const markRunActivity = () => {
@@ -493,30 +620,6 @@ export class NanobossService {
     });
     markRunActivity();
 
-    if (!procedure) {
-      const error = `Unknown command: /${commandName}`;
-      delegate?.emit({
-        sessionUpdate: "agent_message_chunk",
-        content: {
-          type: "text",
-          text: `${error}\n`,
-        },
-      });
-      await (delegate?.flush() ?? Promise.resolve());
-
-      session.events.publish(sessionId, {
-        type: "run_failed",
-        runId,
-        procedure: procedureName,
-        completedAt: new Date().toISOString(),
-        error,
-      });
-      markRunActivity();
-      clearInterval(heartbeatTimer);
-
-      return { stopReason: "end_turn", runId };
-    }
-
     const emitter = new CompositeSessionUpdateEmitter(
       sessionId,
       runId,
@@ -526,37 +629,52 @@ export class NanobossService {
     );
 
     try {
+      if (!procedure) {
+        const error = `Unknown command: /${commandName}`;
+        delegate?.emit({
+          sessionUpdate: "agent_message_chunk",
+          content: {
+            type: "text",
+            text: `${error}\n`,
+          },
+        });
+        await emitter.flush();
+
+        this.publishRunFailed({
+          session,
+          sessionId,
+          runId,
+          procedure: procedureName,
+          error,
+          markRunActivity,
+        });
+
+        return { stopReason: "end_turn", runId };
+      }
+
       if (text.startsWith("/") && procedure.name !== "default") {
         const dispatched = await this.dispatchProcedureIntoDefaultConversation(
           session,
           procedure.name,
           commandPrompt,
           emitter,
+          {
+            signal: activeRun.abortController.signal,
+            softStopSignal: activeRun.softStopController.signal,
+            assertCanStartBoundary,
+          },
         );
 
-        this.applyDefaultAgentSelection(session, dispatched.result.defaultAgentSelection);
-
-        if (dispatched.result.display && !emitter.hasStreamedText(dispatched.result.display)) {
-          emitter.emit({
-            sessionUpdate: "agent_message_chunk",
-            content: {
-              type: "text",
-              text: dispatched.result.display,
-            },
-          });
-        }
-
-        publishStoredMemoryCard(session, sessionId, runId, dispatched.result.cell);
-        session.events.publish(
+        this.publishRunCompleted({
+          session,
           sessionId,
-          buildRunCompletedEvent({
-            runId,
-            procedure: procedure.name,
-            result: dispatched.result,
-            tokenUsage: dispatched.tokenUsage,
-          }),
-        );
-        markRunActivity();
+          runId,
+          procedure: procedure.name,
+          result: dispatched.result,
+          tokenUsage: dispatched.tokenUsage,
+          emitter,
+          markRunActivity,
+        });
       } else {
         try {
           const result = await executeTopLevelProcedure({
@@ -567,7 +685,8 @@ export class NanobossService {
             procedure,
             prompt: commandPrompt,
             emitter,
-            signal: session.abortController.signal,
+            signal: activeRun.abortController.signal,
+            softStopSignal: activeRun.softStopController.signal,
             defaultConversation: session.defaultConversation,
             getDefaultAgentConfig: () => session.defaultAgentConfig,
             setDefaultAgentSelection: (selection) => {
@@ -580,51 +699,50 @@ export class NanobossService {
             onError: (ctx, errorText) => {
               ctx.print(errorText);
             },
+            assertCanStartBoundary,
           });
 
-          this.applyDefaultAgentSelection(session, result.defaultAgentSelection);
-
-          if (result.display && !emitter.hasStreamedText(result.display)) {
-            emitter.emit({
-              sessionUpdate: "agent_message_chunk",
-              content: {
-                type: "text",
-                text: result.display,
-              },
-            });
-          }
-
-          publishStoredMemoryCard(session, sessionId, runId, result.cell);
-          session.events.publish(
+          this.publishRunCompleted({
+            session,
             sessionId,
-            buildRunCompletedEvent({
-              runId,
-              procedure: procedure.name,
-              result,
-              tokenUsage: result.tokenUsage,
-            }),
-          );
-          markRunActivity();
+            runId,
+            procedure: procedure.name,
+            result,
+            tokenUsage: result.tokenUsage,
+            emitter,
+            markRunActivity,
+          });
         } catch (error) {
           if (error instanceof TopLevelProcedureExecutionError) {
-            session.events.publish(sessionId, {
-              type: "run_failed",
+            this.publishRunFailed({
+              session,
+              sessionId,
               runId,
               procedure: procedure.name,
-              completedAt: new Date().toISOString(),
               error: error.message,
               cell: error.cell,
+              markRunActivity,
             });
-            markRunActivity();
+          } else if (error instanceof TopLevelProcedureCancelledError) {
+            this.publishRunCancelled({
+              session,
+              sessionId,
+              runId,
+              procedure: procedure.name,
+              message: error.message,
+              cell: error.cell,
+              markRunActivity,
+            });
           }
           throw error;
         }
       }
     } catch (error) {
-      const cancelled = session.abortController?.signal.aborted || isAbortError(error);
-      const message = cancelled
-        ? "Cancelled"
-        : error instanceof Error ? error.message : String(error);
+      const cancelled = normalizeRunCancelledError(
+        error,
+        activeRun.softStopRequested ? "soft_stop" : "abort",
+      );
+      const message = cancelled?.message ?? (error instanceof Error ? error.message : String(error));
       if (!emitter.hasAnyStreamedText) {
         emitter.emit({
           sessionUpdate: "agent_message_chunk",
@@ -635,15 +753,24 @@ export class NanobossService {
         });
       }
 
-      if (!(error instanceof TopLevelProcedureExecutionError)) {
-        session.events.publish(sessionId, {
-          type: "run_failed",
+      if (cancelled && !(error instanceof TopLevelProcedureCancelledError)) {
+        this.publishRunCancelled({
+          session,
+          sessionId,
           runId,
-          procedure: procedure.name,
-          completedAt: new Date().toISOString(),
-          error: message,
+          procedure: procedureName,
+          message,
+          markRunActivity,
         });
-        markRunActivity();
+      } else if (!cancelled && !(error instanceof TopLevelProcedureExecutionError)) {
+        this.publishRunFailed({
+          session,
+          sessionId,
+          runId,
+          procedure: procedureName,
+          error: message,
+          markRunActivity,
+        });
       }
     } finally {
       clearInterval(heartbeatTimer);
@@ -659,7 +786,9 @@ export class NanobossService {
       });
       await emitter.flush();
       this.touchCurrentSessionMetadata(this.persistSessionState(session));
-      session.abortController = undefined;
+      if (session.activeRun === activeRun) {
+        session.activeRun = undefined;
+      }
     }
 
     return { stopReason: "end_turn", runId };
@@ -669,14 +798,6 @@ export class NanobossService {
 function getRunHeartbeatMs(): number {
   const value = Number(process.env.NANOBOSS_RUN_HEARTBEAT_MS ?? "5000");
   return Number.isFinite(value) && value > 0 ? value : 5000;
-}
-
-function isAbortError(error: unknown): boolean {
-  if (!(error instanceof Error)) {
-    return false;
-  }
-
-  return error.name === "AbortError" || /aborted|cancelled|canceled/i.test(error.message);
 }
 
 function publishStoredMemoryCard(

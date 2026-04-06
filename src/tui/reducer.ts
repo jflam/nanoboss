@@ -20,6 +20,7 @@ import {
 } from "./state.ts";
 
 const MAX_RUNTIME_NOTES = 8;
+const STOP_REQUESTED_STATUS = "[run] ESC received - stopping at next tool boundary...";
 
 export type UiAction =
   | {
@@ -41,6 +42,15 @@ export type UiAction =
   | {
       type: "local_status";
       text?: string;
+    }
+  | {
+      type: "local_stop_requested";
+      runId?: string;
+    }
+  | {
+      type: "local_stop_request_failed";
+      runId?: string;
+      text: string;
     }
   | {
       type: "local_agent_selection";
@@ -93,6 +103,8 @@ export function reduceUiState(state: UiState, action: UiAction): UiState {
         assistantParagraphBreakPending: undefined,
         promptDiagnosticsLine: undefined,
         tokenUsageLine: undefined,
+        pendingStopRequest: false,
+        stopRequestedRunId: undefined,
         statusLine: "[run] waiting for response",
         inputDisabled: true,
       };
@@ -116,6 +128,8 @@ export function reduceUiState(state: UiState, action: UiAction): UiState {
         runStartedAtMs: undefined,
         activeWrapperToolCallIds: [],
         hiddenToolCallIds: [],
+        pendingStopRequest: false,
+        stopRequestedRunId: undefined,
         statusLine: `[run] ${action.error}`,
         inputDisabled: false,
       };
@@ -123,6 +137,28 @@ export function reduceUiState(state: UiState, action: UiAction): UiState {
     case "local_status":
       return {
         ...state,
+        statusLine: action.text,
+      };
+    case "local_stop_requested":
+      return {
+        ...state,
+        pendingStopRequest: !action.runId,
+        stopRequestedRunId: action.runId,
+        statusLine: STOP_REQUESTED_STATUS,
+      };
+    case "local_stop_request_failed":
+      if (action.runId) {
+        if (state.stopRequestedRunId !== action.runId) {
+          return state;
+        }
+      } else if (!state.pendingStopRequest) {
+        return state;
+      }
+
+      return {
+        ...state,
+        pendingStopRequest: false,
+        stopRequestedRunId: undefined,
         statusLine: action.text,
       };
     case "local_agent_selection":
@@ -148,7 +184,10 @@ function reduceFrontendEvent(state: UiState, event: FrontendEventEnvelope): UiSt
         ...state,
         availableCommands: mergeAvailableCommands(event.data.commands),
       };
-    case "run_started":
+    case "run_started": {
+      const stopRequestedRunId = state.pendingStopRequest || state.stopRequestedRunId === event.data.runId
+        ? event.data.runId
+        : undefined;
       return {
         ...state,
         activeWrapperToolCallIds: [],
@@ -161,9 +200,12 @@ function reduceFrontendEvent(state: UiState, event: FrontendEventEnvelope): UiSt
         activeAssistantTurnId: undefined,
         assistantParagraphBreakPending: undefined,
         runStartedAtMs: Date.parse(event.data.startedAt) || Date.now(),
-        statusLine: `[run] ${event.data.procedure} working…`,
+        pendingStopRequest: false,
+        stopRequestedRunId,
+        statusLine: stopRequestedRunId ? STOP_REQUESTED_STATUS : `[run] ${event.data.procedure} working…`,
         inputDisabled: true,
       };
+    }
     case "memory_cards":
       return appendRuntimeLines(state, formatMemoryCardsLines(event.data.cards));
     case "memory_card_stored":
@@ -184,6 +226,10 @@ function reduceFrontendEvent(state: UiState, event: FrontendEventEnvelope): UiSt
         tokenUsageLine: formatTokenUsageLine(event.data.usage),
       };
     case "run_heartbeat": {
+      if (isStopRequestedForRun(state, event.data.runId)) {
+        return state;
+      }
+
       const now = Date.parse(event.data.at) || Date.now();
       const startedAt = state.runStartedAtMs ?? now;
       const elapsedSeconds = Math.max(1, Math.round((now - startedAt) / 1_000));
@@ -306,42 +352,26 @@ function reduceFrontendEvent(state: UiState, event: FrontendEventEnvelope): UiSt
     }
     case "run_completed": {
       const tokenUsageLine = event.data.tokenUsage ? formatTokenUsageLine(event.data.tokenUsage) : state.tokenUsageLine;
-      const nextState = finalizeAssistantTurn(state, {
-        status: "complete",
+      return finishRun(state, {
+        turnStatus: "complete",
         fallbackText: event.data.display,
         tokenUsageLine,
-      });
-      return {
-        ...nextState,
-        activeRunId: undefined,
-        activeProcedure: undefined,
-        activeAssistantTurnId: undefined,
-        assistantParagraphBreakPending: undefined,
-        runStartedAtMs: undefined,
-        activeWrapperToolCallIds: [],
-        hiddenToolCallIds: [],
-        tokenUsageLine,
         statusLine: `[run] ${event.data.procedure} completed`,
-        inputDisabled: false,
-      };
+      });
     }
     case "run_failed":
-      return {
-        ...finalizeAssistantTurn(state, {
-          status: "failed",
-          fallbackText: event.data.error,
-          failureMessage: event.data.error,
-        }),
-        activeRunId: undefined,
-        activeProcedure: undefined,
-        activeAssistantTurnId: undefined,
-        assistantParagraphBreakPending: undefined,
-        runStartedAtMs: undefined,
-        activeWrapperToolCallIds: [],
-        hiddenToolCallIds: [],
+      return finishRun(state, {
+        turnStatus: "failed",
+        fallbackText: event.data.error,
+        failureMessage: event.data.error,
         statusLine: `[run] ${event.data.error}`,
-        inputDisabled: false,
-      };
+      });
+    case "run_cancelled":
+      return finishRun(state, {
+        turnStatus: "cancelled",
+        fallbackText: event.data.message,
+        statusLine: `[run] ${event.data.procedure} stopped`,
+      });
   }
 }
 
@@ -400,6 +430,40 @@ function markAssistantTextBoundary(state: UiState): UiState {
   return {
     ...state,
     assistantParagraphBreakPending: true,
+  };
+}
+
+function finishRun(
+  state: UiState,
+  params: {
+    turnStatus: UiTurn["status"];
+    fallbackText?: string;
+    tokenUsageLine?: string;
+    failureMessage?: string;
+    statusLine: string;
+  },
+): UiState {
+  const nextState = finalizeAssistantTurn(state, {
+    status: params.turnStatus,
+    fallbackText: params.fallbackText,
+    tokenUsageLine: params.tokenUsageLine,
+    failureMessage: params.failureMessage,
+  });
+
+  return {
+    ...nextState,
+    activeRunId: undefined,
+    activeProcedure: undefined,
+    activeAssistantTurnId: undefined,
+    assistantParagraphBreakPending: undefined,
+    runStartedAtMs: undefined,
+    activeWrapperToolCallIds: [],
+    hiddenToolCallIds: [],
+    pendingStopRequest: false,
+    stopRequestedRunId: undefined,
+    tokenUsageLine: params.tokenUsageLine ?? nextState.tokenUsageLine,
+    statusLine: params.statusLine,
+    inputDisabled: false,
   };
 }
 
@@ -547,6 +611,10 @@ function getActiveWrapperDepth(activeWrapperToolCallIds: string[], toolCallId: s
 
 function isTerminalToolStatus(status: string): boolean {
   return status === "completed" || status === "failed" || status === "cancelled";
+}
+
+function isStopRequestedForRun(state: UiState, runId: string): boolean {
+  return state.stopRequestedRunId === runId;
 }
 
 function createAssistantTurn(state: UiState, markdown: string): UiTurn {

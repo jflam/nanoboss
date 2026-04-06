@@ -7,6 +7,7 @@ import { join } from "node:path";
 const MOCK_AGENT_PATH = join(process.cwd(), "tests/fixtures/mock-agent.ts");
 const SELF_COMMAND_PATH = join(process.cwd(), "dist", "nanoboss");
 
+import { DefaultConversationSession } from "../../src/agent/default-session.ts";
 import { ProcedureRegistry } from "../../src/procedure/registry.ts";
 import { extractProcedureDispatchResult, NanobossService } from "../../src/core/service.ts";
 
@@ -101,6 +102,23 @@ function readStoredMockSession(sessionStoreDir: string): {
   return JSON.parse(readFileSync(join(sessionStoreDir, fileName), "utf8")) as {
     turns: Array<{ role: "user" | "assistant"; text: string }>;
   };
+}
+
+async function waitForCondition(
+  predicate: () => boolean,
+  timeoutMs = 5_000,
+  message = "Timed out waiting for condition",
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (predicate()) {
+      return;
+    }
+
+    await Bun.sleep(20);
+  }
+
+  throw new Error(message);
 }
 
 describe("NanobossService", () => {
@@ -410,6 +428,125 @@ describe("NanobossService", () => {
       await service.prompt(session.sessionId, "/model copilot gpt-5.4/xhigh");
 
       expect(service.getSession(session.sessionId)?.agentLabel).toBe("copilot/gpt-5.4/x-high");
+    });
+  }, 30_000);
+
+  test("soft stop cancels the in-flight agent and blocks the next boundary", async () => {
+    await withMockAgentEnv(async () => {
+      const registry = new ProcedureRegistry(mkdtempSync(join(tmpdir(), "nab-service-stop-")));
+      registry.register({
+        name: "default",
+        description: "test soft stop boundaries",
+        async execute(_prompt, ctx) {
+          try {
+            await ctx.callAgent("cooperative cancel demo", { stream: false });
+          } catch {}
+          await ctx.callAgent("second boundary should never start", { stream: false });
+          return { display: "done" };
+        },
+      });
+
+      const service = new NanobossService(registry);
+      const session = service.createSession({ cwd: process.cwd() });
+      const promptPromise = service.prompt(session.sessionId, "stop after this boundary");
+
+      await waitForCondition(() => {
+        const events = service.getSessionEvents(session.sessionId)?.after(-1) ?? [];
+        return events.some((event) => event.type === "tool_started" && event.data.title.includes("cooperative cancel demo"));
+      });
+
+      const runStarted = (service.getSessionEvents(session.sessionId)?.after(-1) ?? []).findLast(
+        (event) => event.type === "run_started",
+      );
+      if (runStarted?.type !== "run_started") {
+        throw new Error("Missing run_started event");
+      }
+
+      service.cancel(session.sessionId, runStarted.data.runId);
+      await promptPromise;
+
+      const events = service.getSessionEvents(session.sessionId)?.after(-1) ?? [];
+      const firstStarted = events.find(
+        (event) => event.type === "tool_started" && event.data.title.includes("cooperative cancel demo"),
+      );
+      const firstUpdate = firstStarted?.type === "tool_started"
+        ? events.findLast(
+          (event) => event.type === "tool_updated" && event.data.toolCallId === firstStarted.data.toolCallId,
+        )
+        : undefined;
+      const startedTitles = events
+        .filter((event) => event.type === "tool_started")
+        .map((event) => event.data.title);
+      const cancelledRun = events.findLast((event) => event.type === "run_cancelled");
+
+      expect(startedTitles.some((title) => title.includes("cooperative cancel demo"))).toBe(true);
+      expect(startedTitles.some((title) => title.includes("second boundary should never start"))).toBe(false);
+      expect(firstUpdate?.type).toBe("tool_updated");
+      expect(firstUpdate?.data.status).toBe("cancelled");
+      expect(cancelledRun?.type).toBe("run_cancelled");
+      expect(cancelledRun?.data.message).toBe("Stopped.");
+    }, {
+      MOCK_AGENT_COOPERATIVE_CANCEL: "1",
+    });
+  }, 30_000);
+
+  test("run-scoped cancel ignores stale run ids", async () => {
+    const registry = new ProcedureRegistry(mkdtempSync(join(tmpdir(), "nab-service-stop-")));
+    registry.register({
+      name: "default",
+      description: "test stale stop ids",
+      async execute() {
+        await Bun.sleep(150);
+        return { display: "done" };
+      },
+    });
+
+    const service = new NanobossService(registry);
+    const session = service.createSession({ cwd: process.cwd() });
+    const promptPromise = service.prompt(session.sessionId, "hello");
+
+    await waitForCondition(() => {
+      const events = service.getSessionEvents(session.sessionId)?.after(-1) ?? [];
+      return events.some((event) => event.type === "run_started");
+    });
+
+    service.cancel(session.sessionId, "stale-run-id");
+    await promptPromise;
+
+    const events = service.getSessionEvents(session.sessionId)?.after(-1) ?? [];
+    expect(events.some((event) => event.type === "run_cancelled")).toBe(false);
+    expect(events.findLast((event) => event.type === "run_completed")?.type).toBe("run_completed");
+  });
+
+  test("soft stop keeps the persistent default ACP session alive", async () => {
+    await withMockAgentEnv(async () => {
+      const session = new DefaultConversationSession({
+        config: {
+          provider: "copilot",
+          command: "bun",
+          args: ["run", MOCK_AGENT_PATH],
+          cwd: process.cwd(),
+        },
+        sessionId: "soft-stop-session",
+      });
+      const softStopController = new AbortController();
+      const promptPromise = session.prompt("cooperative cancel demo", {
+        softStopSignal: softStopController.signal,
+      });
+
+      await Bun.sleep(100);
+      softStopController.abort();
+
+      await expect(promptPromise).rejects.toThrow("Stopped.");
+
+      const persistedSessionId = session.currentSessionId;
+      expect(persistedSessionId).toEqual(expect.any(String));
+      await expect(session.prompt("what is 2+2")).resolves.toMatchObject({ raw: "4" });
+      expect(session.currentSessionId).toBe(persistedSessionId);
+
+      session.closeLiveSession();
+    }, {
+      MOCK_AGENT_COOPERATIVE_CANCEL: "1",
     });
   }, 30_000);
 
