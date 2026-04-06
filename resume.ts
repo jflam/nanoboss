@@ -1,7 +1,6 @@
 import { promptForStoredSessionSelection } from "./src/tui/overlays/session-picker.ts";
 import { createNanobossTuiTheme } from "./src/tui/theme.ts";
 import { assertInteractiveTty, runTuiCli } from "./src/tui/run.ts";
-import { DEFAULT_HTTP_SERVER_URL } from "./src/core/defaults.ts";
 import { parseResumeOptions } from "./src/options/resume.ts";
 import {
   sessionRepository,
@@ -54,6 +53,8 @@ export async function runResumeCommand(
   }
 
   await (deps.runTuiCli ?? runTuiCli)({
+    cwd: selected.cwd,
+    connectionMode: options.connectionMode,
     serverUrl: options.serverUrl,
     showToolCalls: options.showToolCalls,
     sessionId: selected.sessionId,
@@ -65,8 +66,8 @@ function resolveExplicitSession(sessionId: string): SessionSummary | undefined {
 }
 
 function resolveDefaultSession(cwd: string): SessionSummary | undefined {
-  const current = sessionRepository.readCurrentSummary();
-  if (current && current.cwd === cwd) {
+  const current = sessionRepository.readCurrentSummary(cwd);
+  if (current) {
     return current;
   }
 
@@ -86,8 +87,8 @@ async function selectStoredSession(cwd: string): Promise<StoredSessionSelectionR
 }
 
 function withCurrentSession(cwd: string, sessions: SessionSummary[]): SessionSummary[] {
-  const current = sessionRepository.readCurrentSummary();
-  if (!current || current.cwd !== cwd || sessions.some((session) => session.sessionId === current.sessionId)) {
+  const current = sessionRepository.readCurrentSummary(cwd);
+  if (!current || sessions.some((session) => session.sessionId === current.sessionId)) {
     return sessions;
   }
 
@@ -118,7 +119,8 @@ function printHelp(): void {
     "  --list                Choose from saved sessions before resuming",
     "  --tool-calls          Show tool call progress lines (default)",
     "  --no-tool-calls       Hide tool call progress lines",
-    `  --server-url <url>    Connect to nanoboss over HTTP/SSE (default: ${DEFAULT_HTTP_SERVER_URL})`,
+    "  --server-url <url>    Connect to an existing nanoboss HTTP/SSE server",
+    "                        (default: start a private local server)",
     "  -h, --help            Show this help text",
     "",
   ].join("\n"));
