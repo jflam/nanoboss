@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -70,6 +70,25 @@ describe("ProcedureRegistry", () => {
 
     expect(procedure.name).toBe("second-opinion");
     expect(procedure.description).toContain("Codex");
+  });
+
+  test("loads typia-based procedures for a workspace without its own node_modules", async () => {
+    const workspaceRoot = mkdtempSync(join(tmpdir(), "nab-workspace-no-modules-"));
+    const commandsDir = join(workspaceRoot, "commands");
+    mkdirSync(commandsDir, { recursive: true });
+    symlinkSync(join(process.cwd(), "src"), join(workspaceRoot, "src"), "dir");
+    writeFileSync(join(workspaceRoot, "tsconfig.json"), readFileSync(join(process.cwd(), "tsconfig.json"), "utf8"), "utf8");
+    writeFileSync(
+      join(commandsDir, "second-opinion.ts"),
+      readFileSync(join(process.cwd(), "commands", "second-opinion.ts"), "utf8"),
+      "utf8",
+    );
+
+    const registry = new ProcedureRegistry(commandsDir);
+    const procedure = await registry.loadProcedureFromPath(join(commandsDir, "second-opinion.ts"));
+
+    expect(procedure.name).toBe("second-opinion");
+    expect(existsSync(join(workspaceRoot, "node_modules"))).toBe(false);
   });
 
   test("persists generated procedures into the profile commands directory outside the repo", async () => {

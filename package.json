@@ -22,6 +22,7 @@
     "@agentclientprotocol/sdk": "^0.17.1",
     "@mariozechner/pi-tui": "0.64.0",
     "@ryoppippi/unplugin-typia": "^2.6.5",
+    "@typia/transform": "^12.0.1",
     "js-tiktoken": "^1.0.21",
     "markdansi": "^0.2.1",
     "typia": "^12.0.1"

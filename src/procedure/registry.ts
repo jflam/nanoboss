@@ -1,8 +1,7 @@
 import type * as acp from "@agentclientprotocol/sdk";
-import UnpluginTypia from "@ryoppippi/unplugin-typia/bun";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import commitProcedure from "../../commands/commit.ts";
@@ -12,10 +11,11 @@ import modelProcedure from "../../commands/model.ts";
 import secondOpinionProcedure from "../../commands/second-opinion.ts";
 import tokensProcedure from "../../commands/tokens.ts";
 
-import { getNanobossHome } from "../core/config.ts";
+import { getNanobossHome, getProcedureRuntimeDir } from "../core/config.ts";
 import { createCreateProcedure } from "./create.ts";
 import { sessionToolProcedures } from "../mcp/session-tool-procedures.ts";
 import type { Procedure, ProcedureRegistryLike } from "../core/types.ts";
+import { createTypiaBunPlugin } from "./typia-bun-plugin.ts";
 
 interface ProcedureRegistryOptions {
   commandsDir?: string;
@@ -116,14 +116,17 @@ export class ProcedureRegistry implements ProcedureRegistryLike {
 
   private async buildProcedureModule(path: string): Promise<string> {
     const outdir = mkdtempSync(join(tmpdir(), "nanoboss-procedure-"));
-    const result = await Bun.build({
-      entrypoints: [path],
-      outdir,
-      format: "esm",
-      plugins: [UnpluginTypia({ log: false })],
-      sourcemap: "inline",
-      target: "bun",
-    });
+    const result = await withProcedureBuildNodeModules(path, async () =>
+      await Bun.build({
+        entrypoints: [path],
+        outdir,
+        format: "esm",
+        plugins: [createTypiaBunPlugin()],
+        sourcemap: "inline",
+        target: "bun",
+        autoloadBunfig: false,
+        autoloadTsconfig: false,
+      }));
 
     if (!result.success) {
       throw new Error([
@@ -201,6 +204,65 @@ function formatBuildLogs(logs: unknown[]): string[] {
 
 function uniquePaths(paths: string[]): string[] {
   return [...new Set(paths.map((path) => resolve(path)))];
+}
+
+async function withProcedureBuildNodeModules<T>(path: string, run: () => Promise<T>): Promise<T> {
+  const workspaceRoot = resolveProcedureWorkspaceRoot(path);
+  const nodeModulesPath = join(workspaceRoot, "node_modules");
+  if (existsSync(nodeModulesPath)) {
+    return await run();
+  }
+
+  const runtimeNodeModulesPath = resolveProcedureBuildNodeModulesPath();
+  let createdSymlink = false;
+
+  try {
+    symlinkSync(runtimeNodeModulesPath, nodeModulesPath, "dir");
+    createdSymlink = true;
+  } catch (error) {
+    if (!(error instanceof Error) || !("code" in error) || error.code !== "EEXIST") {
+      throw error;
+    }
+  }
+
+  try {
+    return await run();
+  } finally {
+    if (createdSymlink && isSymlinkPath(nodeModulesPath)) {
+      rmSync(nodeModulesPath, { recursive: true, force: true });
+    }
+  }
+}
+
+function resolveProcedureWorkspaceRoot(path: string): string {
+  const fileDir = dirname(resolve(path));
+  return basename(fileDir) === "commands"
+    ? dirname(fileDir)
+    : fileDir;
+}
+
+function resolveProcedureBuildNodeModulesPath(): string {
+  const installedRuntimeNodeModulesPath = join(getProcedureRuntimeDir(), "node_modules");
+  if (existsSync(installedRuntimeNodeModulesPath)) {
+    return installedRuntimeNodeModulesPath;
+  }
+
+  const sourceNodeModulesPath = resolve(import.meta.dir, "..", "..", "node_modules");
+  if (existsSync(sourceNodeModulesPath)) {
+    return sourceNodeModulesPath;
+  }
+
+  throw new Error(
+    `Procedure build runtime packages are not available. Expected ${installedRuntimeNodeModulesPath} or ${sourceNodeModulesPath}. Rebuild nanoboss to install its typia runtime packages.`,
+  );
+}
+
+function isSymlinkPath(path: string): boolean {
+  try {
+    return lstatSync(path).isSymbolicLink();
+  } catch {
+    return false;
+  }
 }
 
 function resolvePersistCommandsDir(params: {

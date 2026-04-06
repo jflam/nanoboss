@@ -30,6 +30,10 @@ export function getAgentTranscriptDir(): string {
   return join(getNanobossHome(), "agent-logs");
 }
 
+export function getProcedureRuntimeDir(): string {
+  return join(getNanobossHome(), "runtime");
+}
+
 export function resolveDownstreamAgentConfig(
   cwd?: string,
   selection?: DownstreamAgentSelection,

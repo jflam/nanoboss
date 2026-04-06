@@ -1,8 +1,9 @@
 import UnpluginTypia from "@ryoppippi/unplugin-typia/bun";
 import { execFileSync } from "node:child_process";
-import { accessSync, chmodSync, constants, copyFileSync, mkdirSync } from "node:fs";
+import { accessSync, chmodSync, constants, copyFileSync, cpSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
 
+import { getProcedureRuntimeDir } from "./src/core/config.ts";
 import { resolveNanobossInstallDir } from "./src/core/install-path.ts";
 
 const outfile = "./dist/nanoboss";
@@ -22,7 +23,7 @@ const result = await Bun.build({
   external: ["svelte/compiler"],
   compile: {
     outfile,
-    autoloadBunfig: true,
+    autoloadBunfig: false,
     autoloadTsconfig: false,
     autoloadPackageJson: false,
   },
@@ -38,14 +39,17 @@ if (!result.success) {
     overrideDir: Bun.env.NANOBOSS_INSTALL_DIR,
   });
   const target = join(installDir, "nanoboss");
+  const typiaRuntimeNodeModulesTarget = join(getProcedureRuntimeDir(), "node_modules");
 
   mkdirSync(dirname(outfile), { recursive: true });
   mkdirSync(installDir, { recursive: true });
+  installProcedureRuntimePackages(typiaRuntimeNodeModulesTarget);
   copyFileSync(outfile, target);
   chmodSync(target, 0o755);
 
   console.log(`Built nanoboss-${buildCommit}`);
   console.log(`Installed nanoboss to ${target}`);
+  console.log(`Installed procedure runtime packages to ${typiaRuntimeNodeModulesTarget}`);
 
   try {
     accessSync(installDir, constants.W_OK | constants.X_OK);
@@ -81,5 +85,42 @@ function isDirtyWorkingTree(): boolean {
     return false;
   } catch {
     return true;
+  }
+}
+
+function installProcedureRuntimePackages(targetNodeModulesDir: string): void {
+  rmSync(targetNodeModulesDir, { recursive: true, force: true });
+  mkdirSync(targetNodeModulesDir, { recursive: true });
+
+  const copiedPackages = new Set<string>();
+  copyPackageClosure("typia", targetNodeModulesDir, copiedPackages);
+}
+
+function copyPackageClosure(
+  packageName: string,
+  targetNodeModulesDir: string,
+  copiedPackages: Set<string>,
+): void {
+  if (copiedPackages.has(packageName)) {
+    return;
+  }
+  copiedPackages.add(packageName);
+
+  const sourcePackageDir = join(process.cwd(), "node_modules", ...packageName.split("/"));
+  const targetPackageDir = join(targetNodeModulesDir, ...packageName.split("/"));
+  mkdirSync(dirname(targetPackageDir), { recursive: true });
+  cpSync(sourcePackageDir, targetPackageDir, { recursive: true });
+
+  const packageJsonPath = join(sourcePackageDir, "package.json");
+  const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf8")) as {
+    dependencies?: Record<string, string>;
+    optionalDependencies?: Record<string, string>;
+  };
+
+  for (const dependencyName of Object.keys({
+    ...packageJson.dependencies,
+    ...packageJson.optionalDependencies,
+  })) {
+    copyPackageClosure(dependencyName, targetNodeModulesDir, copiedPackages);
   }
 }
