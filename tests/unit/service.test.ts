@@ -9,11 +9,16 @@ const SELF_COMMAND_PATH = join(process.cwd(), "dist", "nanoboss");
 const BUILD_HOOK_TIMEOUT_MS = 15_000;
 
 import { DefaultConversationSession } from "../../src/agent/default-session.ts";
+import type { CellRef } from "../../src/core/types.ts";
 import { ProcedureRegistry } from "../../src/procedure/registry.ts";
 import { buildProcedureDispatchJobsDir } from "../../src/procedure/dispatch-jobs.ts";
 import { TopLevelProcedureCancelledError } from "../../src/procedure/runner.ts";
-import type { SessionStore } from "../../src/session/index.ts";
+import { SessionStore } from "../../src/session/index.ts";
 import { extractProcedureDispatchResult, NanobossService } from "../../src/core/service.ts";
+
+interface InternalSessionState {
+  store: SessionStore;
+}
 
 beforeAll(() => {
   const build = spawnSync("bun", ["run", "build"], {
@@ -56,7 +61,7 @@ async function withMockAgentEnv(
 
   for (const [key, value] of Object.entries(extraEnv)) {
     if (value === undefined) {
-      delete process.env[key];
+      Reflect.deleteProperty(process.env, key);
     } else {
       process.env[key] = value;
     }
@@ -67,7 +72,7 @@ async function withMockAgentEnv(
   } finally {
     for (const [key, value] of originalEnv) {
       if (value === undefined) {
-        delete process.env[key];
+        Reflect.deleteProperty(process.env, key);
       } else {
         process.env[key] = value;
       }
@@ -123,6 +128,34 @@ async function waitForCondition(
   }
 
   throw new Error(message);
+}
+
+function isInternalSessionState(value: unknown): value is InternalSessionState {
+  return typeof value === "object"
+    && value !== null
+    && "store" in value
+    && value.store instanceof SessionStore;
+}
+
+function getInternalSessionState(service: NanobossService, sessionId: string): InternalSessionState {
+  const sessions = Reflect.get(service as object, "sessions") as unknown;
+  if (!(sessions instanceof Map)) {
+    throw new Error("Missing internal session map");
+  }
+
+  const sessionState: unknown = (sessions as Map<unknown, unknown>).get(sessionId);
+  if (!isInternalSessionState(sessionState)) {
+    throw new Error("Missing internal session state");
+  }
+
+  return sessionState;
+}
+
+function setDispatchProcedureIntoDefaultConversation(
+  service: NanobossService,
+  dispatch: (...args: unknown[]) => Promise<never>,
+): void {
+  Reflect.set(service as object, "dispatchProcedureIntoDefaultConversation", dispatch);
 }
 
 describe("NanobossService", () => {
@@ -208,6 +241,9 @@ describe("NanobossService", () => {
         expect(liveReplay.some((event) => event.type === "tool_started")).toBe(true);
         expect(liveReplay.some((event) => event.type === "text_delta")).toBe(true);
         expect(typeof liveCompletedAt).toBe("string");
+        if (typeof liveCompletedAt !== "string") {
+          throw new Error("Missing completed timestamp");
+        }
 
         service.destroySession(session.sessionId);
 
@@ -221,22 +257,19 @@ describe("NanobossService", () => {
         const restored = resumedEvents.find((event) => event.type === "run_restored");
         const commandsUpdated = resumedEvents.find((event) => event.type === "commands_updated");
 
-        expect(restored).toEqual({
-          sessionId: session.sessionId,
-          seq: 1,
-          type: "run_restored",
-          data: {
-            runId: expect.any(String),
-            procedure: "default",
-            prompt: "nested tool trace demo",
-            completedAt: liveCompletedAt,
-            cell: {
-              sessionId: session.sessionId,
-              cellId: expect.any(String),
-            },
-            status: "complete",
-          },
-        });
+        expect(restored?.type).toBe("run_restored");
+        if (restored?.type !== "run_restored") {
+          throw new Error("Missing run_restored event");
+        }
+        expect(restored.sessionId).toBe(session.sessionId);
+        expect(restored.seq).toBe(1);
+        expect(typeof restored.data.runId).toBe("string");
+        expect(restored.data.procedure).toBe("default");
+        expect(restored.data.prompt).toBe("nested tool trace demo");
+        expect(restored.data.completedAt).toBe(liveCompletedAt);
+        expect(restored.data.cell.sessionId).toBe(session.sessionId);
+        expect(typeof restored.data.cell.cellId).toBe("string");
+        expect(restored.data.status).toBe("complete");
         expect(normalizeReplayEvents(resumedEvents.slice(1))).toEqual(liveReplay);
         expect(commandsUpdated?.type).toBe("commands_updated");
       } finally {
@@ -283,6 +316,9 @@ describe("NanobossService", () => {
         const liveCancelledAt = liveReplay.findLast((event) => event.type === "run_cancelled")?.data.completedAt;
         expect(liveReplay.some((event) => event.type === "run_cancelled")).toBe(true);
         expect(typeof liveCancelledAt).toBe("string");
+        if (typeof liveCancelledAt !== "string") {
+          throw new Error("Missing cancelled timestamp");
+        }
 
         service.destroySession(session.sessionId);
 
@@ -295,22 +331,19 @@ describe("NanobossService", () => {
         const resumedEvents = resumedService.getSessionEvents(session.sessionId)?.after(-1) ?? [];
         const restored = resumedEvents.find((event) => event.type === "run_restored");
 
-        expect(restored).toEqual({
-          sessionId: session.sessionId,
-          seq: 1,
-          type: "run_restored",
-          data: {
-            runId: runStarted.data.runId,
-            procedure: "default",
-            prompt: "cooperative cancel demo",
-            completedAt: liveCancelledAt,
-            cell: {
-              sessionId: session.sessionId,
-              cellId: expect.any(String),
-            },
-            status: "cancelled",
-          },
-        });
+        expect(restored?.type).toBe("run_restored");
+        if (restored?.type !== "run_restored") {
+          throw new Error("Missing run_restored event");
+        }
+        expect(restored.sessionId).toBe(session.sessionId);
+        expect(restored.seq).toBe(1);
+        expect(restored.data.runId).toBe(runStarted.data.runId);
+        expect(restored.data.procedure).toBe("default");
+        expect(restored.data.prompt).toBe("cooperative cancel demo");
+        expect(restored.data.completedAt).toBe(liveCancelledAt);
+        expect(restored.data.cell.sessionId).toBe(session.sessionId);
+        expect(typeof restored.data.cell.cellId).toBe("string");
+        expect(restored.data.status).toBe("cancelled");
         expect(normalizeReplayEvents(resumedEvents.slice(1))).toEqual(liveReplay);
       } finally {
         service.destroySession(session.sessionId);
@@ -356,12 +389,16 @@ describe("NanobossService", () => {
       expect(toolTitles).toContain("Mock read README.md");
       expect(textEvents).toContain("done");
       expect(completed?.type).toBe("run_completed");
-      expect(completed?.data.tokenUsage).toMatchObject({
+      if (completed?.type !== "run_completed") {
+        throw new Error("Missing run_completed event");
+      }
+      const tokenUsage = completed.data.tokenUsage;
+      expect(tokenUsage).toMatchObject({
         source: "acp_usage_update",
         currentContextTokens: 512,
         maxContextTokens: 8192,
       });
-      expect(completed?.data.tokenUsage?.sessionId).toEqual(expect.any(String));
+      expect(typeof tokenUsage?.sessionId).toBe("string");
     });
   }, 30_000);
 
@@ -590,16 +627,9 @@ describe("NanobossService", () => {
 
     const service = new NanobossService(registry);
     const session = service.createSession({ cwd: process.cwd() });
-    const patchedService = service as NanobossService & {
-      sessions: Map<string, { store: SessionStore }>;
-      dispatchProcedureIntoDefaultConversation: (...args: unknown[]) => Promise<never>;
-    };
-    const sessionState = patchedService.sessions.get(session.sessionId);
-    if (!sessionState) {
-      throw new Error("Missing internal session state");
-    }
+    const sessionState = getInternalSessionState(service, session.sessionId);
 
-    const cancelledCell = sessionState.store.finalizeCell(
+    const cancelledResult = sessionState.store.finalizeCell(
       sessionState.store.startCell({
         procedure: "review",
         input: "/review the code",
@@ -609,10 +639,11 @@ describe("NanobossService", () => {
         display: "Stopped.",
         summary: "Stopped.",
       },
-    ).cell;
-    patchedService.dispatchProcedureIntoDefaultConversation = async () => {
+    );
+    const cancelledCell: CellRef = cancelledResult.cell;
+    setDispatchProcedureIntoDefaultConversation(service, async () => {
       throw new TopLevelProcedureCancelledError("Stopped.", cancelledCell);
-    };
+    });
 
     await service.prompt(session.sessionId, "/review the code");
 
@@ -620,8 +651,11 @@ describe("NanobossService", () => {
     const cancelledRun = events.findLast((event) => event.type === "run_cancelled");
 
     expect(cancelledRun?.type).toBe("run_cancelled");
-    expect(cancelledRun?.data.message).toBe("Stopped.");
-    expect(cancelledRun?.data.cell).toEqual(cancelledCell);
+    if (cancelledRun?.type !== "run_cancelled") {
+      throw new Error("Missing run_cancelled event");
+    }
+    expect(cancelledRun.data.message).toBe("Stopped.");
+    expect(cancelledRun.data.cell).toEqual(cancelledCell);
     expect(events.some((event) => event.type === "run_failed")).toBe(false);
   });
 
@@ -634,7 +668,9 @@ describe("NanobossService", () => {
         async execute(_prompt, ctx) {
           try {
             await ctx.callAgent("cooperative cancel demo", { stream: false });
-          } catch {}
+          } catch {
+            // Expected: the active boundary is cancelled before the next one can start.
+          }
           await ctx.callAgent("second boundary should never start", { stream: false });
           return { display: "done" };
         },
@@ -701,12 +737,7 @@ describe("NanobossService", () => {
 
       const service = new NanobossService(registry);
       const session = service.createSession({ cwd });
-      const sessionState = (service as NanobossService & { sessions: Map<string, { store: SessionStore }> })
-        .sessions
-        .get(session.sessionId);
-      if (!sessionState) {
-        throw new Error("Missing internal session state");
-      }
+      const sessionState = getInternalSessionState(service, session.sessionId);
       const jobsDir = buildProcedureDispatchJobsDir(sessionState.store.rootDir);
       const promptPromise = service.prompt(session.sessionId, "/review stop this");
 
@@ -795,7 +826,7 @@ describe("NanobossService", () => {
       await expect(promptPromise).rejects.toThrow("Stopped.");
 
       const persistedSessionId = session.currentSessionId;
-      expect(persistedSessionId).toEqual(expect.any(String));
+      expect(typeof persistedSessionId).toBe("string");
       await expect(session.prompt("what is 2+2")).resolves.toMatchObject({ raw: "4" });
       expect(session.currentSessionId).toBe(persistedSessionId);
 
