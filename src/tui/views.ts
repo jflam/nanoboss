@@ -4,6 +4,7 @@ import type { NanobossTuiTheme } from "./theme.ts";
 
 import { MessageCardComponent } from "./components/message-card.ts";
 import { ToolCardComponent } from "./components/tool-card.ts";
+import { formatElapsedRunTimer } from "./format.ts";
 
 export class NanobossAppView implements Component {
   private readonly container = new Container();
@@ -13,6 +14,7 @@ export class NanobossAppView implements Component {
     private readonly editor: Editor,
     private readonly theme: NanobossTuiTheme,
     initialState: UiState,
+    private readonly nowProvider: () => number = Date.now,
   ) {
     this.state = initialState;
     this.rebuild();
@@ -96,6 +98,10 @@ export class NanobossAppView implements Component {
   private buildActivityBarLine(): string {
     const separator = this.theme.dim(" • ");
     const parts = buildActivityBarParts(this.theme, this.state);
+    const runTimerLine = buildRunTimerLine(this.state, this.nowProvider());
+    if (runTimerLine) {
+      parts.push(this.theme.warning(runTimerLine));
+    }
     if (this.state.tokenUsageLine) {
       parts.push(this.theme.success(this.state.tokenUsageLine));
     }
@@ -166,6 +172,14 @@ function getActivityBarModelLabel(state: UiState): string {
   }
 
   return selection.model || "default";
+}
+
+function buildRunTimerLine(state: UiState, nowMs: number): string | undefined {
+  if (!state.inputDisabled || state.runStartedAtMs === undefined) {
+    return undefined;
+  }
+
+  return formatElapsedRunTimer(Math.max(0, nowMs - state.runStartedAtMs));
 }
 
 function renderTurnLabel(theme: NanobossTuiTheme, turn: UiTurn): string {

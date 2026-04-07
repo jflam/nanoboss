@@ -277,6 +277,76 @@ describe("NanobossTuiApp", () => {
     expect(queued).toEqual(["after this"]);
   });
 
+  test("refreshes the view while an active run is in progress so the timer can advance", async () => {
+    const editor = new FakeEditor();
+    let currentState: UiState = createInitialUiState({ cwd: "/repo", showToolCalls: true });
+    let capturedOnStateChange: ((state: UiState) => void) | undefined;
+    let setStateCalls = 0;
+    const intervalCallbacks: Array<() => void> = [];
+    const clearedIntervals: number[] = [];
+
+    const app = new NanobossTuiApp(
+      {
+        serverUrl: "http://localhost:3000",
+        showToolCalls: true,
+      },
+      {
+        createTerminal: () => ({
+          setTitle() {},
+          async drainInput() {},
+        }),
+        createTui: () => ({
+          addInputListener() {},
+          addChild() {},
+          setFocus() {},
+          start() {},
+          requestRender() {},
+          stop() {},
+        }),
+        createEditor: () => editor,
+        createController: (_params, deps) => {
+          capturedOnStateChange = deps.onStateChange;
+          return {
+            getState: () => currentState,
+            async handleSubmit() {},
+            async queuePrompt() {},
+            async cancelActiveRun() {},
+            toggleToolOutput() {},
+            requestExit() {},
+            async run() {
+              currentState = {
+                ...currentState,
+                inputDisabled: true,
+                runStartedAtMs: 1_000,
+              };
+              capturedOnStateChange?.(currentState);
+              intervalCallbacks[0]?.();
+              return undefined;
+            },
+            async stop() {},
+          };
+        },
+        createView: () => ({
+          setState() {
+            setStateCalls += 1;
+          },
+        }),
+        setInterval(callback: () => void) {
+          intervalCallbacks.push(callback);
+          return intervalCallbacks.length as unknown as ReturnType<typeof setInterval>;
+        },
+        clearInterval(handle) {
+          clearedIntervals.push(Number(handle));
+        },
+      },
+    );
+
+    await app.run();
+
+    expect(setStateCalls).toBe(3);
+    expect(clearedIntervals).toEqual([1]);
+  });
+
   test("applies local tool card theme changes to the shared theme instance", () => {
     const editor = new FakeEditor();
     const theme = createNanobossTuiTheme();

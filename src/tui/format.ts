@@ -136,6 +136,18 @@ export function formatTokenUsageLine(usage: AgentTokenUsage): string {
   return `[tokens] ${usage.source}`;
 }
 
+export function formatElapsedRunTimer(durationMs: number): string {
+  const totalSeconds = Math.max(0, Math.floor(durationMs / 1_000));
+  const hours = Math.floor(totalSeconds / 3_600);
+  const minutes = Math.floor((totalSeconds % 3_600) / 60);
+  const seconds = totalSeconds % 60;
+  if (hours > 0) {
+    return `[time] ${hours}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+  }
+
+  return `[time] ${minutes}:${String(seconds).padStart(2, "0")}`;
+}
+
 function formatValueRefInline(valueRef: ValueRef): string {
   return `session=${valueRef.cell.sessionId} cell=${valueRef.cell.cellId} path=${valueRef.path}`;
 }

@@ -74,6 +74,8 @@ export interface NanobossTuiAppDeps {
     deps: NanobossTuiControllerDeps,
   ) => ControllerLike;
   createView?: (editor: EditorLike, theme: NanobossTuiTheme, state: UiState) => ViewLike;
+  setInterval?: typeof globalThis.setInterval;
+  clearInterval?: typeof globalThis.clearInterval;
 }
 
 export class NanobossTuiApp {
@@ -87,6 +89,7 @@ export class NanobossTuiApp {
   private state: UiState;
   private autocompleteSignature = "";
   private stopped = false;
+  private liveRefreshInterval?: ReturnType<typeof setInterval>;
 
   constructor(
     private readonly params: NanobossTuiAppParams,
@@ -177,6 +180,7 @@ export class NanobossTuiApp {
     this.tui.start();
     this.terminal.setTitle("nanoboss");
     this.tui.requestRender(true);
+    this.startLiveRefresh();
 
     try {
       return await this.controller.run();
@@ -224,6 +228,7 @@ export class NanobossTuiApp {
     }
 
     this.stopped = true;
+    this.stopLiveRefresh();
     await this.controller.stop();
 
     try {
@@ -233,5 +238,31 @@ export class NanobossTuiApp {
     }
 
     this.tui.stop();
+  }
+
+  private startLiveRefresh(): void {
+    if (this.liveRefreshInterval) {
+      return;
+    }
+
+    const setIntervalFn = this.deps.setInterval ?? globalThis.setInterval;
+    this.liveRefreshInterval = setIntervalFn(() => {
+      if (this.stopped || !this.state.inputDisabled || this.state.runStartedAtMs === undefined) {
+        return;
+      }
+
+      this.view.setState(this.state);
+      this.tui.requestRender();
+    }, 1_000);
+  }
+
+  private stopLiveRefresh(): void {
+    if (!this.liveRefreshInterval) {
+      return;
+    }
+
+    const clearIntervalFn = this.deps.clearInterval ?? globalThis.clearInterval;
+    clearIntervalFn(this.liveRefreshInterval);
+    this.liveRefreshInterval = undefined;
   }
 }

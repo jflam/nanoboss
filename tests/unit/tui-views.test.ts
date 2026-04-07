@@ -72,6 +72,36 @@ describe("NanobossAppView", () => {
     expect(plain).toContain("tab queue");
   });
 
+  test("shows a live run timer next to token usage while a run is active", () => {
+    const state = {
+      ...createInitialUiState({ cwd: "/repo" }),
+      sessionId: "session-1",
+      inputDisabled: true,
+      runStartedAtMs: 5_000,
+      tokenUsageLine: "[tokens] 512 / 8,192 (6.3%)",
+      defaultAgentSelection: {
+        provider: "copilot" as const,
+        model: "gpt-5.4/xhigh",
+      },
+      agentLabel: "copilot/gpt-5.4/x-high",
+    };
+
+    const view = new NanobossAppView(
+      {
+        render: () => [""],
+        invalidate() {},
+      } as never,
+      createNanobossTuiTheme(),
+      state,
+      () => 70_000,
+    );
+
+    const plain = stripAnsi(view.render(120).join("\n"));
+
+    expect(plain).toContain("[time] 1:05");
+    expect(plain).toContain("[tokens] 512 / 8,192 (6.3%)");
+  });
+
   test("renders tool cards inline in transcript order without a separate activity panel", () => {
     const state = {
       ...createInitialUiState({ cwd: "/repo", showToolCalls: true }),
