@@ -165,6 +165,12 @@ export type PersistedFrontendEvent =
       stream: "agent";
     }
   | {
+      type: "assistant_notice";
+      runId: string;
+      text: string;
+      tone: "info" | "warning" | "error";
+    }
+  | {
       type: "tool_started";
       runId: string;
       toolCallId: string;

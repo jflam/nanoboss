@@ -1045,6 +1045,13 @@ function toPersistedReplayEvent(
         text: event.data.text,
         stream: event.data.stream,
       };
+    case "assistant_notice":
+      return {
+        type: "assistant_notice",
+        runId: event.data.runId,
+        text: event.data.text,
+        tone: event.data.tone,
+      };
     case "tool_started":
       return {
         type: "tool_started",

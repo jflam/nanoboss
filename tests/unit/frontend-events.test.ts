@@ -43,6 +43,23 @@ describe("frontend-events", () => {
 
     expect(
       mapSessionUpdateToFrontendEvents("run-1", {
+        sessionUpdate: "agent_message_chunk",
+        content: {
+          type: "text",
+          text: "Info: Operation cancelled by user\n",
+        },
+      }),
+    ).toEqual([
+      {
+        type: "assistant_notice",
+        runId: "run-1",
+        text: "Operation cancelled by user",
+        tone: "info",
+      },
+    ]);
+
+    expect(
+      mapSessionUpdateToFrontendEvents("run-1", {
         sessionUpdate: "usage_update",
         size: 258400,
         used: 12824,

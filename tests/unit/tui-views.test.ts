@@ -446,6 +446,37 @@ describe("NanobossAppView", () => {
     expect(stoppedLine).toContain("\u001b[38;2;253;186;116mStopped.\u001b[39m");
   });
 
+  test("renders info assistant notices as cards", () => {
+    const view = new NanobossAppView(
+      {
+        render: () => [""],
+        invalidate() {},
+      } as never,
+      createNanobossTuiTheme(),
+      {
+        ...createInitialUiState({ cwd: "/repo" }),
+        sessionId: "session-1",
+        turns: [
+          {
+            id: "assistant-1",
+            role: "assistant" as const,
+            markdown: "Operation cancelled by user",
+            status: "complete" as const,
+            displayStyle: "card" as const,
+            cardTone: "info" as const,
+          },
+        ],
+        transcriptItems: [{ type: "turn" as const, id: "assistant-1" }],
+      },
+    );
+
+    const rendered = view.render(120);
+    const infoLine = rendered.find((line) => stripAnsi(line).includes("Operation cancelled by user"));
+
+    expect(stripAnsi(rendered.join("\n"))).toContain("Operation cancelled by user");
+    expect(infoLine).toContain("\u001b[48;2;32;32;32m");
+  });
+
   test("renders read tool code with pi-style syntax colors", () => {
     const view = new NanobossAppView(
       {

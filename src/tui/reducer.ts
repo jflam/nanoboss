@@ -304,6 +304,11 @@ function reduceFrontendEvent(state: UiState, event: FrontendEventEnvelope): UiSt
         ...state,
         promptDiagnosticsLine: formatPromptDiagnosticsLine(event.data.diagnostics),
       };
+    case "assistant_notice":
+      if (shouldIgnoreMismatchedRunEvent(state, event.data.runId)) {
+        return state;
+      }
+      return appendAssistantNoticeCard(state, event.data.text, event.data.tone);
     case "text_delta":
       if (shouldIgnoreMismatchedRunEvent(state, event.data.runId)) {
         return state;
@@ -538,6 +543,38 @@ function appendAssistantText(state: UiState, text: string): UiState {
           markdown: `${turn.markdown}${text}`,
         }
       : turn),
+    assistantParagraphBreakPending: false,
+  };
+}
+
+function appendAssistantNoticeCard(
+  state: UiState,
+  text: string,
+  tone: "info" | "warning" | "error",
+): UiState {
+  const turns = state.activeAssistantTurnId
+    ? state.turns.map((turn) => turn.id === state.activeAssistantTurnId && turn.status === "streaming"
+      ? { ...turn, status: "complete" as const }
+      : turn)
+    : state.turns;
+  const turn = createTurn({
+    id: nextTurnId("assistant", turns.length),
+    role: "assistant",
+    markdown: text,
+    status: tone === "error" ? "failed" : "complete",
+    runId: state.activeRunId,
+    displayStyle: "card",
+    cardTone: tone,
+    meta: buildAssistantTurnMeta({
+      procedure: state.activeProcedure,
+    }),
+  });
+
+  return {
+    ...state,
+    turns: [...turns, turn],
+    transcriptItems: appendTranscriptItem(state.transcriptItems, { type: "turn", id: turn.id }),
+    activeAssistantTurnId: undefined,
     assistantParagraphBreakPending: false,
   };
 }

@@ -330,6 +330,73 @@ describe("tui reducer", () => {
     });
   });
 
+  test("renders streamed assistant notices as standalone cards and keeps later text separate", () => {
+    let state = createInitialUiState({ cwd: "/repo", showToolCalls: true });
+
+    state = reduceUiState(state, {
+      type: "frontend_event",
+      event: eventEnvelope("run_started", {
+        runId: "run-1",
+        procedure: "default",
+        prompt: "hello",
+        startedAt: new Date(0).toISOString(),
+      }),
+    });
+    state = reduceUiState(state, {
+      type: "frontend_event",
+      event: eventEnvelope("text_delta", {
+        runId: "run-1",
+        text: "Working.",
+        stream: "agent",
+      }),
+    });
+    state = reduceUiState(state, {
+      type: "frontend_event",
+      event: eventEnvelope("assistant_notice", {
+        runId: "run-1",
+        text: "Operation cancelled by user",
+        tone: "info",
+      }),
+    });
+    state = reduceUiState(state, {
+      type: "frontend_event",
+      event: eventEnvelope("text_delta", {
+        runId: "run-1",
+        text: "Done.",
+        stream: "agent",
+      }),
+    });
+
+    expect(state.turns).toMatchObject([
+      {
+        id: "assistant-1",
+        role: "assistant",
+        markdown: "Working.",
+        status: "complete",
+      },
+      {
+        id: "assistant-2",
+        role: "assistant",
+        markdown: "Operation cancelled by user",
+        status: "complete",
+        displayStyle: "card",
+        cardTone: "info",
+      },
+      {
+        id: "assistant-3",
+        role: "assistant",
+        markdown: "Done.",
+        status: "streaming",
+      },
+    ]);
+    expect(state.transcriptItems).toEqual([
+      { type: "turn", id: "assistant-1" },
+      { type: "turn", id: "assistant-2" },
+      { type: "turn", id: "assistant-3" },
+    ]);
+    expect(state.activeAssistantTurnId).toBe("assistant-3");
+  });
+
   test("ignores stale run events after a newer run has started", () => {
     let state = createInitialUiState({ cwd: "/repo", showToolCalls: true });
 

@@ -62,6 +62,12 @@ export type FrontendEvent =
       stream: "agent";
     }
   | {
+      type: "assistant_notice";
+      runId: string;
+      text: string;
+      tone: "info" | "warning" | "error";
+    }
+  | {
       type: "token_usage";
       runId: string;
       usage: AgentTokenUsage;
@@ -217,9 +223,21 @@ export function mapSessionUpdateToFrontendEvents(
   update: acp.SessionUpdate,
 ): FrontendEvent[] {
   switch (update.sessionUpdate) {
-    case "agent_message_chunk":
+    case "agent_message_chunk": {
       if (update.content.type !== "text") {
         return [];
+      }
+
+      const notice = parseAssistantNotice(update.content.text);
+      if (notice) {
+        return [
+          {
+            type: "assistant_notice",
+            runId,
+            text: notice.text,
+            tone: notice.tone,
+          },
+        ];
       }
 
       return [
@@ -230,6 +248,7 @@ export function mapSessionUpdateToFrontendEvents(
           stream: "agent",
         },
       ];
+    }
     case "tool_call": {
       const preview = summarizeToolCallStart({
         title: update.title,
@@ -309,6 +328,26 @@ export function mapSessionUpdateToFrontendEvents(
     default:
       return [];
   }
+}
+
+function parseAssistantNotice(text: string): {
+  text: string;
+  tone: "info" | "warning" | "error";
+} | undefined {
+  const normalized = text.trim();
+  if (normalized.length === 0 || normalized.includes("\n")) {
+    return undefined;
+  }
+
+  const match = /^(Info|Warning|Error):\s+(.+)$/.exec(normalized);
+  if (!match) {
+    return undefined;
+  }
+
+  return {
+    tone: match[1].toLowerCase() as "info" | "warning" | "error",
+    text: match[2],
+  };
 }
 
 function extractTokenUsage(rawOutput: unknown): AgentTokenUsage | undefined {
