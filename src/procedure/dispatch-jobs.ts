@@ -178,7 +178,9 @@ export class ProcedureDispatchJobManager {
     let defaultAgentConfig = resolveDownstreamAgentConfig(this.params.cwd, job.defaultAgentSelection);
     const emitter = new ProcedureDispatchProgressEmitter(
       buildProcedureDispatchProgressPath(store.rootDir, job.dispatchCorrelationId),
-      () => this.touchRunningJob(dispatchId),
+      () => {
+        this.touchRunningJob(dispatchId);
+      },
     );
 
     try {
