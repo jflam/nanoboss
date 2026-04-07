@@ -57,6 +57,14 @@ function expectDefined<T>(value: T | undefined, message: string): T {
   return value;
 }
 
+function expectString(value: unknown, message: string): string {
+  if (typeof value !== "string") {
+    throw new Error(message);
+  }
+
+  return value;
+}
+
 function seedSession(rootDir: string) {
   const store = new SessionStore({
     sessionId: "mcp-test-session",
@@ -384,8 +392,12 @@ describe("nanoboss MCP API", () => {
       dispatchId: string;
       status: string;
     };
+    const startedDispatchId = expectString(
+      started.dispatchId,
+      "Expected dispatchId to be a string",
+    );
 
-    expect(started.dispatchId).toMatch(/^dispatch_/);
+    expect(startedDispatchId).toMatch(/^dispatch_/);
     expect(started.status).toBe("queued");
 
     const reloadedApi = createNanobossMcpApi({
@@ -396,18 +408,18 @@ describe("nanoboss MCP API", () => {
     });
 
     const initialStatus = await callMcpTool(reloadedApi, "procedure_dispatch_status", {
-      dispatchId: started.dispatchId,
+      dispatchId: startedDispatchId,
     }) as {
       dispatchId: string;
       status: string;
       procedure: string;
     };
-    expect(initialStatus.dispatchId).toBe(started.dispatchId);
+    expect(initialStatus.dispatchId).toBe(startedDispatchId);
     expect(initialStatus.procedure).toBe("review");
     expect(["queued", "running", "completed"]).toContain(initialStatus.status);
 
     let completed = await callMcpTool(reloadedApi, "procedure_dispatch_wait", {
-      dispatchId: started.dispatchId,
+      dispatchId: startedDispatchId,
       waitMs: 10,
     }) as {
       dispatchId: string;
@@ -425,7 +437,7 @@ describe("nanoboss MCP API", () => {
 
     while (completed.status !== "completed") {
       completed = await callMcpTool(reloadedApi, "procedure_dispatch_wait", {
-        dispatchId: started.dispatchId,
+        dispatchId: startedDispatchId,
         waitMs: 50,
       }) as typeof completed;
     }
