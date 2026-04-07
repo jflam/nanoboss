@@ -59,7 +59,7 @@ describeE2E("/linter fixture (real agent)", () => {
 
       await linter.execute("", ctx);
 
-      execFileSync("bun", ["run", "lint", "--format", "json"], {
+      execFileSync("bun", ["../node_modules/eslint/bin/eslint.js", ".", "--cache", "--format", "json"], {
         cwd: fixtureDir,
         stdio: "pipe",
       });
