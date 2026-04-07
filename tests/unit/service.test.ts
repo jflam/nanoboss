@@ -10,6 +10,8 @@ const BUILD_HOOK_TIMEOUT_MS = 15_000;
 
 import { DefaultConversationSession } from "../../src/agent/default-session.ts";
 import { ProcedureRegistry } from "../../src/procedure/registry.ts";
+import { TopLevelProcedureCancelledError } from "../../src/procedure/runner.ts";
+import type { SessionStore } from "../../src/session/index.ts";
 import { extractProcedureDispatchResult, NanobossService } from "../../src/core/service.ts";
 
 beforeAll(() => {
@@ -567,6 +569,60 @@ describe("NanobossService", () => {
       expect(service.getSession(session.sessionId)?.agentLabel).toBe("copilot/gpt-5.4/x-high");
     });
   }, 30_000);
+
+  test("cancelled slash-command dispatches still publish a terminal run_cancelled event", async () => {
+    const registry = new ProcedureRegistry(mkdtempSync(join(tmpdir(), "nab-service-dispatch-stop-")));
+    registry.register({
+      name: "default",
+      description: "test default",
+      async execute() {
+        return { display: "default" };
+      },
+    });
+    registry.register({
+      name: "review",
+      description: "test review",
+      async execute() {
+        return { display: "review" };
+      },
+    });
+
+    const service = new NanobossService(registry);
+    const session = service.createSession({ cwd: process.cwd() });
+    const patchedService = service as NanobossService & {
+      sessions: Map<string, { store: SessionStore }>;
+      dispatchProcedureIntoDefaultConversation: (...args: unknown[]) => Promise<never>;
+    };
+    const sessionState = patchedService.sessions.get(session.sessionId);
+    if (!sessionState) {
+      throw new Error("Missing internal session state");
+    }
+
+    const cancelledCell = sessionState.store.finalizeCell(
+      sessionState.store.startCell({
+        procedure: "review",
+        input: "/review the code",
+        kind: "top_level",
+      }),
+      {
+        display: "Stopped.",
+        summary: "Stopped.",
+      },
+    ).cell;
+    patchedService.dispatchProcedureIntoDefaultConversation = async () => {
+      throw new TopLevelProcedureCancelledError("Stopped.", cancelledCell);
+    };
+
+    await service.prompt(session.sessionId, "/review the code");
+
+    const events = service.getSessionEvents(session.sessionId)?.after(-1) ?? [];
+    const cancelledRun = events.findLast((event) => event.type === "run_cancelled");
+
+    expect(cancelledRun?.type).toBe("run_cancelled");
+    expect(cancelledRun?.data.message).toBe("Stopped.");
+    expect(cancelledRun?.data.cell).toEqual(cancelledCell);
+    expect(events.some((event) => event.type === "run_failed")).toBe(false);
+  });
 
   test("soft stop cancels the in-flight agent and blocks the next boundary", async () => {
     await withMockAgentEnv(async () => {

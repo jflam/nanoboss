@@ -699,29 +699,55 @@ export class NanobossService {
       }
 
       if (text.startsWith("/") && procedure.name !== "default") {
-        const dispatched = await this.dispatchProcedureIntoDefaultConversation(
-          session,
-          procedure.name,
-          commandPrompt,
-          emitter,
-          {
-            signal: activeRun.abortController.signal,
-            softStopSignal: activeRun.softStopController.signal,
-            assertCanStartBoundary,
-          },
-        );
+        try {
+          const dispatched = await this.dispatchProcedureIntoDefaultConversation(
+            session,
+            procedure.name,
+            commandPrompt,
+            emitter,
+            {
+              signal: activeRun.abortController.signal,
+              softStopSignal: activeRun.softStopController.signal,
+              assertCanStartBoundary,
+            },
+          );
 
-        this.publishRunCompleted({
-          session,
-          sessionId,
-          runId,
-          procedure: procedure.name,
-          result: dispatched.result,
-          tokenUsage: dispatched.tokenUsage,
-          emitter,
-          markRunActivity,
-        });
-        persistedTopLevelCell = dispatched.result.cell;
+          this.publishRunCompleted({
+            session,
+            sessionId,
+            runId,
+            procedure: procedure.name,
+            result: dispatched.result,
+            tokenUsage: dispatched.tokenUsage,
+            emitter,
+            markRunActivity,
+          });
+          persistedTopLevelCell = dispatched.result.cell;
+        } catch (error) {
+          if (error instanceof TopLevelProcedureExecutionError) {
+            this.publishRunFailed({
+              session,
+              sessionId,
+              runId,
+              procedure: procedure.name,
+              error: error.message,
+              cell: error.cell,
+              markRunActivity,
+            });
+          } else if (error instanceof TopLevelProcedureCancelledError) {
+            this.publishRunCancelled({
+              session,
+              sessionId,
+              runId,
+              procedure: procedure.name,
+              message: error.message,
+              cell: error.cell,
+              markRunActivity,
+            });
+            persistedTopLevelCell = error.cell;
+          }
+          throw error;
+        }
       } else {
         try {
           const result = await executeTopLevelProcedure({
