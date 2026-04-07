@@ -171,7 +171,7 @@ export async function executeAutoresearchLoopCommand(
   const state = readAutoresearchState(paths);
   if (!state) {
     return {
-      display: "No autoresearch state exists in this repository.\n",
+      display: formatMissingAutoresearchDisplay("continue"),
       summary: "autoresearch-loop: missing state",
     };
   }
@@ -298,7 +298,7 @@ export async function executeAutoresearchStopCommand(
   const records = readExperimentLog(paths);
   if (!state) {
     return {
-      display: "No autoresearch session exists in this repository.\n",
+      display: formatMissingAutoresearchDisplay("stop"),
       summary: "autoresearch-stop: missing state",
     };
   }
@@ -337,7 +337,7 @@ export async function executeAutoresearchClearCommand(
   const state = readAutoresearchState(paths);
   if (!state) {
     return {
-      display: "No autoresearch session exists in this repository.\n",
+      display: formatMissingAutoresearchDisplay("clear"),
       summary: "autoresearch-clear: missing state",
     };
   }
@@ -371,7 +371,7 @@ export async function executeAutoresearchFinalizeCommand(
   const state = readAutoresearchState(paths);
   if (!state) {
     return {
-      display: "No autoresearch session exists in this repository.\n",
+      display: formatMissingAutoresearchDisplay("finalize"),
       summary: "autoresearch-finalize: missing state",
     };
   }
@@ -860,7 +860,7 @@ function buildStatusResult(
 ): ProcedureResult {
   if (!state) {
     return {
-      display: "No autoresearch session exists in this repository.\n",
+      display: formatMissingAutoresearchDisplay("status"),
       summary: "autoresearch: no state",
     };
   }
@@ -887,6 +887,23 @@ function buildStatusResult(
     ].join("\n") + "\n",
     summary: `autoresearch: ${state.status} ${state.branchName}`,
   };
+}
+
+function formatMissingAutoresearchDisplay(
+  action: "status" | "continue" | "stop" | "clear" | "finalize",
+): string {
+  switch (action) {
+    case "status":
+      return "No autoresearch session exists in this repository yet. Run /autoresearch <goal> to start one.\n";
+    case "continue":
+      return "Cannot continue autoresearch: no session exists in this repository yet. Run /autoresearch <goal> to start one.\n";
+    case "stop":
+      return "Cannot stop autoresearch: no session exists in this repository yet.\n";
+    case "clear":
+      return "Cannot clear autoresearch: no session exists in this repository yet.\n";
+    case "finalize":
+      return "Cannot finalize autoresearch: no session exists in this repository yet.\n";
+  }
 }
 
 function prepareAutoresearchBranch(

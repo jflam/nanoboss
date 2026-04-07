@@ -279,6 +279,30 @@ describe("autoresearch procedures", () => {
     expect(readGitFile(cwd, createdBranch as string, "score.txt")).toBe("90");
     expect(getCurrentBranch(cwd)).toBe(branchBeforeFinalize);
   });
+
+  test("reports command-specific guidance when no autoresearch session exists", async () => {
+    const cwd = createFixtureRepo();
+    const runtime = createFakeRuntime();
+    const ctx = createMockContext(cwd, async () => {
+      throw new Error("missing-state commands should not callAgent");
+    });
+
+    const status = await executeAutoresearchCommand("status", ctx, runtime.runtime);
+    const loop = await executeAutoresearchLoopCommand("", ctx, runtime.runtime);
+    const stop = await executeAutoresearchStopCommand("", ctx, runtime.runtime);
+    const clear = await executeAutoresearchClearCommand("", ctx);
+    const finalize = await executeAutoresearchFinalizeCommand("", ctx);
+
+    expect(status.display).toBe(
+      "No autoresearch session exists in this repository yet. Run /autoresearch <goal> to start one.\n",
+    );
+    expect(loop.display).toBe(
+      "Cannot continue autoresearch: no session exists in this repository yet. Run /autoresearch <goal> to start one.\n",
+    );
+    expect(stop.display).toBe("Cannot stop autoresearch: no session exists in this repository yet.\n");
+    expect(clear.display).toBe("Cannot clear autoresearch: no session exists in this repository yet.\n");
+    expect(finalize.display).toBe("Cannot finalize autoresearch: no session exists in this repository yet.\n");
+  });
 });
 
 function buildInitPlan(overrides: Partial<AutoresearchInitPlan> = {}): AutoresearchInitPlan {
