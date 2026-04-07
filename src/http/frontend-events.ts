@@ -289,18 +289,23 @@ export function mapSessionUpdateToFrontendEvents(
         },
       ];
     case "usage_update":
-      return [
-        {
-          type: "token_usage",
-          runId,
-          usage: normalizeAgentTokenUsage({
-            source: "acp_usage_update",
-            contextWindowTokens: update.size,
-            usedContextTokens: update.used,
-          })!,
-          sourceUpdate: "usage_update",
-        },
-      ];
+      {
+        const usage = normalizeAgentTokenUsage({
+          source: "acp_usage_update",
+          contextWindowTokens: update.size,
+          usedContextTokens: update.used,
+        });
+        return usage
+          ? [
+              {
+                type: "token_usage",
+                runId,
+                usage,
+                sourceUpdate: "usage_update",
+              },
+            ]
+          : [];
+      }
     default:
       return [];
   }
