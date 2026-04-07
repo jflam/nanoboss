@@ -11,9 +11,10 @@ const tempDirs: string[] = [];
 afterEach(() => {
   while (tempDirs.length > 0) {
     const dir = tempDirs.pop();
-    if (dir) {
-      rmSync(dir, { recursive: true, force: true });
+    if (dir === undefined) {
+      throw new Error("Expected temporary directory path");
     }
+    rmSync(dir, { recursive: true, force: true });
   }
 });
 
@@ -48,10 +49,6 @@ describe("/research", () => {
         },
       }),
     );
-
-    if (!result || typeof result === "string") {
-      throw new Error("Expected ProcedureResult");
-    }
 
     const plansDir = join(cwd, "plans");
     const planFiles = readdirSync(plansDir);
