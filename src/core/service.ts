@@ -30,7 +30,10 @@ import {
   procedureDispatchResultFromRecoveredCell,
   waitForRecoveredProcedureDispatchCell,
 } from "../procedure/dispatch-recovery.ts";
-import { ProcedureDispatchJobManager } from "../procedure/dispatch-jobs.ts";
+import {
+  ProcedureDispatchJobManager,
+  type ProcedureDispatchStatusResult,
+} from "../procedure/dispatch-jobs.ts";
 import {
   buildRunCancelledEvent,
   buildRunCompletedEvent,
@@ -472,6 +475,34 @@ export class NanobossService {
         };
       }
 
+      const dispatchStatus = await this.waitForProcedureDispatchResult({
+        session,
+        promptUpdates: promptResult.updates,
+        signal: options.signal,
+        softStopSignal: options.softStopSignal,
+      });
+      if (dispatchStatus?.status === "completed" && dispatchStatus.result) {
+        session.syncedProcedureMemoryCellIds.add(dispatchStatus.result.cell.cellId);
+        return {
+          result: dispatchStatus.result,
+          tokenUsage: normalizeAgentTokenUsage(
+            promptResult.tokenSnapshot ?? await session.defaultConversation.getCurrentTokenSnapshot(),
+            session.defaultAgentConfig,
+          ),
+        };
+      }
+      if (dispatchStatus?.status === "cancelled") {
+        throw new RunCancelledError(
+          dispatchStatus.error?.trim() || defaultCancellationMessage("soft_stop"),
+          "soft_stop",
+        );
+      }
+      if (dispatchStatus?.status === "failed") {
+        throw new Error(
+          dispatchStatus.error?.trim() || `Default session async dispatch failed for /${procedureName}.`,
+        );
+      }
+
       const recoveredCell = await waitForRecoveredProcedureDispatchCell(session.store, {
         procedureName,
         dispatchCorrelationId,
@@ -521,6 +552,42 @@ export class NanobossService {
     for (const dispatchCorrelationId of activeRun.dispatchCorrelationIds) {
       manager.cancelByCorrelationId(dispatchCorrelationId);
     }
+  }
+
+  private async waitForProcedureDispatchResult(params: {
+    session: SessionState;
+    promptUpdates: acp.SessionUpdate[];
+    signal?: AbortSignal;
+    softStopSignal?: AbortSignal;
+  }): Promise<ProcedureDispatchStatusResult | undefined> {
+    const dispatchId = extractProcedureDispatchId(params.promptUpdates);
+    if (!dispatchId) {
+      return undefined;
+    }
+
+    const manager = this.createProcedureDispatchManager(params.session);
+    let latest = extractProcedureDispatchStatus(params.promptUpdates) ?? await manager.status(dispatchId);
+    while (latest.status === "queued" || latest.status === "running") {
+      if (params.softStopSignal?.aborted) {
+        throw new RunCancelledError(defaultCancellationMessage("soft_stop"), "soft_stop");
+      }
+      if (params.signal?.aborted) {
+        throw new RunCancelledError(defaultCancellationMessage("abort"), "abort");
+      }
+
+      latest = await manager.wait(dispatchId, 1_000);
+    }
+
+    return latest;
+  }
+
+  private createProcedureDispatchManager(session: SessionState): ProcedureDispatchJobManager {
+    return new ProcedureDispatchJobManager({
+      cwd: session.cwd,
+      sessionId: session.store.sessionId,
+      rootDir: session.store.rootDir,
+      getRegistry: async () => this.registry,
+    });
   }
 
   private applyDefaultAgentSelection(
@@ -1029,6 +1096,40 @@ export function extractProcedureDispatchResult(updates: acp.SessionUpdate[]): Pr
   return undefined;
 }
 
+function extractProcedureDispatchId(updates: acp.SessionUpdate[]): string | undefined {
+  for (const update of [...updates].reverse()) {
+    if (update.sessionUpdate !== "tool_call_update") {
+      continue;
+    }
+
+    for (const candidate of collectProcedureDispatchCandidates(update)) {
+      const parsed = parseProcedureDispatchIdCandidate(candidate);
+      if (parsed) {
+        return parsed;
+      }
+    }
+  }
+
+  return undefined;
+}
+
+function extractProcedureDispatchStatus(updates: acp.SessionUpdate[]): ProcedureDispatchStatusResult | undefined {
+  for (const update of [...updates].reverse()) {
+    if (update.sessionUpdate !== "tool_call_update") {
+      continue;
+    }
+
+    for (const candidate of collectProcedureDispatchCandidates(update)) {
+      const parsed = parseProcedureDispatchStatusCandidate(candidate);
+      if (parsed) {
+        return parsed;
+      }
+    }
+  }
+
+  return undefined;
+}
+
 function toPersistedReplayEvent(
   event: FrontendEventEnvelope,
   runId: string,
@@ -1187,6 +1288,119 @@ function parseProcedureDispatchResultCandidate(value: unknown): ProcedureExecuti
   const nestedResult = (value as { result?: unknown }).result;
   if (nestedResult !== undefined) {
     const parsed = parseProcedureDispatchResultCandidate(nestedResult);
+    if (parsed) {
+      return parsed;
+    }
+  }
+
+  return undefined;
+}
+
+function parseProcedureDispatchIdCandidate(value: unknown): string | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  if (typeof value === "string") {
+    try {
+      return parseProcedureDispatchIdCandidate(JSON.parse(value) as unknown);
+    } catch {
+      return undefined;
+    }
+  }
+
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const parsed = parseProcedureDispatchIdCandidate(item);
+      if (parsed) {
+        return parsed;
+      }
+    }
+    return undefined;
+  }
+
+  if (typeof value !== "object") {
+    return undefined;
+  }
+
+  const dispatchId = (value as { dispatchId?: unknown }).dispatchId;
+  if (typeof dispatchId === "string" && dispatchId.trim()) {
+    return dispatchId;
+  }
+
+  const contentText = (value as { text?: unknown }).text;
+  if (typeof contentText === "string") {
+    const parsed = parseProcedureDispatchIdCandidate(contentText);
+    if (parsed) {
+      return parsed;
+    }
+  }
+
+  const nestedContent = (value as { content?: unknown }).content;
+  if (nestedContent !== undefined) {
+    const parsed = parseProcedureDispatchIdCandidate(nestedContent);
+    if (parsed) {
+      return parsed;
+    }
+  }
+
+  const nestedResult = (value as { result?: unknown }).result;
+  if (nestedResult !== undefined) {
+    const parsed = parseProcedureDispatchIdCandidate(nestedResult);
+    if (parsed) {
+      return parsed;
+    }
+  }
+
+  return undefined;
+}
+
+function parseProcedureDispatchStatusCandidate(value: unknown): ProcedureDispatchStatusResult | undefined {
+  if (isProcedureDispatchStatusResult(value)) {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    try {
+      return parseProcedureDispatchStatusCandidate(JSON.parse(value) as unknown);
+    } catch {
+      return undefined;
+    }
+  }
+
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const parsed = parseProcedureDispatchStatusCandidate(item);
+      if (parsed) {
+        return parsed;
+      }
+    }
+    return undefined;
+  }
+
+  if (!value || typeof value !== "object") {
+    return undefined;
+  }
+
+  const contentText = (value as { text?: unknown }).text;
+  if (typeof contentText === "string") {
+    const parsed = parseProcedureDispatchStatusCandidate(contentText);
+    if (parsed) {
+      return parsed;
+    }
+  }
+
+  const nestedContent = (value as { content?: unknown }).content;
+  if (nestedContent !== undefined) {
+    const parsed = parseProcedureDispatchStatusCandidate(nestedContent);
+    if (parsed) {
+      return parsed;
+    }
+  }
+
+  const nestedResult = (value as { result?: unknown }).result;
+  if (nestedResult !== undefined) {
+    const parsed = parseProcedureDispatchStatusCandidate(nestedResult);
     if (parsed) {
       return parsed;
     }
