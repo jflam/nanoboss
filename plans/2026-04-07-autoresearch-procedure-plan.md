@@ -117,6 +117,31 @@ Under this design, the procedure layer owns:
 - performing git keep/revert actions
 - dispatching the next iteration
 
+### What is *not* being proposed
+
+This plan does **not** assume that `/autoresearch-loop` writes a new ephemeral procedure for each experiment.
+
+The intended model is:
+
+- `/autoresearch-loop` is itself the stable procedure
+- each iteration is represented as structured state and log data
+- the agent proposes the next experiment in a typed or otherwise bounded result
+- the runner applies that experiment using normal editing/tool calls
+- the runner records the outcome in `autoresearch.jsonl` and `autoresearch.md`
+
+So the ephemeral thing is the **experiment record**, not the **procedure definition**.
+
+An experiment may include:
+
+- prompt/context for the idea
+- a short description
+- expected files in scope
+- benchmark result
+- keep/revert decision
+- resulting commit SHA if kept
+
+But it should not become a generated command module unless we later discover a very strong reason to make experiments first-class executable artifacts.
+
 ### Proposed procedure set
 
 #### 1. `/autoresearch`
@@ -168,6 +193,16 @@ Implementation-wise, this should be a deterministic runner in NanoBoss code, wit
 6. evaluate keep/revert in code
 7. persist state/log/doc updates
 8. enqueue the next iteration if still active
+
+The result of step 2 should be an **experiment spec**, not a generated procedure. For example, the agent could return structured fields like:
+
+- `idea`
+- `rationale`
+- `filesInScope`
+- `editInstructions`
+- `expectedMetricEffect`
+
+The runner then decides what to do with that spec.
 
 #### 3. `/autoresearch-stop`
 
@@ -309,6 +344,21 @@ The first implementation should explicitly separate deterministic orchestration 
 
 This preserves NanoBoss's intended architecture: code runs the state machine, the model fills in bounded judgment calls.
 
+### Why avoid ephemeral procedures here
+
+Generating a procedure per experiment would make lifecycle and resume semantics much less clear:
+
+- procedure creation would become part of normal loop execution
+- old experiment procedures would need cleanup or archival rules
+- resume would have to reconstruct code artifacts, not just state
+- the distinction between "control plane code" and "experiment payload" would blur
+
+For phase 1, the simpler and more NanoBoss-native design is:
+
+- one stable procedure for control
+- structured experiment specs for each iteration
+- durable logs and state for replay/resume
+
 ---
 
 ## Loop design in NanoBoss terms
@@ -328,8 +378,8 @@ This preserves NanoBoss's intended architecture: code runs the state machine, th
 Each loop iteration should:
 
 1. read current state and best-so-far context
-2. ask the agent for one scoped experiment idea
-3. apply the code change
+2. ask the agent for one scoped experiment spec
+3. apply the code change described by that spec
 4. run the benchmark from structured config via deterministic procedure code
 5. if benchmark passes, run optional checks from structured config via deterministic procedure code
 6. compare result against the best-so-far and noise floor in code
@@ -344,6 +394,8 @@ Each loop iteration should:
 9. continue or stop based on explicit stop state, max iterations, or hard failure
 
 The shell never decides whether to continue, keep, revert, or finalize; those transitions belong to the runner. In the preferred design, the loop does not require a shell artifact at all.
+
+The runner may invoke the agent repeatedly, but those calls stay inside the stable `/autoresearch-loop` procedure rather than materializing new procedures on disk.
 
 ### Resume phase
 
