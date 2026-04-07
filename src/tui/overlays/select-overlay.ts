@@ -97,12 +97,11 @@ export async function showSelectOverlay<T extends string>(
   options: SelectOverlayOptions<T>,
 ): Promise<T | undefined> {
   return await new Promise<T | undefined>((resolve) => {
-    let handle: OverlayHandle | undefined;
     const component = new SelectOverlay<T>(tui, theme, options, (value) => {
-      handle?.hide();
+      handle.hide();
       resolve(value);
     });
-    handle = tui.showOverlay(component, {
+    const handle: OverlayHandle = tui.showOverlay(component, {
       width: "70%",
       maxHeight: "70%",
       anchor: "center",
