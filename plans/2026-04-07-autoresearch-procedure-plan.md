@@ -541,3 +541,129 @@ This keeps the first version aligned with NanoBoss’s current strengths: proced
 3. Implement the TypeScript runner/state machine and safe git behavior.
 4. Implement entrypoint, stop, clear, and finalize procedures.
 5. Add coverage for initialization, keep/revert behavior, resume, and finalization.
+
+---
+
+## Recommended first experiment: reduce `bun test` end-to-end time in the `nanoboss` repo
+
+This is a good first validation run for the new procedures because it exercises the full loop with a single scalar metric, has an obvious user-facing payoff, and should produce small reviewable wins if the search stays focused on test harness/setup overhead.
+
+It also fits the current implementation well:
+
+- the metric is naturally "lower is better"
+- benchmark failure already means the candidate should be rejected and reverted
+- the loop can prove baseline, keep/revert, resume, stop, and finalize behavior in one realistic scenario
+- `/autoresearch-finalize` currently cherry-picks each kept commit onto its own fresh branch from the merge-base, so asking for small independent wins is especially important
+
+### Constraints to respect when running this experiment
+
+- start from a completely clean `nanoboss` worktree; the current implementation refuses to start, continue, finalize, or clear when the repo is dirty
+- make the benchmark command side-effect free; if the benchmark or checks dirty files that were not part of the proposed experiment, the iteration is marked failed
+- do **not** benchmark with coverage output, snapshot updates, or any command that writes cache/report files into the repo
+- use multiple samples for timing noise; the runner averages samples, and `betterDelta` is an absolute threshold, not a percentage
+- keep the first run short and reviewable; prefer `maxIterations: 5` and stop after the first clear win or two
+
+### Preparation in `nanoboss`
+
+1. Check out a clean starting point, ideally `main`, in the `nanoboss` repo.
+2. Add a tiny measurement helper so the benchmark can use explicit argv and a machine-readable metric without relying on a shell pipeline.
+3. Make that helper run `bun test`, forward the real output, and print one final marker line with the measured duration.
+
+Suggested helper:
+
+```ts
+import { spawnSync } from "node:child_process";
+
+const startedAt = performance.now();
+const result = spawnSync("bun", ["test"], {
+  encoding: "utf8",
+  maxBuffer: 20 * 1024 * 1024,
+});
+const durationMs = performance.now() - startedAt;
+
+if (result.stdout) process.stdout.write(result.stdout);
+if (result.stderr) process.stderr.write(result.stderr);
+process.stdout.write(`AUTORESEARCH_DURATION_MS=${durationMs.toFixed(1)}\n`);
+
+process.exit(result.status ?? 1);
+```
+
+`stdout-regex` is the simplest fit for the current benchmark parser because the helper can preserve normal test output and still emit one final parseable metric line.
+
+### Recommended initialization shape
+
+When starting the experiment, steer the initializer toward a session config roughly like this:
+
+```json
+{
+  "goalSummary": "bun-test-e2e",
+  "branchName": "autoresearch/bun-test-e2e",
+  "filesInScope": [
+    "package.json",
+    "bunfig.toml",
+    "tests",
+    "scripts/measure-bun-test-time.ts"
+  ],
+  "maxIterations": 5,
+  "benchmark": {
+    "argv": ["bun", "scripts/measure-bun-test-time.ts"],
+    "timeoutMs": 900000,
+    "samples": 3,
+    "metric": {
+      "name": "bun test duration",
+      "direction": "lower",
+      "unit": "ms",
+      "betterDelta": 250,
+      "source": "stdout-regex",
+      "pattern": "AUTORESEARCH_DURATION_MS=(\\d+(?:\\.\\d+)?)"
+    }
+  },
+  "checks": []
+}
+```
+
+Notes on that shape:
+
+- `samples: 3` is a good default for noisy wall-clock timing
+- `betterDelta: 250` is a reasonable starting point, but it should be raised if baseline variance is high or lowered if the suite is already very fast
+- `checks: []` is acceptable for the first run because the benchmark itself is already the full `bun test` correctness gate; if `nanoboss` has a cheap existing typecheck/smoke command, it can be added later
+- `filesInScope` should stay narrow; the first experiment should prefer test infrastructure, fixture setup, and test-runner configuration over broad product-code changes
+
+### Suggested `/autoresearch` prompt
+
+Use a prompt along these lines:
+
+> Reduce the end-to-end wall-clock time of `bun test` in the `nanoboss` repo without changing test behavior or coverage intent. Focus first on test harness/setup overhead, repeated fixture initialization, unnecessary serialization, and other small isolated changes. Prefer changes that can stand alone when cherry-picked from the merge-base.
+
+That prompt gives the agent the right optimization target and also reflects the current finalize behavior.
+
+### How to run the experiment
+
+1. Run `/autoresearch` with the prompt above from the root of the `nanoboss` repo.
+2. Let the initializer create the autoresearch branch, baseline, and repo-local files under `.git/nanoboss/autoresearch/`.
+3. Confirm the baseline via `/autoresearch status` and note the paths to:
+   - `autoresearch.state.json`
+   - `autoresearch.jsonl`
+   - `autoresearch.md`
+4. Let the loop run a few iterations.
+5. If the loop starts drifting, resume it with a targeted note such as `resume focus on shared test setup and fixture reuse; avoid product logic changes`.
+6. After one or two clear wins, stop the session with `/autoresearch-stop`.
+7. Run `/autoresearch-finalize` to create review branches for the kept commits.
+8. Only run `/autoresearch-clear` after the session is stopped and the desired review branches have been preserved.
+
+### What success should look like
+
+The experiment is successful if it demonstrates all of the following:
+
+- baseline state/log/summary files are created in `.git/nanoboss/autoresearch/`
+- at least one iteration is kept because it beats the current best by more than `betterDelta`
+- at least one rejected or failed candidate is cleanly reverted
+- the summary/log files are sufficient for a fresh agent to resume with useful context
+- `/autoresearch-finalize` produces at least one review branch that cherry-picks cleanly from the merge-base
+
+### Practical advice for the first run
+
+- keep the first successful change small; independent commits are easier for the current finalize implementation to export
+- avoid experiments that require a stack of dependent commits before any benefit appears
+- if the benchmark is noisy, increase `samples` before broadening the search space
+- if the benchmark writes generated files, fix that first before trusting the loop output
