@@ -29,6 +29,7 @@ interface PromptCollector {
   raw: string;
   updates: acp.SessionUpdate[];
   onUpdate?: CallAgentOptions["onUpdate"];
+  lastTask: Promise<void>;
 }
 
 interface DefaultConversationSessionParams {
@@ -142,6 +143,7 @@ class PersistentAcpSession {
   private activeCollector?: PromptCollector;
   private closed = false;
   private tokenSnapshot?: AgentTokenSnapshot;
+  private updateQueue: Promise<void> = Promise.resolve();
 
   private constructor(
     private readonly state: OpenAcpConnection,
@@ -241,6 +243,7 @@ class PersistentAcpSession {
       raw: "",
       updates: [],
       onUpdate: options.onUpdate,
+      lastTask: Promise.resolve(),
     };
     this.activeCollector = collector;
 
@@ -275,6 +278,7 @@ class PersistentAcpSession {
         throw error;
       }
 
+      await this.waitForCollectorToSettle(collector);
       this.tokenSnapshot = await collectTokenSnapshot({
         childPid: this.state.child.pid,
         config: this.config,
@@ -286,7 +290,7 @@ class PersistentAcpSession {
       return {
         raw: collector.raw,
         logFile: this.state.transcriptPath,
-        updates: collector.updates,
+        updates: [...collector.updates],
         tokenSnapshot: this.tokenSnapshot,
       };
     } finally {
@@ -311,29 +315,55 @@ class PersistentAcpSession {
       update: params.update,
     });
 
-    if (params.sessionId !== this.sessionId || !this.activeCollector) {
+    const collector = params.sessionId === this.sessionId
+      ? this.activeCollector
+      : undefined;
+    if (!collector) {
       return;
     }
 
-    const { update, tokenSnapshot } = await enrichToolCallUpdateWithTokenUsage({
-      childPid: this.state.child.pid,
-      config: this.config,
-      sessionId: this.sessionId,
-      update: params.update,
-      updates: this.activeCollector.updates,
+    const task = this.updateQueue.then(async () => {
+      const { update, tokenSnapshot } = await enrichToolCallUpdateWithTokenUsage({
+        childPid: this.state.child.pid,
+        config: this.config,
+        sessionId: this.sessionId,
+        update: params.update,
+        updates: collector.updates,
+      });
+      this.tokenSnapshot = tokenSnapshot ?? this.tokenSnapshot;
+      collector.updates.push(update);
+
+      if (
+        update.sessionUpdate === "agent_message_chunk" &&
+        update.content.type === "text"
+      ) {
+        collector.raw += update.content.text;
+      }
+
+      await collector.onUpdate?.(update);
     });
-    this.tokenSnapshot = tokenSnapshot ?? this.tokenSnapshot;
-    this.activeCollector.updates.push(update);
 
-    if (
-      update.sessionUpdate === "agent_message_chunk" &&
-      update.content.type === "text"
-    ) {
-      this.activeCollector.raw += update.content.text;
-    }
-
-    await this.activeCollector.onUpdate?.(update);
+    collector.lastTask = task;
+    this.updateQueue = task.catch(() => {});
+    await task;
   }
+
+  private async waitForCollectorToSettle(collector: PromptCollector): Promise<void> {
+    const settleMs = getPromptSettleMs();
+    for (;;) {
+      const currentTask = collector.lastTask;
+      await currentTask;
+      await Bun.sleep(settleMs);
+      if (collector.lastTask === currentTask) {
+        return;
+      }
+    }
+  }
+}
+
+function getPromptSettleMs(): number {
+  const value = Number(process.env.NANOBOSS_ACP_PROMPT_SETTLE_MS ?? "50");
+  return Number.isFinite(value) && value >= 0 ? value : 50;
 }
 
 function sameAgentConfig(left: DownstreamAgentConfig, right: DownstreamAgentConfig): boolean {

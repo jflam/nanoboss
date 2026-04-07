@@ -261,13 +261,22 @@ function reduceFrontendEvent(state: UiState, event: FrontendEventEnvelope): UiSt
         promptDiagnosticsLine: formatPromptDiagnosticsLine(event.data.diagnostics),
       };
     case "text_delta":
+      if (shouldIgnoreMismatchedRunEvent(state, event.data.runId)) {
+        return state;
+      }
       return appendAssistantText(state, event.data.text);
     case "token_usage":
+      if (shouldIgnoreMismatchedRunEvent(state, event.data.runId)) {
+        return state;
+      }
       return {
         ...state,
         tokenUsageLine: formatTokenUsageLine(event.data.usage),
       };
     case "run_heartbeat": {
+      if (shouldIgnoreMismatchedRunEvent(state, event.data.runId)) {
+        return state;
+      }
       if (isStopRequestedForRun(state, event.data.runId)) {
         return state;
       }
@@ -281,6 +290,9 @@ function reduceFrontendEvent(state: UiState, event: FrontendEventEnvelope): UiSt
       };
     }
     case "tool_started": {
+      if (shouldIgnoreMismatchedRunEvent(state, event.data.runId)) {
+        return state;
+      }
       const depth = state.activeWrapperToolCallIds.length;
       const isWrapper = isWrapperToolTitle(event.data.title);
       const suppressed = shouldSuppressToolTraceTitle(event.data.title);
@@ -393,6 +405,9 @@ function reduceFrontendEvent(state: UiState, event: FrontendEventEnvelope): UiSt
         : markAssistantTextBoundary(nextState);
     }
     case "run_completed": {
+      if (shouldIgnoreMismatchedRunEvent(state, event.data.runId)) {
+        return state;
+      }
       const tokenUsageLine = event.data.tokenUsage ? formatTokenUsageLine(event.data.tokenUsage) : state.tokenUsageLine;
       return finishRun(state, {
         turnStatus: "complete",
@@ -402,6 +417,9 @@ function reduceFrontendEvent(state: UiState, event: FrontendEventEnvelope): UiSt
       });
     }
     case "run_failed":
+      if (shouldIgnoreMismatchedRunEvent(state, event.data.runId)) {
+        return state;
+      }
       return finishRun(state, {
         turnStatus: "failed",
         fallbackText: event.data.error,
@@ -409,6 +427,9 @@ function reduceFrontendEvent(state: UiState, event: FrontendEventEnvelope): UiSt
         statusLine: `[run] ${event.data.error}`,
       });
     case "run_cancelled":
+      if (shouldIgnoreMismatchedRunEvent(state, event.data.runId)) {
+        return state;
+      }
       return finishRun(state, {
         turnStatus: "cancelled",
         fallbackText: event.data.message,
@@ -422,6 +443,10 @@ function mergeAvailableCommands(commands: FrontendCommand[]): string[] {
     ...commands.map((command) => `/${command.name}`),
     ...LOCAL_TUI_COMMANDS.map((command) => command.name),
   ]);
+}
+
+function shouldIgnoreMismatchedRunEvent(state: UiState, runId: string): boolean {
+  return state.activeRunId !== undefined && state.activeRunId !== runId;
 }
 
 function appendAssistantText(state: UiState, text: string): UiState {

@@ -162,6 +162,97 @@ describe("tui reducer", () => {
     expect(state.transcriptItems).toContainEqual({ type: "tool_call", id: "tool-1" });
   });
 
+  test("ignores stale run events after a newer run has started", () => {
+    let state = createInitialUiState({ cwd: "/repo", showToolCalls: true });
+
+    state = reduceUiState(state, {
+      type: "local_user_submitted",
+      text: "first",
+    });
+    state = reduceUiState(state, {
+      type: "frontend_event",
+      event: eventEnvelope("run_started", {
+        runId: "run-1",
+        procedure: "default",
+        prompt: "first",
+        startedAt: new Date(0).toISOString(),
+      }),
+    });
+    state = reduceUiState(state, {
+      type: "frontend_event",
+      event: eventEnvelope("text_delta", {
+        runId: "run-1",
+        text: "one",
+        stream: "agent",
+      }),
+    });
+    state = reduceUiState(state, {
+      type: "frontend_event",
+      event: eventEnvelope("run_completed", {
+        runId: "run-1",
+        procedure: "default",
+        completedAt: new Date(1).toISOString(),
+        cell: { sessionId: "session-1", cellId: "cell-1" },
+      }),
+    });
+
+    state = reduceUiState(state, {
+      type: "local_user_submitted",
+      text: "second",
+    });
+    state = reduceUiState(state, {
+      type: "frontend_event",
+      event: eventEnvelope("run_started", {
+        runId: "run-2",
+        procedure: "default",
+        prompt: "second",
+        startedAt: new Date(2).toISOString(),
+      }),
+    });
+
+    state = reduceUiState(state, {
+      type: "frontend_event",
+      event: eventEnvelope("text_delta", {
+        runId: "run-1",
+        text: " stale",
+        stream: "agent",
+      }),
+    });
+    state = reduceUiState(state, {
+      type: "frontend_event",
+      event: eventEnvelope("tool_started", {
+        runId: "run-1",
+        toolCallId: "stale-tool",
+        title: "Stale tool",
+        kind: "read",
+      }),
+    });
+    state = reduceUiState(state, {
+      type: "frontend_event",
+      event: eventEnvelope("run_completed", {
+        runId: "run-1",
+        procedure: "default",
+        completedAt: new Date(3).toISOString(),
+        cell: { sessionId: "session-1", cellId: "cell-2" },
+        display: "stale",
+      }),
+    });
+
+    expect(state.turns.map((turn) => ({
+      role: turn.role,
+      markdown: turn.markdown,
+      status: turn.status,
+      runId: turn.runId,
+    }))).toEqual([
+      { role: "user", markdown: "first", status: "complete", runId: undefined },
+      { role: "assistant", markdown: "one", status: "complete", runId: "run-1" },
+      { role: "user", markdown: "second", status: "complete", runId: undefined },
+    ]);
+    expect(state.toolCalls).toEqual([]);
+    expect(state.activeRunId).toBe("run-2");
+    expect(state.inputDisabled).toBe(true);
+  });
+
   test("latches a local stop request, preserves it across heartbeats, and finishes the run as cancelled", () => {
     let state = createInitialUiState({ cwd: "/repo", showToolCalls: true });
 

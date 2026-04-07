@@ -39,6 +39,7 @@ const STREAM_ASYNC_DISPATCH_PROGRESS = process.env.MOCK_AGENT_STREAM_ASYNC_DISPA
 const STRIP_ASYNC_WAIT_RAW_OUTPUT = process.env.MOCK_AGENT_STRIP_ASYNC_WAIT_RAW_OUTPUT === "1";
 const COOPERATIVE_CANCEL = process.env.MOCK_AGENT_COOPERATIVE_CANCEL === "1";
 const WRITE_COPILOT_LOG = process.env.MOCK_AGENT_WRITE_COPILOT_LOG === "1";
+const LATE_PREVIOUS_TURN_CHUNK_MS = Number(process.env.MOCK_AGENT_LATE_PREVIOUS_TURN_CHUNK_MS ?? "0");
 
 class MockAgent implements acp.Agent {
   private readonly sessions = new Map<string, LiveSession>();
@@ -165,6 +166,21 @@ class MockAgent implements acp.Agent {
         },
       },
     });
+
+    if (LATE_PREVIOUS_TURN_CHUNK_MS > 0 && prompt.toLowerCase().includes("what is 2+2")) {
+      setTimeout(() => {
+        void this.connection.sessionUpdate({
+          sessionId: params.sessionId,
+          update: {
+            sessionUpdate: "agent_message_chunk",
+            content: {
+              type: "text",
+              text: "[late previous turn chunk]",
+            },
+          },
+        });
+      }, LATE_PREVIOUS_TURN_CHUNK_MS);
+    }
 
     return { stopReason: "end_turn" };
   }

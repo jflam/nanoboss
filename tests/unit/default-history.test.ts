@@ -165,6 +165,36 @@ describe("/default native session continuity", () => {
   );
 
   test(
+    "ignores late previous-turn chunks when a live session is reused",
+    async () => {
+      const sessionStoreDir = mkdtempSync(join(tmpdir(), "nab-default-late-chunk-"));
+      const conversation = new DefaultConversationSession({
+        config: createMockConfig(process.cwd(), {
+          supportLoadSession: true,
+          sessionStoreDir,
+          extraEnv: {
+            MOCK_AGENT_LATE_PREVIOUS_TURN_CHUNK_MS: "25",
+          },
+        }),
+        sessionId: crypto.randomUUID(),
+      });
+
+      try {
+        const first = await conversation.prompt("what is 2+2");
+        expect(first.raw).toContain("4");
+        expect(first.raw).toContain("late previous turn");
+
+        const second = await conversation.prompt("simulate-long-run add 3 to result");
+        expect(second.raw).toBe("7");
+        expect(second.raw).not.toContain("late previous turn");
+      } finally {
+        conversation.closeLiveSession();
+      }
+    },
+    30_000,
+  );
+
+  test(
     "service publishes token usage from copilot logs after downstream tool calls",
     async () => {
       const previousHome = process.env.HOME;
