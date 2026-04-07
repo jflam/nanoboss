@@ -14,6 +14,8 @@ NanoBoss already has the core primitives needed to reproduce that behavior:
 
 The missing pieces are mostly **deterministic host-side experiment control** and a **procedure set** that turns those primitives into a long-running optimization workflow. In NanoBoss, the control loop should live in TypeScript procedure code, not in a shell script. The first implementation should stay CLI-first and persistence-first; the custom dashboard/export surface can come later.
 
+This document is broader design research, including async/resumable directions. For the concrete v1 implementation target, use `plans/2026-04-07-autoresearch-v1-sync-commentary-plan.md`, which narrows the command surface to explicit start/continue/status commands and defers background execution.
+
 ---
 
 ## Why this work matters

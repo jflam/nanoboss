@@ -2,7 +2,7 @@
 
 ## Decision
 
-The first desirable NanoBoss version of `/autoresearch` should be **synchronous, foreground, and chat-progressive**.
+The first desirable NanoBoss version of autoresearch should be **synchronous, foreground, and chat-progressive**.
 
 The v1 goal is **not** to prove async dispatch, dashboards, or long-running background orchestration. The v1 goal is to prove that the autoresearch loop itself can:
 
@@ -13,6 +13,16 @@ The v1 goal is **not** to prove async dispatch, dashboards, or long-running back
 5. produce at least one reviewable improvement when the benchmark allows it
 
 Async dispatch remains a later execution mode, not the definition of the feature.
+
+The intended v1 command surface is:
+
+- `/autoresearch-start <goal>`
+- `/autoresearch-continue [note]`
+- `/autoresearch-status`
+- `/autoresearch-finalize`
+- `/autoresearch-clear`
+
+`/autoresearch-stop` should be removed from the v1 design.
 
 ---
 
@@ -37,17 +47,27 @@ A synchronous first iteration can preserve all of that except true background ex
 When a user runs:
 
 ```text
-/autoresearch <goal>
+/autoresearch-start <goal>
 ```
 
 NanoBoss should:
 
-1. create or resume the autoresearch session
+1. create a new autoresearch session
 2. run the baseline and a bounded number of iterations **in the same foreground procedure call**
 3. stream concise "observer commentary" as the loop proceeds
 4. finish with a clear summary of what happened and what the current best result is
 
 The user should feel like they are **watching the research happen live** in the chat, not waiting silently for one big response.
+
+When a user later runs:
+
+```text
+/autoresearch-continue [note]
+```
+
+NanoBoss should continue from the **last durable autoresearch state**, optionally incorporating the note into future experiment selection.
+
+This is intentionally **not** a promise that ESC can pause and later resume an in-flight iteration exactly where it stopped. Under the current architecture, `continue` means "resume from the last clean persisted state if the repo is still in a resumable condition."
 
 ---
 
@@ -99,7 +119,7 @@ That is ideal for the desired UX: the host procedure can keep agent chatter quie
 `tests/unit/autoresearch-command.test.ts` already covers:
 
 - initialization
-- resume behavior
+- existing-session continuation behavior
 - kept vs. rejected experiments
 - failing checks
 - stop / clear / finalize flows
@@ -114,6 +134,18 @@ The current implementation routes continuation through async dispatch:
 - `executeAutoresearchLoopCommand(...)` performs one iteration and queues the next dispatch
 
 For v1, that dispatch chaining is unnecessary complexity. The one-iteration loop logic is useful; the async chaining is what should be deferred.
+
+### Existing behavior that should be made explicit in the v1 surface
+
+The current implementation overloads `/autoresearch` prompt parsing to mean:
+
+- `status`
+- `resume ...`
+- or almost any free-text continuation note once state exists
+
+That is too ambiguous for a clean v1. The current code also only supports continuation from durable state boundaries; it does **not** provide a strong "interrupt with ESC and later resume the exact suspended frame" guarantee.
+
+The v1 command design should make both of those facts explicit.
 
 ---
 
@@ -145,29 +177,35 @@ The commentary should be:
 
 ## Proposed v1 behavior
 
-### `/autoresearch <goal>`
+### `/autoresearch-start <goal>`
 
 Primary entrypoint for v1.
 
 Behavior:
 
-1. initialize the session if no state exists
+1. create a new autoresearch session
 2. run the baseline
 3. synchronously execute up to a bounded number of iterations
 4. stream commentary throughout
 5. end with a durable summary and a final result
 
-### `/autoresearch resume ...`
+If a session already exists, `start` should fail clearly instead of guessing whether the user meant "continue."
 
-Continue an existing session in the foreground.
+### `/autoresearch-continue [note]`
+
+Continue an existing session in the foreground from the last durable state.
 
 Behavior:
 
-1. append any resume note into state
-2. synchronously run more iterations from the current best state
-3. stream commentary using the same format as initial execution
+1. require existing repo-local autoresearch state
+2. confirm the branch/worktree is resumable
+3. append any continuation note into state
+4. synchronously run more iterations from the current best state
+5. stream commentary using the same format as initial execution
 
-### `/autoresearch status`
+This command should be explicit that it is **continue-from-state**, not **resume-from-interrupt**.
+
+### `/autoresearch-status`
 
 Keep this command.
 
@@ -185,11 +223,16 @@ Keep this command.
 
 It remains useful for resetting repo-local artifacts.
 
-### `/autoresearch-stop`
+### `/autoresearch`
 
-De-emphasize or defer.
+Do not use this as the primary v1 execution path.
 
-For a foreground-only v1, stop is not central because there is no background worker to interrupt. We should keep the command vocabulary in mind, but it does not need to drive the initial implementation.
+To avoid ambiguity between "new goal" and "continuation note," `/autoresearch` should either:
+
+1. become a help/overview command, or
+2. remain a compatibility alias that points users toward the explicit commands
+
+It should not be the canonical interface for implementation.
 
 ---
 
@@ -199,7 +242,7 @@ For a foreground-only v1, stop is not central because there is no background wor
 
 The current code already has two valuable layers:
 
-- initialization in `executeAutoresearchCommand(...)`
+- initialization / prompt routing in `executeAutoresearchCommand(...)`
 - one-iteration execution in `executeAutoresearchLoopCommand(...)`
 
 For v1, the command path should change from:
@@ -230,6 +273,18 @@ That helper can power both:
 
 This keeps async as a future runner choice rather than a separate logic path.
 
+### 2.5. Split the command surface explicitly
+
+The current `parseAutoresearchPrompt(...)` heuristic should not remain the primary surface for v1.
+
+Instead, the implementation should expose explicit procedures or command entrypoints for:
+
+- start
+- continue
+- status
+
+Those entrypoints can still share the same underlying helper logic in `src/autoresearch/runner.ts`, but the user-facing command contract should be explicit.
+
 ### 3. Add a foreground loop driver
 
 Introduce a driver in `src/autoresearch/runner.ts` with a shape like:
@@ -243,7 +298,7 @@ Introduce a driver in `src/autoresearch/runner.ts` with a shape like:
 4. write final summary
 5. return final `ProcedureResult`
 
-This driver should become the primary behavior for `/autoresearch` and `resume` in v1.
+This driver should become the primary behavior for `/autoresearch-start` and `/autoresearch-continue` in v1.
 
 ### 4. Introduce host-owned commentary formatting
 
@@ -309,8 +364,8 @@ Adapt `tests/unit/autoresearch-command.test.ts` so the v1 command path verifies 
 
 Examples:
 
-1. initialization test should assert baseline files exist and at least one foreground iteration can run
-2. resume test should assert more iterations occur synchronously
+1. start test should assert baseline files exist and at least one foreground iteration can run
+2. continue test should assert more iterations occur synchronously from durable state
 3. keep / reject / fail tests should continue to verify durable loop semantics
 
 ### Add commentary-focused tests
@@ -333,22 +388,24 @@ The existing finalize tests should still pass because the durable log / commit m
 
 The v1 is successful when all of the following are true:
 
-1. `/autoresearch <goal>` runs in the foreground without async dispatch.
-2. The user sees streamed progress commentary throughout the run.
-3. Repo-local state, log, and summary files are still created and updated.
-4. The loop still keeps wins, reverts regressions, and records failures deterministically.
-5. `/autoresearch status`, `/autoresearch-clear`, and `/autoresearch-finalize` still work with the same durable artifacts.
-6. The implementation remains structurally compatible with a later async runner.
+1. `/autoresearch-start <goal>` runs in the foreground without async dispatch.
+2. `/autoresearch-continue [note]` continues from the last durable state using explicit command semantics.
+3. The user sees streamed progress commentary throughout the run.
+4. Repo-local state, log, and summary files are still created and updated.
+5. The loop still keeps wins, reverts regressions, and records failures deterministically.
+6. `/autoresearch-status`, `/autoresearch-clear`, and `/autoresearch-finalize` still work with the same durable artifacts.
+7. The implementation remains structurally compatible with a later async runner.
 
 ---
 
 ## Implementation todos
 
-1. extract single-iteration loop logic from `executeAutoresearchLoopCommand(...)`
-2. add a synchronous foreground loop driver for `/autoresearch`
-3. introduce structured commentary events and `ctx.print(...)` formatting
-4. remove dispatch-driven continuation from the v1 command path
-5. update autoresearch unit tests for synchronous execution and streamed commentary
+1. split the command surface into explicit start / continue / status entrypoints
+2. extract single-iteration loop logic from `executeAutoresearchLoopCommand(...)`
+3. add a synchronous foreground loop driver for start and continue
+4. introduce structured commentary events and `ctx.print(...)` formatting
+5. remove dispatch-driven continuation from the v1 command path
+6. update autoresearch unit tests for synchronous execution, explicit command semantics, and streamed commentary
 
 ---
 
@@ -365,3 +422,9 @@ It preserves the parts of `pi-autoresearch` that matter most:
 - later finalization of kept wins
 
 What it postpones is only the product surface for background execution. That is an acceptable v1 tradeoff as long as the sync loop is built so that a future async runner can reuse the same core iteration engine and commentary event model.
+
+It also makes the command contract more honest:
+
+- `start` means start
+- `continue` means continue from durable state
+- it does **not** imply that ESC creates a resumable suspended frame
