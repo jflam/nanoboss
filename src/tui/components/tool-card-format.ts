@@ -41,7 +41,7 @@ export function normalizeToolName(toolCall: Pick<UiToolCall, "kind" | "title">):
     return "agent";
   }
 
-  const firstToken = title.split(/[\s:(\[]/, 1)[0] || "";
+  const firstToken = title.split(/[\s:([]/, 1)[0] || "";
   const lastSegment = firstToken.split(".").at(-1);
   return lastSegment || firstToken || undefined;
 }
@@ -436,8 +436,10 @@ function extractPathLike(record: Record<string, unknown> | undefined): string | 
   );
 }
 
+const ANSI_COLOR_PATTERN = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g");
+
 function stripAnsi(text: string): string {
-  return text.replace(/\x1b\[[0-9;]*m/g, "");
+  return text.replace(ANSI_COLOR_PATTERN, "");
 }
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
@@ -485,11 +487,23 @@ function stringifyValue(value: unknown): string | undefined {
     return value;
   }
 
+  if (typeof value === "number" || typeof value === "boolean" || typeof value === "bigint") {
+    return String(value);
+  }
+
+  if (typeof value === "symbol") {
+    return value.toString();
+  }
+
+  if (typeof value === "function") {
+    return value.name ? `[Function: ${value.name}]` : "[Function]";
+  }
+
   try {
     const text = JSON.stringify(value, null, 2);
     return text.length > MAX_FALLBACK_JSON_LENGTH ? `${text.slice(0, MAX_FALLBACK_JSON_LENGTH)}\n…` : text;
   } catch {
-    return String(value);
+    return Object.prototype.toString.call(value);
   }
 }
 

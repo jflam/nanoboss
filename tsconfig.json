@@ -32,6 +32,7 @@
     "nanoboss.ts",
     "cli.ts",
     "preload.ts",
+    "scripts/cleanup-sessions.ts",
     "src/**/*.ts",
     "commands/**/*.ts",
     "tests/**/*.ts"

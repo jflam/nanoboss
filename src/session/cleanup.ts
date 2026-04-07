@@ -214,8 +214,6 @@ function countJsonFiles(dir: string): number {
   }
 }
 
-}
-
 function isDirectoryEmpty(dir: string): boolean {
   try {
     return readdirSync(dir).length === 0;
@@ -233,7 +231,7 @@ function looksLikeTempCwd(cwd: string | undefined): boolean {
     return false;
   }
 
-  const value = cwd!.trim();
+  const value = cwd.trim();
   return (
     value.startsWith("/tmp/") ||
     value.startsWith("/private/tmp/") ||
@@ -254,6 +252,6 @@ function looksLikeFixturePrompt(initialPrompt: string | undefined): boolean {
     return false;
   }
 
-  const prompt = initialPrompt!.trim();
+  const prompt = initialPrompt.trim();
   return FIXTURE_PROMPTS.has(prompt) || FIXTURE_PROMPT_PREFIXES.some((prefix) => prompt.startsWith(prefix));
 }
