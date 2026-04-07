@@ -3,6 +3,6 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "lint": "node ../node_modules/eslint/bin/eslint.js . --cache"
+    "lint": "bun ../node_modules/eslint/bin/eslint.js . --cache"
   }
 }
