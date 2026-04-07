@@ -198,7 +198,7 @@ function readTypiaTransformOptions(config: unknown): TypiaTransformOptions | und
 }
 
 function extractRecord(value: object, key: string): Record<string, unknown> | undefined {
-  const entry = Reflect.get(value, key);
+  const entry = (value as Record<string, unknown>)[key];
   return typeof entry === "object" && entry !== null && !Array.isArray(entry)
     ? entry as Record<string, unknown>
     : undefined;
