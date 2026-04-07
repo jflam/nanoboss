@@ -273,6 +273,45 @@ describe("autoresearch procedures", () => {
     expect(getCurrentBranch(cwd)).toBe(branchBeforeFinalize);
   });
 
+  test("finalize replays prior kept commits onto later review branches", async () => {
+    const cwd = createFixtureRepo();
+    await executeAutoresearchStartCommand(
+      "reduce the score benchmark",
+      createMockContext(cwd, async (_prompt, callCount) => {
+        if (callCount === 1) {
+          return buildInitPlan({ maxIterations: 2 });
+        }
+        if (callCount === 2) {
+          return buildExperimentSpec("Lower the score", "Write 90 to score.txt", "score drops from 100 to 90");
+        }
+        if (callCount === 3) {
+          writeFileSync(join(cwd, "score.txt"), "90\n", "utf8");
+          return buildApplyResult("Wrote 90 to score.txt");
+        }
+        if (callCount === 4) {
+          return buildExperimentSpec("Lower the score again", "Write 80 to score.txt", "score drops from 90 to 80");
+        }
+
+        writeFileSync(join(cwd, "score.txt"), "80\n", "utf8");
+        return buildApplyResult("Wrote 80 to score.txt");
+      }),
+    );
+
+    const branchBeforeFinalize = getCurrentBranch(cwd);
+    const result = await executeAutoresearchFinalizeCommand(
+      "",
+      createMockContext(cwd, async () => {
+        throw new Error("finalize does not use callAgent");
+      }),
+    );
+
+    const branches = (result.data as { branches: Array<{ branchName: string }> }).branches;
+    expect(branches).toHaveLength(2);
+    expect(readGitFile(cwd, branches[0]?.branchName as string, "score.txt")).toBe("90");
+    expect(readGitFile(cwd, branches[1]?.branchName as string, "score.txt")).toBe("80");
+    expect(getCurrentBranch(cwd)).toBe(branchBeforeFinalize);
+  });
+
   test("prints high-signal commentary for baseline, iteration progress, decisions, and completion", async () => {
     const cwd = createFixtureRepo();
     const printed: string[] = [];

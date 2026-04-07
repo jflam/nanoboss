@@ -254,7 +254,7 @@ export async function executeAutoresearchFinalizeCommand(
 
   ensureCleanWorktree(paths.repoRoot, "finalize autoresearch");
   const records = readExperimentLog(paths);
-  const keptRecords = records.filter((record) => record.decision.status === "kept" && record.keptCommit);
+  const keptRecords = records.filter(isKeptAutoresearchRecord);
   if (keptRecords.length === 0) {
     return {
       data: {
@@ -267,16 +267,21 @@ export async function executeAutoresearchFinalizeCommand(
 
   const originalBranch = getCurrentBranch(paths.repoRoot);
   const createdBranches: AutoresearchFinalizeBranch[] = [];
+  const commitChain: string[] = [];
 
   try {
     for (const record of keptRecords) {
+      commitChain.push(record.keptCommit);
       const baseName = sanitizeBranchName(`autoresearch-review/${record.iteration}-${record.idea}`);
       const branchName = makeUniqueBranchName(paths.repoRoot, baseName);
       createAndSwitchBranch(paths.repoRoot, branchName, state.mergeBaseCommit);
-      const cherryPickedCommit = cherryPickCommit(paths.repoRoot, record.keptCommit as string);
+      let cherryPickedCommit = state.mergeBaseCommit;
+      for (const commitSha of commitChain) {
+        cherryPickedCommit = cherryPickCommit(paths.repoRoot, commitSha);
+      }
       createdBranches.push({
         runId: record.id,
-        sourceCommit: record.keptCommit as string,
+        sourceCommit: record.keptCommit,
         branchName,
         cherryPickedCommit,
         idea: record.idea,
@@ -300,6 +305,14 @@ export async function executeAutoresearchFinalizeCommand(
     ].join("\n") + "\n",
     summary: `autoresearch-finalize: ${createdBranches.length} branches`,
   };
+}
+
+function isKeptAutoresearchRecord(
+  record: AutoresearchExperimentRecord,
+): record is AutoresearchExperimentRecord & { keptCommit: string } {
+  return record.decision.status === "kept"
+    && typeof record.keptCommit === "string"
+    && record.keptCommit.length > 0;
 }
 
 async function initializeAutoresearch(
