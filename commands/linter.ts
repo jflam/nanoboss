@@ -17,11 +17,19 @@ export interface LinterError {
   rule: string;
 }
 
+interface ProcessCommand {
+  executable: string;
+  args: string[];
+}
+
+type LintAdapterCommand = ProcessCommand;
+
 export interface LintExecutionPlan {
   cwd: string;
   executable: string;
   args: string[];
-  parser: "eslint-json";
+  adapter?: LintAdapterCommand | null;
+  parser: LintOutputParser;
 }
 
 interface FileErrorGroup {
@@ -46,13 +54,34 @@ interface LintRunResult {
   command: string | null;
 }
 
-interface EslintJsonMessage {
-  line?: number;
-  column?: number;
-  message?: string;
-  ruleId?: string | null;
-  severity?: number;
+type JsonScalar = string | number | boolean | null;
+
+interface BaseJsonLintParser {
+  entriesPath?: string[];
+  lineField?: string;
+  columnField?: string;
+  messageField: string;
+  ruleField?: string;
+  severityField?: string;
+  errorSeverities?: JsonScalar[];
+  defaultRule?: string;
 }
+
+export interface DiagnosticArrayJsonParser extends BaseJsonLintParser {
+  kind: "diagnostic-array-json";
+  fileField: string;
+}
+
+export interface FileMessageArrayJsonParser extends BaseJsonLintParser {
+  kind: "file-message-array-json";
+  fileField: string;
+  messagesField: string;
+}
+
+export type LintOutputParser =
+  | "eslint-json"
+  | DiagnosticArrayJsonParser
+  | FileMessageArrayJsonParser;
 
 const LinterDiscoveryResultType = jsonType<LinterDiscoveryResult>(
   typia.json.schema<LinterDiscoveryResult>(),
@@ -62,6 +91,18 @@ const LinterDiscoveryResultType = jsonType<LinterDiscoveryResult>(
 const MAX_ROUNDS = 3;
 const MAX_FILES_PER_ROUND = 3;
 const textDecoder = new TextDecoder();
+const ESLINT_JSON_PARSER: FileMessageArrayJsonParser = {
+  kind: "file-message-array-json",
+  fileField: "filePath",
+  messagesField: "messages",
+  lineField: "line",
+  columnField: "column",
+  messageField: "message",
+  ruleField: "ruleId",
+  severityField: "severity",
+  errorSeverities: [2],
+  defaultRule: "parsing",
+};
 
 function renderRecommendations(recommendations: string[]): string {
   if (recommendations.length === 0) {
@@ -82,8 +123,13 @@ function displayErrorFile(cwd: string, file: string): string {
     : file;
 }
 
+function renderProcessCommand(command: ProcessCommand): string {
+  return [command.executable, ...command.args].join(" ");
+}
+
 function renderCommand(plan: LintExecutionPlan): string {
-  return [plan.executable, ...plan.args].join(" ");
+  const linterCommand = renderProcessCommand(plan);
+  return plan.adapter ? `${linterCommand} | ${renderProcessCommand(plan.adapter)}` : linterCommand;
 }
 
 function decodeProcessText(output: Uint8Array): string {
@@ -146,14 +192,17 @@ export function buildFixPrompt(group: FileErrorGroup): string {
 
 function buildDiscoveryPrompt(cwd: string, prompt: string): string {
   return [
-    `Inspect the repo at ${cwd} and determine whether an existing linter can be run in machine-readable JSON mode.`,
+    `Inspect the repo at ${cwd} and determine whether an existing linter can be run or adapted into machine-readable JSON mode.`,
     "Check existing scripts and linter config if needed, but do not install or configure anything.",
     "If a linter is runnable, actually run it once and return normalized lint errors from that run.",
     "If a linter is runnable, also return a reusable `plan` object with:",
     "- `cwd`: the absolute working directory to run from",
     "- `executable`: the direct executable to invoke",
     "- `args`: the exact argv needed to rerun the linter in JSON mode",
-    "- `parser`: currently only `eslint-json` is supported",
+    "- `adapter` (optional): a direct executable + args that reads the raw linter stdout on stdin and emits JSON for `parser`",
+    "- `parser`: either `eslint-json`, or a JSON parser descriptor using `diagnostic-array-json` or `file-message-array-json`",
+    "- custom parser descriptors may include `entriesPath`, `severityField`, and `errorSeverities` so reruns can filter errors correctly",
+    "If the linter cannot emit JSON directly, you may return an adapter command. It must be deterministic and rerunnable without extra reasoning.",
     "The plan must avoid shell operators, pipes, command substitution, and inline environment-variable assignments.",
     "If you cannot express the runnable linter in this schema, return status `missing_linter` with a short complaint and 1-3 concrete recommendations.",
     "If the linter runs successfully with zero errors, return status `configured` with an empty errors array and a valid plan.",
@@ -182,62 +231,155 @@ async function discoverLinter(
   return expectData(result, "Linter discovery returned no data");
 }
 
-function parseEslintJsonMessage(
+function parseJsonOutput(output: string, parserName: string): unknown {
+  if (output.trim().length === 0) {
+    throw new Error("Expected JSON output from the discovered linter command, but stdout was empty");
+  }
+
+  try {
+    return JSON.parse(output);
+  } catch (error) {
+    throw new Error(
+      `Failed to parse ${parserName} output: ${formatErrorMessage(error)}`,
+      { cause: error },
+    );
+  }
+}
+
+function asText(value: unknown): string | undefined {
+  if (typeof value === "string") {
+    return value;
+  }
+
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+
+  return undefined;
+}
+
+function asLineNumber(value: unknown): number | undefined {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === "string" && value.trim().length > 0) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }
+
+  return undefined;
+}
+
+function resolveEntries(parsed: unknown, entriesPath: string[] | undefined, parserName: string): unknown[] {
+  let current = parsed;
+
+  for (const segment of entriesPath ?? []) {
+    const record = asRecord(current);
+    if (!record || !(segment in record)) {
+      const renderedPath = (entriesPath ?? []).join(".");
+      throw new Error(`Expected ${parserName} output to contain an array at path \`${renderedPath}\``);
+    }
+
+    current = record[segment];
+  }
+
+  if (!Array.isArray(current)) {
+    throw new Error(`Expected ${parserName} output to resolve to an array of lint entries`);
+  }
+
+  return current;
+}
+
+function isErrorSeverity(record: Record<string, unknown>, parser: BaseJsonLintParser): boolean {
+  const severityField = parser.severityField;
+  const errorSeverities = parser.errorSeverities;
+
+  if (!severityField || !errorSeverities || errorSeverities.length === 0) {
+    return true;
+  }
+
+  return errorSeverities.some((severity) => record[severityField] === severity);
+}
+
+function normalizeLintMessage(
   cwd: string,
   filePath: string,
-  message: EslintJsonMessage,
+  record: Record<string, unknown>,
+  parser: BaseJsonLintParser,
 ): LinterError | null {
-  if ((message.severity ?? 0) < 2) {
+  if (!isErrorSeverity(record, parser)) {
     return null;
   }
 
   return {
     file: normalizeErrorFile(cwd, filePath),
-    line: message.line ?? 0,
-    column: message.column ?? 0,
-    message: message.message ?? "Unknown lint error",
-    rule: message.ruleId ?? "parsing",
+    line: parser.lineField ? asLineNumber(record[parser.lineField]) ?? 0 : 0,
+    column: parser.columnField ? asLineNumber(record[parser.columnField]) ?? 0 : 0,
+    message: asText(record[parser.messageField]) ?? "Unknown lint error",
+    rule: parser.ruleField
+      ? asText(record[parser.ruleField]) ?? (parser.defaultRule ?? "unknown")
+      : (parser.defaultRule ?? "unknown"),
   };
 }
 
-export function parseEslintJsonOutput(cwd: string, output: string): LinterError[] {
-  if (output.trim().length === 0) {
-    throw new Error("Expected JSON output from the discovered linter command, but stdout was empty");
-  }
-
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(output);
-  } catch (error) {
-    throw new Error(
-      `Failed to parse ESLint JSON output: ${formatErrorMessage(error)}`,
-      { cause: error },
-    );
-  }
-
-  if (!Array.isArray(parsed)) {
-    throw new Error("Expected ESLint JSON output to be an array");
-  }
-
+function parseDiagnosticArrayJsonOutput(
+  cwd: string,
+  output: string,
+  parser: DiagnosticArrayJsonParser,
+): LinterError[] {
+  const parsed = parseJsonOutput(output, parser.kind);
+  const entries = resolveEntries(parsed, parser.entriesPath, parser.kind);
   const errors: LinterError[] = [];
-  for (const entry of parsed) {
+
+  for (const entry of entries) {
     const record = asRecord(entry);
     if (!record) {
       continue;
     }
 
-    const filePath = typeof record.filePath === "string"
-      ? record.filePath
-      : undefined;
+    const filePath = asText(record[parser.fileField]);
     if (!filePath) {
       continue;
     }
 
-    const messages = Array.isArray(record.messages)
-      ? record.messages
-      : [];
+    const normalized = normalizeLintMessage(cwd, filePath, record, parser);
+    if (normalized) {
+      errors.push(normalized);
+    }
+  }
+
+  return errors;
+}
+
+function parseFileMessageArrayJsonOutput(
+  cwd: string,
+  output: string,
+  parser: FileMessageArrayJsonParser,
+): LinterError[] {
+  const parsed = parseJsonOutput(output, parser.kind);
+  const entries = resolveEntries(parsed, parser.entriesPath, parser.kind);
+
+  const errors: LinterError[] = [];
+  for (const entry of entries) {
+    const record = asRecord(entry);
+    if (!record) {
+      continue;
+    }
+
+    const filePath = asText(record[parser.fileField]);
+    if (!filePath) {
+      continue;
+    }
+
+    const messages = Array.isArray(record[parser.messagesField]) ? record[parser.messagesField] : [];
     for (const message of messages) {
-      const normalized = parseEslintJsonMessage(cwd, filePath, message as EslintJsonMessage);
+      const messageRecord = asRecord(message);
+      if (!messageRecord) {
+        continue;
+      }
+
+      const normalized = normalizeLintMessage(cwd, filePath, messageRecord, parser);
       if (normalized) {
         errors.push(normalized);
       }
@@ -247,32 +389,105 @@ export function parseEslintJsonOutput(cwd: string, output: string): LinterError[
   return errors;
 }
 
-function runPlannedLinter(plan: LintExecutionPlan): LintRunResult {
+function resolveLintParser(parser: LintOutputParser): DiagnosticArrayJsonParser | FileMessageArrayJsonParser {
+  return parser === "eslint-json" ? ESLINT_JSON_PARSER : parser;
+}
+
+export function parseLintOutput(cwd: string, output: string, parser: LintOutputParser): LinterError[] {
+  const resolved = resolveLintParser(parser);
+
+  switch (resolved.kind) {
+    case "diagnostic-array-json":
+      return parseDiagnosticArrayJsonOutput(cwd, output, resolved);
+    case "file-message-array-json":
+      return parseFileMessageArrayJsonOutput(cwd, output, resolved);
+  }
+}
+
+export function parseEslintJsonOutput(cwd: string, output: string): LinterError[] {
+  return parseLintOutput(cwd, output, "eslint-json");
+}
+
+interface ProcessRunResult {
+  exitCode: number;
+  stdout: Uint8Array;
+  stderr: Uint8Array;
+}
+
+function runProcess(
+  command: ProcessCommand,
+  cwd: string,
+  description: string,
+  stdin?: Uint8Array,
+): ProcessRunResult {
   let result: Bun.SyncSubprocess;
   try {
     result = Bun.spawnSync({
-      cmd: [plan.executable, ...plan.args],
-      cwd: plan.cwd,
+      cmd: [command.executable, ...command.args],
+      cwd,
       env: process.env,
+      stdin,
       stdout: "pipe",
       stderr: "pipe",
     });
   } catch (error) {
     throw new Error(
-      `Failed to start discovered linter command \`${renderCommand(plan)}\`: ${formatErrorMessage(error)}`,
+      `Failed to start ${description} \`${renderProcessCommand(command)}\`: ${formatErrorMessage(error)}`,
       { cause: error },
     );
   }
 
-  const stdout = decodeProcessText(result.stdout);
-  const stderr = decodeProcessText(result.stderr);
+  return {
+    exitCode: result.exitCode,
+    stdout: result.stdout,
+    stderr: result.stderr,
+  };
+}
 
-  const errors = parseEslintJsonOutput(plan.cwd, stdout);
+export function runPlannedLinter(plan: LintExecutionPlan): LintRunResult {
+  const linterResult = runProcess(
+    {
+      executable: plan.executable,
+      args: plan.args,
+    },
+    plan.cwd,
+    "discovered linter command",
+  );
 
-  if (result.exitCode !== 0 && result.exitCode !== 1 && errors.length === 0) {
-    const details = [stdout, stderr].filter((value) => value.length > 0).join("\n");
+  let parseOutput = linterResult.stdout;
+  const linterStdout = decodeProcessText(linterResult.stdout);
+  const linterStderr = decodeProcessText(linterResult.stderr);
+  let adapterStderr = "";
+
+  if (plan.adapter) {
+    const adapterResult = runProcess(
+      plan.adapter,
+      plan.cwd,
+      "discovered linter adapter command",
+      linterResult.stdout,
+    );
+    parseOutput = adapterResult.stdout;
+    adapterStderr = decodeProcessText(adapterResult.stderr);
+
+    if (adapterResult.exitCode !== 0) {
+      const details = [linterStdout, linterStderr, adapterStderr]
+        .filter((value) => value.length > 0)
+        .join("\n");
+      throw new Error(
+        `Discovered linter adapter command \`${renderProcessCommand(plan.adapter)}\` failed with exit code ${adapterResult.exitCode}${details ? `: ${details}` : ""}`,
+      );
+    }
+  }
+
+  const parserOutput = decodeProcessText(parseOutput);
+  const errors = parseLintOutput(plan.cwd, parserOutput, plan.parser);
+
+  if (linterResult.exitCode !== 0 && linterResult.exitCode !== 1 && errors.length === 0) {
+    const details = [linterStdout, linterStderr, adapterStderr]
+      .filter((value) => value.length > 0)
+      .join("\n");
     throw new Error(
-      `Discovered linter command \`${renderCommand(plan)}\` failed with exit code ${result.exitCode}${details ? `: ${details}` : ""}`,
+      `Discovered linter command \`${renderCommand(plan)}\` failed with exit code ${linterResult.exitCode}${details ? `: ${details}` : ""}`,
     );
   }
 

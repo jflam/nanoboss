@@ -3,7 +3,9 @@ import { describe, expect, test } from "bun:test";
 import {
   buildFixPrompt,
   groupErrorsByFile,
+  parseLintOutput,
   parseEslintJsonOutput,
+  runPlannedLinter,
   selectFixWave,
 } from "../../commands/linter.ts";
 
@@ -117,6 +119,147 @@ describe("/linter helpers", () => {
         column: 1,
         message: "parse error",
         rule: "parsing",
+      },
+    ]);
+  });
+
+  test("parses generic diagnostic-array json output via parser config", () => {
+    const errors = parseLintOutput(
+      "/repo",
+      JSON.stringify({
+        diagnostics: [
+          {
+            path: "src/app.ts",
+            row: "7",
+            col: 3,
+            text: "problem",
+            code: "custom/rule",
+            level: "error",
+          },
+          {
+            path: "src/app.ts",
+            row: 8,
+            col: 1,
+            text: "warning",
+            code: "custom/warn",
+            level: "warning",
+          },
+        ],
+      }),
+      {
+        kind: "diagnostic-array-json",
+        entriesPath: ["diagnostics"],
+        fileField: "path",
+        lineField: "row",
+        columnField: "col",
+        messageField: "text",
+        ruleField: "code",
+        severityField: "level",
+        errorSeverities: ["error"],
+      },
+    );
+
+    expect(errors).toEqual([
+      {
+        file: "/repo/src/app.ts",
+        line: 7,
+        column: 3,
+        message: "problem",
+        rule: "custom/rule",
+      },
+    ]);
+  });
+
+  test("parses generic file-message json output via parser config", () => {
+    const errors = parseLintOutput(
+      "/repo",
+      JSON.stringify({
+        files: [
+          {
+            filename: "/repo/src/other.ts",
+            diagnostics: [
+              {
+                row: 1,
+                col: 9,
+                text: "parse error",
+                level: "error",
+              },
+              {
+                row: 2,
+                col: 1,
+                text: "warning",
+                level: "warning",
+              },
+            ],
+          },
+        ],
+      }),
+      {
+        kind: "file-message-array-json",
+        entriesPath: ["files"],
+        fileField: "filename",
+        messagesField: "diagnostics",
+        lineField: "row",
+        columnField: "col",
+        messageField: "text",
+        severityField: "level",
+        errorSeverities: ["error"],
+        defaultRule: "generic",
+      },
+    );
+
+    expect(errors).toEqual([
+      {
+        file: "/repo/src/other.ts",
+        line: 1,
+        column: 9,
+        message: "parse error",
+        rule: "generic",
+      },
+    ]);
+  });
+
+  test("runs a discovered adapter before parsing rerun output", () => {
+    const cwd = process.cwd();
+    const result = runPlannedLinter({
+      cwd,
+      executable: "bun",
+      args: [
+        "-e",
+        "console.log('src/app.ts|4|2|problem|custom/rule'); process.exit(1);",
+      ],
+      adapter: {
+        executable: "bun",
+        args: [
+          "-e",
+          [
+            "const input = await new Response(Bun.stdin.stream()).text();",
+            "const [file, line, column, message, rule] = input.trim().split('|');",
+            "console.log(JSON.stringify({ diagnostics: [{ path: file, row: Number(line), col: Number(column), text: message, code: rule, level: 'error' }] }));",
+          ].join(" "),
+        ],
+      },
+      parser: {
+        kind: "diagnostic-array-json",
+        entriesPath: ["diagnostics"],
+        fileField: "path",
+        lineField: "row",
+        columnField: "col",
+        messageField: "text",
+        ruleField: "code",
+        severityField: "level",
+        errorSeverities: ["error"],
+      },
+    });
+
+    expect(result.command).toContain(" | ");
+    expect(result.errors).toEqual([
+      {
+        file: `${cwd}/src/app.ts`,
+        line: 4,
+        column: 2,
+        message: "problem",
+        rule: "custom/rule",
       },
     ]);
   });
