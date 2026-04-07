@@ -63,64 +63,6 @@ const AutoresearchApplyResultType = jsonType<AutoresearchApplyResult>(
   typia.createValidate<AutoresearchApplyResult>(),
 );
 
-type AutoresearchProgressEvent =
-  | { kind: "session_configuring" }
-  | { kind: "session_resuming"; branchName: string }
-  | {
-      kind: "baseline_started";
-      command: string;
-    }
-  | {
-      kind: "baseline_completed";
-      metricName: string;
-      metric?: number;
-      metricUnit?: string;
-      reason?: string;
-    }
-  | {
-      kind: "iteration_started";
-      iteration: number;
-      maxIterations: number;
-    }
-  | {
-      kind: "candidate_selected";
-      idea: string;
-    }
-  | {
-      kind: "candidate_applied";
-      summary: string;
-    }
-  | {
-      kind: "benchmark_started";
-      command: string;
-    }
-  | {
-      kind: "checks_failed";
-      checkName: string;
-    }
-  | {
-      kind: "decision_kept";
-      metric?: number;
-      metricUnit?: string;
-    }
-  | {
-      kind: "decision_reverted";
-      metric?: number;
-      metricUnit?: string;
-    }
-  | {
-      kind: "decision_failed";
-      reason: string;
-    }
-  | {
-      kind: "session_completed";
-      iterationCount: number;
-      bestMetric?: number;
-      metricName: string;
-      metricUnit?: string;
-      reason?: string;
-    };
-
 type AutoresearchIterationResult =
   | {
       kind: "recorded";
@@ -236,10 +178,7 @@ export async function executeAutoresearchContinueCommand(
     return prepared.pausedResult;
   }
 
-  emitAutoresearchProgress(ctx, {
-    kind: "session_resuming",
-    branchName: state.branchName,
-  });
+  printAutoresearchProgress(ctx, `Continuing autoresearch on ${state.branchName}...`);
 
   const records = readExperimentLog(paths);
   const nextState = writeAutoresearchState(paths, {
@@ -369,7 +308,7 @@ async function initializeAutoresearch(
   ctx: CommandContext,
 ): Promise<ProcedureResult> {
   ensureCleanWorktree(paths.repoRoot, "start autoresearch");
-  emitAutoresearchProgress(ctx, { kind: "session_configuring" });
+  printAutoresearchProgress(ctx, "Configuring autoresearch session...");
 
   const initPlan = await buildInitializationPlan(goal, ctx);
   const baseBranch = getCurrentBranch(paths.repoRoot) || "HEAD";
@@ -400,10 +339,10 @@ async function initializeAutoresearch(
     pendingContextNotes: [],
   });
 
-  emitAutoresearchProgress(ctx, {
-    kind: "baseline_started",
-    command: summarizeText(state.benchmark.argv.join(" "), 80),
-  });
+  printAutoresearchProgress(
+    ctx,
+    `Running baseline benchmark (${summarizeText(state.benchmark.argv.join(" "), 80)})...`,
+  );
 
   const baseline = runBenchmark(state.benchmark, paths.repoRoot);
   const baselineChecks = baseline.exitCode === 0 ? runChecks(state.checks, paths.repoRoot) : [];
@@ -433,13 +372,12 @@ async function initializeAutoresearch(
   state = writeAutoresearchState(paths, updateStateAfterRecord(state, baselineRecord));
   writeAutoresearchSummary(paths, state, [baselineRecord]);
 
-  emitAutoresearchProgress(ctx, {
-    kind: "baseline_completed",
-    metricName: state.benchmark.metric.name,
-    metric: baselineRecord.benchmark.metric,
-    metricUnit: state.benchmark.metric.unit,
-    reason: baselineRecord.decision.status === "failed" ? baselineRecord.decision.reason : undefined,
-  });
+  printAutoresearchProgress(
+    ctx,
+    baselineRecord.decision.status === "failed"
+      ? `Baseline failed: ${baselineRecord.decision.reason}.`
+      : `Baseline: ${state.benchmark.metric.name} -> ${formatMetricValue(baselineRecord.benchmark.metric, state.benchmark.metric.unit)}.`,
+  );
 
   if (baselineRecord.decision.status === "failed") {
     state = writeAutoresearchState(paths, {
@@ -447,14 +385,10 @@ async function initializeAutoresearch(
       status: "inactive",
     });
     writeAutoresearchSummary(paths, state, [baselineRecord]);
-    emitAutoresearchProgress(ctx, {
-      kind: "session_completed",
-      iterationCount: state.iterationCount,
-      bestMetric: state.currentBestMetric,
-      metricName: state.benchmark.metric.name,
-      metricUnit: state.benchmark.metric.unit,
-      reason: baselineRecord.decision.reason,
-    });
+    printAutoresearchProgress(
+      ctx,
+      `Autoresearch finished after ${state.iterationCount} iteration${state.iterationCount === 1 ? "" : "s"}. Best ${state.benchmark.metric.name}: ${formatMetricValue(state.currentBestMetric, state.benchmark.metric.unit)}. Reason: ${baselineRecord.decision.reason}.`,
+    );
     return buildForegroundCompletionResult(paths, state, [baselineRecord], baselineRecord.decision.reason);
   }
 
@@ -477,11 +411,10 @@ async function runForegroundAutoresearchLoop(params: {
   let completionReason: string | undefined;
 
   while (state.iterationCount < state.maxIterations) {
-    emitAutoresearchProgress(params.ctx, {
-      kind: "iteration_started",
-      iteration: state.iterationCount + 1,
-      maxIterations: state.maxIterations,
-    });
+    printAutoresearchProgress(
+      params.ctx,
+      `Iteration ${state.iterationCount + 1}/${state.maxIterations}: selecting the next experiment.`,
+    );
 
     const iteration = await runAutoresearchIteration({
       paths: params.paths,
@@ -499,33 +432,28 @@ async function runForegroundAutoresearchLoop(params: {
     records = [...records, iteration.record];
 
     if (iteration.record.decision.reason.startsWith("Check failed: ")) {
-      emitAutoresearchProgress(params.ctx, {
-        kind: "checks_failed",
-        checkName: iteration.record.decision.reason.slice("Check failed: ".length),
-      });
+      printAutoresearchProgress(
+        params.ctx,
+        `Checks failed: ${iteration.record.decision.reason.slice("Check failed: ".length)}. Reverting candidate.`,
+      );
     }
 
     switch (iteration.record.decision.status) {
       case "kept":
-        emitAutoresearchProgress(params.ctx, {
-          kind: "decision_kept",
-          metric: iteration.record.benchmark.metric,
-          metricUnit: state.benchmark.metric.unit,
-        });
+        printAutoresearchProgress(
+          params.ctx,
+          `Result: ${formatMetricValue(iteration.record.benchmark.metric, state.benchmark.metric.unit)}, improvement kept.`,
+        );
         break;
       case "rejected":
-        emitAutoresearchProgress(params.ctx, {
-          kind: "decision_reverted",
-          metric: iteration.record.benchmark.metric,
-          metricUnit: state.benchmark.metric.unit,
-        });
+        printAutoresearchProgress(
+          params.ctx,
+          `Result: ${formatMetricValue(iteration.record.benchmark.metric, state.benchmark.metric.unit)}, reverted.`,
+        );
         break;
       case "failed":
         if (!iteration.record.decision.reason.startsWith("Check failed: ")) {
-          emitAutoresearchProgress(params.ctx, {
-            kind: "decision_failed",
-            reason: iteration.record.decision.reason,
-          });
+          printAutoresearchProgress(params.ctx, `Experiment failed: ${iteration.record.decision.reason}.`);
         }
         break;
     }
@@ -537,14 +465,12 @@ async function runForegroundAutoresearchLoop(params: {
   });
   writeAutoresearchSummary(params.paths, state, records);
 
-  emitAutoresearchProgress(params.ctx, {
-    kind: "session_completed",
-    iterationCount: state.iterationCount,
-    bestMetric: state.currentBestMetric,
-    metricName: state.benchmark.metric.name,
-    metricUnit: state.benchmark.metric.unit,
-    reason: completionReason,
-  });
+  printAutoresearchProgress(
+    params.ctx,
+    completionReason
+      ? `Autoresearch finished after ${state.iterationCount} iteration${state.iterationCount === 1 ? "" : "s"}. Best ${state.benchmark.metric.name}: ${formatMetricValue(state.currentBestMetric, state.benchmark.metric.unit)}. Reason: ${completionReason}.`
+      : `Autoresearch finished after ${state.iterationCount} iteration${state.iterationCount === 1 ? "" : "s"}. Best ${state.benchmark.metric.name}: ${formatMetricValue(state.currentBestMetric, state.benchmark.metric.unit)}.`,
+  );
 
   return buildForegroundCompletionResult(params.paths, state, records, completionReason);
 }
@@ -573,20 +499,19 @@ async function runAutoresearchIteration(params: {
     pendingContextNotes: [],
   });
 
-  emitAutoresearchProgress(params.ctx, {
-    kind: "candidate_selected",
-    idea: experiment.idea,
-  });
+  printAutoresearchProgress(params.ctx, `Candidate: ${summarizeText(experiment.idea, 120)}.`);
 
   const applied = await applyExperiment(params.ctx, stateBeforeIteration, experiment, params.records);
-  emitAutoresearchProgress(params.ctx, {
-    kind: "candidate_applied",
-    summary: applied.summary,
-  });
-  emitAutoresearchProgress(params.ctx, {
-    kind: "benchmark_started",
-    command: summarizeText(stateBeforeIteration.benchmark.argv.join(" "), 80),
-  });
+  printAutoresearchProgress(
+    params.ctx,
+    applied.summary.trim().length > 0
+      ? `Applied candidate: ${summarizeText(applied.summary.trim(), 120)}.`
+      : "Applied candidate.",
+  );
+  printAutoresearchProgress(
+    params.ctx,
+    `Benchmarking candidate (${summarizeText(stateBeforeIteration.benchmark.argv.join(" "), 80)})...`,
+  );
 
   const iteration = stateBeforeIteration.iterationCount + 1;
   const runId = `run-${String(iteration).padStart(4, "0")}`;
@@ -1034,48 +959,8 @@ function prepareAutoresearchBranch(
   }
 }
 
-function emitAutoresearchProgress(ctx: CommandContext, event: AutoresearchProgressEvent): void {
-  const message = formatAutoresearchProgress(event);
-  if (message) {
-    ctx.print(`${message}\n`);
-  }
-}
-
-function formatAutoresearchProgress(event: AutoresearchProgressEvent): string | undefined {
-  switch (event.kind) {
-    case "session_configuring":
-      return "Configuring autoresearch session...";
-    case "session_resuming":
-      return `Continuing autoresearch on ${event.branchName}...`;
-    case "baseline_started":
-      return `Running baseline benchmark (${event.command})...`;
-    case "baseline_completed":
-      return event.reason
-        ? `Baseline failed: ${event.reason}.`
-        : `Baseline: ${event.metricName} -> ${formatMetricValue(event.metric, event.metricUnit)}.`;
-    case "iteration_started":
-      return `Iteration ${event.iteration}/${event.maxIterations}: selecting the next experiment.`;
-    case "candidate_selected":
-      return `Candidate: ${summarizeText(event.idea, 120)}.`;
-    case "candidate_applied":
-      return event.summary.trim().length > 0
-        ? `Applied candidate: ${summarizeText(event.summary.trim(), 120)}.`
-        : "Applied candidate.";
-    case "benchmark_started":
-      return `Benchmarking candidate (${event.command})...`;
-    case "checks_failed":
-      return `Checks failed: ${event.checkName}. Reverting candidate.`;
-    case "decision_kept":
-      return `Result: ${formatMetricValue(event.metric, event.metricUnit)}, improvement kept.`;
-    case "decision_reverted":
-      return `Result: ${formatMetricValue(event.metric, event.metricUnit)}, reverted.`;
-    case "decision_failed":
-      return `Experiment failed: ${event.reason}.`;
-    case "session_completed":
-      return event.reason
-        ? `Autoresearch finished after ${event.iterationCount} iteration${event.iterationCount === 1 ? "" : "s"}. Best ${event.metricName}: ${formatMetricValue(event.bestMetric, event.metricUnit)}. Reason: ${event.reason}.`
-        : `Autoresearch finished after ${event.iterationCount} iteration${event.iterationCount === 1 ? "" : "s"}. Best ${event.metricName}: ${formatMetricValue(event.bestMetric, event.metricUnit)}.`;
-  }
+function printAutoresearchProgress(ctx: CommandContext, message: string): void {
+  ctx.print(`${message}\n`);
 }
 
 function sanitizeBranchName(value: string): string {
