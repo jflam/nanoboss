@@ -12,7 +12,7 @@ NanoBoss already has the core primitives needed to reproduce that behavior:
 - async procedure dispatch
 - agent delegation for planning and experiment selection
 
-The missing pieces are mostly **deterministic host-side experiment control** and a **procedure set** that turns those primitives into a long-running optimization workflow. The first implementation should stay CLI-first and persistence-first; the custom dashboard/export surface can come later.
+The missing pieces are mostly **deterministic host-side experiment control** and a **procedure set** that turns those primitives into a long-running optimization workflow. In NanoBoss, the control loop should live in TypeScript procedure code, not in a shell script. The first implementation should stay CLI-first and persistence-first; the custom dashboard/export surface can come later.
 
 ---
 
@@ -41,7 +41,8 @@ At a high level, `pi-autoresearch` runs this loop:
 
 - **append-only run history**: `autoresearch.jsonl` is the source of truth for each experiment
 - **human-readable session context**: `autoresearch.md` captures goals, tried ideas, wins, and dead ends
-- **deterministic benchmark execution**: benchmark and checks live in scripts/files, not only prompt text
+- **deterministic outer-loop control**: procedure code owns state transitions, branching, keep/revert, and resume
+- **deterministic benchmark execution**: benchmark and checks can live in scripts/files, but only as harnesses invoked by procedure code
 - **branch isolation**: the loop works on an autoresearch branch, then finalization creates reviewable branches from the merge-base
 - **resume after restart/context loss**: a new agent can continue from repo-local state
 - **keep vs revert discipline**: failed or worse experiments do not accumulate
@@ -84,11 +85,36 @@ At a high level, `pi-autoresearch` runs this loop:
 - a repo-local persistence format for cross-session resume
 - procedure outputs that are small and machine-oriented, so later procedures can compose them
 
+### Control-loop ownership
+
+The most important adaptation from `pi-autoresearch` is this:
+
+- in `pi-autoresearch`, shell artifacts help drive the workflow
+- in NanoBoss, **procedures should drive the workflow**
+
+That means:
+
+- the outer loop lives in TypeScript
+- shell scripts are optional adapters for benchmark and checks execution
+- the agent provides experiment ideas and summaries, not loop control
+- keep/revert, logging, and continuation decisions happen in deterministic code
+
+The right NanoBoss equivalent is therefore not "write a shell loop and invoke it", but "write a procedure runner that repeatedly calls intelligence at controlled decision points."
+
 ---
 
 ## Recommended NanoBoss mapping
 
 The cleanest mapping is **one user-facing controller plus a few focused support procedures**, with deterministic host-side helpers underneath.
+
+Under this design, the procedure layer owns:
+
+- reading and writing state
+- deciding which step comes next
+- invoking the agent for one bounded reasoning task
+- invoking local benchmark/check helpers
+- performing git keep/revert actions
+- dispatching the next iteration
 
 ### Proposed procedure set
 
@@ -130,6 +156,17 @@ Responsibilities:
 - continue until stopped or iteration budget is reached
 
 This is the best place to use async dispatch so the workflow is resumable instead of requiring one long foreground run.
+
+Implementation-wise, this should be a deterministic runner in NanoBoss code, with an internal shape roughly like:
+
+1. load state
+2. ask the agent for the next experiment
+3. apply the experiment
+4. run benchmark helper
+5. run checks helper if configured
+6. evaluate keep/revert in code
+7. persist state/log/doc updates
+8. enqueue the next iteration if still active
 
 #### 3. `/autoresearch-stop`
 
@@ -177,8 +214,8 @@ Responsibilities:
 | --- | --- | --- |
 | `autoresearch-create` skill | `/autoresearch` start path | NanoBoss procedure can gather details directly instead of a separate skill package |
 | `init_experiment` | deterministic helper used by `/autoresearch` | Better as local code than delegated agent behavior |
-| `run_experiment` | deterministic helper or `/autoresearch-loop` sub-step | Must own command execution, timing, timeout, and metric extraction |
-| `log_experiment` | deterministic helper used by `/autoresearch-loop` | Should append JSONL, update summary doc, and return machine-readable result refs |
+| `run_experiment` | deterministic helper called by `/autoresearch-loop` | Must own command execution, timing, timeout, and metric extraction |
+| `log_experiment` | deterministic helper called by `/autoresearch-loop` | Should append JSONL, update summary doc, and return machine-readable result refs |
 | `/autoresearch off` | `/autoresearch-stop` | Keep state, disable continuation |
 | `/autoresearch clear` | `/autoresearch-clear` | Reset durable artifacts safely |
 | `/autoresearch export` | later `/autoresearch-export` | Phase 1 can write report files before adding rich UI |
@@ -200,10 +237,12 @@ To preserve the strongest part of `pi-autoresearch`, NanoBoss should keep **repo
   - living objective and progress document
   - must be sufficient for a fresh agent to resume strategically
 - `autoresearch.sh`
-  - canonical benchmark script
+  - optional benchmark harness
+  - invoked by procedure code, never used as the loop controller
   - emits parseable metric output
 - `autoresearch.checks.sh` (optional)
-  - correctness gates that do not affect the primary metric
+  - correctness-gate harness
+  - invoked by procedure code after successful benchmark runs
 - optional NanoBoss metadata file such as `autoresearch.state.json`
   - active/inactive flag
   - branch name
@@ -221,6 +260,33 @@ Session refs are excellent for intra-session composition, but repo-local files s
 - provide a stable handoff surface for `/autoresearch-finalize`
 
 The right design is therefore **repo-local state as source of truth**, with NanoBoss refs as acceleration and composition aids.
+
+### Recommended code structure
+
+The first implementation should explicitly separate deterministic orchestration from intelligence:
+
+- `commands/autoresearch.ts`
+  - user-facing entrypoint
+- `commands/autoresearch-stop.ts`
+  - stop command
+- `commands/autoresearch-clear.ts`
+  - reset command
+- `commands/autoresearch-finalize.ts`
+  - branch-splitting/finalization entrypoint
+- `src/autoresearch/state.ts`
+  - load/save state files
+- `src/autoresearch/log.ts`
+  - append/read JSONL records
+- `src/autoresearch/benchmark.ts`
+  - execute benchmark harness and parse metrics
+- `src/autoresearch/checks.ts`
+  - run optional correctness harness
+- `src/autoresearch/git.ts`
+  - branch setup, revert, commit, merge-base helpers
+- `src/autoresearch/runner.ts`
+  - deterministic outer loop and state machine
+
+This preserves NanoBoss's intended architecture: code runs the state machine, the model fills in bounded judgment calls.
 
 ---
 
@@ -243,9 +309,9 @@ Each loop iteration should:
 1. read current state and best-so-far context
 2. ask the agent for one scoped experiment idea
 3. apply the code change
-4. run the benchmark script
-5. if benchmark passes, run optional checks
-6. compare result against the best-so-far and noise floor
+4. run the benchmark harness via deterministic procedure code
+5. if benchmark passes, run optional checks via deterministic procedure code
+6. compare result against the best-so-far and noise floor in code
 7. if the result is a keep:
    - create a commit
    - append run record with kept status
@@ -255,6 +321,8 @@ Each loop iteration should:
    - append run record with rejected/failed status
    - update `autoresearch.md` with the failed idea
 9. continue or stop based on explicit stop state, max iterations, or hard failure
+
+The shell never decides whether to continue, keep, revert, or finalize; those transitions belong to the runner.
 
 ### Resume phase
 
@@ -283,6 +351,7 @@ Phase 1 should focus on the workflow core, not the UI polish.
 - repo-local state files
 - append-only JSONL logging
 - baseline + keep/revert loop
+- TypeScript runner/state-machine ownership of the loop
 - optional checks script support
 - confidence calculation persisted in logs
 
@@ -302,6 +371,7 @@ This keeps the first version aligned with NanoBoss’s current strengths: proced
 - never run the loop against an ambiguous or unsafe git state
 - do not silently keep benchmark regressions
 - make benchmark parsing explicit and deterministic
+- do not put loop-control semantics into shell scripts
 - keep correctness checks separate from the optimization metric
 - do not rely on transient chat memory for resumability
 - stop or ask when branch/worktree state is ambiguous
@@ -319,25 +389,27 @@ This keeps the first version aligned with NanoBoss’s current strengths: proced
 7. `/autoresearch-clear` resets state safely.
 8. `/autoresearch-finalize` groups kept experiments into non-overlapping review branches.
 9. loop resume after NanoBoss session restart still works from repo-local state alone.
+10. the loop can run with no shell controller present beyond benchmark/check harness scripts.
 
 ---
 
 ## Implementation milestones
 
 1. Define the repo-local state schema and benchmark/checks contract.
-2. Implement deterministic helpers for benchmark execution, logging, git keep/revert, and state transitions.
-3. Build `/autoresearch` initialization and resume behavior.
-4. Build `/autoresearch-loop` on top of async dispatch and persisted state.
-5. Build `/autoresearch-stop` and `/autoresearch-clear`.
-6. Build `/autoresearch-finalize`.
-7. Add UI/reporting enhancements only after the core loop is reliable.
+2. Implement `src/autoresearch/*` helpers for benchmark execution, logging, git keep/revert, and state transitions.
+3. Build the deterministic runner/state machine that owns loop transitions.
+4. Build `/autoresearch` initialization and resume behavior on top of that runner.
+5. Build `/autoresearch-loop` async continuation on top of persisted state.
+6. Build `/autoresearch-stop` and `/autoresearch-clear`.
+7. Build `/autoresearch-finalize`.
+8. Add UI/reporting enhancements only after the core loop is reliable.
 
 ---
 
 ## Todo breakdown
 
 1. Define the durable state files and JSONL record schema.
-2. Design the benchmark and metric-parsing contract for deterministic execution.
-3. Implement the controller and loop procedures with safe git behavior.
-4. Implement stop/clear/finalize procedures.
+2. Design the benchmark/check harness contract so shell stays a leaf execution surface.
+3. Implement the TypeScript runner/state machine and safe git behavior.
+4. Implement entrypoint, stop, clear, and finalize procedures.
 5. Add coverage for initialization, keep/revert behavior, resume, and finalization.
