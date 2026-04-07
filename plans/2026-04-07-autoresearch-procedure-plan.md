@@ -16,7 +16,7 @@ The missing pieces are mostly **deterministic host-side experiment control** and
 
 ---
 
-## Non-normative why
+## Why this work matters
 
 Beyond the feature itself, this is a useful stress test for NanoBoss's procedure extensibility model.
 
