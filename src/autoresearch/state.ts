@@ -1,18 +1,29 @@
-import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { summarizeText } from "../util/text.ts";
 
-import { resolveGitRepoRoot } from "./git.ts";
+import { ensureGitLocalExclude, resolveGitRepoRoot } from "./git.ts";
 import type {
   AutoresearchExperimentRecord,
   AutoresearchPaths,
   AutoresearchState,
 } from "./types.ts";
 
+const AUTORESEARCH_STORAGE_SUBDIR = [".nanoboss", "autoresearch"] as const;
+const LEGACY_AUTORESEARCH_STORAGE_SUBDIR = [".git", "nanoboss", "autoresearch"] as const;
+const AUTORESEARCH_LOCAL_EXCLUDE_PATTERN = "/.nanoboss/";
+const AUTORESEARCH_FILE_NAMES = [
+  "autoresearch.state.json",
+  "autoresearch.jsonl",
+  "autoresearch.md",
+] as const;
+
 export function resolveAutoresearchPaths(cwd: string): AutoresearchPaths {
   const repoRoot = resolveGitRepoRoot(cwd);
-  const storageDir = join(repoRoot, ".git", "nanoboss", "autoresearch");
+  ensureGitLocalExclude(repoRoot, AUTORESEARCH_LOCAL_EXCLUDE_PATTERN);
+  const storageDir = join(repoRoot, ...AUTORESEARCH_STORAGE_SUBDIR);
+  migrateLegacyAutoresearchStorage(repoRoot, storageDir);
   return {
     repoRoot,
     storageDir,
@@ -52,6 +63,7 @@ export function writeAutoresearchSummary(
 
 export function clearAutoresearchArtifacts(paths: AutoresearchPaths): void {
   rmSync(paths.storageDir, { recursive: true, force: true });
+  rmSync(getLegacyAutoresearchStorageDir(paths.repoRoot), { recursive: true, force: true });
 }
 
 export function renderAutoresearchSummary(
@@ -125,6 +137,52 @@ function writeAtomic(path: string, contents: string): void {
   renameSync(tempPath, path);
 }
 
+function migrateLegacyAutoresearchStorage(repoRoot: string, storageDir: string): void {
+  const legacyStorageDir = getLegacyAutoresearchStorageDir(repoRoot);
+  if (!existsSync(legacyStorageDir)) {
+    return;
+  }
+
+  mkdirSync(join(repoRoot, AUTORESEARCH_STORAGE_SUBDIR[0]), { recursive: true });
+  if (!existsSync(storageDir)) {
+    renameSync(legacyStorageDir, storageDir);
+    removeDirectoryIfEmpty(join(repoRoot, ".git", "nanoboss"));
+    return;
+  }
+
+  for (const fileName of AUTORESEARCH_FILE_NAMES) {
+    const legacyPath = join(legacyStorageDir, fileName);
+    const nextPath = join(storageDir, fileName);
+    if (!existsSync(legacyPath)) {
+      continue;
+    }
+
+    if (!existsSync(nextPath)) {
+      renameSync(legacyPath, nextPath);
+      continue;
+    }
+
+    if (readFileSync(legacyPath, "utf8") === readFileSync(nextPath, "utf8")) {
+      rmSync(legacyPath, { force: true });
+    }
+  }
+
+  removeDirectoryIfEmpty(legacyStorageDir);
+  removeDirectoryIfEmpty(join(repoRoot, ".git", "nanoboss"));
+}
+
 function normalizeNotes(notes: string[]): string[] {
   return [...new Set(notes.map((note) => note.trim()).filter((note) => note.length > 0))];
+}
+
+function getLegacyAutoresearchStorageDir(repoRoot: string): string {
+  return join(repoRoot, ...LEGACY_AUTORESEARCH_STORAGE_SUBDIR);
+}
+
+function removeDirectoryIfEmpty(path: string): void {
+  if (!existsSync(path) || readdirSync(path).length > 0) {
+    return;
+  }
+
+  rmSync(path, { recursive: true, force: true });
 }

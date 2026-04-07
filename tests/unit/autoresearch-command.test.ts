@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -57,6 +57,7 @@ describe("autoresearch procedures", () => {
     const state = readAutoresearchState(paths);
     const records = readExperimentLog(paths);
 
+    expect(paths.storageDir).toBe(join(paths.repoRoot, ".nanoboss", "autoresearch"));
     expect(state).toBeDefined();
     expect(state?.goal).toBe("reduce the score benchmark");
     expect(state?.status).toBe("inactive");
@@ -71,10 +72,28 @@ describe("autoresearch procedures", () => {
     expect(resultData?.iterationCount).toBe(1);
     expect(resultData?.maxIterations).toBe(1);
     expect(resultData?.status).toBe("inactive");
+    expect(readFileSync(resolveGitPath(cwd, "info/exclude"), "utf8")).toContain("/.nanoboss/");
     expect(printed.join("")).toContain("Configuring autoresearch session...");
     expect(printed.join("")).toContain("Baseline: score -> 100.");
     expect(printed.join("")).toContain("Iteration 1/1: selecting the next experiment.");
     expect(printed.join("")).toContain("Result: 90, improvement kept.");
+  });
+
+  test("migrates legacy autoresearch storage out of .git", () => {
+    const cwd = createFixtureRepo();
+    const legacyStorageDir = join(cwd, ".git", "nanoboss", "autoresearch");
+    mkdirSync(legacyStorageDir, { recursive: true });
+    writeFileSync(join(legacyStorageDir, "autoresearch.state.json"), "{\"goal\":\"legacy\"}\n", "utf8");
+    writeFileSync(join(legacyStorageDir, "autoresearch.jsonl"), "{\"id\":\"run-0001\"}\n", "utf8");
+    writeFileSync(join(legacyStorageDir, "autoresearch.md"), "# Legacy\n", "utf8");
+
+    const paths = resolveAutoresearchPaths(cwd);
+
+    expect(paths.storageDir).toBe(join(paths.repoRoot, ".nanoboss", "autoresearch"));
+    expect(readFileSync(paths.statePath, "utf8")).toBe("{\"goal\":\"legacy\"}\n");
+    expect(readFileSync(paths.logPath, "utf8")).toBe("{\"id\":\"run-0001\"}\n");
+    expect(readFileSync(paths.summaryPath, "utf8")).toBe("# Legacy\n");
+    expect(existsSync(legacyStorageDir)).toBe(false);
   });
 
   test("continue resumes from durable state and incorporates continuation notes", async () => {
@@ -539,4 +558,14 @@ function readGitFile(cwd: string, ref: string, path: string): string {
     cwd,
     encoding: "utf8",
   }).trim();
+}
+
+function resolveGitPath(cwd: string, path: string): string {
+  return join(
+    resolveAutoresearchPaths(cwd).repoRoot,
+    execFileSync("git", ["rev-parse", "--git-path", path], {
+      cwd,
+      encoding: "utf8",
+    }).trim(),
+  );
 }

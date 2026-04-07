@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, rmSync } from "node:fs";
-import { resolve, sep } from "node:path";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { dirname, resolve, sep } from "node:path";
 
 import { formatErrorMessage } from "../core/error-format.ts";
 
@@ -18,6 +18,18 @@ export function getCurrentBranch(cwd: string): string {
 
 export function getHeadCommit(cwd: string): string {
   return runGit(cwd, ["rev-parse", "HEAD"]).trim();
+}
+
+export function ensureGitLocalExclude(cwd: string, pattern: string): void {
+  const excludePath = resolve(cwd, runGit(cwd, ["rev-parse", "--git-path", "info/exclude"]).trim());
+  const current = existsSync(excludePath) ? readFileSync(excludePath, "utf8") : "";
+  if (current.split("\n").some((line) => line.trim() === pattern)) {
+    return;
+  }
+
+  mkdirSync(dirname(excludePath), { recursive: true });
+  const prefix = current.length > 0 && !current.endsWith("\n") ? "\n" : "";
+  writeFileSync(excludePath, `${current}${prefix}${pattern}\n`, "utf8");
 }
 
 export function branchExists(cwd: string, branchName: string): boolean {
