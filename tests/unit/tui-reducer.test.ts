@@ -322,6 +322,8 @@ describe("tui reducer", () => {
       role: "assistant",
       markdown: "Stopped.",
       status: "cancelled",
+      displayStyle: "card",
+      cardTone: "warning",
       meta: {
         completionNote: "turn #2 stopped in 2.0s | tools 0/0 succeeded",
       },

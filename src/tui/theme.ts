@@ -105,7 +105,7 @@ const TOOL_CARD_PALETTE_BY_MODE: Record<ToolCardThemeMode, ToolCardPalette> = {
     syntaxPunctuation: [212, 212, 212],
   },
   light: {
-    background: [236, 236, 236],
+    background: [245, 245, 246],
     border: [100, 116, 139],
     title: [15, 23, 42],
     meta: [71, 85, 105],

@@ -3,17 +3,26 @@ import type { DownstreamAgentSelection } from "../core/types.ts";
 
 export type ToolCardThemeMode = "dark" | "light";
 
+export interface UiPendingPrompt {
+  id: string;
+  text: string;
+  kind: "steering" | "queued";
+}
+
 export interface UiTurn {
   id: string;
   role: "user" | "assistant" | "system";
   markdown: string;
   status?: "streaming" | "complete" | "failed" | "cancelled";
   runId?: string;
+  displayStyle?: "inline" | "card";
+  cardTone?: "info" | "success" | "warning" | "error";
   meta?: {
     procedure?: string;
     tokenUsageLine?: string;
     failureMessage?: string;
     completionNote?: string;
+    statusMessage?: string;
   };
 }
 
@@ -46,6 +55,7 @@ export interface UiState {
   availableCommands: string[];
   turns: UiTurn[];
   toolCalls: UiToolCall[];
+  pendingPrompts: UiPendingPrompt[];
   transcriptItems: UiTranscriptItem[];
   activeWrapperToolCallIds: string[];
   hiddenToolCallIds: string[];
@@ -84,6 +94,7 @@ export function createInitialUiState(params: {
     availableCommands: [],
     turns: [],
     toolCalls: [],
+    pendingPrompts: [],
     transcriptItems: [],
     activeWrapperToolCallIds: [],
     hiddenToolCallIds: [],

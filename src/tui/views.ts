@@ -2,6 +2,7 @@ import { Container, Markdown, Spacer, Text, TruncatedText, type Component, type 
 import type { UiState, UiTurn } from "./state.ts";
 import type { NanobossTuiTheme } from "./theme.ts";
 
+import { MessageCardComponent } from "./components/message-card.ts";
 import { ToolCardComponent } from "./components/tool-card.ts";
 
 export class NanobossAppView implements Component {
@@ -103,7 +104,7 @@ export class NanobossAppView implements Component {
 
   private buildFooterLine(): string {
     const parts = [
-      "enter send",
+      this.state.inputDisabled ? "enter steer" : "enter send",
       "shift+enter newline",
       "ctrl+o tools",
       this.state.expandedToolOutput ? "expanded" : "collapsed",
@@ -114,7 +115,11 @@ export class NanobossAppView implements Component {
       "/quit",
     ];
     if (this.state.inputDisabled) {
-      parts.push("esc stop", "run active (other submit blocked; /quit exits)");
+      parts.push(
+        "tab queue",
+        "esc stop",
+        this.state.pendingPrompts.length > 0 ? `${this.state.pendingPrompts.length} pending` : "run active",
+      );
     }
     return this.theme.dim(parts.join(" • "));
   }
@@ -124,6 +129,15 @@ function buildActivityBarParts(theme: NanobossTuiTheme, state: UiState): string[
   const parts: string[] = [];
   if (state.inputDisabled) {
     parts.push(theme.warning("● busy"));
+  }
+
+  const steeringCount = state.pendingPrompts.filter((prompt) => prompt.kind === "steering").length;
+  const queuedCount = state.pendingPrompts.filter((prompt) => prompt.kind === "queued").length;
+  if (steeringCount > 0) {
+    parts.push(theme.warning(`steer ${steeringCount}`));
+  }
+  if (queuedCount > 0) {
+    parts.push(theme.warning(`queued ${queuedCount}`));
   }
 
   const selection = state.defaultAgentSelection;
@@ -171,6 +185,10 @@ function renderTurnLabel(theme: NanobossTuiTheme, turn: UiTurn): string {
 
 function renderTurnBody(theme: NanobossTuiTheme, turn: UiTurn): Component {
   if (turn.role === "assistant") {
+    if (turn.displayStyle === "card") {
+      return renderMessageCard(theme, turn.markdown, turn.cardTone ?? inferTurnCardTone(turn));
+    }
+
     const container = new Container();
     container.addChild(turn.markdown.length === 0
       ? new Text(theme.dim("…"))
@@ -178,23 +196,58 @@ function renderTurnBody(theme: NanobossTuiTheme, turn: UiTurn): Component {
           color: theme.text,
         }));
 
+    if (turn.meta?.statusMessage) {
+      container.addChild(new Spacer(1));
+      container.addChild(renderMessageCard(theme, turn.meta.statusMessage, "warning"));
+    }
+
     if (turn.meta?.failureMessage) {
       container.addChild(new Spacer(1));
-      container.addChild(new Text(theme.error(`Error: ${turn.meta.failureMessage}`), 0, 0));
+      container.addChild(renderMessageCard(theme, `Error: ${turn.meta.failureMessage}`, "error"));
     }
 
     if (turn.meta?.completionNote) {
-      container.addChild(new Text(theme.dim(turn.meta.completionNote), 0, 0));
+      container.addChild(new Spacer(1));
+      container.addChild(renderMessageCard(theme, turn.meta.completionNote, "info"));
     }
 
     return container;
   }
 
   if (turn.role === "system") {
-    return new Text(turn.status === "failed" ? theme.error(turn.markdown) : theme.warning(turn.markdown));
+    return renderMessageCard(
+      theme,
+      turn.markdown,
+      turn.status === "failed" ? "error" : (turn.cardTone ?? "warning"),
+    );
   }
 
   return new Text(turn.markdown);
+}
+
+function renderMessageCard(
+  theme: NanobossTuiTheme,
+  markdown: string,
+  tone: NonNullable<UiTurn["cardTone"]>,
+): Component {
+  const lines = markdown.length === 0 ? ["…"] : markdown.split("\n");
+  return new MessageCardComponent(theme, lines, tone);
+}
+
+function inferTurnCardTone(turn: UiTurn): NonNullable<UiTurn["cardTone"]> {
+  if (turn.status === "failed") {
+    return "error";
+  }
+
+  if (turn.status === "cancelled") {
+    return "warning";
+  }
+
+  if (turn.status === "complete") {
+    return "success";
+  }
+
+  return "info";
 }
 
 function styleStatusLine(theme: NanobossTuiTheme, line: string): string {

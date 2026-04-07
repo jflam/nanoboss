@@ -14,6 +14,7 @@ import {
 import { LOCAL_TUI_COMMANDS } from "./commands.ts";
 import {
   createInitialUiState,
+  type UiPendingPrompt,
   type UiState,
   type UiToolCall,
   type UiTranscriptItem,
@@ -53,6 +54,14 @@ export type UiAction =
       type: "local_stop_request_failed";
       runId?: string;
       text: string;
+    }
+  | {
+      type: "local_pending_prompt_added";
+      prompt: UiPendingPrompt;
+    }
+  | {
+      type: "local_pending_prompt_removed";
+      promptId: string;
     }
   | {
       type: "local_agent_selection";
@@ -124,6 +133,8 @@ export function reduceUiState(state: UiState, action: UiAction): UiState {
         role: "system",
         markdown: action.error,
         status: "failed",
+        displayStyle: "card",
+        cardTone: "error",
       });
 
       return {
@@ -171,6 +182,16 @@ export function reduceUiState(state: UiState, action: UiAction): UiState {
         pendingStopRequest: false,
         stopRequestedRunId: undefined,
         statusLine: action.text,
+      };
+    case "local_pending_prompt_added":
+      return {
+        ...state,
+        pendingPrompts: [...state.pendingPrompts, action.prompt],
+      };
+    case "local_pending_prompt_removed":
+      return {
+        ...state,
+        pendingPrompts: state.pendingPrompts.filter((prompt) => prompt.id !== action.promptId),
       };
     case "local_agent_selection":
       return {
@@ -468,6 +489,7 @@ function reduceFrontendEvent(state: UiState, event: FrontendEventEnvelope): UiSt
       return finishRun(state, {
         turnStatus: "cancelled",
         fallbackText: event.data.message,
+        statusMessage: event.data.message,
         completedAt: event.data.completedAt,
         statusLine: `[run] ${event.data.procedure} stopped`,
       });
@@ -543,6 +565,7 @@ function finishRun(
     fallbackText?: string;
     tokenUsageLine?: string;
     failureMessage?: string;
+    statusMessage?: string;
     completedAt?: string;
     statusLine: string;
   },
@@ -550,11 +573,12 @@ function finishRun(
   const completionNote = buildTurnCompletionNote(state, params.turnStatus, params.completedAt);
   const nextState = finalizeAssistantTurn(state, {
     status: params.turnStatus,
-    fallbackText: params.fallbackText,
-    tokenUsageLine: params.tokenUsageLine,
-    failureMessage: params.failureMessage,
-    completionNote,
-  });
+      fallbackText: params.fallbackText,
+      tokenUsageLine: params.tokenUsageLine,
+      failureMessage: params.failureMessage,
+      statusMessage: params.statusMessage,
+      completionNote,
+    });
 
   return {
     ...nextState,
@@ -582,6 +606,7 @@ function finalizeAssistantTurn(
     fallbackText?: string;
     tokenUsageLine?: string;
     failureMessage?: string;
+    statusMessage?: string;
     completionNote?: string;
   },
 ): UiState {
@@ -591,19 +616,26 @@ function finalizeAssistantTurn(
       return state;
     }
 
-    const turn = createTurn({
-      id: nextTurnId("assistant", state.turns.length),
-      role: "assistant",
-      markdown: params.fallbackText,
-      status: params.status,
-      runId: state.activeRunId,
-      meta: buildAssistantTurnMeta({
-        procedure: state.activeProcedure,
-        tokenUsageLine: params.tokenUsageLine,
-        failureMessage: undefined,
-        completionNote: params.completionNote,
-      }),
-    });
+      const turn = createTurn({
+        id: nextTurnId("assistant", state.turns.length),
+        role: "assistant",
+        markdown: params.fallbackText,
+        status: params.status,
+        runId: state.activeRunId,
+        displayStyle: params.status === "complete" ? "inline" : "card",
+        cardTone: params.status === "failed"
+          ? "error"
+          : params.status === "cancelled"
+            ? "warning"
+            : "info",
+        meta: buildAssistantTurnMeta({
+          procedure: state.activeProcedure,
+          tokenUsageLine: params.tokenUsageLine,
+          failureMessage: undefined,
+          statusMessage: undefined,
+          completionNote: params.completionNote,
+        }),
+      });
 
     return {
       ...state,
@@ -625,11 +657,20 @@ function finalizeAssistantTurn(
         ...turn,
         markdown,
         status: params.status,
+        displayStyle: !hadStreamedText && params.status !== "complete" ? "card" : turn.displayStyle,
+        cardTone: !hadStreamedText && params.status !== "complete"
+          ? params.status === "failed"
+            ? "error"
+            : params.status === "cancelled"
+              ? "warning"
+              : "info"
+          : turn.cardTone,
         meta: buildAssistantTurnMeta({
           existing: turn.meta,
           procedure: turn.meta?.procedure ?? state.activeProcedure,
           tokenUsageLine: params.tokenUsageLine,
           failureMessage: hadStreamedText ? params.failureMessage : undefined,
+          statusMessage: hadStreamedText ? params.statusMessage : undefined,
           completionNote: params.completionNote,
         }),
       };
@@ -650,16 +691,21 @@ function buildAssistantTurnMeta(params: {
   tokenUsageLine?: string;
   failureMessage?: string;
   completionNote?: string;
+  statusMessage?: string;
 }): UiTurn["meta"] | undefined {
+  const statusMessage = params.statusMessage ?? params.existing?.statusMessage;
   const meta = {
     ...params.existing,
     procedure: params.procedure ?? params.existing?.procedure,
     tokenUsageLine: params.tokenUsageLine ?? params.existing?.tokenUsageLine,
     failureMessage: params.failureMessage,
     completionNote: params.completionNote ?? params.existing?.completionNote,
+    ...(statusMessage !== undefined ? { statusMessage } : {}),
   };
 
-  return meta.procedure || meta.tokenUsageLine || meta.failureMessage || meta.completionNote ? meta : undefined;
+  return meta.procedure || meta.tokenUsageLine || meta.failureMessage || meta.completionNote || statusMessage
+    ? meta
+    : undefined;
 }
 
 function mergeToolPreview(

@@ -42,6 +42,10 @@ describe("NanobossAppView", () => {
       ...createInitialUiState({ cwd: "/repo" }),
       sessionId: "session-1",
       inputDisabled: true,
+      pendingPrompts: [
+        { id: "pending-1", text: "steer next", kind: "steering" as const },
+        { id: "pending-2", text: "then queue", kind: "queued" as const },
+      ],
       defaultAgentSelection: {
         provider: "copilot" as const,
         model: "gpt-5.4/xhigh",
@@ -61,7 +65,11 @@ describe("NanobossAppView", () => {
     const plain = stripAnsi(view.render(120).join("\n"));
 
     expect(plain).toContain("● busy");
+    expect(plain).toContain("steer 1");
+    expect(plain).toContain("queued 1");
     expect(plain).toContain("agent copilot");
+    expect(plain).toContain("enter steer");
+    expect(plain).toContain("tab queue");
   });
 
   test("renders tool cards inline in transcript order without a separate activity panel", () => {
@@ -282,7 +290,7 @@ describe("NanobossAppView", () => {
     const bodyLine = rendered.find((entry) => stripAnsi(entry).includes("line 1"));
     const metaLine = rendered.find((entry) => stripAnsi(entry).includes("ctrl+o to expand"));
 
-    expect(headerLine).toContain("\u001b[48;2;236;236;236m");
+    expect(headerLine).toContain("\u001b[48;2;245;245;246m");
     expect(headerLine).toContain("\u001b[1;38;2;15;23;42mread\u001b[22;39m");
     expect(headerLine).toContain("\u001b[38;2;3;105;161mREADME.md\u001b[39m");
     expect(bodyLine).toContain("\u001b[38;2;31;41;55mline 1\u001b[39m");
@@ -397,9 +405,45 @@ describe("NanobossAppView", () => {
       },
     );
 
-    const plain = stripAnsi(view.render(120).join("\n"));
+    const rendered = view.render(120);
+    const plain = stripAnsi(rendered.join("\n"));
+    const noteLine = rendered.find((line) => stripAnsi(line).includes("turn #1 completed in 2.5s | tools 1/2 succeeded"));
+
     expect(plain).toContain("Done.");
     expect(plain).toContain("turn #1 completed in 2.5s | tools 1/2 succeeded");
+    expect(noteLine).toContain("\u001b[48;2;32;32;32m");
+  });
+
+  test("renders stopped assistant status messages as cards", () => {
+    const view = new NanobossAppView(
+      {
+        render: () => [""],
+        invalidate() {},
+      } as never,
+      createNanobossTuiTheme(),
+      {
+        ...createInitialUiState({ cwd: "/repo" }),
+        sessionId: "session-1",
+        turns: [
+          {
+            id: "assistant-1",
+            role: "assistant" as const,
+            markdown: "Stopped.",
+            status: "cancelled" as const,
+            displayStyle: "card" as const,
+            cardTone: "warning" as const,
+          },
+        ],
+        transcriptItems: [{ type: "turn" as const, id: "assistant-1" }],
+      },
+    );
+
+    const rendered = view.render(120);
+    const stoppedLine = rendered.find((line) => stripAnsi(line).includes("Stopped."));
+
+    expect(stripAnsi(rendered.join("\n"))).toContain("Stopped.");
+    expect(stoppedLine).toContain("\u001b[48;2;32;32;32m");
+    expect(stoppedLine).toContain("\u001b[38;2;253;186;116mStopped.\u001b[39m");
   });
 
   test("renders read tool code with pi-style syntax colors", () => {
@@ -707,7 +751,8 @@ describe("NanobossAppView", () => {
 
     expect(contentLine).toBeDefined();
     expect(contentLine).not.toContain("\u001b[31m");
-    expect(errorLine).toContain("\u001b[31m");
+    expect(errorLine).toContain("\u001b[38;2;248;113;113m");
+    expect(errorLine).toContain("\u001b[48;2;32;32;32m");
     expect(labelLine).toContain("\u001b[31m");
   });
 });
