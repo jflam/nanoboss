@@ -10,7 +10,7 @@ import { RunLogger } from "../core/logger.ts";
 import { inferDataShape } from "../core/data-shape.ts";
 import { formatErrorMessage } from "../core/error-format.ts";
 import {
-  SessionStore,
+  type SessionStore,
   createValueRef,
   normalizeProcedureResult,
 } from "../session/index.ts";

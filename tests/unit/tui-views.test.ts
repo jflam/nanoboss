@@ -36,7 +36,7 @@ describe("NanobossAppView", () => {
     expect(plain).toContain("agent copilot");
   });
 
-  test("renders tool cards inline in transcript order instead of in the activity area", () => {
+  test("renders tool cards inline in transcript order without a separate activity panel", () => {
     const state = {
       ...createInitialUiState({ cwd: "/repo", showToolCalls: true }),
       sessionId: "session-1",
@@ -91,12 +91,12 @@ describe("NanobossAppView", () => {
     const userIndex = plainLines.findIndex((line) => line.trim() === "you");
     const toolIndex = plainLines.findIndex((line) => line.includes("read README.md"));
     const assistantIndex = plainLines.findIndex((line) => line.includes("I checked the code."));
-    const activityIndex = plainLines.findIndex((line) => line.trim() === "activity");
 
     expect(toolIndex).toBeGreaterThan(userIndex);
     expect(assistantIndex).toBeGreaterThan(toolIndex);
     expect(joined).toContain("Project instructions");
-    expect(activityIndex).toBeGreaterThan(assistantIndex);
+    expect(joined).not.toContain("activity");
+    expect(joined).not.toContain("[memory] injected 1 card");
     expect(joined).not.toContain("[tool]");
   });
 

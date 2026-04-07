@@ -43,7 +43,6 @@ export class NanobossAppView implements Component {
 
     this.container.addChild(new Spacer(1));
     this.appendTranscript();
-    this.appendPendingActivity();
     this.container.addChild(this.editor);
     this.container.addChild(new Spacer(1));
     this.container.addChild(new TruncatedText(this.buildActivityBarLine()));
@@ -78,17 +77,6 @@ export class NanobossAppView implements Component {
       this.container.addChild(new ToolCardComponent(this.theme, toolCall, this.state.expandedToolOutput));
       this.container.addChild(new Spacer(1));
     }
-  }
-
-  private appendPendingActivity(): void {
-    const pendingLines = buildPendingLines(this.state);
-    if (pendingLines.length === 0) {
-      return;
-    }
-
-    this.container.addChild(new TruncatedText(this.theme.accent("activity")));
-    this.container.addChild(new Text(pendingLines.map((line) => styleRuntimeLine(this.theme, line)).join("\n")));
-    this.container.addChild(new Spacer(1));
   }
 
   private buildHeaderLine(): string {
@@ -207,18 +195,6 @@ function renderTurnBody(theme: NanobossTuiTheme, turn: UiTurn): Component {
   return new Text(turn.markdown);
 }
 
-function buildPendingLines(state: UiState): string[] {
-  const lines: string[] = [];
-
-  lines.push(...state.runtimeNotes);
-
-  if (state.promptDiagnosticsLine) {
-    lines.push(state.promptDiagnosticsLine);
-  }
-
-  return lines;
-}
-
 function styleStatusLine(theme: NanobossTuiTheme, line: string): string {
   if (line.includes("failed") || line.includes("error") || line.startsWith("[stream]")) {
     return theme.error(line);
@@ -233,20 +209,4 @@ function styleStatusLine(theme: NanobossTuiTheme, line: string): string {
   }
 
   return theme.dim(line);
-}
-
-function styleRuntimeLine(theme: NanobossTuiTheme, line: string): string {
-  if (line.includes("failed")) {
-    return theme.error(line);
-  }
-
-  if (line.startsWith("[tokens]")) {
-    return theme.success(line);
-  }
-
-  if (line.startsWith("[prompt]") || line.startsWith("[memory]")) {
-    return theme.dim(line);
-  }
-
-  return theme.muted(line);
 }
