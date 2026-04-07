@@ -172,6 +172,60 @@ export function selectFixWave(fileGroups: FileErrorGroup[], limit: number): File
   return fileGroups.slice(0, limit);
 }
 
+interface LintErrorDelta {
+  resolvedCount: number;
+  surfacedCount: number;
+}
+
+function buildLintErrorKey(cwd: string, error: LinterError): string {
+  return [
+    normalizeErrorFile(cwd, error.file),
+    String(error.line),
+    String(error.column),
+    error.message,
+    error.rule,
+  ].join("\u0000");
+}
+
+function countLintErrorsByKey(cwd: string, errors: LinterError[]): Map<string, number> {
+  const counts = new Map<string, number>();
+
+  for (const error of errors) {
+    const key = buildLintErrorKey(cwd, error);
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+
+  return counts;
+}
+
+export function diffLintErrors(
+  cwd: string,
+  before: LinterError[],
+  after: LinterError[],
+): LintErrorDelta {
+  const beforeCounts = countLintErrorsByKey(cwd, before);
+  const afterCounts = countLintErrorsByKey(cwd, after);
+  const keys = new Set([...beforeCounts.keys(), ...afterCounts.keys()]);
+  let resolvedCount = 0;
+  let surfacedCount = 0;
+
+  for (const key of keys) {
+    const beforeCount = beforeCounts.get(key) ?? 0;
+    const afterCount = afterCounts.get(key) ?? 0;
+
+    if (beforeCount > afterCount) {
+      resolvedCount += beforeCount - afterCount;
+      continue;
+    }
+
+    if (afterCount > beforeCount) {
+      surfacedCount += afterCount - beforeCount;
+    }
+  }
+
+  return { resolvedCount, surfacedCount };
+}
+
 export function buildFixPrompt(group: FileErrorGroup): string {
   const diagnostics = group.errors.map((error) =>
     `- ${group.displayFile}:${error.line}:${error.column} ${error.message} (rule: ${error.rule})`
@@ -583,7 +637,8 @@ export default {
       }
 
       const rerun = runPlannedLinter(discovery.plan);
-      const resolvedThisRound = Math.max(0, linter.errors.length - rerun.errors.length);
+      const roundDelta = diffLintErrors(ctx.cwd, linter.errors, rerun.errors);
+      const resolvedThisRound = roundDelta.resolvedCount;
       let resolvedInTargetedFiles = 0;
 
       for (const fileGroup of wave) {
@@ -614,6 +669,12 @@ export default {
       if (resolvedThisRound > resolvedInTargetedFiles) {
         const spillover = resolvedThisRound - resolvedInTargetedFiles;
         ctx.print(`Resolved ${pluralize(spillover, "additional error")} outside the targeted files.\n`);
+      }
+
+      if (roundDelta.surfacedCount > 0) {
+        ctx.print(
+          `Lint rerun surfaced ${pluralize(roundDelta.surfacedCount, "additional error")} outside the previously reported set.\n`,
+        );
       }
 
       fixedErrors += resolvedThisRound;

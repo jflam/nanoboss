@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   buildFixPrompt,
+  diffLintErrors,
   groupErrorsByFile,
   parseLintOutput,
   parseEslintJsonOutput,
@@ -292,5 +293,70 @@ describe("/linter helpers", () => {
     const wave = selectFixWave(groups, 2);
 
     expect(wave.map((group) => group.displayFile)).toEqual(["src/a.ts", "src/b.ts"]);
+  });
+
+  test("counts resolved errors even when rerun surfaces additional errors", () => {
+    const delta = diffLintErrors(
+      "/repo",
+      [
+        {
+          file: "src/target.ts",
+          line: 1,
+          column: 1,
+          message: "first",
+          rule: "rule-a",
+        },
+      ],
+      [
+        {
+          file: "src/other.ts",
+          line: 2,
+          column: 3,
+          message: "second",
+          rule: "rule-b",
+        },
+        {
+          file: "src/another.ts",
+          line: 4,
+          column: 5,
+          message: "third",
+          rule: "rule-c",
+        },
+      ],
+    );
+
+    expect(delta).toEqual({
+      resolvedCount: 1,
+      surfacedCount: 2,
+    });
+  });
+
+  test("normalizes file paths when diffing lint errors", () => {
+    const delta = diffLintErrors(
+      "/repo",
+      [
+        {
+          file: "src/app.ts",
+          line: 7,
+          column: 9,
+          message: "problem",
+          rule: "rule-a",
+        },
+      ],
+      [
+        {
+          file: "/repo/src/app.ts",
+          line: 7,
+          column: 9,
+          message: "problem",
+          rule: "rule-a",
+        },
+      ],
+    );
+
+    expect(delta).toEqual({
+      resolvedCount: 0,
+      surfacedCount: 0,
+    });
   });
 });
