@@ -14,7 +14,13 @@ function stripAnsi(text: string): string {
     if (char === esc && text.charAt(index + 1) === "[") {
       let cursor = index + 2;
 
-      while (cursor < text.length && /[0-9;]/.test(text.charAt(cursor))) {
+      while (cursor < text.length) {
+        const code = text.charCodeAt(cursor);
+
+        if ((code < 48 || code > 57) && code !== 59) {
+          break;
+        }
+
         cursor += 1;
       }
 
