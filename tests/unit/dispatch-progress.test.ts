@@ -1,3 +1,4 @@
+import type * as acp from "@agentclientprotocol/sdk";
 import { describe, expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -49,7 +50,7 @@ describe("dispatch-progress", () => {
       const [started, updated, usage] = readFileSync(progressPath, "utf8")
         .trim()
         .split("\n")
-        .map((line) => JSON.parse(line));
+        .map((line): acp.SessionUpdate => JSON.parse(line) as acp.SessionUpdate);
 
       expect(started).toEqual({
         sessionUpdate: "tool_call",
