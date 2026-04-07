@@ -24,7 +24,7 @@ At a high level, `pi-autoresearch` runs this loop:
 
 1. gather the optimization goal, metric, command, and file scope
 2. create a dedicated working branch
-3. write durable session artifacts (`autoresearch.md`, `autoresearch.sh`, optional checks script)
+3. write durable session artifacts and structured config
 4. run a baseline benchmark
 5. iterate autonomously:
    - propose a change
@@ -42,7 +42,7 @@ At a high level, `pi-autoresearch` runs this loop:
 - **append-only run history**: `autoresearch.jsonl` is the source of truth for each experiment
 - **human-readable session context**: `autoresearch.md` captures goals, tried ideas, wins, and dead ends
 - **deterministic outer-loop control**: procedure code owns state transitions, branching, keep/revert, and resume
-- **deterministic benchmark execution**: benchmark and checks can live in scripts/files, but only as harnesses invoked by procedure code
+- **deterministic benchmark execution**: benchmark and checks should default to structured config executed by procedure code
 - **branch isolation**: the loop works on an autoresearch branch, then finalization creates reviewable branches from the merge-base
 - **resume after restart/context loss**: a new agent can continue from repo-local state
 - **keep vs revert discipline**: failed or worse experiments do not accumulate
@@ -95,7 +95,8 @@ The most important adaptation from `pi-autoresearch` is this:
 That means:
 
 - the outer loop lives in TypeScript
-- shell scripts are optional adapters for benchmark and checks execution
+- benchmark/check execution should default to structured config, not shell
+- shell scripts should be optional compatibility adapters only
 - the agent provides experiment ideas and summaries, not loop control
 - keep/revert, logging, and continuation decisions happen in deterministic code
 
@@ -236,19 +237,39 @@ To preserve the strongest part of `pi-autoresearch`, NanoBoss should keep **repo
 - `autoresearch.md`
   - living objective and progress document
   - must be sufficient for a fresh agent to resume strategically
-- `autoresearch.sh`
-  - optional benchmark harness
-  - invoked by procedure code, never used as the loop controller
-  - emits parseable metric output
-- `autoresearch.checks.sh` (optional)
-  - correctness-gate harness
-  - invoked by procedure code after successful benchmark runs
-- optional NanoBoss metadata file such as `autoresearch.state.json`
+- `autoresearch.state.json`
   - active/inactive flag
   - branch name
   - iteration count
   - current best run id
+  - benchmark config
+  - checks config
   - metric config
+  - files in scope
+
+### Recommended benchmark/check config model
+
+The plan should assume **no required shell artifact at all**.
+
+Instead, `autoresearch.state.json` should hold a structured execution contract such as:
+
+- benchmark:
+  - `argv: string[]`
+  - `cwd?: string`
+  - `timeoutMs?: number`
+  - `metric`:
+    - `source: "stdout-regex" | "stderr-regex" | "exit-code" | "json-path"`
+    - parser config
+- checks:
+  - zero or more command specs with their own `argv`, `cwd`, and `timeoutMs`
+
+That gives NanoBoss deterministic execution without generating or trusting a shell script.
+
+### When a script would still be acceptable
+
+A generated script is only justified as a later escape hatch for workloads that genuinely need complex multi-step environment setup that cannot be expressed cleanly as structured command config.
+
+That should be optional and explicitly second-class in the design, not the default contract.
 
 ### Why not rely only on NanoBoss session refs
 
@@ -278,9 +299,9 @@ The first implementation should explicitly separate deterministic orchestration 
 - `src/autoresearch/log.ts`
   - append/read JSONL records
 - `src/autoresearch/benchmark.ts`
-  - execute benchmark harness and parse metrics
+  - execute structured benchmark config and parse metrics
 - `src/autoresearch/checks.ts`
-  - run optional correctness harness
+  - run optional structured correctness checks
 - `src/autoresearch/git.ts`
   - branch setup, revert, commit, merge-base helpers
 - `src/autoresearch/runner.ts`
@@ -297,7 +318,7 @@ This preserves NanoBoss's intended architecture: code runs the state machine, th
 1. validate git repository and working tree safety
 2. create or switch to an autoresearch branch
 3. gather benchmark configuration
-4. write `autoresearch.md` and `autoresearch.sh`
+4. write `autoresearch.md` and `autoresearch.state.json`
 5. run baseline benchmark
 6. append baseline to `autoresearch.jsonl`
 7. dispatch `/autoresearch-loop`
@@ -309,8 +330,8 @@ Each loop iteration should:
 1. read current state and best-so-far context
 2. ask the agent for one scoped experiment idea
 3. apply the code change
-4. run the benchmark harness via deterministic procedure code
-5. if benchmark passes, run optional checks via deterministic procedure code
+4. run the benchmark from structured config via deterministic procedure code
+5. if benchmark passes, run optional checks from structured config via deterministic procedure code
 6. compare result against the best-so-far and noise floor in code
 7. if the result is a keep:
    - create a commit
@@ -322,7 +343,7 @@ Each loop iteration should:
    - update `autoresearch.md` with the failed idea
 9. continue or stop based on explicit stop state, max iterations, or hard failure
 
-The shell never decides whether to continue, keep, revert, or finalize; those transitions belong to the runner.
+The shell never decides whether to continue, keep, revert, or finalize; those transitions belong to the runner. In the preferred design, the loop does not require a shell artifact at all.
 
 ### Resume phase
 
@@ -352,7 +373,7 @@ Phase 1 should focus on the workflow core, not the UI polish.
 - append-only JSONL logging
 - baseline + keep/revert loop
 - TypeScript runner/state-machine ownership of the loop
-- optional checks script support
+- structured benchmark/check config
 - confidence calculation persisted in logs
 
 ### Defer until phase 2
@@ -371,7 +392,7 @@ This keeps the first version aligned with NanoBoss’s current strengths: proced
 - never run the loop against an ambiguous or unsafe git state
 - do not silently keep benchmark regressions
 - make benchmark parsing explicit and deterministic
-- do not put loop-control semantics into shell scripts
+- do not make shell scripts part of the required control contract
 - keep correctness checks separate from the optimization metric
 - do not rely on transient chat memory for resumability
 - stop or ask when branch/worktree state is ambiguous
@@ -389,13 +410,13 @@ This keeps the first version aligned with NanoBoss’s current strengths: proced
 7. `/autoresearch-clear` resets state safely.
 8. `/autoresearch-finalize` groups kept experiments into non-overlapping review branches.
 9. loop resume after NanoBoss session restart still works from repo-local state alone.
-10. the loop can run with no shell controller present beyond benchmark/check harness scripts.
+10. the loop can run with no generated shell script at all.
 
 ---
 
 ## Implementation milestones
 
-1. Define the repo-local state schema and benchmark/checks contract.
+1. Define the repo-local state schema and structured benchmark/check contract.
 2. Implement `src/autoresearch/*` helpers for benchmark execution, logging, git keep/revert, and state transitions.
 3. Build the deterministic runner/state machine that owns loop transitions.
 4. Build `/autoresearch` initialization and resume behavior on top of that runner.
@@ -409,7 +430,7 @@ This keeps the first version aligned with NanoBoss’s current strengths: proced
 ## Todo breakdown
 
 1. Define the durable state files and JSONL record schema.
-2. Design the benchmark/check harness contract so shell stays a leaf execution surface.
+2. Design the benchmark/check contract so no shell artifact is required.
 3. Implement the TypeScript runner/state machine and safe git behavior.
 4. Implement entrypoint, stop, clear, and finalize procedures.
 5. Add coverage for initialization, keep/revert behavior, resume, and finalization.
