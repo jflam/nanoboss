@@ -103,8 +103,8 @@ async function main(): Promise<void> {
   });
 
   let stderr = "";
-  child.stderr.on("data", (chunk) => {
-    stderr += chunk.toString();
+  child.stderr.on("data", (chunk: Buffer | string) => {
+    stderr = `${stderr}${String(chunk)}`;
   });
 
   const stream = acp.ndJsonStream(
@@ -165,7 +165,10 @@ async function main(): Promise<void> {
 
     for (let index = 0; index < args.prompts.length; index += 1) {
       activeUpdates = [];
-      const prompt = args.prompts[index]!;
+      const prompt = args.prompts[index];
+      if (prompt === undefined) {
+        throw new Error(`Missing prompt at index ${index}`);
+      }
       const response = await connection.prompt({
         sessionId: created.sessionId,
         prompt: [{ type: "text", text: prompt }],
