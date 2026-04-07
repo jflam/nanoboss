@@ -5,6 +5,11 @@ import { tmpdir } from "node:os";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
+import autoresearchProcedure from "../../commands/autoresearch.ts";
+import autoresearchClearProcedure from "../../commands/autoresearch-clear.ts";
+import autoresearchFinalizeProcedure from "../../commands/autoresearch-finalize.ts";
+import autoresearchLoopProcedure from "../../commands/autoresearch-loop.ts";
+import autoresearchStopProcedure from "../../commands/autoresearch-stop.ts";
 import commitProcedure from "../../commands/commit.ts";
 import defaultProcedure from "../../commands/default.ts";
 import kbAnswerProcedure from "../../commands/kb-answer.ts";
@@ -107,6 +112,11 @@ export class ProcedureRegistry implements ProcedureRegistryLike {
   loadBuiltins(): void {
     this.register(defaultProcedure);
     this.register(createCreateProcedure(this));
+    this.register(autoresearchProcedure);
+    this.register(autoresearchLoopProcedure);
+    this.register(autoresearchStopProcedure);
+    this.register(autoresearchClearProcedure);
+    this.register(autoresearchFinalizeProcedure);
     this.register(commitProcedure);
     this.register(kbIngestProcedure);
     this.register(kbCompileSourceProcedure);

@@ -204,6 +204,11 @@ describe("ProcedureRegistry", () => {
     registry.loadBuiltins();
 
     expect(registry.get("default")).toBeDefined();
+    expect(registry.get("autoresearch")).toBeDefined();
+    expect(registry.get("autoresearch-loop")).toBeDefined();
+    expect(registry.get("autoresearch-stop")).toBeDefined();
+    expect(registry.get("autoresearch-clear")).toBeDefined();
+    expect(registry.get("autoresearch-finalize")).toBeDefined();
     expect(registry.get("model")).toBeDefined();
     expect(registry.get("kb-ingest")).toBeDefined();
     expect(registry.get("kb-compile-source")).toBeDefined();
@@ -217,6 +222,11 @@ describe("ProcedureRegistry", () => {
     expect(registry.get("cell_get")).toBeDefined();
     expect(registry.get("ref_read")).toBeDefined();
     expect(registry.toAvailableCommands().some((command) => command.name === "default")).toBe(false);
+    expect(registry.toAvailableCommands().some((command) => command.name === "autoresearch")).toBe(true);
+    expect(registry.toAvailableCommands().some((command) => command.name === "autoresearch-loop")).toBe(true);
+    expect(registry.toAvailableCommands().some((command) => command.name === "autoresearch-stop")).toBe(true);
+    expect(registry.toAvailableCommands().some((command) => command.name === "autoresearch-clear")).toBe(true);
+    expect(registry.toAvailableCommands().some((command) => command.name === "autoresearch-finalize")).toBe(true);
     expect(registry.toAvailableCommands().some((command) => command.name === "model")).toBe(true);
     expect(registry.toAvailableCommands().some((command) => command.name === "kb-ingest")).toBe(true);
     expect(registry.toAvailableCommands().some((command) => command.name === "kb-compile-source")).toBe(true);
