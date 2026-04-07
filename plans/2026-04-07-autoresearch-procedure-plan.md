@@ -16,6 +16,23 @@ The missing pieces are mostly **deterministic host-side experiment control** and
 
 ---
 
+## Non-normative why
+
+Beyond the feature itself, this is a useful stress test for NanoBoss's procedure extensibility model.
+
+If NanoBoss can support a long-running, resumable, generic optimization engine like `/autoresearch-loop` **without introducing new procedure-model primitives**, that is strong evidence that the current design is holding up well.
+
+That is not a requirement for the feature to be worthwhile, but it is a meaningful reason to do the work:
+
+- it exercises stable procedures plus bounded agent calls
+- it exercises durable repo-local state alongside session tooling
+- it exercises async continuation and resume
+- it exercises a generic control-plane procedure that can serve multiple domains
+
+Success here would therefore validate not just an autoresearch feature, but also the claim that the existing procedure model is flexible enough for more ambitious workflows.
+
+---
+
 ## What `pi-autoresearch` does
 
 ### Core loop
