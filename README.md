@@ -170,7 +170,9 @@ Run the full test suite:
 bun run test
 ```
 
-This runs `bun test`. Real-agent end-to-end tests still skip unless `NANOBOSS_RUN_E2E=1` is set.
+This runs a compact wrapper around `bun test` that emits `.` for pass, `S` for skip, and `F` for fail,
+then prints detailed failure output only when tests fail. Real-agent end-to-end tests still skip unless
+`NANOBOSS_RUN_E2E=1` is set.
 
 Run unit tests only:
 
@@ -178,7 +180,7 @@ Run unit tests only:
 bun run test:unit
 ```
 
-This runs `bun test tests/unit`.
+This runs the compact test wrapper against `tests/unit`.
 
 Run end-to-end tests with the default gating behavior:
 
@@ -186,7 +188,7 @@ Run end-to-end tests with the default gating behavior:
 bun run test:e2e
 ```
 
-This runs `bun test tests/e2e`. Real-agent tests are present in that directory, but they remain skipped
+This runs the compact test wrapper against `tests/e2e`. Real-agent tests are present in that directory, but they remain skipped
 unless `NANOBOSS_RUN_E2E=1` is enabled.
 
 Run the full real-agent end-to-end suite:
@@ -195,12 +197,12 @@ Run the full real-agent end-to-end suite:
 bun run test:e2e:real
 ```
 
-This runs `NANOBOSS_RUN_E2E=1 bun test tests/e2e` and exercises the real downstream agents.
+This runs `NANOBOSS_RUN_E2E=1 bun run scripts/compact-test.ts tests/e2e` and exercises the real downstream agents.
 
 Run the `/default` multi-turn history real-agent coverage only:
 
 ```bash
-NANOBOSS_RUN_E2E=1 bun test tests/e2e/default-history-agents.test.ts
+NANOBOSS_RUN_E2E=1 bun run scripts/compact-test.ts tests/e2e/default-history-agents.test.ts
 ```
 
 That file contains 4 independent tests:
@@ -213,10 +215,12 @@ That file contains 4 independent tests:
 Run a single real-agent `/default` history test by name:
 
 ```bash
-NANOBOSS_RUN_E2E=1 bun test tests/e2e/default-history-agents.test.ts --test-name-pattern claude
+NANOBOSS_RUN_E2E=1 bun run scripts/compact-test.ts tests/e2e/default-history-agents.test.ts --test-name-pattern claude
 ```
 
 Replace `claude` with `gemini`, `codex`, or `copilot` as needed.
+
+If you need Bun's native reporter output for debugging, run `bun run test:raw`.
 
 Typed downstream agent outputs should use `jsonType(...)` from `src/core/types.ts` with concrete `typia`
 inputs, for example `jsonType<Result>(typia.json.schema<Result>(), typia.createValidate<Result>())`,

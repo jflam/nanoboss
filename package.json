@@ -11,11 +11,12 @@
     "build": "bun run build.ts",
     "lint": "eslint . --cache",
     "lint:fix": "eslint . --cache --fix",
-    "test": "bun test",
-    "test:unit": "bun test tests/unit",
-    "test:e2e": "bun test tests/e2e",
+    "test": "bun run scripts/compact-test.ts",
+    "test:raw": "bun test",
+    "test:unit": "bun run scripts/compact-test.ts tests/unit",
+    "test:e2e": "bun run scripts/compact-test.ts tests/e2e",
     "cleanup:sessions": "bun run scripts/cleanup-sessions.ts",
-    "test:e2e:real": "NANOBOSS_RUN_E2E=1 bun test tests/e2e",
+    "test:e2e:real": "NANOBOSS_RUN_E2E=1 bun run scripts/compact-test.ts tests/e2e",
     "prepare": "ts-patch install"
   },
   "dependencies": {
