@@ -93,7 +93,10 @@ export function formatPreviewBody(
   }
 
   const collapsedLines = options.collapsedLines ?? DEFAULT_COLLAPSED_LINES;
-  const formatter = options.lineFormatter ?? ((currentTheme: NanobossTuiTheme, line: string) => currentTheme.toolCardBody(line));
+  const formatter = options.lineFormatter
+    ?? (looksLikeDiffBlock(block.bodyLines)
+      ? formatDiffLine
+      : ((currentTheme: NanobossTuiTheme, line: string) => currentTheme.toolCardBody(line)));
   const visibleLines = expanded ? block.bodyLines : block.bodyLines.slice(0, collapsedLines);
   const lines = visibleLines.map((line) => formatter(theme, line));
 
@@ -118,6 +121,13 @@ export function formatCodePreviewBody(
   }
 
   const collapsedLines = options.collapsedLines ?? DEFAULT_COLLAPSED_LINES;
+  if (looksLikeDiffBlock(block.bodyLines)) {
+    return formatPreviewBody(theme, block, expanded, {
+      collapsedLines,
+      lineFormatter: formatDiffLine,
+    });
+  }
+
   const { shouldHighlight, language } = getToolCodeContext(toolCall);
   if (!shouldHighlight) {
     return formatPreviewBody(theme, block, expanded, options);
@@ -136,6 +146,32 @@ export function formatCodePreviewBody(
 
 export function formatWarnings(theme: NanobossTuiTheme, block: ToolPreviewBlock | undefined): string[] {
   return (block?.warnings ?? []).map((warning) => theme.warning(warning.startsWith("[") ? warning : `[${warning}]`));
+}
+
+export function formatDiffLine(theme: NanobossTuiTheme, line: string): string {
+  if (
+    line.startsWith("diff --git ")
+    || line.startsWith("index ")
+    || line.startsWith("--- ")
+    || line.startsWith("+++ ")
+    || line.startsWith("*** ")
+  ) {
+    return theme.toolCardMeta(line);
+  }
+
+  if (line.startsWith("@@")) {
+    return theme.accent(line);
+  }
+
+  if (line.startsWith("+")) {
+    return theme.success(line);
+  }
+
+  if (line.startsWith("-")) {
+    return theme.error(line);
+  }
+
+  return theme.toolCardBody(line);
 }
 
 export function formatErrorLines(
@@ -335,6 +371,33 @@ function extractListLikeLines(value: unknown): string[] {
   }
 
   return [];
+}
+
+function looksLikeDiffBlock(lines: string[]): boolean {
+  let hasUnifiedFileHeaders = false;
+  let hasUnifiedHunk = false;
+  let hasGitDiffHeader = false;
+  let hasApplyPatchHeader = false;
+
+  for (const line of lines) {
+    if (line.startsWith("diff --git ")) {
+      hasGitDiffHeader = true;
+    } else if (line.startsWith("--- ") || line.startsWith("+++ ")) {
+      hasUnifiedFileHeaders = true;
+    } else if (line.startsWith("@@")) {
+      hasUnifiedHunk = true;
+    } else if (
+      line.startsWith("*** Begin Patch")
+      || line.startsWith("*** Update File:")
+      || line.startsWith("*** Add File:")
+      || line.startsWith("*** Delete File:")
+      || line.startsWith("*** Move to:")
+    ) {
+      hasApplyPatchHeader = true;
+    }
+  }
+
+  return hasApplyPatchHeader || (hasUnifiedFileHeaders && hasUnifiedHunk) || (hasGitDiffHeader && (hasUnifiedFileHeaders || hasUnifiedHunk));
 }
 
 function summarizeListEntry(entry: unknown): string | undefined {

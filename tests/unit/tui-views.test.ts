@@ -268,7 +268,7 @@ describe("NanobossAppView", () => {
       } as never,
       createNanobossTuiTheme(),
       {
-        ...createInitialUiState({ cwd: "/repo", showToolCalls: true }),
+        ...createInitialUiState({ cwd: "/repo", showToolCalls: true, expandedToolOutput: true }),
         sessionId: "session-1",
         toolCalls: [
           {
@@ -292,6 +292,97 @@ describe("NanobossAppView", () => {
 
     expect(highlightedLine).toContain("\u001b[38;2;86;156;214mconst");
     expect(highlightedLine).toContain("\u001b[38;2;181;206;168m42");
+  });
+
+  test("renders unified diff lines with red and green colors in read cards", () => {
+    const view = new NanobossAppView(
+      {
+        render: () => [""],
+        invalidate() {},
+      } as never,
+      createNanobossTuiTheme(),
+      {
+        ...createInitialUiState({ cwd: "/repo", showToolCalls: true, expandedToolOutput: true }),
+        sessionId: "session-1",
+        toolCalls: [
+          {
+            id: "tool-1",
+            runId: "run-1",
+            title: "read",
+            kind: "read",
+            status: "completed",
+            depth: 0,
+            isWrapper: false,
+            callPreview: { header: "read changes.diff" },
+            resultPreview: {
+              bodyLines: [
+                "--- a/src/example.ts",
+                "+++ b/src/example.ts",
+                "@@ -1 +1 @@",
+                "-const before = 1;",
+                "+const after = 2;",
+              ],
+            },
+            rawInput: { path: "changes.diff" },
+          },
+        ],
+        transcriptItems: [{ type: "tool_call" as const, id: "tool-1" }],
+      },
+    );
+
+    const rendered = view.render(120);
+    const removedLine = rendered.find((line) => stripAnsi(line).includes("-const before = 1;"));
+    const addedLine = rendered.find((line) => stripAnsi(line).includes("+const after = 2;"));
+    const hunkLine = rendered.find((line) => stripAnsi(line).includes("@@ -1 +1 @@"));
+
+    expect(removedLine).toContain("\u001b[31m");
+    expect(addedLine).toContain("\u001b[32m");
+    expect(hunkLine).toContain("\u001b[36m");
+  });
+
+  test("renders bash diff output with red and green colors", () => {
+    const view = new NanobossAppView(
+      {
+        render: () => [""],
+        invalidate() {},
+      } as never,
+      createNanobossTuiTheme(),
+      {
+        ...createInitialUiState({ cwd: "/repo", showToolCalls: true, expandedToolOutput: true }),
+        sessionId: "session-1",
+        toolCalls: [
+          {
+            id: "tool-1",
+            runId: "run-1",
+            title: "bash",
+            kind: "bash",
+            status: "completed",
+            depth: 0,
+            isWrapper: false,
+            callPreview: { header: "$ git diff -- src/example.ts" },
+            resultPreview: {
+              bodyLines: [
+                "diff --git a/src/example.ts b/src/example.ts",
+                "index 1111111..2222222 100644",
+                "--- a/src/example.ts",
+                "+++ b/src/example.ts",
+                "@@ -1 +1 @@",
+                "-const before = 1;",
+                "+const after = 2;",
+              ],
+            },
+          },
+        ],
+        transcriptItems: [{ type: "tool_call" as const, id: "tool-1" }],
+      },
+    );
+
+    const rendered = view.render(120);
+    const removedLine = rendered.find((line) => stripAnsi(line).includes("-const before = 1;"));
+    const addedLine = rendered.find((line) => stripAnsi(line).includes("+const after = 2;"));
+
+    expect(removedLine).toContain("\u001b[31m");
+    expect(addedLine).toContain("\u001b[32m");
   });
 
   test("default procedure cards do not repeat the user prompt", () => {

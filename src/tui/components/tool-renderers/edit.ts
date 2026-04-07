@@ -1,6 +1,7 @@
 import type { UiToolCall } from "../../state.ts";
 import type { NanobossTuiTheme } from "../../theme.ts";
 import {
+  formatDiffLine,
   formatErrorLines,
   formatExpandedToolHeader,
   formatPreviewBody,
@@ -13,18 +14,6 @@ import {
   joinToolContent,
   type RenderedToolCard,
 } from "../tool-card-format.ts";
-
-function formatDiffLine(theme: NanobossTuiTheme, line: string): string {
-  if (line.startsWith("+")) {
-    return theme.success(line);
-  }
-
-  if (line.startsWith("-")) {
-    return theme.error(line);
-  }
-
-  return theme.toolCardMeta(line);
-}
 
 export function renderEditToolCard(theme: NanobossTuiTheme, toolCall: UiToolCall, expanded: boolean): RenderedToolCard {
   return {
