@@ -862,12 +862,19 @@ function formatDuration(durationMs: number): string {
 function getCompletionTurnNumber(state: UiState): number {
   const activeAssistantTurnId = state.activeAssistantTurnId;
   if (!activeAssistantTurnId) {
-    return state.turns.length + 1;
+    return Math.max(1, countUserTurns(state.turns));
   }
 
-  const suffix = activeAssistantTurnId.split("-").at(-1);
-  const parsed = suffix ? Number.parseInt(suffix, 10) : Number.NaN;
-  return Number.isFinite(parsed) ? parsed : state.turns.length + 1;
+  const assistantIndex = state.turns.findIndex((turn) => turn.id === activeAssistantTurnId);
+  if (assistantIndex < 0) {
+    return Math.max(1, countUserTurns(state.turns));
+  }
+
+  return Math.max(1, countUserTurns(state.turns.slice(0, assistantIndex + 1)));
+}
+
+function countUserTurns(turns: UiTurn[]): number {
+  return turns.filter((turn) => turn.role === "user").length;
 }
 
 function createAssistantTurn(state: UiState, markdown: string): UiTurn {
