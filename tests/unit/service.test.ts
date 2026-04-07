@@ -11,13 +11,14 @@ const BUILD_HOOK_TIMEOUT_MS = 15_000;
 import { DefaultConversationSession } from "../../src/agent/default-session.ts";
 import type { CellRef } from "../../src/core/types.ts";
 import { ProcedureRegistry } from "../../src/procedure/registry.ts";
-import { buildProcedureDispatchJobsDir } from "../../src/procedure/dispatch-jobs.ts";
+import { buildProcedureDispatchJobsDir, ProcedureDispatchJobManager } from "../../src/procedure/dispatch-jobs.ts";
 import { TopLevelProcedureCancelledError } from "../../src/procedure/runner.ts";
 import { SessionStore } from "../../src/session/index.ts";
 import { extractProcedureDispatchResult, NanobossService } from "../../src/core/service.ts";
 
 interface InternalSessionState {
   store: SessionStore;
+  defaultConversation: DefaultConversationSession;
 }
 
 beforeAll(() => {
@@ -110,6 +111,29 @@ function readStoredMockSession(sessionStoreDir: string): {
 
   return JSON.parse(readFileSync(join(sessionStoreDir, fileName), "utf8")) as {
     turns: Array<{ role: "user" | "assistant"; text: string }>;
+  };
+}
+
+function extractDispatchRequest(prompt: string): {
+  sessionId: string;
+  name: string;
+  prompt: string;
+  defaultAgentSelection?: unknown;
+  dispatchCorrelationId?: string;
+} {
+  const payload = prompt
+    .split("\n\n")
+    .find((part) => part.trimStart().startsWith('{"sessionId"'));
+  if (!payload) {
+    throw new Error("Missing internal dispatch JSON payload");
+  }
+
+  return JSON.parse(payload) as {
+    sessionId: string;
+    name: string;
+    prompt: string;
+    defaultAgentSelection?: unknown;
+    dispatchCorrelationId?: string;
   };
 }
 
@@ -508,6 +532,140 @@ describe("NanobossService", () => {
     }, {
       MOCK_AGENT_STRIP_ASYNC_WAIT_RAW_OUTPUT: "1",
     });
+  }, 30_000);
+
+  test("keeps deterministic polling when the default session returns a non-terminal async dispatch status", async () => {
+    const originalRecoveryWaitMs = process.env.NANOBOSS_PROCEDURE_DISPATCH_RECOVERY_WAIT_MS;
+    process.env.NANOBOSS_PROCEDURE_DISPATCH_RECOVERY_WAIT_MS = "100";
+
+    try {
+      const { cwd, registry } = await createRegistryWithWorkspace({
+        slowreview: [
+          "export default {",
+          '  name: "slowreview",',
+          '  description: "slow async procedure",',
+          '  async execute(prompt) {',
+          '    await Bun.sleep(1500);',
+          '    return {',
+          '      data: { subject: prompt, verdict: "completed" },',
+          '      display: `completed: ${prompt}`,',
+          '      summary: `completed ${prompt}`,',
+          '      memory: `Completed durable result for ${prompt}.`,',
+          '    };',
+          '  },',
+          "};",
+        ].join("\n"),
+      });
+
+      const service = new NanobossService(registry);
+      const session = service.createSession({ cwd });
+      const sessionState = getInternalSessionState(service, session.sessionId);
+      const manager = new ProcedureDispatchJobManager({
+        cwd,
+        sessionId: session.sessionId,
+        rootDir: sessionState.store.rootDir,
+        getRegistry: async () => registry,
+      });
+      const originalPrompt = sessionState.defaultConversation.prompt.bind(sessionState.defaultConversation);
+      const originalGetCurrentTokenSnapshot = sessionState.defaultConversation.getCurrentTokenSnapshot
+        .bind(sessionState.defaultConversation);
+
+      Reflect.set(
+        sessionState.defaultConversation as object,
+        "prompt",
+        async (controlPrompt: string, options: { onUpdate?: (update: unknown) => Promise<void> | void } = {}) => {
+          const dispatch = extractDispatchRequest(controlPrompt);
+          const startResult = await manager.start({
+            name: dispatch.name,
+            prompt: dispatch.prompt,
+            defaultAgentSelection: dispatch.defaultAgentSelection as never,
+            dispatchCorrelationId: dispatch.dispatchCorrelationId,
+          });
+
+          let runningResult = await manager.wait(startResult.dispatchId, 25);
+          for (let attempt = 0; attempt < 20 && runningResult.status === "queued"; attempt += 1) {
+            runningResult = await manager.wait(startResult.dispatchId, 25);
+          }
+
+          expect(runningResult.status).toBe("running");
+
+          const updates = [
+            {
+              sessionUpdate: "tool_call",
+              toolCallId: "dispatch-start",
+              title: "procedure_dispatch_start",
+              kind: "other",
+              status: "pending",
+              rawInput: dispatch,
+            },
+            {
+              sessionUpdate: "tool_call_update",
+              toolCallId: "dispatch-start",
+              status: "completed",
+              rawOutput: startResult,
+            },
+            {
+              sessionUpdate: "tool_call",
+              toolCallId: "dispatch-wait",
+              title: "procedure_dispatch_wait",
+              kind: "other",
+              status: "pending",
+              rawInput: {
+                dispatchId: startResult.dispatchId,
+                waitMs: 25,
+              },
+            },
+            {
+              sessionUpdate: "tool_call_update",
+              toolCallId: "dispatch-wait",
+              status: "completed",
+              rawOutput: runningResult,
+            },
+          ] as const;
+
+          for (const update of updates) {
+            await options.onUpdate?.(update);
+          }
+
+          return {
+            raw: JSON.stringify(runningResult),
+            updates: [...updates],
+            durationMs: 0,
+          };
+        },
+      );
+      Reflect.set(
+        sessionState.defaultConversation as object,
+        "getCurrentTokenSnapshot",
+        async () => undefined,
+      );
+
+      try {
+        await service.prompt(session.sessionId, "/slowreview patch");
+
+        const events = service.getSessionEvents(session.sessionId)?.after(-1) ?? [];
+        const completed = events.findLast((event) => event.type === "run_completed" && event.data.procedure === "slowreview");
+        const failed = events.findLast((event) => event.type === "run_failed" && event.data.procedure === "slowreview");
+
+        expect(completed?.type).toBe("run_completed");
+        expect(completed?.data.display).toBe("completed: patch");
+        expect(failed).toBeUndefined();
+      } finally {
+        Reflect.set(sessionState.defaultConversation as object, "prompt", originalPrompt);
+        Reflect.set(
+          sessionState.defaultConversation as object,
+          "getCurrentTokenSnapshot",
+          originalGetCurrentTokenSnapshot,
+        );
+        service.destroySession(session.sessionId);
+      }
+    } finally {
+      if (originalRecoveryWaitMs === undefined) {
+        delete process.env.NANOBOSS_PROCEDURE_DISPATCH_RECOVERY_WAIT_MS;
+      } else {
+        process.env.NANOBOSS_PROCEDURE_DISPATCH_RECOVERY_WAIT_MS = originalRecoveryWaitMs;
+      }
+    }
   }, 30_000);
 
   test.skip("long-running slash commands survive short per-request MCP deadlines via async dispatch polling", async () => {
