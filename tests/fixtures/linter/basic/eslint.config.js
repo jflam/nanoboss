@@ -1,12 +1,8 @@
-import { fileURLToPath } from "node:url";
-
 import js from "@eslint/js";
 import globals from "globals";
 import tseslint from "typescript-eslint";
 
-const tsconfigRootDir = fileURLToPath(new URL(".", import.meta.url));
-
-export default tseslint.config(
+export default [
   {
     ignores: [
       "coverage/**",
@@ -15,22 +11,32 @@ export default tseslint.config(
       "out/**",
     ],
   },
-  js.configs.recommended,
-  ...tseslint.configs.recommendedTypeChecked,
-  ...tseslint.configs.strictTypeChecked,
   {
-    files: ["**/*.ts"],
+    ...js.configs.recommended,
+    files: ["**/*.js"],
     languageOptions: {
+      ...js.configs.recommended.languageOptions,
       globals: {
         ...globals.es2024,
         ...globals.node,
       },
-      parserOptions: {
-        projectService: true,
-        tsconfigRootDir,
+    },
+  },
+  {
+    files: ["**/*.ts"],
+    languageOptions: {
+      parser: tseslint.parser,
+      globals: {
+        ...globals.es2024,
+        ...globals.node,
       },
     },
+    plugins: {
+      "@typescript-eslint": tseslint.plugin,
+    },
     rules: {
+      "object-shorthand": ["error", "always"],
+      "prefer-const": "error",
       "@typescript-eslint/consistent-type-imports": [
         "error",
         {
@@ -38,28 +44,6 @@ export default tseslint.config(
           fixStyle: "separate-type-imports",
         },
       ],
-      "@typescript-eslint/no-floating-promises": [
-        "error",
-        {
-          ignoreIIFE: true,
-          ignoreVoid: true,
-        },
-      ],
-      "@typescript-eslint/no-invalid-void-type": "off",
-      "@typescript-eslint/no-unused-vars": [
-        "error",
-        {
-          argsIgnorePattern: "^_",
-          caughtErrorsIgnorePattern: "^_",
-        },
-      ],
-      "@typescript-eslint/require-await": "off",
-      "@typescript-eslint/restrict-template-expressions": [
-        "error",
-        {
-          allowNumber: true,
-        },
-      ],
     },
   },
-);
+];

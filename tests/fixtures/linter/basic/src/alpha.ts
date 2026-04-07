@@ -1,8 +1,8 @@
-export function alpha(): string {
-  const value = "alpha";
-  if (value) {
-    return String(value);
-  }
+export function alpha(): { value: string; count: number } {
+  let value = "alpha";
 
-  return "fallback";
+  return {
+    value: value,
+    count: 1,
+  };
 }
