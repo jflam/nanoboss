@@ -107,6 +107,47 @@ describe("NanobossTuiController", () => {
     expect(streams[1]?.closeCount).toBe(1);
   });
 
+  test("/dark and /light change the local tool card theme without forwarding prompts", async () => {
+    const sendCalls: string[] = [];
+    const controller = new NanobossTuiController(
+      {
+        serverUrl: "http://localhost:3000",
+        showToolCalls: true,
+      },
+      {
+        ensureMatchingHttpServer: async () => {},
+        createHttpSession: async () => createSession("session-1"),
+        sendSessionPrompt: async (_baseUrl, _sessionId, prompt) => {
+          sendCalls.push(prompt);
+        },
+        startSessionEventStream: ({ sessionId, onEvent }) => createFakeStream([], sessionId, onEvent),
+      },
+    );
+
+    const runPromise = controller.run();
+    await waitFor(() => controller.getState().sessionId === "session-1");
+
+    await controller.handleSubmit("/light");
+
+    expect(controller.getState().toolCardThemeMode).toBe("light");
+    expect(controller.getState().statusLine).toBe("[theme] tool cards light");
+    expect(controller.getState().turns).toEqual([]);
+    expect(sendCalls).toEqual([]);
+
+    await controller.handleSubmit("hello");
+    expect(controller.getState().inputDisabled).toBe(true);
+    expect(sendCalls).toEqual(["hello"]);
+
+    await controller.handleSubmit("/dark");
+
+    expect(controller.getState().toolCardThemeMode).toBe("dark");
+    expect(controller.getState().statusLine).toBe("[theme] tool cards dark");
+    expect(sendCalls).toEqual(["hello"]);
+
+    controller.requestExit();
+    await runPromise;
+  });
+
   test("/model picker selection can persist the chosen default before sending the generated command", async () => {
     const sendCalls: string[] = [];
     const history: string[] = [];

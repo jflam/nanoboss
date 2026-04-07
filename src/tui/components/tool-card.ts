@@ -30,8 +30,12 @@ export class ToolCardComponent implements Component {
     this.container.clear();
 
     const formatted = renderToolCard(this.theme, this.toolCall, this.expanded);
+    const lines = [...formatted.lines];
+    if (this.toolCall.status === "failed" && lines.length > 0) {
+      lines[0] = `${this.theme.toolCardError("●")} ${lines[0]}`;
+    }
     const box = new Box(1, 1, backgroundForStatus(this.theme, this.toolCall.status));
-    box.addChild(new Text(formatted.lines.join("\n"), 0, 0));
+    box.addChild(new Text(lines.join("\n"), 0, 0));
     this.container.addChild(box);
   }
 }

@@ -112,6 +112,27 @@ describe("tui reducer", () => {
     expect(state.activeRunId).toBeUndefined();
   });
 
+  test("keeps the local tool card theme mode across session resets and exposes local theme commands", () => {
+    let state = createInitialUiState({ cwd: "/repo", showToolCalls: true });
+
+    state = reduceUiState(state, {
+      type: "local_tool_card_theme_mode",
+      mode: "light",
+    });
+    state = reduceUiState(state, {
+      type: "session_ready",
+      sessionId: "session-1",
+      cwd: "/repo",
+      buildLabel: "nanoboss-test",
+      agentLabel: "copilot/default",
+      commands: [{ name: "tokens", description: "show tokens" }],
+    });
+
+    expect(state.toolCardThemeMode).toBe("light");
+    expect(state.availableCommands).toContain("/dark");
+    expect(state.availableCommands).toContain("/light");
+  });
+
   test("completed tool cards persist after run completion", () => {
     let state = createInitialUiState({ cwd: "/repo", showToolCalls: true });
 
@@ -833,6 +854,8 @@ describe("tui reducer", () => {
       "/quit",
       "/exit",
       "/model",
+      "/dark",
+      "/light",
     ]);
   });
 

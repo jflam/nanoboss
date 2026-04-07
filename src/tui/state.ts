@@ -1,6 +1,8 @@
 import type { ToolPreviewBlock } from "../core/tool-call-preview.ts";
 import type { DownstreamAgentSelection } from "../core/types.ts";
 
+export type ToolCardThemeMode = "dark" | "light";
+
 export interface UiTurn {
   id: string;
   role: "user" | "assistant" | "system";
@@ -63,6 +65,7 @@ export interface UiState {
   inputDisabled: boolean;
   showToolCalls: boolean;
   expandedToolOutput: boolean;
+  toolCardThemeMode: ToolCardThemeMode;
 }
 
 export function createInitialUiState(params: {
@@ -71,6 +74,7 @@ export function createInitialUiState(params: {
   agentLabel?: string;
   showToolCalls?: boolean;
   expandedToolOutput?: boolean;
+  toolCardThemeMode?: ToolCardThemeMode;
 } = {}): UiState {
   return {
     cwd: params.cwd ?? process.cwd(),
@@ -90,5 +94,6 @@ export function createInitialUiState(params: {
     inputDisabled: false,
     showToolCalls: params.showToolCalls ?? true,
     expandedToolOutput: params.expandedToolOutput ?? false,
+    toolCardThemeMode: params.toolCardThemeMode ?? "dark",
   };
 }

@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import { NanobossTuiApp } from "../../src/tui/app.ts";
 import { createInitialUiState, type UiState } from "../../src/tui/state.ts";
+import { createNanobossTuiTheme } from "../../src/tui/theme.ts";
 
 class FakeEditor {
   text = "";
@@ -213,5 +214,65 @@ describe("NanobossTuiApp", () => {
 
     expect(result).toEqual({ consume: true });
     expect(cancellations).toEqual(["cancel"]);
+  });
+
+  test("applies local tool card theme changes to the shared theme instance", () => {
+    const editor = new FakeEditor();
+    const theme = createNanobossTuiTheme();
+    let currentState: UiState = createInitialUiState({
+      cwd: "/repo",
+      showToolCalls: true,
+    });
+    let capturedOnStateChange: ((state: UiState) => void) | undefined;
+
+    new NanobossTuiApp(
+      {
+        serverUrl: "http://localhost:3000",
+        showToolCalls: true,
+      },
+      {
+        createTheme: () => theme,
+        createTerminal: () => ({
+          setTitle() {},
+          async drainInput() {},
+        }),
+        createTui: () => ({
+          addInputListener() {},
+          addChild() {},
+          setFocus() {},
+          start() {},
+          requestRender() {},
+          stop() {},
+        }),
+        createEditor: () => editor,
+        createController: (_params, deps) => {
+          capturedOnStateChange = deps.onStateChange;
+          return {
+            getState: () => currentState,
+            async handleSubmit() {},
+            async cancelActiveRun() {},
+            toggleToolOutput() {},
+            requestExit() {},
+            async run() {
+              return undefined;
+            },
+            async stop() {},
+          };
+        },
+        createView: () => ({
+          setState() {},
+        }),
+      },
+    );
+
+    expect(theme.getToolCardMode()).toBe("dark");
+
+    currentState = {
+      ...currentState,
+      toolCardThemeMode: "light",
+    };
+    capturedOnStateChange?.(currentState);
+
+    expect(theme.getToolCardMode()).toBe("light");
   });
 });

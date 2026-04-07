@@ -175,6 +175,9 @@ export class NanobossTuiApp {
   }
 
   private syncState(state: UiState): void {
+    if (this.theme.getToolCardMode() !== state.toolCardThemeMode) {
+      this.theme.setToolCardMode(state.toolCardThemeMode);
+    }
     this.state = state;
     this.updateEditorSubmitState();
     this.refreshAutocompleteProvider();

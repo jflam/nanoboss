@@ -1,5 +1,6 @@
 import type { FrontendCommand, FrontendEventEnvelope } from "../http/frontend-events.ts";
 import type { DownstreamAgentSelection } from "../core/types.ts";
+import type { ToolCardThemeMode } from "./state.ts";
 
 import {
   formatMemoryCardsLines,
@@ -59,6 +60,10 @@ export type UiAction =
       selection: DownstreamAgentSelection;
     }
   | {
+      type: "local_tool_card_theme_mode";
+      mode: ToolCardThemeMode;
+    }
+  | {
       type: "toggle_tool_output";
     }
   | {
@@ -76,6 +81,7 @@ export function reduceUiState(state: UiState, action: UiAction): UiState {
           agentLabel: action.agentLabel,
           showToolCalls: state.showToolCalls,
           expandedToolOutput: state.expandedToolOutput,
+          toolCardThemeMode: state.toolCardThemeMode,
         }),
         sessionId: action.sessionId,
         buildLabel: action.buildLabel,
@@ -171,6 +177,12 @@ export function reduceUiState(state: UiState, action: UiAction): UiState {
         ...state,
         agentLabel: action.agentLabel,
         defaultAgentSelection: action.selection,
+      };
+    case "local_tool_card_theme_mode":
+      return {
+        ...state,
+        toolCardThemeMode: action.mode,
+        statusLine: `[theme] tool cards ${action.mode}`,
       };
     case "toggle_tool_output":
       return {

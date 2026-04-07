@@ -20,6 +20,7 @@ import {
   isModelPickerRequest,
   isNewSessionRequest,
   parseModelSelectionCommand,
+  parseToolCardThemeCommand,
 } from "./commands.ts";
 import { reduceUiState, type UiAction } from "./reducer.ts";
 import { createInitialUiState, type UiState } from "./state.ts";
@@ -138,6 +139,13 @@ export class NanobossTuiController {
     if (isExitRequest(trimmed)) {
       this.deps.onClearInput?.();
       this.requestExit();
+      return;
+    }
+
+    const toolCardThemeMode = parseToolCardThemeCommand(trimmed);
+    if (toolCardThemeMode) {
+      this.deps.onClearInput?.();
+      this.dispatch({ type: "local_tool_card_theme_mode", mode: toolCardThemeMode });
       return;
     }
 

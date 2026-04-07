@@ -109,6 +109,8 @@ export class NanobossAppView implements Component {
       this.state.expandedToolOutput ? "expanded" : "collapsed",
       "/new",
       "/model",
+      `/${this.state.toolCardThemeMode}`,
+      this.state.toolCardThemeMode === "dark" ? "/light" : "/dark",
       "/quit",
     ];
     if (this.state.inputDisabled) {

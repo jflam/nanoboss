@@ -1,6 +1,7 @@
 import { highlight, supportsLanguage } from "cli-highlight";
 
 import type { EditorTheme, MarkdownTheme, SelectListTheme } from "./pi-tui.ts";
+import type { ToolCardThemeMode } from "./state.ts";
 
 export interface NanobossTuiTheme {
   text: (text: string) => string;
@@ -20,7 +21,13 @@ export interface NanobossTuiTheme {
   toolCardTitle: (text: string) => string;
   toolCardMeta: (text: string) => string;
   toolCardBody: (text: string) => string;
+  toolCardAccent: (text: string) => string;
+  toolCardWarning: (text: string) => string;
+  toolCardSuccess: (text: string) => string;
+  toolCardError: (text: string) => string;
   highlightCode: (code: string, lang?: string) => string[];
+  getToolCardMode: () => ToolCardThemeMode;
+  setToolCardMode: (mode: ToolCardThemeMode) => void;
   editor: EditorTheme;
   selectList: SelectListTheme;
   markdown: MarkdownTheme;
@@ -51,6 +58,82 @@ function attrStyle(text: string, code: number, resetCode: number): string {
 }
 
 type CliHighlightTheme = Record<string, (text: string) => string>;
+type Rgb = readonly [number, number, number];
+
+interface ToolCardPalette {
+  background: Rgb;
+  border: Rgb;
+  title: Rgb;
+  meta: Rgb;
+  body: Rgb;
+  accent: Rgb;
+  warning: Rgb;
+  success: Rgb;
+  error: Rgb;
+  code: Rgb;
+  syntaxComment: Rgb;
+  syntaxKeyword: Rgb;
+  syntaxFunction: Rgb;
+  syntaxVariable: Rgb;
+  syntaxString: Rgb;
+  syntaxNumber: Rgb;
+  syntaxType: Rgb;
+  syntaxOperator: Rgb;
+  syntaxPunctuation: Rgb;
+}
+
+const TOOL_CARD_PALETTE_BY_MODE: Record<ToolCardThemeMode, ToolCardPalette> = {
+  dark: {
+    background: [32, 32, 32],
+    border: [148, 163, 184],
+    title: [248, 250, 252],
+    meta: [148, 163, 184],
+    body: [229, 231, 235],
+    accent: [125, 211, 252],
+    warning: [253, 186, 116],
+    success: [74, 222, 128],
+    error: [248, 113, 113],
+    code: [229, 192, 123],
+    syntaxComment: [106, 153, 85],
+    syntaxKeyword: [86, 156, 214],
+    syntaxFunction: [220, 220, 170],
+    syntaxVariable: [156, 220, 254],
+    syntaxString: [206, 145, 120],
+    syntaxNumber: [181, 206, 168],
+    syntaxType: [78, 201, 176],
+    syntaxOperator: [212, 212, 212],
+    syntaxPunctuation: [212, 212, 212],
+  },
+  light: {
+    background: [236, 236, 236],
+    border: [100, 116, 139],
+    title: [15, 23, 42],
+    meta: [71, 85, 105],
+    body: [31, 41, 55],
+    accent: [3, 105, 161],
+    warning: [146, 64, 14],
+    success: [22, 101, 52],
+    error: [153, 27, 27],
+    code: [120, 53, 15],
+    syntaxComment: [71, 85, 105],
+    syntaxKeyword: [29, 78, 216],
+    syntaxFunction: [109, 40, 217],
+    syntaxVariable: [14, 116, 144],
+    syntaxString: [154, 52, 18],
+    syntaxNumber: [21, 101, 192],
+    syntaxType: [6, 95, 70],
+    syntaxOperator: [55, 65, 81],
+    syntaxPunctuation: [55, 65, 81],
+  },
+};
+
+function applyRgb(text: string, rgb: Rgb): string {
+  return rgbFgStyle(text, rgb[0], rgb[1], rgb[2]);
+}
+
+function applyBoldRgb(text: string, rgb: Rgb): string {
+  return style(text, [1, 38, 2, rgb[0], rgb[1], rgb[2]], [22, 39]);
+}
 
 export function getLanguageFromPath(filePath: string): string | undefined {
   const ext = filePath.split(".").pop()?.toLowerCase();
@@ -122,7 +205,9 @@ export function getLanguageFromPath(filePath: string): string | undefined {
   return extToLang[ext];
 }
 
-export function createNanobossTuiTheme(): NanobossTuiTheme {
+export function createNanobossTuiTheme(initialToolCardMode: ToolCardThemeMode = "dark"): NanobossTuiTheme {
+  let toolCardMode = initialToolCardMode;
+  const toolCardPalette = (): ToolCardPalette => TOOL_CARD_PALETTE_BY_MODE[toolCardMode];
   const text = (value: string) => value;
   const accent = (value: string) => fgStyle(value, 36);
   const muted = (value: string) => fgStyle(value, 90);
@@ -133,23 +218,31 @@ export function createNanobossTuiTheme(): NanobossTuiTheme {
   const bold = (value: string) => attrStyle(value, 1, 22);
   const italic = (value: string) => attrStyle(value, 3, 23);
   const underline = (value: string) => attrStyle(value, 4, 24);
-  const toolCardPendingBg = (value: string) => rgbBgStyle(value, 40, 40, 50);
-  const toolCardSuccessBg = (value: string) => rgbBgStyle(value, 40, 50, 40);
-  const toolCardErrorBg = (value: string) => rgbBgStyle(value, 60, 40, 40);
-  const toolCardBorder = muted;
-  const toolCardTitle = bold;
-  const toolCardMeta = dim;
-  const toolCardBody = text;
-  const toolCardCode = (value: string) => rgbFgStyle(value, 181, 189, 104);
-  const syntaxComment = (value: string) => rgbFgStyle(value, 106, 153, 85);
-  const syntaxKeyword = (value: string) => rgbFgStyle(value, 86, 156, 214);
-  const syntaxFunction = (value: string) => rgbFgStyle(value, 220, 220, 170);
-  const syntaxVariable = (value: string) => rgbFgStyle(value, 156, 220, 254);
-  const syntaxString = (value: string) => rgbFgStyle(value, 206, 145, 120);
-  const syntaxNumber = (value: string) => rgbFgStyle(value, 181, 206, 168);
-  const syntaxType = (value: string) => rgbFgStyle(value, 78, 201, 176);
-  const syntaxOperator = (value: string) => rgbFgStyle(value, 212, 212, 212);
-  const syntaxPunctuation = (value: string) => rgbFgStyle(value, 212, 212, 212);
+  const toolCardBackground = (value: string) => {
+    const [red, green, blue] = toolCardPalette().background;
+    return rgbBgStyle(value, red, green, blue);
+  };
+  const toolCardPendingBg = toolCardBackground;
+  const toolCardSuccessBg = toolCardBackground;
+  const toolCardErrorBg = toolCardBackground;
+  const toolCardBorder = (value: string) => applyRgb(value, toolCardPalette().border);
+  const toolCardTitle = (value: string) => applyBoldRgb(value, toolCardPalette().title);
+  const toolCardMeta = (value: string) => applyRgb(value, toolCardPalette().meta);
+  const toolCardBody = (value: string) => applyRgb(value, toolCardPalette().body);
+  const toolCardAccent = (value: string) => applyRgb(value, toolCardPalette().accent);
+  const toolCardWarning = (value: string) => applyRgb(value, toolCardPalette().warning);
+  const toolCardSuccess = (value: string) => applyRgb(value, toolCardPalette().success);
+  const toolCardError = (value: string) => applyRgb(value, toolCardPalette().error);
+  const toolCardCode = (value: string) => applyRgb(value, toolCardPalette().code);
+  const syntaxComment = (value: string) => applyRgb(value, toolCardPalette().syntaxComment);
+  const syntaxKeyword = (value: string) => applyRgb(value, toolCardPalette().syntaxKeyword);
+  const syntaxFunction = (value: string) => applyRgb(value, toolCardPalette().syntaxFunction);
+  const syntaxVariable = (value: string) => applyRgb(value, toolCardPalette().syntaxVariable);
+  const syntaxString = (value: string) => applyRgb(value, toolCardPalette().syntaxString);
+  const syntaxNumber = (value: string) => applyRgb(value, toolCardPalette().syntaxNumber);
+  const syntaxType = (value: string) => applyRgb(value, toolCardPalette().syntaxType);
+  const syntaxOperator = (value: string) => applyRgb(value, toolCardPalette().syntaxOperator);
+  const syntaxPunctuation = (value: string) => applyRgb(value, toolCardPalette().syntaxPunctuation);
   const cliHighlightTheme: CliHighlightTheme = {
     keyword: syntaxKeyword,
     built_in: syntaxType,
@@ -209,6 +302,11 @@ export function createNanobossTuiTheme(): NanobossTuiTheme {
     underline,
   };
 
+  const getToolCardMode = (): ToolCardThemeMode => toolCardMode;
+  const setToolCardMode = (mode: ToolCardThemeMode): void => {
+    toolCardMode = mode;
+  };
+
   return {
     text,
     accent,
@@ -227,7 +325,13 @@ export function createNanobossTuiTheme(): NanobossTuiTheme {
     toolCardTitle,
     toolCardMeta,
     toolCardBody,
+    toolCardAccent,
+    toolCardWarning,
+    toolCardSuccess,
+    toolCardError,
     highlightCode,
+    getToolCardMode,
+    setToolCardMode,
     editor: {
       borderColor: accent,
       selectList,

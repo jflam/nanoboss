@@ -68,11 +68,11 @@ export function formatToolHeader(theme: NanobossTuiTheme, header: string | undef
   if (command.toLowerCase() === "read") {
     const rangeMatch = rest.match(/^(.*?)(:\d+(?:-\d+)?)$/);
     if (rangeMatch) {
-      return `${commandText} ${theme.accent(rangeMatch[1])}${theme.warning(rangeMatch[2])}`;
+      return `${commandText} ${theme.toolCardAccent(rangeMatch[1])}${theme.toolCardWarning(rangeMatch[2])}`;
     }
   }
 
-  return `${commandText} ${theme.accent(stripWrappingBackticks(rest))}`;
+  return `${commandText} ${theme.toolCardAccent(stripWrappingBackticks(rest))}`;
 }
 
 function stripWrappingBackticks(text: string): string {
@@ -145,7 +145,9 @@ export function formatCodePreviewBody(
 }
 
 export function formatWarnings(theme: NanobossTuiTheme, block: ToolPreviewBlock | undefined): string[] {
-  return (block?.warnings ?? []).map((warning) => theme.warning(warning.startsWith("[") ? warning : `[${warning}]`));
+  return (block?.warnings ?? []).map((warning) =>
+    theme.toolCardWarning(warning.startsWith("[") ? warning : `[${warning}]`),
+  );
 }
 
 export function formatDiffLine(theme: NanobossTuiTheme, line: string): string {
@@ -160,15 +162,15 @@ export function formatDiffLine(theme: NanobossTuiTheme, line: string): string {
   }
 
   if (line.startsWith("@@")) {
-    return theme.accent(line);
+    return theme.toolCardAccent(line);
   }
 
   if (line.startsWith("+")) {
-    return theme.success(line);
+    return theme.toolCardSuccess(line);
   }
 
   if (line.startsWith("-")) {
-    return theme.error(line);
+    return theme.toolCardError(line);
   }
 
   return theme.toolCardBody(line);
@@ -182,7 +184,7 @@ export function formatErrorLines(
 ): string[] {
   return formatPreviewBody(theme, block, expanded, {
     collapsedLines,
-    lineFormatter: (currentTheme, line) => currentTheme.error(line),
+    lineFormatter: (currentTheme, line) => currentTheme.toolCardError(line),
   });
 }
 
