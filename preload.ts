@@ -1,7 +1,5 @@
 import { plugin } from "bun";
 
-const script = process.argv[1] ?? "";
-const shouldSkipTypiaPreload = script.endsWith("build.ts");
 const typiaPreloadStateKey = Symbol.for("nanoboss.typia-preload-state");
 
 type TypiaPreloadState = {
@@ -17,11 +15,25 @@ const typiaPreloadState = globalWithTypiaPreloadState[typiaPreloadStateKey] ??= 
   initialized: false,
 };
 
-if (!shouldSkipTypiaPreload) {
+if (!shouldSkipTypiaPreloadForEntryPoint(process.argv[1], process.env)) {
   if (!typiaPreloadState.initialized) {
     typiaPreloadState.promise ??= initializeTypiaPlugin(typiaPreloadState);
     await typiaPreloadState.promise;
   }
+}
+
+export function shouldSkipTypiaPreloadForEntryPoint(
+  script: string | undefined,
+  env: Record<string, string | undefined>,
+): boolean {
+  if (env.NANOBOSS_SKIP_TYPIA_PRELOAD === "1") {
+    return true;
+  }
+
+  const normalizedScript = (script ?? "").replaceAll("\\", "/");
+  return normalizedScript === "build.ts"
+    || normalizedScript.endsWith("/build.ts")
+    || /(^|\/)tests\/fixtures\/[^/]*mock-agent\.ts$/.test(normalizedScript);
 }
 
 async function initializeTypiaPlugin(state: TypiaPreloadState): Promise<void> {
