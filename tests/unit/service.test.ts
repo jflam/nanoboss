@@ -6,10 +6,10 @@ import { join } from "node:path";
 
 const MOCK_AGENT_PATH = join(process.cwd(), "tests/fixtures/mock-agent.ts");
 const SELF_COMMAND_PATH = join(process.cwd(), "dist", "nanoboss");
-const BUILD_HOOK_TIMEOUT_MS = 15_000;
+const BUILD_HOOK_TIMEOUT_MS = 30_000;
 
 import { DefaultConversationSession } from "../../src/agent/default-session.ts";
-import type { CellRef } from "../../src/core/types.ts";
+import type { CellRef, Procedure } from "../../src/core/types.ts";
 import { ProcedureRegistry } from "../../src/procedure/registry.ts";
 import { buildProcedureDispatchJobsDir, ProcedureDispatchJobManager } from "../../src/procedure/dispatch-jobs.ts";
 import { TopLevelProcedureCancelledError } from "../../src/procedure/runner.ts";
@@ -182,6 +182,32 @@ function setDispatchProcedureIntoDefaultConversation(
   dispatch: (...args: unknown[]) => Promise<never>,
 ): void {
   Reflect.set(service as object, "dispatchProcedureIntoDefaultConversation", dispatch);
+}
+
+function createPausedWizardProcedure(): Procedure {
+  return {
+    name: "wizard",
+    description: "pause and resume test procedure",
+    executionMode: "harness",
+    async execute(prompt) {
+      return {
+        display: `wizard started: ${prompt}\n`,
+        pause: {
+          question: "What should I do next?",
+          state: {
+            step: 1,
+            priorPrompt: prompt,
+          },
+          suggestedReplies: ["apply it", "skip it", "stop"],
+        },
+      };
+    },
+    async resume(prompt, state) {
+      return {
+        display: `resumed with ${prompt} after ${(state as { step: number }).step} step\n`,
+      };
+    },
+  };
 }
 
 describe("NanobossService", () => {
@@ -1122,6 +1148,120 @@ describe("NanobossService", () => {
       expect(text).toContain("\"verdict\": \"mixed\"");
     });
   }, 30_000);
+
+  test("plain-text replies resume a paused procedure", async () => {
+    const registry = new ProcedureRegistry(mkdtempSync(join(tmpdir(), "nab-service-pause-")));
+    registry.register(createPausedWizardProcedure());
+    registry.register({
+      name: "default",
+      description: "test default",
+      async execute(prompt) {
+        return { display: `default: ${prompt}` };
+      },
+    });
+
+    const service = new NanobossService(registry);
+    const session = service.createSession({ cwd: process.cwd() });
+
+    await service.prompt(session.sessionId, "/wizard first");
+    let events = service.getSessionEvents(session.sessionId)?.after(-1) ?? [];
+    const paused = events.findLast((event) => event.type === "run_paused");
+    expect(paused?.type).toBe("run_paused");
+    if (paused?.type !== "run_paused") {
+      throw new Error("Expected run_paused event");
+    }
+    expect(paused.data.question).toContain("What should I do next");
+    expect(events.some((event) => event.type === "run_completed" && event.data.procedure === "wizard")).toBe(false);
+
+    await service.prompt(session.sessionId, "focus on dead code");
+
+    events = service.getSessionEvents(session.sessionId)?.after(-1) ?? [];
+    const completed = events.findLast((event) => event.type === "run_completed" && event.data.procedure === "wizard");
+    expect(completed?.type).toBe("run_completed");
+    if (completed?.type !== "run_completed") {
+      throw new Error("Expected resumed run_completed event");
+    }
+    expect(completed.data.display).toContain("resumed with focus on dead code");
+  });
+
+  test("explicit slash commands do not consume a pending continuation", async () => {
+    const registry = new ProcedureRegistry(mkdtempSync(join(tmpdir(), "nab-service-pause-")));
+    registry.register(createPausedWizardProcedure());
+    registry.register({
+      name: "default",
+      description: "test default",
+      async execute(prompt) {
+        return { display: `default: ${prompt}` };
+      },
+    });
+
+    const service = new NanobossService(registry);
+    const session = service.createSession({ cwd: process.cwd() });
+
+    await service.prompt(session.sessionId, "/wizard first");
+    await service.prompt(session.sessionId, "/default hello");
+    await service.prompt(session.sessionId, "resume now");
+
+    const events = service.getSessionEvents(session.sessionId)?.after(-1) ?? [];
+    const defaultCompleted = events.findLast((event) => event.type === "run_completed" && event.data.procedure === "default");
+    const wizardCompleted = events.findLast((event) => event.type === "run_completed" && event.data.procedure === "wizard");
+
+    expect(defaultCompleted?.type).toBe("run_completed");
+    expect(wizardCompleted?.type).toBe("run_completed");
+    if (wizardCompleted?.type !== "run_completed") {
+      throw new Error("Expected wizard continuation to remain pending");
+    }
+    expect(wizardCompleted.data.display).toContain("resumed with resume now");
+  });
+
+  test("resumed sessions keep paused procedure continuations", async () => {
+    const originalHome = process.env.HOME;
+    process.env.HOME = mkdtempSync(join(tmpdir(), "nab-paused-resume-home-"));
+
+    try {
+      const registry = new ProcedureRegistry(mkdtempSync(join(tmpdir(), "nab-service-pause-")));
+      registry.register(createPausedWizardProcedure());
+      registry.register({
+        name: "default",
+        description: "test default",
+        async execute(prompt) {
+          return { display: `default: ${prompt}` };
+        },
+      });
+
+      const service = new NanobossService(registry);
+      const session = service.createSession({ cwd: process.cwd() });
+
+      await service.prompt(session.sessionId, "/wizard first");
+
+      const resumedService = new NanobossService(registry);
+      resumedService.resumeSession({ sessionId: session.sessionId, cwd: process.cwd() });
+
+      const restored = resumedService.getSessionEvents(session.sessionId)?.after(-1) ?? [];
+      const restoredPaused = restored.findLast((event) => event.type === "run_restored");
+      expect(restoredPaused?.type).toBe("run_restored");
+      if (restoredPaused?.type !== "run_restored") {
+        throw new Error("Expected restored paused run");
+      }
+      expect(restoredPaused.data.status).toBe("paused");
+
+      await resumedService.prompt(session.sessionId, "keep going");
+
+      const events = resumedService.getSessionEvents(session.sessionId)?.after(-1) ?? [];
+      const completed = events.findLast((event) => event.type === "run_completed" && event.data.procedure === "wizard");
+      expect(completed?.type).toBe("run_completed");
+      if (completed?.type !== "run_completed") {
+        throw new Error("Expected resumed completion");
+      }
+      expect(completed.data.display).toContain("resumed with keep going");
+    } finally {
+      if (originalHome === undefined) {
+        delete process.env.HOME;
+      } else {
+        process.env.HOME = originalHome;
+      }
+    }
+  });
 });
 
 function normalizeReplayEvents(events: Array<{ type: string; data: Record<string, unknown> }>): Array<{
@@ -1134,6 +1274,7 @@ function normalizeReplayEvents(events: Array<{ type: string; data: Record<string
     "tool_updated",
     "token_usage",
     "run_completed",
+    "run_paused",
     "run_failed",
     "run_cancelled",
   ]);

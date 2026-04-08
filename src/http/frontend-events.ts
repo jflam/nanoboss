@@ -28,7 +28,7 @@ export type FrontendEvent =
       prompt: string;
       completedAt: string;
       cell: CellRef;
-      status: "complete" | "failed" | "cancelled";
+      status: "complete" | "failed" | "cancelled" | "paused";
       text?: string;
     }
   | {
@@ -64,7 +64,7 @@ export type FrontendEvent =
       type: "token_usage";
       runId: string;
       usage: AgentTokenUsage;
-      sourceUpdate: "usage_update" | "tool_call_update" | "run_completed";
+      sourceUpdate: "usage_update" | "tool_call_update" | "run_completed" | "run_paused";
       toolCallId?: string;
       status?: string;
     }
@@ -103,6 +103,18 @@ export type FrontendEvent =
       cell: CellRef;
       summary?: string;
       display?: string;
+      tokenUsage?: AgentTokenUsage;
+    }
+  | {
+      type: "run_paused";
+      runId: string;
+      procedure: string;
+      pausedAt: string;
+      cell: CellRef;
+      question: string;
+      display?: string;
+      inputHint?: string;
+      suggestedReplies?: string[];
       tokenUsage?: AgentTokenUsage;
     }
   | {

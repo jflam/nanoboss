@@ -14,6 +14,18 @@ export interface ValueRef {
   path: string;
 }
 
+export interface ProcedurePause<TState extends KernelValue = KernelValue> {
+  question: string;
+  state: TState;
+  inputHint?: string;
+  suggestedReplies?: string[];
+}
+
+export interface PendingProcedureContinuation<TState extends KernelValue = KernelValue> extends ProcedurePause<TState> {
+  procedure: string;
+  cell: CellRef;
+}
+
 export type KernelValue =
   | KernelScalar
   | CellRef
@@ -33,6 +45,7 @@ export interface CellRecord {
     stream?: string;
     summary?: string;
     memory?: string;
+    pause?: ProcedurePause;
     explicitDataSchema?: object;
     replayEvents?: PersistedFrontendEvent[];
   };
@@ -195,7 +208,7 @@ export type PersistedFrontendEvent =
       type: "token_usage";
       runId: string;
       usage: AgentTokenUsage;
-      sourceUpdate: "usage_update" | "tool_call_update" | "run_completed";
+      sourceUpdate: "usage_update" | "tool_call_update" | "run_completed" | "run_paused";
       toolCallId?: string;
       status?: string;
     }
@@ -207,6 +220,18 @@ export type PersistedFrontendEvent =
       cell: CellRef;
       summary?: string;
       display?: string;
+      tokenUsage?: AgentTokenUsage;
+    }
+  | {
+      type: "run_paused";
+      runId: string;
+      procedure: string;
+      pausedAt: string;
+      cell: CellRef;
+      question: string;
+      display?: string;
+      inputHint?: string;
+      suggestedReplies?: string[];
       tokenUsage?: AgentTokenUsage;
     }
   | {
@@ -261,6 +286,7 @@ export interface ProcedureResult<T extends KernelValue = KernelValue> {
   display?: string;
   summary?: string;
   memory?: string;
+  pause?: ProcedurePause;
   explicitDataSchema?: object;
 }
 
@@ -270,6 +296,8 @@ export interface RunResult<T extends KernelValue = KernelValue> {
   dataRef?: ValueRef;
   displayRef?: ValueRef;
   streamRef?: ValueRef;
+  pause?: ProcedurePause;
+  pauseRef?: ValueRef;
   summary?: string;
   rawRef?: ValueRef;
 }
@@ -287,6 +315,7 @@ export interface Procedure {
   inputHint?: string;
   executionMode?: "defaultConversation" | "harness";
   execute(prompt: string, ctx: CommandContext): Promise<ProcedureResult | string | void>;
+  resume?(prompt: string, state: KernelValue, ctx: CommandContext): Promise<ProcedureResult | string | void>;
 }
 
 export interface ProcedureRegistryLike {

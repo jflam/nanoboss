@@ -464,7 +464,10 @@ function getBusyLocalCommandLabel(trimmed: string): string | undefined {
 }
 
 function isTerminalFrontendEvent(event: FrontendEventEnvelope): boolean {
-  return event.type === "run_completed" || event.type === "run_failed" || event.type === "run_cancelled";
+  return event.type === "run_completed"
+    || event.type === "run_paused"
+    || event.type === "run_failed"
+    || event.type === "run_cancelled";
 }
 
 function selectNextPendingPrompt(prompts: UiPendingPrompt[]): UiPendingPrompt | undefined {

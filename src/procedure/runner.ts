@@ -22,7 +22,9 @@ import type {
   CellRef,
   DownstreamAgentConfig,
   DownstreamAgentSelection,
+  KernelValue,
   Procedure,
+  ProcedurePause,
   ProcedureRegistryLike,
   ValueRef,
 } from "../core/types.ts";
@@ -41,6 +43,8 @@ export interface ProcedureExecutionResult {
   dataRef?: ValueRef;
   displayRef?: ValueRef;
   streamRef?: ValueRef;
+  pause?: ProcedurePause;
+  pauseRef?: ValueRef;
   dataShape?: unknown;
   explicitDataSchema?: object;
   tokenUsage?: AgentTokenUsage;
@@ -86,6 +90,10 @@ export async function executeTopLevelProcedure(params: {
   onError?: (ctx: CommandContextImpl, errorText: string) => void | Promise<void>;
   dispatchCorrelationId?: string;
   assertCanStartBoundary?: () => void;
+  resume?: {
+    prompt: string;
+    state: KernelValue;
+  };
 }): Promise<ProcedureExecutionResult> {
   const logger = new RunLogger();
   const rootSpanId = logger.newSpan();
@@ -125,7 +133,9 @@ export async function executeTopLevelProcedure(params: {
   });
 
   try {
-    const rawResult = await params.procedure.execute(params.prompt, ctx);
+    const rawResult = params.resume
+      ? await resumeTopLevelProcedure(params.procedure, params.resume.prompt, params.resume.state, ctx)
+      : await params.procedure.execute(params.prompt, ctx);
     const result = normalizeProcedureResult(rawResult);
     const afterSelection = toDownstreamAgentSelection(params.getDefaultAgentConfig());
     const changedSelection = sameSelection(beforeSelection, afterSelection) ? undefined : afterSelection;
@@ -208,6 +218,8 @@ export function buildProcedureExecutionResult(params: {
     dataRef: params.cell.output.data !== undefined ? createValueRef(cellRef, "output.data") : undefined,
     displayRef: params.cell.output.display !== undefined ? createValueRef(cellRef, "output.display") : undefined,
     streamRef: params.cell.output.stream !== undefined ? createValueRef(cellRef, "output.stream") : undefined,
+    pause: params.cell.output.pause,
+    pauseRef: params.cell.output.pause !== undefined ? createValueRef(cellRef, "output.pause") : undefined,
     dataShape: params.cell.output.data !== undefined ? inferDataShape(params.cell.output.data) : undefined,
     explicitDataSchema: params.cell.output.explicitDataSchema,
     tokenUsage: params.tokenUsage,
@@ -249,6 +261,44 @@ export function buildRunCancelledEvent(params: {
     message: params.message,
     cell: params.cell,
   };
+}
+
+export function buildRunPausedEvent(params: {
+  runId: string;
+  procedure: string;
+  result: Pick<ProcedureExecutionResult, "cell" | "display" | "pause">;
+  pausedAt?: string;
+  tokenUsage?: AgentTokenUsage;
+}): Extract<FrontendEvent, { type: "run_paused" }> {
+  if (!params.result.pause) {
+    throw new Error("Paused run event requires pause metadata.");
+  }
+
+  return {
+    type: "run_paused",
+    runId: params.runId,
+    procedure: params.procedure,
+    pausedAt: params.pausedAt ?? new Date().toISOString(),
+    cell: params.result.cell,
+    question: params.result.pause.question,
+    display: params.result.display,
+    inputHint: params.result.pause.inputHint,
+    suggestedReplies: params.result.pause.suggestedReplies,
+    tokenUsage: params.tokenUsage,
+  };
+}
+
+async function resumeTopLevelProcedure(
+  procedure: Procedure,
+  prompt: string,
+  state: KernelValue,
+  ctx: CommandContextImpl,
+) {
+  if (!procedure.resume) {
+    throw new Error(`Procedure /${procedure.name} does not support continuation.`);
+  }
+
+  return await procedure.resume(prompt, state, ctx);
 }
 
 function sameSelection(

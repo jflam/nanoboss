@@ -258,7 +258,7 @@ function reduceFrontendEvent(state: UiState, event: FrontendEventEnvelope): UiSt
         id: nextTurnId("assistant", nextTurns.length),
         role: "assistant",
         markdown: event.data.text,
-        status: event.data.status,
+        status: event.data.status === "paused" ? "complete" : event.data.status,
         runId: event.data.runId,
         meta: buildAssistantTurnMeta({
           procedure: event.data.procedure,
@@ -473,6 +473,19 @@ function reduceFrontendEvent(state: UiState, event: FrontendEventEnvelope): UiSt
         tokenUsageLine,
         completedAt: event.data.completedAt,
         statusLine: `[run] ${event.data.procedure} completed`,
+      });
+    }
+    case "run_paused": {
+      if (shouldIgnoreMismatchedRunEvent(state, event.data.runId)) {
+        return state;
+      }
+      const tokenUsageLine = event.data.tokenUsage ? formatTokenUsageLine(event.data.tokenUsage) : state.tokenUsageLine;
+      return finishRun(state, {
+        turnStatus: "complete",
+        fallbackText: event.data.display ?? event.data.question,
+        tokenUsageLine,
+        completedAt: event.data.pausedAt,
+        statusLine: `[run] ${event.data.procedure} waiting for your reply`,
       });
     }
     case "run_failed":

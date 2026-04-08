@@ -36,6 +36,7 @@ import {
 import {
   buildRunCancelledEvent,
   buildRunCompletedEvent,
+  buildRunPausedEvent,
   executeTopLevelProcedure,
   TopLevelProcedureCancelledError,
   TopLevelProcedureExecutionError,
@@ -50,6 +51,7 @@ import type {
   AgentTokenUsage,
   DownstreamAgentConfig,
   DownstreamAgentSelection,
+  PendingProcedureContinuation,
   PersistedFrontendEvent,
 } from "./types.ts";
 
@@ -71,6 +73,7 @@ interface SessionState {
   recentRecoverySyncAtMs?: number;
   activeRun?: ActiveRunState;
   commands: FrontendCommand[];
+  pendingProcedureContinuation?: PendingProcedureContinuation;
 }
 
 export interface SessionDescriptor {
@@ -196,6 +199,7 @@ export class NanobossService {
       cwd,
       defaultAgentSelection: params.defaultAgentSelection ?? stored?.defaultAgentSelection,
       defaultAcpSessionId: stored?.defaultAcpSessionId,
+      pendingProcedureContinuation: stored?.pendingProcedureContinuation,
     });
     this.restorePersistedSessionHistory(params.sessionId, state);
 
@@ -223,6 +227,7 @@ export class NanobossService {
     cwd: string;
     defaultAgentSelection?: DownstreamAgentSelection;
     defaultAcpSessionId?: string;
+    pendingProcedureContinuation?: PendingProcedureContinuation;
   }): SessionState {
     const commands = toFrontendCommands(this.registry.toAvailableCommands());
     const defaultAgentConfig = this.resolveDefaultAgentConfig(params.cwd, params.defaultAgentSelection);
@@ -244,6 +249,7 @@ export class NanobossService {
       }),
       syncedProcedureMemoryCellIds: new Set(),
       commands,
+      pendingProcedureContinuation: params.pendingProcedureContinuation,
     };
   }
 
@@ -264,11 +270,13 @@ export class NanobossService {
       const record = session.store.readCell(summary.cell);
       const replayEvents = record.output.replayEvents;
       const runId = replayEvents?.[0]?.runId ?? record.cellId;
-      const completedAt = getRestoredRunCompletedAt(replayEvents) ?? record.meta.createdAt;
+      const completedAt = getRestoredRunEndedAt(replayEvents) ?? record.meta.createdAt;
       const status = replayEvents?.some((event) => event.type === "run_failed")
         ? "failed"
         : replayEvents?.some((event) => event.type === "run_cancelled")
           ? "cancelled"
+          : replayEvents?.some((event) => event.type === "run_paused")
+            ? "paused"
           : "complete";
 
       session.events.publish(sessionId, {
@@ -311,6 +319,7 @@ export class NanobossService {
       lastPrompt: options.prompt ?? existing?.lastPrompt,
       defaultAgentSelection: toDownstreamAgentSelection(session.defaultAgentConfig),
       defaultAcpSessionId,
+      pendingProcedureContinuation: session.pendingProcedureContinuation,
     });
   }
 
@@ -641,6 +650,42 @@ export class NanobossService {
     params.markRunActivity();
   }
 
+  private publishRunPaused(params: {
+    session: SessionState;
+    sessionId: string;
+    runId: string;
+    procedure: string;
+    result: ProcedureExecutionResult;
+    tokenUsage?: AgentTokenUsage;
+    emitter: CompositeSessionUpdateEmitter;
+    markRunActivity: () => void;
+  }): void {
+    this.applyDefaultAgentSelection(params.session, params.result.defaultAgentSelection);
+    this.emitDisplayIfNeeded(
+      params.emitter,
+      params.result.display ?? params.result.pause?.question,
+    );
+    publishStoredMemoryCard(params.session, params.sessionId, params.runId, params.result.cell);
+    if (params.tokenUsage) {
+      params.session.events.publish(params.sessionId, {
+        type: "token_usage",
+        runId: params.runId,
+        usage: params.tokenUsage,
+        sourceUpdate: "run_paused",
+      });
+    }
+    params.session.events.publish(
+      params.sessionId,
+      buildRunPausedEvent({
+        runId: params.runId,
+        procedure: params.procedure,
+        result: params.result,
+        tokenUsage: params.tokenUsage,
+      }),
+    );
+    params.markRunActivity();
+  }
+
   private publishRunFailed(params: {
     session: SessionState;
     sessionId: string;
@@ -697,7 +742,10 @@ export class NanobossService {
     session.activeRun?.softStopController.abort();
 
     const text = promptText.trim();
-    const { commandName, commandPrompt } = resolveCommand(text);
+    const { commandName, commandPrompt, continuation } = resolveCommand(
+      text,
+      session.pendingProcedureContinuation,
+    );
     this.touchCurrentSessionMetadata(this.persistSessionState(session, { prompt: text }));
     const procedure = this.registry.get(commandName);
     const procedureName = procedure?.name ?? commandName;
@@ -766,7 +814,12 @@ export class NanobossService {
 
     try {
       if (!procedure) {
-        const error = `Unknown command: /${commandName}`;
+        const error = continuation
+          ? `Pending continuation for /${commandName} is no longer available.`
+          : `Unknown command: /${commandName}`;
+        if (continuation) {
+          session.pendingProcedureContinuation = undefined;
+        }
         delegate?.emit({
           sessionUpdate: "agent_message_chunk",
           content: {
@@ -788,7 +841,36 @@ export class NanobossService {
         return { stopReason: "end_turn", runId };
       }
 
-      if (text.startsWith("/") && procedure.name !== "default" && procedure.executionMode !== "harness") {
+      if (continuation && !procedure.resume) {
+        const error = `Procedure /${procedure.name} does not support continuation.`;
+        session.pendingProcedureContinuation = undefined;
+        delegate?.emit({
+          sessionUpdate: "agent_message_chunk",
+          content: {
+            type: "text",
+            text: `${error}\n`,
+          },
+        });
+        await emitter.flush();
+
+        this.publishRunFailed({
+          session,
+          sessionId,
+          runId,
+          procedure: procedure.name,
+          error,
+          markRunActivity,
+        });
+
+        return { stopReason: "end_turn", runId };
+      }
+
+      if (
+        text.startsWith("/")
+        && !continuation
+        && procedure.name !== "default"
+        && procedure.executionMode !== "harness"
+      ) {
         try {
           const dispatched = await this.dispatchProcedureIntoDefaultConversation(
             session,
@@ -803,16 +885,33 @@ export class NanobossService {
             },
           );
 
-          this.publishRunCompleted({
-            session,
-            sessionId,
-            runId,
-            procedure: procedure.name,
-            result: dispatched.result,
-            tokenUsage: dispatched.tokenUsage,
-            emitter,
-            markRunActivity,
-          });
+          if (dispatched.result.pause) {
+            session.pendingProcedureContinuation = buildPendingProcedureContinuation(
+              procedure.name,
+              dispatched.result,
+            );
+            this.publishRunPaused({
+              session,
+              sessionId,
+              runId,
+              procedure: procedure.name,
+              result: dispatched.result,
+              tokenUsage: dispatched.tokenUsage,
+              emitter,
+              markRunActivity,
+            });
+          } else {
+            this.publishRunCompleted({
+              session,
+              sessionId,
+              runId,
+              procedure: procedure.name,
+              result: dispatched.result,
+              tokenUsage: dispatched.tokenUsage,
+              emitter,
+              markRunActivity,
+            });
+          }
           persistedTopLevelCell = dispatched.result.cell;
         } catch (error) {
           if (error instanceof TopLevelProcedureExecutionError) {
@@ -864,18 +963,44 @@ export class NanobossService {
               ctx.print(errorText);
             },
             assertCanStartBoundary,
+            resume: continuation
+              ? {
+                  prompt: commandPrompt,
+                  state: continuation.state,
+                }
+              : undefined,
           });
 
-          this.publishRunCompleted({
-            session,
-            sessionId,
-            runId,
-            procedure: procedure.name,
-            result,
-            tokenUsage: result.tokenUsage,
-            emitter,
-            markRunActivity,
-          });
+          if (result.pause) {
+            session.pendingProcedureContinuation = buildPendingProcedureContinuation(
+              procedure.name,
+              result,
+            );
+            this.publishRunPaused({
+              session,
+              sessionId,
+              runId,
+              procedure: procedure.name,
+              result,
+              tokenUsage: result.tokenUsage,
+              emitter,
+              markRunActivity,
+            });
+          } else {
+            if (continuation) {
+              session.pendingProcedureContinuation = undefined;
+            }
+            this.publishRunCompleted({
+              session,
+              sessionId,
+              runId,
+              procedure: procedure.name,
+              result,
+              tokenUsage: result.tokenUsage,
+              emitter,
+              markRunActivity,
+            });
+          }
           persistedTopLevelCell = result.cell;
         } catch (error) {
           if (error instanceof TopLevelProcedureExecutionError) {
@@ -969,14 +1094,20 @@ export class NanobossService {
   }
 }
 
-function getRestoredRunCompletedAt(replayEvents: PersistedFrontendEvent[] | undefined): string | undefined {
-  return [...(replayEvents ?? [])]
+function getRestoredRunEndedAt(replayEvents: PersistedFrontendEvent[] | undefined): string | undefined {
+  const latest = [...(replayEvents ?? [])]
     .reverse()
     .find((event) =>
       event.type === "run_completed"
+      || event.type === "run_paused"
       || event.type === "run_failed"
       || event.type === "run_cancelled"
-    )?.completedAt;
+    );
+  if (!latest) {
+    return undefined;
+  }
+
+  return latest.type === "run_paused" ? latest.pausedAt : latest.completedAt;
 }
 
 function getRunHeartbeatMs(): number {
@@ -1166,6 +1297,19 @@ function toPersistedReplayEvent(
         cell: event.data.cell,
         summary: event.data.summary,
         display: event.data.display,
+        tokenUsage: event.data.tokenUsage,
+      };
+    case "run_paused":
+      return {
+        type: "run_paused",
+        runId: event.data.runId,
+        procedure: event.data.procedure,
+        pausedAt: event.data.pausedAt,
+        cell: event.data.cell,
+        question: event.data.question,
+        display: event.data.display,
+        inputHint: event.data.inputHint,
+        suggestedReplies: event.data.suggestedReplies,
         tokenUsage: event.data.tokenUsage,
       };
     case "run_failed":
@@ -1469,12 +1613,43 @@ function parseProcedureDispatchFailureCandidate(value: unknown): string | undefi
   return undefined;
 }
 
-function resolveCommand(text: string): { commandName: string; commandPrompt: string } {
+function buildPendingProcedureContinuation(
+  procedure: string,
+  result: ProcedureExecutionResult,
+): PendingProcedureContinuation {
+  if (!result.pause) {
+    throw new Error("Cannot persist continuation without pause metadata.");
+  }
+
+  return {
+    procedure,
+    cell: result.cell,
+    question: result.pause.question,
+    state: result.pause.state,
+    inputHint: result.pause.inputHint,
+    suggestedReplies: result.pause.suggestedReplies,
+  };
+}
+
+function resolveCommand(
+  text: string,
+  pendingProcedureContinuation?: PendingProcedureContinuation,
+): {
+  commandName: string;
+  commandPrompt: string;
+  continuation?: PendingProcedureContinuation;
+} {
   if (!text.startsWith("/")) {
-    return {
-      commandName: "default",
-      commandPrompt: text,
-    };
+    return pendingProcedureContinuation
+      ? {
+          commandName: pendingProcedureContinuation.procedure,
+          commandPrompt: text,
+          continuation: pendingProcedureContinuation,
+        }
+      : {
+          commandName: "default",
+          commandPrompt: text,
+        };
   }
 
   const [name, ...rest] = text.slice(1).split(/\s+/);

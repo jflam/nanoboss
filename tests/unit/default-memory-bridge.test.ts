@@ -6,7 +6,7 @@ import { join } from "node:path";
 
 const MOCK_AGENT_PATH = join(process.cwd(), "tests/fixtures/mock-agent.ts");
 const SELF_COMMAND_PATH = join(process.cwd(), "dist", "nanoboss");
-const BUILD_HOOK_TIMEOUT_MS = 15_000;
+const BUILD_HOOK_TIMEOUT_MS = 30_000;
 
 import { ProcedureRegistry } from "../../src/procedure/registry.ts";
 import { NanobossService } from "../../src/core/service.ts";

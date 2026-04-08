@@ -527,6 +527,54 @@ describe("NanobossTuiController", () => {
     await runPromise;
   });
 
+  test("paused runs re-enable input for open-ended replies", async () => {
+    const streams: FakeStreamRecord[] = [];
+    const controller = new NanobossTuiController(
+      {
+        serverUrl: "http://localhost:3000",
+        showToolCalls: true,
+      },
+      {
+        ensureMatchingHttpServer: async () => {},
+        createHttpSession: async () => createSession("session-1"),
+        sendSessionPrompt: async () => {},
+        startSessionEventStream: ({ sessionId, onEvent }) => createFakeStream(streams, sessionId, onEvent),
+      },
+    );
+
+    const runPromise = controller.run();
+    await waitFor(() => controller.getState().sessionId === "session-1");
+
+    await controller.handleSubmit("/simplify");
+    expect(controller.getState().inputDisabled).toBe(true);
+
+    streams[0]?.emit(eventEnvelope("run_started", {
+      runId: "run-1",
+      procedure: "simplify",
+      prompt: "",
+      startedAt: new Date(0).toISOString(),
+    }));
+    streams[0]?.emit(eventEnvelope("run_paused", {
+      runId: "run-1",
+      procedure: "simplify",
+      pausedAt: new Date(1).toISOString(),
+      cell: { sessionId: "session-1", cellId: "cell-1" },
+      question: "What would you like instead?",
+      display: "Try deleting dead code first.\n\nWhat would you like instead?",
+    }));
+
+    expect(controller.getState().inputDisabled).toBe(false);
+    expect(controller.getState().statusLine).toBe("[run] simplify waiting for your reply");
+    expect(controller.getState().turns.at(-1)).toMatchObject({
+      role: "assistant",
+      markdown: "Try deleting dead code first.\n\nWhat would you like instead?",
+      status: "complete",
+    });
+
+    controller.requestExit();
+    await runPromise;
+  });
+
   test("escape-triggered cancel latches a soft stop and debounces repeated requests", async () => {
     const cancelCalls: Array<{ sessionId: string; runId: string }> = [];
     const streams: FakeStreamRecord[] = [];

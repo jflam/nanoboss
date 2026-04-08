@@ -132,6 +132,7 @@ export class SessionStore {
         : undefined
     );
     const memory = result.memory;
+    const pause = result.pause;
 
     const record: CellRecord = {
       cellId: draft.cell.cellId,
@@ -143,6 +144,7 @@ export class SessionStore {
         ...(stream !== undefined && stream.length > 0 ? { stream } : {}),
         ...(summary !== undefined && summary.length > 0 ? { summary } : {}),
         ...(memory !== undefined && memory.length > 0 ? { memory } : {}),
+        ...(pause !== undefined ? { pause } : {}),
         ...(options.replayEvents && options.replayEvents.length > 0
           ? { replayEvents: options.replayEvents }
           : {}),
@@ -170,6 +172,9 @@ export class SessionStore {
     const streamRef = record.output.stream !== undefined
       ? createValueRef(draft.cell, "output.stream")
       : undefined;
+    const pauseRef = record.output.pause !== undefined
+      ? createValueRef(draft.cell, "output.pause")
+      : undefined;
 
     return {
       cell: draft.cell,
@@ -177,6 +182,8 @@ export class SessionStore {
       dataRef,
       displayRef,
       streamRef,
+      pause: record.output.pause,
+      pauseRef,
       summary: record.output.summary,
       rawRef: options.raw !== undefined ? displayRef : undefined,
     };

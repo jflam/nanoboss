@@ -9,7 +9,11 @@ import { join } from "node:path";
 
 import { getNanobossHome, getSessionDir } from "../core/config.ts";
 import { resolveWorkspaceKey } from "../core/workspace-identity.ts";
-import type { DownstreamAgentProvider, DownstreamAgentSelection } from "../core/types.ts";
+import type {
+  DownstreamAgentProvider,
+  DownstreamAgentSelection,
+  PendingProcedureContinuation,
+} from "../core/types.ts";
 import { SessionStore } from "./store.ts";
 
 const SESSION_METADATA_FILE = "session.json";
@@ -26,6 +30,7 @@ export interface SessionMetadata {
   lastPrompt?: string;
   defaultAgentSelection?: DownstreamAgentSelection;
   defaultAcpSessionId?: string;
+  pendingProcedureContinuation?: PendingProcedureContinuation;
 }
 
 export interface SessionSummary extends SessionMetadata {
@@ -256,6 +261,7 @@ function parseSessionMetadata(
     lastPrompt: asNonEmptyString(raw.lastPrompt),
     defaultAgentSelection: parseDownstreamAgentSelection(raw.defaultAgentSelection),
     defaultAcpSessionId: asNonEmptyString(raw.defaultAcpSessionId),
+    pendingProcedureContinuation: parsePendingProcedureContinuation(raw.pendingProcedureContinuation),
   };
 }
 
@@ -270,6 +276,36 @@ function parseDownstreamAgentSelection(value: unknown): DownstreamAgentSelection
   return model
     ? { provider, model }
     : { provider };
+}
+
+function parsePendingProcedureContinuation(value: unknown): PendingProcedureContinuation | undefined {
+  const record = asRecord(value);
+  const procedure = asNonEmptyString(record?.procedure);
+  const cell = parseCellRef(record?.cell);
+  const question = asNonEmptyString(record?.question);
+  if (!procedure || !cell || !question || !("state" in (record ?? {}))) {
+    return undefined;
+  }
+
+  const suggestedReplies = Array.isArray(record?.suggestedReplies)
+    ? record.suggestedReplies.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+    : undefined;
+
+  return {
+    procedure,
+    cell,
+    question,
+    state: record.state,
+    inputHint: asNonEmptyString(record?.inputHint),
+    suggestedReplies: suggestedReplies && suggestedReplies.length > 0 ? suggestedReplies : undefined,
+  };
+}
+
+function parseCellRef(value: unknown): PendingProcedureContinuation["cell"] | undefined {
+  const record = asRecord(value);
+  const sessionId = asNonEmptyString(record?.sessionId);
+  const cellId = asNonEmptyString(record?.cellId);
+  return sessionId && cellId ? { sessionId, cellId } : undefined;
 }
 
 function asProvider(value: unknown): DownstreamAgentProvider | undefined {
