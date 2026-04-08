@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { summarizeToolCallStart, summarizeToolCallUpdate } from "../../src/core/tool-call-preview.ts";
 import { createInitialUiState } from "../../src/tui/state.ts";
 import { createNanobossTuiTheme } from "../../src/tui/theme.ts";
 import { NanobossAppView } from "../../src/tui/views.ts";
@@ -300,6 +301,71 @@ describe("NanobossAppView", () => {
     expect(headerLine).toBeDefined();
     expect(headerLine).toContain("\u001b[48;2;32;32;32m");
     expect(headerLine).not.toContain("\u001b[0m");
+  });
+
+  test("keeps provider-specific read previews aligned with expanded tool cards", () => {
+    const rawInput = {
+      file_path: "src/mcp/jsonrpc.ts",
+      locations: [{ path: "src/mcp/jsonrpc.ts", line: 12 }],
+    };
+    const rawOutput = {
+      type: "text",
+      file: {
+        filePath: "src/mcp/jsonrpc.ts",
+        content: "export const hello = 1;\nexport const world = 2;",
+      },
+      duration_ms: 12,
+    };
+    const toolCall = {
+      id: "tool-read",
+      runId: "run-1",
+      title: "Read File",
+      kind: "read",
+      status: "completed",
+      depth: 0,
+      isWrapper: false,
+      rawInput,
+      rawOutput,
+      ...summarizeToolCallStart({ title: "Read File", kind: "read" }, rawInput),
+      ...summarizeToolCallUpdate({ title: "Read File", kind: "read" }, rawOutput),
+    };
+
+    const baseState = {
+      ...createInitialUiState({ cwd: "/repo", showToolCalls: true }),
+      sessionId: "session-1",
+      toolCalls: [toolCall],
+      transcriptItems: [{ type: "tool_call" as const, id: "tool-read" }],
+    };
+
+    const collapsedView = new NanobossAppView(
+      {
+        render: () => [""],
+        invalidate() {},
+      } as never,
+      createNanobossTuiTheme(),
+      baseState,
+    );
+    const expandedView = new NanobossAppView(
+      {
+        render: () => [""],
+        invalidate() {},
+      } as never,
+      createNanobossTuiTheme(),
+      {
+        ...baseState,
+        expandedToolOutput: true,
+      },
+    );
+
+    const collapsed = stripAnsi(collapsedView.render(160).join("\n"));
+    const expanded = stripAnsi(expandedView.render(160).join("\n"));
+
+    expect(collapsed).toContain("read src/mcp/jsonrpc.ts:12");
+    expect(expanded).toContain("read src/mcp/jsonrpc.ts:12");
+    expect(collapsed).toContain("export const hello = 1;");
+    expect(expanded).toContain("export const hello = 1;");
+    expect(collapsed).toContain("export const world = 2;");
+    expect(expanded).toContain("export const world = 2;");
   });
 
   test("renders light tool cards with explicit readable header, body, and meta colors", () => {

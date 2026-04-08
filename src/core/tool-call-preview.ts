@@ -1,4 +1,14 @@
 import { summarizeText } from "../util/text.ts";
+import {
+  asRecord,
+  extractPathLike,
+  extractToolErrorText,
+  firstNumber,
+  firstString,
+  normalizeToolInputPayload,
+  normalizeToolResultPayload,
+} from "./tool-payload-normalizer.ts";
+import type { ToolPayloadIdentity } from "./tool-payload-normalizer.ts";
 
 const MAX_HEADER_LENGTH = 140;
 const MAX_WARNING_LENGTH = 180;
@@ -14,11 +24,6 @@ export interface ToolPreviewBlock {
   truncated?: boolean;
 }
 
-interface ToolIdentity {
-  title?: string;
-  kind?: string;
-}
-
 interface ToolPreviewFields {
   callPreview?: ToolPreviewBlock;
   resultPreview?: ToolPreviewBlock;
@@ -27,7 +32,7 @@ interface ToolPreviewFields {
 }
 
 export function summarizeToolCallStart(
-  identity: ToolIdentity,
+  identity: ToolPayloadIdentity,
   rawInput: unknown,
 ): Pick<ToolPreviewFields, "callPreview"> {
   return {
@@ -36,7 +41,7 @@ export function summarizeToolCallStart(
 }
 
 export function summarizeToolCallUpdate(
-  identity: ToolIdentity,
+  identity: ToolPayloadIdentity,
   rawOutput: unknown,
 ): Pick<ToolPreviewFields, "resultPreview" | "errorPreview" | "durationMs"> {
   const record = asRecord(rawOutput);
@@ -66,12 +71,12 @@ export function summarizeToolCallUpdate(
   };
 }
 
-export function compactToolCallInput(identity: ToolIdentity, rawInput: unknown): unknown {
+export function compactToolCallInput(identity: ToolPayloadIdentity, rawInput: unknown): unknown {
   const callPreview = summarizeToolInput(identity, rawInput);
   return callPreview ? { callPreview } : undefined;
 }
 
-export function compactToolCallOutput(identity: ToolIdentity, rawOutput: unknown): unknown {
+export function compactToolCallOutput(identity: ToolPayloadIdentity, rawOutput: unknown): unknown {
   if (rawOutput === undefined) {
     return undefined;
   }
@@ -92,7 +97,7 @@ export function compactToolCallOutput(identity: ToolIdentity, rawOutput: unknown
   });
 }
 
-function summarizeToolInput(identity: ToolIdentity, rawInput: unknown): ToolPreviewBlock | undefined {
+function summarizeToolInput(identity: ToolPayloadIdentity, rawInput: unknown): ToolPreviewBlock | undefined {
   const record = asRecord(rawInput);
   const explicit = normalizeToolPreviewBlock(
     record?.callPreview ?? record?.call_preview,
@@ -102,66 +107,38 @@ function summarizeToolInput(identity: ToolIdentity, rawInput: unknown): ToolPrev
     return explicit;
   }
 
-  const toolName = normalizeToolName(identity);
-  switch (toolName) {
+  const normalized = normalizeToolInputPayload(identity, rawInput);
+  switch (normalized.toolName) {
     case "bash": {
-      const command = firstString(record?.command, record?.cmd, rawInput);
-      return command ? { header: summarizeInline(`$ ${command}`, MAX_HEADER_LENGTH) } : undefined;
+      return normalized.header ? { header: summarizeInline(normalized.header, MAX_HEADER_LENGTH) } : undefined;
     }
     case "read": {
-      const path = extractPathLike(record);
-      const header = path ? summarizeInline(`read ${path}${formatLineRange(record)}`, MAX_HEADER_LENGTH) : undefined;
       return cleanPreviewBlock({
-        header,
+        header: normalized.header ? summarizeInline(normalized.header, MAX_HEADER_LENGTH) : undefined,
         warnings: summarizeWarnings(extractWarnings(record)),
       });
     }
     case "write": {
-      const path = extractPathLike(record);
       return cleanPreviewBlock({
-        header: path ? summarizeInline(`write ${path}`, MAX_HEADER_LENGTH) : undefined,
-        bodyLines: boundedPreviewLines(extractTextLikeContent(record?.content ?? record?.text ?? rawInput), "start").lines,
+        header: normalized.header ? summarizeInline(normalized.header, MAX_HEADER_LENGTH) : undefined,
+        bodyLines: boundedPreviewLines(normalized.text, "start").lines,
         warnings: summarizeWarnings(extractWarnings(record)),
       });
     }
     case "edit": {
-      const path = extractPathLike(record);
       const edits = Array.isArray(record?.edits) ? record.edits.length : undefined;
       const bodyLines = edits !== undefined ? [`${edits} edit${edits === 1 ? "" : "s"}`] : undefined;
       return cleanPreviewBlock({
-        header: path ? summarizeInline(`edit ${path}`, MAX_HEADER_LENGTH) : undefined,
+        header: normalized.header ? summarizeInline(normalized.header, MAX_HEADER_LENGTH) : undefined,
         bodyLines,
         warnings: summarizeWarnings(extractWarnings(record)),
       });
     }
-    case "grep": {
-      const pattern = firstString(record?.pattern, record?.query);
-      const path = firstString(record?.path, record?.cwd);
-      if (!pattern && !path) {
-        break;
-      }
-
-      return cleanPreviewBlock({
-        header: summarizeInline(path ? `grep ${pattern ?? ""} @ ${path}` : `grep ${pattern ?? path}`, MAX_HEADER_LENGTH),
-        warnings: summarizeWarnings(extractWarnings(record)),
-      });
-    }
-    case "find": {
-      const query = firstString(record?.query, record?.pattern, record?.name);
-      const path = firstString(record?.path, record?.cwd, record?.dir);
-      if (!query && !path) {
-        break;
-      }
-
-      return cleanPreviewBlock({
-        header: summarizeInline(path && query ? `find ${query} @ ${path}` : `find ${query ?? path}`, MAX_HEADER_LENGTH),
-        warnings: summarizeWarnings(extractWarnings(record)),
-      });
-    }
+    case "grep":
+    case "find":
     case "ls": {
-      const path = firstString(extractPathLike(record), record?.dir, record?.cwd);
       return cleanPreviewBlock({
-        header: path ? summarizeInline(`ls ${path}`, MAX_HEADER_LENGTH) : undefined,
+        header: normalized.header ? summarizeInline(normalized.header, MAX_HEADER_LENGTH) : undefined,
         warnings: summarizeWarnings(extractWarnings(record)),
       });
     }
@@ -180,7 +157,7 @@ function summarizeToolInput(identity: ToolIdentity, rawInput: unknown): ToolPrev
   return buildSummaryPreviewBlock(summarizeUnknown(rawInput, MAX_HEADER_LENGTH));
 }
 
-function summarizeToolOutput(identity: ToolIdentity, rawOutput: unknown): ToolPreviewBlock | undefined {
+function summarizeToolOutput(identity: ToolPayloadIdentity, rawOutput: unknown): ToolPreviewBlock | undefined {
   const record = asRecord(rawOutput);
   const explicit = normalizeToolPreviewBlock(
     record?.resultPreview ?? record?.result_preview,
@@ -190,20 +167,16 @@ function summarizeToolOutput(identity: ToolIdentity, rawOutput: unknown): ToolPr
     return explicit;
   }
 
-  const toolName = normalizeToolName(identity);
-  switch (toolName) {
+  const normalized = normalizeToolResultPayload(identity, rawOutput);
+  switch (normalized.toolName) {
     case "bash":
       return cleanPreviewBlock({
-        bodyLines: boundedPreviewLines(
-          firstString(record?.stdout, record?.stderr, record?.text, record?.content),
-          "end",
-        ).lines,
+        bodyLines: boundedPreviewLines(normalized.text, "end").lines,
         warnings: summarizeWarnings(extractWarnings(record)),
-        truncated: hasPreviewTruncation(firstString(record?.stdout, record?.stderr, record?.text, record?.content), record),
+        truncated: hasPreviewTruncation(normalized.text, record),
       });
     case "read": {
-      const contents = extractTextLikeContent(rawOutput);
-      const preview = boundedPreviewLines(contents, "start");
+      const preview = boundedPreviewLines(normalized.text, "start");
       return cleanPreviewBlock({
         bodyLines: preview.lines,
         warnings: summarizeWarnings(extractWarnings(record)),
@@ -211,28 +184,24 @@ function summarizeToolOutput(identity: ToolIdentity, rawOutput: unknown): ToolPr
       });
     }
     case "edit": {
-      const diffText = firstString(record?.diff, record?.patch, record?.text, record?.content);
-      const diffPreview = boundedPreviewLines(diffText, "start");
-      const path = extractPathLike(record);
+      const diffPreview = boundedPreviewLines(normalized.text, "start");
       return cleanPreviewBlock({
         bodyLines: diffPreview.lines.length > 0
           ? diffPreview.lines
-          : path
-            ? [`updated ${path}`]
+          : normalized.path
+            ? [`updated ${normalized.path}`]
             : undefined,
         warnings: summarizeWarnings(extractWarnings(record)),
         truncated: diffPreview.truncated || hasExplicitTruncation(record),
       });
     }
     case "write": {
-      const outputText = extractTextLikeContent(rawOutput);
-      const preview = boundedPreviewLines(outputText, "start");
-      const path = extractPathLike(record);
+      const preview = boundedPreviewLines(normalized.text, "start");
       return cleanPreviewBlock({
         bodyLines: preview.lines.length > 0
           ? preview.lines
-          : path
-            ? [`wrote ${path}`]
+          : normalized.path
+            ? [`wrote ${normalized.path}`]
             : undefined,
         warnings: summarizeWarnings(extractWarnings(record)),
         truncated: preview.truncated || hasExplicitTruncation(record),
@@ -241,7 +210,7 @@ function summarizeToolOutput(identity: ToolIdentity, rawOutput: unknown): ToolPr
     case "grep":
     case "find":
     case "ls": {
-      const preview = summarizeListLikeResult(rawOutput);
+      const preview = boundedListPreviewLines(normalized.lines);
       if (preview) {
         return cleanPreviewBlock({
           bodyLines: preview.lines,
@@ -253,9 +222,8 @@ function summarizeToolOutput(identity: ToolIdentity, rawOutput: unknown): ToolPr
     }
   }
 
-  const textLike = extractTextLikeContent(rawOutput);
-  if (textLike) {
-    const preview = boundedPreviewLines(textLike, "start");
+  if (normalized.text) {
+    const preview = boundedPreviewLines(normalized.text, "start");
     return cleanPreviewBlock({
       bodyLines: preview.lines,
       warnings: summarizeWarnings(extractWarnings(record)),
@@ -263,7 +231,7 @@ function summarizeToolOutput(identity: ToolIdentity, rawOutput: unknown): ToolPr
     });
   }
 
-  const listPreview = summarizeListLikeResult(rawOutput);
+  const listPreview = boundedListPreviewLines(normalized.lines);
   if (listPreview) {
     return cleanPreviewBlock({
       bodyLines: listPreview.lines,
@@ -282,9 +250,8 @@ function summarizeToolOutput(identity: ToolIdentity, rawOutput: unknown): ToolPr
     return { bodyLines: [summarizeInline(`stored ref ${dataRef.path}`, MAX_PREVIEW_LINE_LENGTH)] };
   }
 
-  const path = extractPathLike(record);
-  if (path) {
-    return { bodyLines: [summarizeInline(path, MAX_PREVIEW_LINE_LENGTH)] };
+  if (normalized.path) {
+    return { bodyLines: [summarizeInline(normalized.path, MAX_PREVIEW_LINE_LENGTH)] };
   }
 
   return buildSummaryPreviewBlock(summarizeUnknown(rawOutput, MAX_HEADER_LENGTH));
@@ -300,7 +267,7 @@ function summarizeToolError(rawOutput: unknown): ToolPreviewBlock | undefined {
     return explicit;
   }
 
-  const errorText = firstString(record?.error, record?.error_message, record?.message, record?.stderr);
+  const errorText = extractToolErrorText(rawOutput);
   if (!errorText) {
     return undefined;
   }
@@ -339,132 +306,6 @@ function normalizeToolPreviewBlock(value: unknown, fallback?: ToolPreviewBlock):
     warnings,
     truncated,
   }) ?? fallback;
-}
-
-function summarizeListLikeResult(value: unknown): { lines: string[]; truncated: boolean } | undefined {
-  const record = asRecord(value);
-  const candidates: unknown[] = [
-    record?.matches,
-    record?.items,
-    record?.entries,
-    record?.files,
-    record?.paths,
-    record?.results,
-    record?.lines,
-  ];
-
-  for (const candidate of candidates) {
-    if (!Array.isArray(candidate) || candidate.length === 0) {
-      continue;
-    }
-
-    const lines = candidate
-      .map((entry) => summarizeListEntry(entry))
-      .filter((entry): entry is string => Boolean(entry));
-    if (lines.length === 0) {
-      continue;
-    }
-
-    return {
-      lines: normalizePreviewLines(lines),
-      truncated: candidate.length > lines.length || candidate.length > MAX_PREVIEW_LINES,
-    };
-  }
-
-  return undefined;
-}
-
-function summarizeListEntry(entry: unknown): string | undefined {
-  if (typeof entry === "string") {
-    return summarizeInline(entry, MAX_PREVIEW_LINE_LENGTH);
-  }
-
-  const record = asRecord(entry);
-  if (!record) {
-    return summarizeUnknown(entry, MAX_PREVIEW_LINE_LENGTH);
-  }
-
-  const path = firstString(
-    extractPathLike(record),
-    record.file,
-    record.name,
-  );
-  const line = typeof record.line === "number" ? record.line : undefined;
-  const text = firstString(record.text, record.content, record.preview, record.match);
-
-  if (path && line !== undefined && text) {
-    return summarizeInline(`${path}:${line} ${text}`, MAX_PREVIEW_LINE_LENGTH);
-  }
-  if (path && text) {
-    return summarizeInline(`${path} ${text}`, MAX_PREVIEW_LINE_LENGTH);
-  }
-  if (path) {
-    return summarizeInline(path, MAX_PREVIEW_LINE_LENGTH);
-  }
-  if (text) {
-    return summarizeInline(text, MAX_PREVIEW_LINE_LENGTH);
-  }
-
-  return summarizeUnknown(entry, MAX_PREVIEW_LINE_LENGTH);
-}
-
-function extractTextLikeContent(value: unknown): string | undefined {
-  const record = asRecord(value);
-  const nestedRecords = [
-    asRecord(record?.file),
-    asRecord(record?.result),
-    asRecord(record?.response),
-    asRecord(record?.output),
-    asRecord(record?.data),
-  ];
-
-  const direct = firstString(
-    record?.text,
-    record?.content,
-    record?.detailedContent,
-    record?.stdout,
-    record?.stderr,
-    ...nestedRecords.flatMap((item) => item ? [
-      item.text,
-      item.content,
-      item.detailedContent,
-      item.stdout,
-      item.stderr,
-    ] : []),
-    value,
-  );
-  if (direct) {
-    return direct;
-  }
-
-  if (Array.isArray(record?.contents)) {
-    const text = record.contents
-      .map((item) => asRecord(item))
-      .map((item) => firstString(item?.text, item?.content, asRecord(item?.file)?.content))
-      .filter((item): item is string => Boolean(item))
-      .join("\n");
-    if (text) {
-      return text;
-    }
-  }
-
-  if (Array.isArray(record?.content)) {
-    const text = record.content
-      .map((item) => asRecord(item))
-      .map((item) => firstString(item?.text, asRecord(item?.content)?.text, asRecord(item?.file)?.content))
-      .filter((item): item is string => Boolean(item))
-      .join("\n");
-    if (text) {
-      return text;
-    }
-  }
-
-  const structuredContent = firstDefined(record?.structuredContent, ...nestedRecords.map((item) => item?.structuredContent));
-  if (structuredContent !== undefined) {
-    return summarizeUnknown(structuredContent, MAX_BODY_CHARS);
-  }
-
-  return undefined;
 }
 
 function buildSummaryPreviewBlock(value: unknown): ToolPreviewBlock | undefined {
@@ -510,6 +351,22 @@ function normalizePreviewLines(lines: unknown[], maxLength = MAX_PREVIEW_LINE_LE
 function summarizeWarnings(values: string[]): string[] | undefined {
   const warnings = normalizePreviewLines(values, MAX_WARNING_LENGTH);
   return warnings.length > 0 ? warnings : undefined;
+}
+
+function boundedListPreviewLines(lines: string[] | undefined): { lines: string[]; truncated: boolean } | undefined {
+  if (!Array.isArray(lines) || lines.length === 0) {
+    return undefined;
+  }
+
+  const visibleLines = normalizePreviewLines(lines.slice(0, MAX_PREVIEW_LINES));
+  if (visibleLines.length === 0) {
+    return undefined;
+  }
+
+  return {
+    lines: visibleLines,
+    truncated: lines.length > visibleLines.length || lines.length > MAX_PREVIEW_LINES,
+  };
 }
 
 function summarizeInline(value: string, maxLength: number): string {
@@ -578,33 +435,6 @@ function extractWarnings(record: Record<string, unknown> | undefined): string[] 
   return warnings;
 }
 
-function formatLineRange(record: Record<string, unknown> | undefined): string {
-  if (!record) {
-    return "";
-  }
-
-  const firstLocation = Array.isArray(record.locations) ? asRecord(record.locations[0]) : undefined;
-  const offset = firstNumber(
-    record.offset,
-    record.line,
-    record.startLine,
-    record.start_line,
-    firstLocation?.line,
-    firstLocation?.startLine,
-    firstLocation?.start_line,
-  );
-  const limit = firstNumber(record.limit, record.count);
-  if (offset === undefined && limit === undefined) {
-    return "";
-  }
-
-  if (offset !== undefined && limit !== undefined) {
-    return `:${offset}-${offset + Math.max(0, limit - 1)}`;
-  }
-
-  return offset !== undefined ? `:${offset}` : "";
-}
-
 function hasPreviewTruncation(text: string | undefined, record: Record<string, unknown> | undefined): boolean {
   return boundedPreviewLines(text, "end").truncated || hasExplicitTruncation(record);
 }
@@ -641,100 +471,8 @@ function summarizeUnknown(value: unknown, maxLength: number): string | undefined
   }
 }
 
-function normalizeToolName(identity: ToolIdentity): string | undefined {
-  const kind = identity.kind?.trim().toLowerCase();
-  if (kind && kind !== "other" && kind !== "thought" && kind !== "wrapper") {
-    return kind;
-  }
-
-  const title = identity.title?.trim().toLowerCase();
-  if (!title) {
-    return undefined;
-  }
-
-  if (title.startsWith("mock ")) {
-    const parts = title.split(/\s+/);
-    return parts[1];
-  }
-
-  if (title.startsWith("callagent") || title.startsWith("defaultsession:") || title.startsWith("calling ")) {
-    return "agent";
-  }
-
-  const firstToken = title.split(/[[\s:(]/, 1)[0] || "";
-  const lastSegment = firstToken.split(".").at(-1);
-  return lastSegment || firstToken || undefined;
-}
-
 function stripAnsi(text: string): string {
   return text.replace(ANSI_SGR_PATTERN, "");
-}
-
-function asRecord(value: unknown): Record<string, unknown> | undefined {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : undefined;
-}
-
-function extractPathLike(record: Record<string, unknown> | undefined): string | undefined {
-  if (!record) {
-    return undefined;
-  }
-
-  const location = asRecord(record.location);
-  const firstLocation = Array.isArray(record.locations) ? asRecord(record.locations[0]) : undefined;
-  const file = asRecord(record.file);
-  const target = asRecord(record.target);
-
-  return firstString(
-    record.path,
-    record.filePath,
-    record.file_path,
-    record.fileName,
-    record.filename,
-    location?.path,
-    location?.filePath,
-    location?.file_path,
-    firstLocation?.path,
-    firstLocation?.filePath,
-    firstLocation?.file_path,
-    file?.path,
-    file?.filePath,
-    file?.file_path,
-    target?.path,
-    target?.filePath,
-    target?.file_path,
-  );
-}
-
-function firstString(...values: unknown[]): string | undefined {
-  for (const value of values) {
-    if (typeof value === "string" && value.trim()) {
-      return value;
-    }
-  }
-
-  return undefined;
-}
-
-function firstNumber(...values: unknown[]): number | undefined {
-  for (const value of values) {
-    if (typeof value === "number" && Number.isFinite(value)) {
-      return value;
-    }
-  }
-
-  return undefined;
-}
-
-function firstDefined<T>(...values: (T | undefined)[]): T | undefined {
-  for (const value of values) {
-    if (value !== undefined) {
-      return value;
-    }
-  }
-
-  return undefined;
 }
 
 function cleanObject(value: Record<string, unknown>): Record<string, unknown> | undefined {
