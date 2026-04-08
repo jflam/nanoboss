@@ -11,6 +11,38 @@ export interface RenderedToolCard {
   lines: string[];
 }
 
+export function renderPreviewToolCard(
+  theme: NanobossTuiTheme,
+  toolCall: UiToolCall,
+  expanded: boolean,
+  options: {
+    collapsedLines: number;
+  },
+): RenderedToolCard {
+  const { collapsedLines } = options;
+
+  return {
+    lines: joinToolContent(
+      formatToolHeader(theme, expanded ? formatExpandedToolHeader(toolCall) : toolCall.callPreview?.header, toolCall.title),
+      formatPreviewBody(
+        theme,
+        expanded ? getExpandedToolResultBlock(toolCall) ?? toolCall.resultPreview : toolCall.resultPreview,
+        expanded,
+        { collapsedLines },
+      ),
+      formatErrorLines(
+        theme,
+        expanded ? getExpandedToolErrorBlock(toolCall) ?? toolCall.errorPreview : toolCall.errorPreview,
+        expanded,
+        collapsedLines,
+      ),
+      formatWarnings(theme, toolCall.resultPreview),
+      formatWarnings(theme, toolCall.errorPreview),
+      formatToolDurationLine(theme, toolCall),
+    ),
+  };
+}
+
 export function formatDuration(durationMs: number): string {
   if (durationMs < 1_000) {
     return `${durationMs}ms`;
