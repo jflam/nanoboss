@@ -273,7 +273,7 @@ async function applyOpportunity(params: {
     [
       "Apply the following simplification directly in the repository.",
       "Prefer deleting, inlining, or consolidating code over adding new abstraction layers.",
-      "Do not run git commands.",
+      "Commit your work once you have validated the change locally.",
       "Return JSON only with `summary` and `touchedFiles`.",
       "",
       `Overall focus: ${params.focus}`,
