@@ -1,8 +1,10 @@
 import typia from "typia";
 
 import { normalizeRunCancelledError } from "../../src/core/cancellation.ts";
-import { expectData } from "../../src/core/run-result.ts";
+import { getSessionDir } from "../../src/core/config.ts";
 import { formatErrorMessage } from "../../src/core/error-format.ts";
+import { ProcedureDispatchJobManager } from "../../src/procedure/dispatch-jobs.ts";
+import { expectData } from "../../src/core/run-result.ts";
 import {
   jsonType,
   type CommandContext,
@@ -225,22 +227,23 @@ export async function executeAutoresearchClearCommand(
     };
   }
 
-  if (state.status === "active") {
-    return {
-      display: "Autoresearch is currently running. Wait for it to finish before clearing state.\n",
-      summary: "autoresearch/clear: active session",
-    };
+  const cancelledDispatchCount = state.status === "active"
+    ? cancelActiveAutoresearchDispatches(ctx)
+    : 0;
+  if (state.status !== "active") {
+    ensureCleanWorktree(paths.repoRoot, "clear autoresearch state");
   }
-
-  ensureCleanWorktree(paths.repoRoot, "clear autoresearch state");
   clearAutoresearchArtifacts(paths);
 
   return {
     data: {
       cleared: true,
+      cancelledDispatchCount,
       storageDir: paths.storageDir,
     },
-    display: `Cleared autoresearch state from ${paths.storageDir}.\n`,
+    display: cancelledDispatchCount > 0
+      ? `Cancelled ${cancelledDispatchCount} active autoresearch dispatch${cancelledDispatchCount === 1 ? "" : "es"} and cleared state from ${paths.storageDir}.\n`
+      : `Cleared autoresearch state from ${paths.storageDir}.\n`,
     summary: "autoresearch/clear: cleared state",
   };
 }
@@ -366,6 +369,7 @@ async function initializeAutoresearch(
 
   const baseline = runBenchmark(state.benchmark, paths.repoRoot);
   const baselineChecks = baseline.exitCode === 0 ? runChecks(state.checks, paths.repoRoot) : [];
+  assertAutoresearchNotCancelled(ctx);
   const baselineDecision = evaluateBaselineDecision(state, baseline, baselineChecks);
 
   const baselineRecord: AutoresearchExperimentRecord = {
@@ -431,6 +435,7 @@ async function runForegroundAutoresearchLoop(params: {
   let completionReason: string | undefined;
 
   while (state.iterationCount < state.maxIterations) {
+    assertAutoresearchNotCancelled(params.ctx);
     printAutoresearchProgress(
       params.ctx,
       `Iteration ${state.iterationCount + 1}/${state.maxIterations}: selecting the next experiment.`,
@@ -522,6 +527,7 @@ async function runAutoresearchIteration(params: {
   printAutoresearchProgress(params.ctx, `Candidate: ${summarizeText(experiment.idea, 120)}.`);
 
   const applied = await applyExperiment(params.ctx, stateBeforeIteration, experiment, params.records);
+  assertAutoresearchNotCancelled(params.ctx);
   printAutoresearchProgress(
     params.ctx,
     applied.summary.trim().length > 0
@@ -543,6 +549,7 @@ async function runAutoresearchIteration(params: {
     priorRecords: params.records,
     experiment,
     applied,
+    ctx: params.ctx,
   });
   appendExperimentRecord(params.paths, record);
 
@@ -585,6 +592,25 @@ function buildForegroundCompletionResult(
     summary: `autoresearch: completed ${state.branchName}`,
     memory: `Autoresearch state for ${state.branchName} lives at ${paths.statePath}.`,
   };
+}
+
+function assertAutoresearchNotCancelled(ctx: { assertNotCancelled(): void }): void {
+  ctx.assertNotCancelled();
+}
+
+function cancelActiveAutoresearchDispatches(ctx: CommandContext): number {
+  const manager = new ProcedureDispatchJobManager({
+    cwd: ctx.cwd,
+    sessionId: ctx.sessionId,
+    rootDir: getSessionDir(ctx.sessionId),
+    getRegistry: async () => {
+      throw new Error("Procedure registry is unavailable during autoresearch clear.");
+    },
+  });
+  return manager.cancelMatchingProcedures([
+    "autoresearch/start",
+    "autoresearch/continue",
+  ]);
 }
 
 async function buildInitializationPlan(prompt: string, ctx: CommandContext): Promise<AutoresearchInitPlan> {
@@ -676,6 +702,7 @@ async function executeExperimentRun(params: {
   priorRecords: AutoresearchExperimentRecord[];
   experiment: AutoresearchExperimentSpec;
   applied: AutoresearchApplyResult;
+  ctx: CommandContext;
 }): Promise<AutoresearchExperimentRecord> {
   const promptContext = params.state.pendingContextNotes;
   const changedBeforeEvaluation = getChangedFiles(params.paths.repoRoot);
@@ -694,7 +721,9 @@ async function executeExperimentRun(params: {
       };
     } else {
       benchmark = runBenchmark(params.state.benchmark, params.paths.repoRoot);
+      assertAutoresearchNotCancelled(params.ctx);
       checks = benchmark.exitCode === 0 ? runChecks(params.state.checks, params.paths.repoRoot) : [];
+      assertAutoresearchNotCancelled(params.ctx);
       changedAfterEvaluation = getChangedFiles(params.paths.repoRoot);
       decision = evaluateRecordDecision(
         params.state,
@@ -706,6 +735,13 @@ async function executeExperimentRun(params: {
     }
   } catch (error) {
     changedAfterEvaluation = getChangedFiles(params.paths.repoRoot);
+    const cancelled = normalizeRunCancelledError(error, "soft_stop");
+    if (cancelled) {
+      if (changedAfterEvaluation.all.length > 0) {
+        revertWorkingTreeChanges(params.paths.repoRoot, changedAfterEvaluation);
+      }
+      throw cancelled;
+    }
     decision = {
       status: "failed",
       kept: false,

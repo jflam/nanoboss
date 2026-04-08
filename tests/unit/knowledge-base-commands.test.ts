@@ -740,6 +740,7 @@ function createMockContext(params: {
         return [];
       },
     },
+    assertNotCancelled() {},
     getDefaultAgentConfig() {
       return params.defaultAgentConfig;
     },
