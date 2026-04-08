@@ -24,6 +24,7 @@ import kbRefreshProcedure from "../../procedures/kb/refresh.ts";
 import linterProcedure from "../../procedures/linter.ts";
 import modelProcedure from "../../procedures/model.ts";
 import secondOpinionProcedure from "../../procedures/second-opinion.ts";
+import simplifyProcedure from "../../procedures/simplify.ts";
 import tokensProcedure from "../../procedures/tokens.ts";
 
 import { getProcedureRuntimeDir } from "../core/config.ts";
@@ -141,6 +142,7 @@ export class ProcedureRegistry implements ProcedureRegistryLike {
     this.register(kbAnswerProcedure);
     this.register(linterProcedure);
     this.register(modelProcedure);
+    this.register(simplifyProcedure);
     this.register(tokensProcedure);
     this.register(secondOpinionProcedure);
     for (const procedure of sessionToolProcedures) {
