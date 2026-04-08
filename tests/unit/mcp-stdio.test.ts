@@ -20,7 +20,7 @@ afterEach(() => {
 });
 
 describe("global nanoboss MCP stdio transport", () => {
-  test("serves tools/list and defaults to the current session", async () => {
+  test("serves tools/list and defaults to the current session for the server cwd", async () => {
     const home = mkdtempSync(join(tmpdir(), "nanoboss-mcp-home-"));
     const rootDir = mkdtempSync(join(tmpdir(), "nanoboss-mcp-root-"));
     tempDirs.push(home, rootDir);

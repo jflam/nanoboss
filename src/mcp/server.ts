@@ -27,7 +27,7 @@ import type {
 
 export const MCP_PROTOCOL_VERSION = "2025-11-25";
 export const MCP_SERVER_NAME = "nanoboss";
-export const MCP_INSTRUCTIONS = "Use these tools to dispatch nanoboss procedures and inspect durable session state. Prefer an explicit sessionId for session-scoped operations such as procedure_dispatch_start, top_level_runs, and session_recent. If sessionId is omitted, the current-session pointer may be used when available.";
+export const MCP_INSTRUCTIONS = "Use these tools to dispatch nanoboss procedures and inspect durable session state. Prefer an explicit sessionId for session-scoped operations such as procedure_dispatch_start, top_level_runs, and session_recent. If sessionId is omitted, the current session for the server working directory may be used when available.";
 
 export interface McpServerOptions {
   instructions?: string;
@@ -184,7 +184,7 @@ export class NanobossMcpApi {
   private createStore(sessionIdOverride?: string): SessionStore {
     const context = this.resolveEffectiveContext(sessionIdOverride);
     if (!context.sessionId) {
-      throw new Error("Nanoboss MCP requires an explicit sessionId or a current-session pointer.");
+      throw new Error("Nanoboss MCP requires an explicit sessionId or a current session for the server working directory.");
     }
 
     return new SessionStore({
@@ -241,7 +241,7 @@ export class NanobossMcpApi {
     }
 
     if (this.params.allowCurrentSessionFallback) {
-      const current = readCurrentSessionMetadata();
+      const current = readCurrentSessionMetadata(this.params.cwd);
       if (current) {
         return {
           sessionId: current.sessionId,

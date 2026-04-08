@@ -32,11 +32,6 @@ test("writes and reads the current session metadata", () => {
       updatedAt: "2026-04-01T11:00:00.000Z",
     });
 
-    expect(readCurrentSessionMetadata()).toMatchObject({
-      sessionId: "session-123",
-      cwd: "/repo",
-      rootDir: "/repo/.nanoboss/session-123",
-    });
     expect(readCurrentSessionMetadata("/repo")).toMatchObject({
       sessionId: "session-123",
       cwd: "/repo",
@@ -74,7 +69,7 @@ test("keeps current session pointers isolated by workspace", () => {
 
     expect(readCurrentSessionMetadata("/repo-one")?.sessionId).toBe("session-one");
     expect(readCurrentSessionMetadata("/repo-two")?.sessionId).toBe("session-two");
-    expect(readCurrentSessionMetadata()?.sessionId).toBe("session-two");
+    expect(readCurrentSessionMetadata("/repo-three")).toBeUndefined();
   } finally {
     if (originalHome === undefined) {
       delete process.env.HOME;

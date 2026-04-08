@@ -16,7 +16,6 @@ import type {
 } from "../core/types.ts";
 
 const SESSION_METADATA_FILE = "session.json";
-const CURRENT_SESSION_FILE = "current-session.json";
 const CURRENT_SESSION_INDEX_FILE = "current-sessions.json";
 
 export interface SessionMetadata {
@@ -73,44 +72,14 @@ export function listSessionSummaries(): SessionSummary[] {
     .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
 }
 
-function getCurrentSessionMetadataPath(): string {
-  return join(getNanobossHome(), CURRENT_SESSION_FILE);
-}
-
 export function writeCurrentSessionMetadata(metadata: SessionMetadata): SessionMetadata {
   mkdirSync(getNanobossHome(), { recursive: true });
-  writeFileSync(
-    getCurrentSessionMetadataPath(),
-    `${JSON.stringify(metadata, null, 2)}\n`,
-    "utf8",
-  );
   writeCurrentWorkspaceIndex(metadata);
   return metadata;
 }
 
-export function readCurrentSessionMetadata(cwd?: string): SessionMetadata | undefined {
-  if (cwd) {
-    const indexed = readCurrentWorkspaceMetadata(cwd);
-    if (indexed) {
-      return indexed;
-    }
-  }
-
-  try {
-    const raw = JSON.parse(readFileSync(getCurrentSessionMetadataPath(), "utf8")) as Record<string, unknown>;
-    const metadata = parseSessionMetadata(raw, {
-      allowMissingCreatedAt: true,
-    });
-    if (!metadata || !cwd) {
-      return metadata;
-    }
-
-    return resolveWorkspaceKey(metadata.cwd) === resolveWorkspaceKey(cwd)
-      ? metadata
-      : undefined;
-  } catch {
-    return undefined;
-  }
+export function readCurrentSessionMetadata(cwd: string): SessionMetadata | undefined {
+  return readCurrentWorkspaceMetadata(cwd);
 }
 
 function toSessionSummary(metadata: SessionMetadata): SessionSummary {
