@@ -117,7 +117,7 @@ function readCurrentWorkspaceIndex(): Record<string, SessionMetadata> {
 
     return Object.fromEntries(
       Object.entries(workspaces)
-        .map(([key, value]) => [key, parseSessionMetadata(asRecord(value) ?? {}, { allowMissingCreatedAt: true })] as const)
+        .map(([key, value]) => [key, parseSessionMetadata(asRecord(value) ?? {})] as const)
         .filter((entry): entry is [string, SessionMetadata] => entry[1] !== undefined),
     );
   } catch {
@@ -125,25 +125,14 @@ function readCurrentWorkspaceIndex(): Record<string, SessionMetadata> {
   }
 }
 
-function parseSessionMetadata(
-  raw: Record<string, unknown>,
-  options: {
-    allowMissingCreatedAt?: boolean;
-  } = {},
-): SessionMetadata | undefined {
+function parseSessionMetadata(raw: Record<string, unknown>): SessionMetadata | undefined {
   const sessionId = asNonEmptyString(raw.sessionId);
   const rootDir = asNonEmptyString(raw.rootDir);
   const createdAt = asNonEmptyString(raw.createdAt);
   const updatedAt = asNonEmptyString(raw.updatedAt);
   const cwd = asNonEmptyString(raw.cwd);
 
-  if (
-    !sessionId ||
-    !rootDir ||
-    !cwd ||
-    !updatedAt ||
-    (!createdAt && !options.allowMissingCreatedAt)
-  ) {
+  if (!sessionId || !rootDir || !cwd || !createdAt || !updatedAt) {
     return undefined;
   }
 
@@ -151,7 +140,7 @@ function parseSessionMetadata(
     sessionId,
     cwd,
     rootDir,
-    createdAt: createdAt ?? updatedAt,
+    createdAt,
     updatedAt,
     initialPrompt: asNonEmptyString(raw.initialPrompt),
     lastPrompt: asNonEmptyString(raw.lastPrompt),

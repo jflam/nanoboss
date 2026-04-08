@@ -1,9 +1,10 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { afterEach, expect, test } from "bun:test";
 
+import { resolveWorkspaceKey } from "../../src/core/workspace-identity.ts";
 import {
   readCurrentSessionMetadata,
   writeCurrentSessionMetadata,
@@ -70,6 +71,38 @@ test("keeps current session pointers isolated by workspace", () => {
     expect(readCurrentSessionMetadata("/repo-one")?.sessionId).toBe("session-one");
     expect(readCurrentSessionMetadata("/repo-two")?.sessionId).toBe("session-two");
     expect(readCurrentSessionMetadata("/repo-three")).toBeUndefined();
+  } finally {
+    if (originalHome === undefined) {
+      delete process.env.HOME;
+    } else {
+      process.env.HOME = originalHome;
+    }
+  }
+});
+
+test("ignores current session workspace entries missing createdAt", () => {
+  const originalHome = process.env.HOME;
+  tempHome = mkdtempSync(join(tmpdir(), "nanoboss-current-session-invalid-"));
+  process.env.HOME = tempHome;
+
+  try {
+    mkdirSync(join(tempHome, ".nanoboss"), { recursive: true });
+    writeFileSync(
+      join(tempHome, ".nanoboss", "current-sessions.json"),
+      `${JSON.stringify({
+        workspaces: {
+          [resolveWorkspaceKey("/repo")]: {
+            sessionId: "session-123",
+            cwd: "/repo",
+            rootDir: "/repo/.nanoboss/session-123",
+            updatedAt: "2026-04-01T11:00:00.000Z",
+          },
+        },
+      }, null, 2)}\n`,
+      "utf8",
+    );
+
+    expect(readCurrentSessionMetadata("/repo")).toBeUndefined();
   } finally {
     if (originalHome === undefined) {
       delete process.env.HOME;
