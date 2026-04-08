@@ -312,6 +312,7 @@ export interface CommandContext {
   setDefaultAgentSelection(selection: DownstreamAgentSelection): DownstreamAgentConfig;
   getDefaultAgentTokenSnapshot(): Promise<AgentTokenSnapshot | undefined>;
   getDefaultAgentTokenUsage(): Promise<AgentTokenUsage | undefined>;
+  assertNotCancelled(): void;
   callAgent(
     prompt: string,
     options?: CommandCallAgentOptions,

@@ -36,6 +36,34 @@ class FakeEditor {
   }
 }
 
+interface AutocompleteItemLike {
+  value: string;
+  label: string;
+}
+
+interface AutocompleteProviderLike {
+  getSuggestions(
+    lines: string[],
+    cursorLine: number,
+    cursorCol: number,
+    options: { signal: AbortSignal; force?: boolean },
+  ): Promise<{
+    items: AutocompleteItemLike[];
+    prefix: string;
+  } | null>;
+  applyCompletion(
+    lines: string[],
+    cursorLine: number,
+    cursorCol: number,
+    item: AutocompleteItemLike,
+    prefix: string,
+  ): {
+    lines: string[];
+    cursorLine: number;
+    cursorCol: number;
+  };
+}
+
 describe("NanobossTuiApp", () => {
   test("keeps pi-tui submit enabled for steering input while a run is active", () => {
     const editor = new FakeEditor();
@@ -101,6 +129,91 @@ describe("NanobossTuiApp", () => {
 
     editor.submit();
     expect(handledSubmissions).toEqual(["steer here"]);
+  });
+
+  test("keeps the leading slash when completing namespaced slash commands", async () => {
+    const editor = new FakeEditor();
+    let currentState: UiState = createInitialUiState({
+      cwd: "/repo",
+      showToolCalls: true,
+    });
+    let capturedOnStateChange: ((state: UiState) => void) | undefined;
+
+    new NanobossTuiApp(
+      {
+        serverUrl: "http://localhost:3000",
+        showToolCalls: true,
+      },
+      {
+        createTerminal: () => ({
+          setTitle() {},
+          async drainInput() {},
+        }),
+        createTui: () => ({
+          addInputListener() {},
+          addChild() {},
+          setFocus() {},
+          start() {},
+          requestRender() {},
+          stop() {},
+        }),
+        createEditor: () => editor,
+        createController: (_params, deps) => {
+          capturedOnStateChange = deps.onStateChange;
+          return {
+            getState: () => currentState,
+            async handleSubmit() {},
+            async queuePrompt() {},
+            async cancelActiveRun() {},
+            toggleToolOutput() {},
+            requestExit() {},
+            async run() {
+              return undefined;
+            },
+            async stop() {},
+          };
+        },
+        createView: () => ({
+          setState() {},
+        }),
+      },
+    );
+
+    currentState = {
+      ...currentState,
+      availableCommands: ["/autoresearch/clear"],
+    };
+    capturedOnStateChange?.(currentState);
+
+    const provider = editor.autocompleteProvider as AutocompleteProviderLike;
+    const typedCommand = "/autoresearch/clear";
+    const suggestions = await provider.getSuggestions(
+      [typedCommand],
+      0,
+      typedCommand.length,
+      { signal: new AbortController().signal },
+    );
+    expect(suggestions?.prefix).toBe(typedCommand);
+    expect(suggestions?.items[0]).toEqual({
+      value: "autoresearch/clear",
+      label: "/autoresearch/clear",
+    });
+    if (!suggestions) {
+      throw new Error("Expected autocomplete suggestions for slash command");
+    }
+    const [selectedItem] = suggestions.items;
+    if (!selectedItem) {
+      throw new Error("Expected slash command autocomplete item");
+    }
+
+    const completion = provider.applyCompletion(
+      [typedCommand],
+      0,
+      typedCommand.length,
+      selectedItem,
+      suggestions.prefix,
+    );
+    expect(completion.lines).toEqual(["/autoresearch/clear "]);
   });
 
   test("pressing ctrl+o toggles expanded tool output", async () => {

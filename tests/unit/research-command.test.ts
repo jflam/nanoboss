@@ -127,6 +127,7 @@ function createMockContext(params: {
         return [];
       },
     },
+    assertNotCancelled() {},
     getDefaultAgentConfig() {
       return defaultAgentConfig;
     },

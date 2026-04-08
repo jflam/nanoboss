@@ -43,6 +43,7 @@ export function createCreateProcedure(registry: ProcedureRegistryLike): Procedur
           "- `ctx.callAgent(prompt, { agent: { provider, model }, refs })` to choose a downstream agent per call and pass prior refs",
           "- `ctx.callProcedure(name, prompt)` for composing procedures and getting RunResult<T>",
           "- `ctx.getDefaultAgentConfig()` and `ctx.setDefaultAgentSelection(...)` to inspect or change the session's default downstream agent",
+          "- `ctx.assertNotCancelled()` to cooperatively stop long-running work at safe checkpoints",
           "- `ctx.session.topLevelRuns(...)`, `ctx.session.descendants(...)`, `ctx.session.ancestors(...)`, and `ctx.session.get(...)` for structural discovery over prior cells",
           "- `ctx.session.recent(...)` only for true global recency scans across the whole session",
           "- `ctx.refs.read(...)` and `ctx.refs.writeToFile(...)` for durable references",

@@ -133,6 +133,10 @@ export class CommandContextImpl implements CommandContext {
     );
   }
 
+  assertNotCancelled(): void {
+    this.assertCanStartBoundary();
+  }
+
   async callAgent(
     prompt: string,
     options?: CommandCallAgentOptions,

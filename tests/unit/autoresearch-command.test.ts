@@ -5,6 +5,12 @@ import { join } from "node:path";
 
 import { afterEach, describe, expect, test } from "bun:test";
 
+import { RunCancelledError } from "../../src/core/cancellation.ts";
+import { getSessionDir } from "../../src/core/config.ts";
+import {
+  buildProcedureDispatchJobPath,
+  isProcedureDispatchCancellationRequested,
+} from "../../src/procedure/dispatch-jobs.ts";
 import {
   executeAutoresearchClearCommand,
   executeAutoresearchCommand,
@@ -14,7 +20,11 @@ import {
   executeAutoresearchStatusCommand,
 } from "../../procedures/autoresearch/runner.ts";
 import { readExperimentLog } from "../../procedures/autoresearch/log.ts";
-import { readAutoresearchState, resolveAutoresearchPaths } from "../../procedures/autoresearch/state.ts";
+import {
+  readAutoresearchState,
+  resolveAutoresearchPaths,
+  writeAutoresearchState,
+} from "../../procedures/autoresearch/state.ts";
 import type {
   AutoresearchApplyResult,
   AutoresearchExperimentSpec,
@@ -192,6 +202,87 @@ describe("autoresearch procedures", () => {
     expect(printed.join("")).toContain("Result: 120, reverted.");
   });
 
+  test("cancellation leaves autoresearch inactive so it can be cleared", async () => {
+    const cwd = createFixtureRepo();
+
+    await expect(executeAutoresearchStartCommand(
+      "reduce the score benchmark",
+      createMockContext(cwd, async (_prompt, callCount) => {
+        if (callCount === 1) {
+          return buildInitPlan({ maxIterations: 2 });
+        }
+
+        throw new RunCancelledError("Stopped.", "soft_stop");
+      }),
+    )).rejects.toThrow("Stopped.");
+
+    const paths = resolveAutoresearchPaths(cwd);
+    const state = readAutoresearchState(paths);
+    expect(state?.status).toBe("inactive");
+
+    const cleared = await executeAutoresearchClearCommand("", createMockContext(cwd, async () => {
+      throw new Error("clear should not callAgent");
+    }));
+    expect(cleared.summary).toBe("autoresearch/clear: cleared state");
+    expect(existsSync(paths.statePath)).toBe(false);
+  });
+
+  test("cancellation after benchmarking a candidate reverts it without recording a run", async () => {
+    const cwd = createFixtureRepo();
+
+    await expect(executeAutoresearchStartCommand(
+      "reduce the score benchmark",
+      createMockContext(
+        cwd,
+        async (_prompt, callCount) => {
+          if (callCount === 1) {
+            return buildInitPlan({
+              maxIterations: 1,
+              benchmark: {
+                argv: [
+                  "bun",
+                  "-e",
+                  [
+                    "import { readFileSync, writeFileSync } from 'node:fs';",
+                    "const score = readFileSync('score.txt', 'utf8').trim();",
+                    "if (score !== '100') writeFileSync('benchmark-ran.txt', `${score}\\n`);",
+                    "console.log(`score=${score}`);",
+                  ].join(" "),
+                ],
+                metric: {
+                  name: "score",
+                  direction: "lower",
+                  source: "stdout-regex",
+                  pattern: "score=(\\d+(?:\\.\\d+)?)",
+                },
+              },
+            });
+          }
+          if (callCount === 2) {
+            return buildExperimentSpec("Lower the score", "Write 90 to score.txt", "score drops from 100 to 90");
+          }
+
+          writeFileSync(join(cwd, "score.txt"), "90\n", "utf8");
+          return buildApplyResult("Wrote 90 to score.txt");
+        },
+        [],
+        {
+          assertNotCancelled() {
+            if (existsSync(join(cwd, "benchmark-ran.txt"))) {
+              throw new RunCancelledError("Stopped.", "soft_stop");
+            }
+          },
+        },
+      ),
+    )).rejects.toThrow("Stopped.");
+
+    const paths = resolveAutoresearchPaths(cwd);
+    expect(readAutoresearchState(paths)?.status).toBe("inactive");
+    expect(readFileSync(join(cwd, "score.txt"), "utf8")).toBe("100\n");
+    expect(existsSync(join(cwd, "benchmark-ran.txt"))).toBe(false);
+    expect(readExperimentLog(paths).map((record) => record.id)).toEqual(["baseline"]);
+  });
+
   test("keeps improved experiments, rejects regressions, and records confidence", async () => {
     const cwd = createFixtureRepo();
 
@@ -300,6 +391,75 @@ describe("autoresearch procedures", () => {
 
     expect(readAutoresearchState(paths)).toBeUndefined();
     expect(existsSync(paths.logPath)).toBe(false);
+  });
+
+  test("clear cancels matching active autoresearch dispatches before deleting state", async () => {
+    const cwd = createFixtureRepo();
+    const sessionId = "test-session";
+    const paths = resolveAutoresearchPaths(cwd);
+    const baseCommit = execFileSync("git", ["rev-parse", "HEAD"], { cwd, encoding: "utf8" }).trim();
+    const branchName = execFileSync("git", ["branch", "--show-current"], { cwd, encoding: "utf8" }).trim();
+    const originalHome = process.env.HOME;
+    const fakeHome = mkdtempSync(join(tmpdir(), "nab-autoresearch-home-"));
+    tempDirs.push(fakeHome);
+    process.env.HOME = fakeHome;
+
+    try {
+      writeAutoresearchState(paths, {
+        schemaVersion: 1,
+        createdAt: "2026-04-08T00:00:00.000Z",
+        updatedAt: "2026-04-08T00:00:00.000Z",
+        sessionId,
+        goal: "reduce the score benchmark",
+        goalSummary: "reduce score",
+        status: "active",
+        repoRoot: cwd,
+        branchName,
+        baseBranch: branchName,
+        baseCommit,
+        mergeBaseCommit: baseCommit,
+        iterationCount: 0,
+        maxIterations: 3,
+        filesInScope: ["score.txt"],
+        benchmark: buildInitPlan().benchmark,
+        checks: [],
+        pendingContextNotes: [],
+      });
+
+      const sessionDir = getSessionDir(sessionId);
+      mkdirSync(join(sessionDir, "procedure-dispatch-jobs"), { recursive: true });
+      const dispatchId = "dispatch-active-autoresearch";
+      const dispatchPath = buildProcedureDispatchJobPath(sessionDir, dispatchId);
+      writeFileSync(dispatchPath, `${JSON.stringify({
+        dispatchId,
+        sessionId,
+        procedure: "autoresearch/continue",
+        prompt: "",
+        status: "running",
+        createdAt: "2026-04-08T00:00:00.000Z",
+        updatedAt: "2026-04-08T00:00:01.000Z",
+        startedAt: "2026-04-08T00:00:01.000Z",
+        dispatchCorrelationId: "corr-autoresearch-active",
+      }, null, 2)}\n`);
+
+      const cleared = await executeAutoresearchClearCommand("", createMockContext(cwd, async () => {
+        throw new Error("clear does not use callAgent");
+      }, [], { sessionId }));
+
+      expect(cleared.summary).toBe("autoresearch/clear: cleared state");
+      expect(cleared.display).toContain("Cancelled 1 active autoresearch dispatch");
+      expect(readAutoresearchState(paths)).toBeUndefined();
+      expect(isProcedureDispatchCancellationRequested(sessionDir, "corr-autoresearch-active")).toBe(true);
+      const updatedJob = JSON.parse(readFileSync(dispatchPath, "utf8")) as { status: string; error?: string };
+      expect(updatedJob.status).toBe("cancelled");
+      expect(updatedJob.error).toBe("Stopped.");
+    } finally {
+      if (originalHome === undefined) {
+        delete process.env.HOME;
+      } else {
+        process.env.HOME = originalHome;
+      }
+    }
   });
 
   test("finalize creates review branches for kept experiment commits", async () => {
@@ -509,6 +669,10 @@ function createMockContext(
   cwd: string,
   handler: (prompt: string, callCount: number) => Promise<unknown>,
   printed: string[] = [],
+  options: {
+    sessionId?: string;
+    assertNotCancelled?: (checkCount: number) => void;
+  } = {},
 ): CommandContext {
   const defaultAgentConfig: DownstreamAgentConfig = {
     provider: "copilot",
@@ -517,10 +681,11 @@ function createMockContext(
     cwd,
   };
   let callCount = 0;
+  let cancellationCheckCount = 0;
 
   return {
     cwd,
-    sessionId: "test-session",
+    sessionId: options.sessionId ?? "test-session",
     refs: {
       async read() {
         throw new Error("Not implemented in test");
@@ -549,6 +714,10 @@ function createMockContext(
         return [];
       },
     },
+    assertNotCancelled() {
+      cancellationCheckCount += 1;
+      options.assertNotCancelled?.(cancellationCheckCount);
+    },
     getDefaultAgentConfig() {
       return defaultAgentConfig;
     },
@@ -565,7 +734,7 @@ function createMockContext(
       callCount += 1;
       return {
         cell: {
-          sessionId: "test-session",
+          sessionId: options.sessionId ?? "test-session",
           cellId: `agent-${callCount}`,
         },
         data: await handler(prompt, callCount),

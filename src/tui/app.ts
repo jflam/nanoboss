@@ -7,6 +7,7 @@ import {
 import { shouldDisableEditorSubmit } from "./commands.ts";
 
 import {
+  type AutocompleteItem,
   CombinedAutocompleteProvider,
   Editor,
   ProcessTerminal,
@@ -82,6 +83,36 @@ export interface NanobossTuiAppDeps {
 
 const TOOL_OUTPUT_TOGGLE_COOLDOWN_MS = 150;
 const CTRL_C_EXIT_WINDOW_MS = 500;
+
+class NanobossAutocompleteProvider extends CombinedAutocompleteProvider {
+  override applyCompletion(
+    lines: string[],
+    cursorLine: number,
+    cursorCol: number,
+    item: AutocompleteItem,
+    prefix: string,
+  ): {
+    lines: string[];
+    cursorLine: number;
+    cursorCol: number;
+  } {
+    if (prefix.startsWith("/")) {
+      const currentLine = lines[cursorLine] ?? "";
+      const beforePrefix = currentLine.slice(0, cursorCol - prefix.length);
+      if (beforePrefix.trim() === "") {
+        const completedLines = [...lines];
+        completedLines[cursorLine] = `${beforePrefix}/${item.value} ${currentLine.slice(cursorCol)}`;
+        return {
+          lines: completedLines,
+          cursorLine,
+          cursorCol: beforePrefix.length + item.value.length + 2,
+        };
+      }
+    }
+
+    return super.applyCompletion(lines, cursorLine, cursorCol, item, prefix);
+  }
+}
 
 export class NanobossTuiApp {
   private readonly cwd: string;
@@ -248,7 +279,7 @@ export class NanobossTuiApp {
 
     this.autocompleteSignature = signature;
     this.editor.setAutocompleteProvider(
-      new CombinedAutocompleteProvider(
+      new NanobossAutocompleteProvider(
         this.state.availableCommands.map((command) => ({
           value: command.startsWith("/") ? command.slice(1) : command,
           label: command,

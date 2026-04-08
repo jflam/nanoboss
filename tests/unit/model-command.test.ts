@@ -56,6 +56,7 @@ function createMockContext(): CommandContext {
         return [];
       },
     },
+    assertNotCancelled() {},
     getDefaultAgentConfig() {
       return defaultAgentConfig;
     },

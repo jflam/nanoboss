@@ -180,6 +180,22 @@ export class ProcedureDispatchJobManager {
     }
   }
 
+  cancelMatchingProcedures(procedures: readonly string[]): number {
+    const names = new Set(procedures);
+    let cancelled = 0;
+    for (const job of this.listJobs()) {
+      if (!names.has(job.procedure) || isTerminalStatus(job.status)) {
+        continue;
+      }
+
+      requestProcedureDispatchCancellation(this.params.rootDir, job.dispatchCorrelationId);
+      this.writeJob(markJobCancelled(job));
+      cancelled += 1;
+    }
+
+    return cancelled;
+  }
+
   async run(dispatchId: string): Promise<void> {
     let job = this.readJob(dispatchId);
     if (job.status === "cancelled" || isProcedureDispatchCancellationRequested(this.params.rootDir, job.dispatchCorrelationId)) {
