@@ -1,5 +1,6 @@
 import type * as acp from "@agentclientprotocol/sdk";
 
+import { parseAssistantNoticeText } from "./acp-updates.ts";
 import {
   applyAcpSessionConfig,
   closeAcpConnection,
@@ -337,7 +338,9 @@ class PersistentAcpSession {
         update.sessionUpdate === "agent_message_chunk" &&
         update.content.type === "text"
       ) {
-        collector.raw += update.content.text;
+        if (!parseAssistantNoticeText(update.content.text)) {
+          collector.raw += update.content.text;
+        }
       }
 
       await collector.onUpdate?.(update);

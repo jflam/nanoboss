@@ -1,5 +1,6 @@
 import type * as acp from "@agentclientprotocol/sdk";
 
+import { parseAssistantNoticeText } from "../agent/acp-updates.ts";
 import type { ProcedureMemoryCard } from "../core/memory-cards.ts";
 import type { PromptTokenDiagnostics } from "../core/prompt-diagnostics.ts";
 import { normalizeAgentTokenUsage } from "../agent/token-usage.ts";
@@ -228,7 +229,7 @@ export function mapSessionUpdateToFrontendEvents(
         return [];
       }
 
-      const notice = parseAssistantNotice(update.content.text);
+      const notice = parseAssistantNoticeText(update.content.text);
       if (notice) {
         return [
           {
@@ -328,26 +329,6 @@ export function mapSessionUpdateToFrontendEvents(
     default:
       return [];
   }
-}
-
-function parseAssistantNotice(text: string): {
-  text: string;
-  tone: "info" | "warning" | "error";
-} | undefined {
-  const normalized = text.trim();
-  if (normalized.length === 0 || normalized.includes("\n")) {
-    return undefined;
-  }
-
-  const match = /^(Info|Warning|Error):\s+(.+)$/.exec(normalized);
-  if (!match) {
-    return undefined;
-  }
-
-  return {
-    tone: match[1].toLowerCase() as "info" | "warning" | "error",
-    text: match[2],
-  };
 }
 
 function extractTokenUsage(rawOutput: unknown): AgentTokenUsage | undefined {

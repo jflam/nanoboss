@@ -1,6 +1,6 @@
 import type * as acp from "@agentclientprotocol/sdk";
 
-import { collectTextSessionUpdates, summarizeAgentOutput } from "./acp-updates.ts";
+import { collectTextSessionUpdates, parseAssistantNoticeText, summarizeAgentOutput } from "./acp-updates.ts";
 import {
   applyAcpSessionConfig,
   closeAcpConnection,
@@ -359,7 +359,9 @@ async function runAcpPrompt(
       update.sessionUpdate === "agent_message_chunk" &&
       update.content.type === "text"
     ) {
-      raw += update.content.text;
+      if (!parseAssistantNoticeText(update.content.text)) {
+        raw += update.content.text;
+      }
     }
 
     await options.onUpdate?.(update);
