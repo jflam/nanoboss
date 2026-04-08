@@ -3,14 +3,14 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import kbAnswerProcedure from "../../packages/kb-answer.ts";
-import kbCompileConceptsProcedure from "../../packages/kb-compile-concepts.ts";
-import kbCompileSourceProcedure from "../../packages/kb-compile-source.ts";
-import kbHealthProcedure from "../../packages/kb-health.ts";
-import kbIngestProcedure from "../../packages/kb-ingest.ts";
-import kbLinkProcedure from "../../packages/kb-link.ts";
-import kbRenderProcedure from "../../packages/kb-render.ts";
-import kbRefreshProcedure from "../../packages/kb-refresh.ts";
+import kbAnswerProcedure from "../../procedures/kb/answer.ts";
+import kbCompileConceptsProcedure from "../../procedures/kb/compile-concepts.ts";
+import kbCompileSourceProcedure from "../../procedures/kb/compile-source.ts";
+import kbHealthProcedure from "../../procedures/kb/health.ts";
+import kbIngestProcedure from "../../procedures/kb/ingest.ts";
+import kbLinkProcedure from "../../procedures/kb/link.ts";
+import kbRenderProcedure from "../../procedures/kb/render.ts";
+import kbRefreshProcedure from "../../procedures/kb/refresh.ts";
 import type {
   CommandContext,
   DownstreamAgentConfig,
@@ -31,12 +31,12 @@ afterEach(() => {
 });
 
 describe("knowledge-base procedures", () => {
-  test("/kb-ingest writes manifests, index, and log entries", async () => {
+  test("/kb/ingest writes manifests, index, and log entries", async () => {
     const cwd = createWorkspace();
     writeFileSync(join(cwd, "raw", "article.md"), "# Example\n\nA durable note.\n", "utf8");
 
     const harness = createHarness({ cwd, agentResults: [] });
-    const result = await harness.execute("kb-ingest", "");
+    const result = await harness.execute("kb/ingest", "");
 
     if (!result || typeof result === "string") {
       throw new Error("Expected ProcedureResult");
@@ -68,7 +68,7 @@ describe("knowledge-base procedures", () => {
     expect(harness.prints).toContain("Scanning raw sources...\n");
   });
 
-  test("/kb-compile-source writes a source page and updates the manifest", async () => {
+  test("/kb/compile-source writes a source page and updates the manifest", async () => {
     const cwd = createWorkspace();
     writeFileSync(join(cwd, "raw", "article.md"), "# Example\n\nA durable note.\n", "utf8");
 
@@ -106,13 +106,13 @@ describe("knowledge-base procedures", () => {
       ],
     });
 
-    const ingest = await harness.execute("kb-ingest", "");
+    const ingest = await harness.execute("kb/ingest", "");
     if (!ingest || typeof ingest === "string") {
       throw new Error("Expected ingest ProcedureResult");
     }
     const sourceId = (ingest.data as { allSourceIds: string[] }).allSourceIds[0];
 
-    const compiled = await harness.execute("kb-compile-source", `sourceId=${sourceId}`);
+    const compiled = await harness.execute("kb/compile-source", `sourceId=${sourceId}`);
     if (!compiled || typeof compiled === "string") {
       throw new Error("Expected compile ProcedureResult");
     }
@@ -134,7 +134,7 @@ describe("knowledge-base procedures", () => {
     expect(typeof sourcesManifest[0]?.compiledAt).toBe("string");
   });
 
-  test("/kb-compile-concepts writes concept pages and updates the manifest", async () => {
+  test("/kb/compile-concepts writes concept pages and updates the manifest", async () => {
     const cwd = createWorkspace();
     writeFileSync(join(cwd, "raw", "article.md"), "# Article\n\nContext for retrieval.\n", "utf8");
 
@@ -195,13 +195,13 @@ describe("knowledge-base procedures", () => {
       ],
     });
 
-    const ingest = await harness.execute("kb-ingest", "");
+    const ingest = await harness.execute("kb/ingest", "");
     if (!ingest || typeof ingest === "string") {
       throw new Error("Expected ingest ProcedureResult");
     }
     const sourceId = (ingest.data as { allSourceIds: string[] }).allSourceIds[0];
-    await harness.execute("kb-compile-source", `sourceId=${sourceId}`);
-    const result = await harness.execute("kb-compile-concepts", "");
+    await harness.execute("kb/compile-source", `sourceId=${sourceId}`);
+    const result = await harness.execute("kb/compile-concepts", "");
     if (!result || typeof result === "string") {
       throw new Error("Expected concept compile ProcedureResult");
     }
@@ -221,7 +221,7 @@ describe("knowledge-base procedures", () => {
     });
   });
 
-  test("/kb-link writes supporting KB indexes and maintenance state", async () => {
+  test("/kb/link writes supporting KB indexes and maintenance state", async () => {
     const cwd = createWorkspace();
     writeFileSync(join(cwd, "raw", "paper.md"), "# Paper\n\nInteresting result.\n", "utf8");
 
@@ -282,12 +282,12 @@ describe("knowledge-base procedures", () => {
       ],
     });
 
-    const refresh = await harness.execute("kb-refresh", "");
+    const refresh = await harness.execute("kb/refresh", "");
     if (!refresh || typeof refresh === "string") {
       throw new Error("Expected refresh ProcedureResult");
     }
 
-    const result = await harness.execute("kb-link", "");
+    const result = await harness.execute("kb/link", "");
     if (!result || typeof result === "string") {
       throw new Error("Expected link ProcedureResult");
     }
@@ -302,7 +302,7 @@ describe("knowledge-base procedures", () => {
     expect(readFileSync(join(cwd, "wiki", "index.md"), "utf8")).toContain("## Concepts (1)");
   });
 
-  test("/kb-refresh composes ingest, source compilation, concept compilation, and linking", async () => {
+  test("/kb/refresh composes ingest, source compilation, concept compilation, and linking", async () => {
     const cwd = createWorkspace();
     writeFileSync(join(cwd, "raw", "paper.md"), "# Paper\n\nInteresting result.\n", "utf8");
 
@@ -363,7 +363,7 @@ describe("knowledge-base procedures", () => {
       ],
     });
 
-    const result = await harness.execute("kb-refresh", "");
+    const result = await harness.execute("kb/refresh", "");
     if (!result || typeof result === "string") {
       throw new Error("Expected refresh ProcedureResult");
     }
@@ -389,7 +389,7 @@ describe("knowledge-base procedures", () => {
     expect(harness.prints).toContain("Knowledge base refresh complete.\n");
   });
 
-  test("/kb-answer writes a durable answer page and updates answer manifests", async () => {
+  test("/kb/answer writes a durable answer page and updates answer manifests", async () => {
     const cwd = createWorkspace();
     writeFileSync(join(cwd, "raw", "article.md"), "# Article\n\nContext for answering.\n", "utf8");
 
@@ -448,7 +448,7 @@ describe("knowledge-base procedures", () => {
     ];
     const harness = createHarness({ cwd, agentResults });
 
-    const refresh = await harness.execute("kb-refresh", "");
+    const refresh = await harness.execute("kb/refresh", "");
     if (!refresh || typeof refresh === "string") {
       throw new Error("Expected refresh ProcedureResult");
     }
@@ -475,7 +475,7 @@ describe("knowledge-base procedures", () => {
         `- [Article Summary](../sources/${compiledSourceId}.md)`,
       ].join("\n"),
     });
-    const answer = await harness.execute("kb-answer", "Why does index-first retrieval help?");
+    const answer = await harness.execute("kb/answer", "Why does index-first retrieval help?");
     if (!answer || typeof answer === "string") {
       throw new Error("Expected answer ProcedureResult");
     }
@@ -495,7 +495,7 @@ describe("knowledge-base procedures", () => {
     expect(index).toContain("Why Index-First Retrieval Helps");
   });
 
-  test("/kb-render writes a derived report and updates render manifests", async () => {
+  test("/kb/render writes a derived report and updates render manifests", async () => {
     const cwd = createWorkspace();
     writeFileSync(join(cwd, "raw", "article.md"), "# Article\n\nContext for rendering.\n", "utf8");
 
@@ -554,7 +554,7 @@ describe("knowledge-base procedures", () => {
     ];
     const harness = createHarness({ cwd, agentResults });
 
-    const refresh = await harness.execute("kb-refresh", "");
+    const refresh = await harness.execute("kb/refresh", "");
     if (!refresh || typeof refresh === "string") {
       throw new Error("Expected refresh ProcedureResult");
     }
@@ -573,7 +573,7 @@ describe("knowledge-base procedures", () => {
     });
 
     const render = await harness.execute(
-      "kb-render",
+      "kb/render",
       "kind=report page=wiki/concepts/index-first-retrieval.md",
     );
     if (!render || typeof render === "string") {
@@ -593,13 +593,13 @@ describe("knowledge-base procedures", () => {
     expect(readFileSync(join(cwd, "wiki", "index.md"), "utf8")).toContain("## Derived Outputs (1)");
   });
 
-  test("/kb-health writes a report and deterministic repair queue", async () => {
+  test("/kb/health writes a report and deterministic repair queue", async () => {
     const cwd = createWorkspace();
     writeFileSync(join(cwd, "raw", "article.md"), "# Article\n\nNeeds compilation.\n", "utf8");
 
     const harness = createHarness({ cwd, agentResults: [] });
-    await harness.execute("kb-ingest", "");
-    const health = await harness.execute("kb-health", "");
+    await harness.execute("kb/ingest", "");
+    const health = await harness.execute("kb/health", "");
     if (!health || typeof health === "string") {
       throw new Error("Expected health ProcedureResult");
     }
@@ -627,14 +627,14 @@ function createHarness(params: {
   execute(name: string, prompt: string): Promise<ProcedureResult | string | void>;
 } {
   const procedures = new Map<string, Procedure>([
-    ["kb-ingest", kbIngestProcedure],
-    ["kb-compile-source", kbCompileSourceProcedure],
-    ["kb-compile-concepts", kbCompileConceptsProcedure],
-    ["kb-link", kbLinkProcedure],
-    ["kb-render", kbRenderProcedure],
-    ["kb-health", kbHealthProcedure],
-    ["kb-refresh", kbRefreshProcedure],
-    ["kb-answer", kbAnswerProcedure],
+    ["kb/ingest", kbIngestProcedure],
+    ["kb/compile-source", kbCompileSourceProcedure],
+    ["kb/compile-concepts", kbCompileConceptsProcedure],
+    ["kb/link", kbLinkProcedure],
+    ["kb/render", kbRenderProcedure],
+    ["kb/health", kbHealthProcedure],
+    ["kb/refresh", kbRefreshProcedure],
+    ["kb/answer", kbAnswerProcedure],
   ]);
   const prints: string[] = [];
   let cellCounter = 0;

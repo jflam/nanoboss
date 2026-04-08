@@ -1,4 +1,4 @@
-import type { Procedure } from "../src/core/types.ts";
+import type { Procedure } from "../../src/core/types.ts";
 import {
   appendKnowledgeBaseLog,
   optionalBoolean,
@@ -11,7 +11,7 @@ import {
   type KnowledgeBaseIngestData,
   type KnowledgeBaseLinkData,
   type KnowledgeBaseRefreshData,
-} from "./kb/lib/repository.ts";
+} from "./lib/repository.ts";
 
 interface RefreshOptions {
   path?: string;
@@ -20,7 +20,7 @@ interface RefreshOptions {
 }
 
 export default {
-  name: "kb-refresh",
+  name: "kb/refresh",
   description: "Refresh the knowledge base from raw sources",
   inputHint: "Optional raw path or path=raw/article.md",
   async execute(prompt, ctx) {
@@ -28,7 +28,7 @@ export default {
 
     ctx.print("Refreshing knowledge base...\n");
     const ingestResult = await ctx.callProcedure<KnowledgeBaseIngestData>(
-      "kb-ingest",
+      "kb/ingest",
       JSON.stringify({
         ...(options.path ? { path: options.path } : {}),
         suppressLog: true,
@@ -37,7 +37,7 @@ export default {
     );
     const ingestData = ingestResult.data;
     if (!ingestData) {
-      throw new Error("kb-ingest returned no data");
+      throw new Error("kb/ingest returned no data");
     }
 
     const targetSourceIds = options.force ? ingestData.allSourceIds : ingestData.changedSourceIds;
@@ -45,7 +45,7 @@ export default {
 
     for (const sourceId of targetSourceIds) {
       const compileResult = await ctx.callProcedure<KnowledgeBaseCompileData>(
-        "kb-compile-source",
+        "kb/compile-source",
         JSON.stringify({
           sourceId,
           force: options.force,
@@ -60,7 +60,7 @@ export default {
     }
 
     const conceptResult = await ctx.callProcedure<KnowledgeBaseCompileConceptsData>(
-      "kb-compile-concepts",
+      "kb/compile-concepts",
       JSON.stringify({
         force: options.force,
         suppressLog: true,
@@ -69,26 +69,26 @@ export default {
     );
     const conceptData = conceptResult.data;
     if (!conceptData) {
-      throw new Error("kb-compile-concepts returned no data");
+      throw new Error("kb/compile-concepts returned no data");
     }
 
     const linkResult = await ctx.callProcedure<KnowledgeBaseLinkData>(
-      "kb-link",
+      "kb/link",
       JSON.stringify({
         suppressLog: true,
       }),
     );
     const linkData = linkResult.data;
     if (!linkData) {
-      throw new Error("kb-link returned no data");
+      throw new Error("kb/link returned no data");
     }
 
     let healthIssueCount: number | undefined;
     if (options.health) {
-      const healthResult = await ctx.callProcedure<KnowledgeBaseHealthData>("kb-health", "");
+      const healthResult = await ctx.callProcedure<KnowledgeBaseHealthData>("kb/health", "");
       const healthData = healthResult.data;
       if (!healthData) {
-        throw new Error("kb-health returned no data");
+        throw new Error("kb/health returned no data");
       }
       healthIssueCount = healthData.issueCount;
     }
@@ -141,7 +141,7 @@ export default {
         `Index updated at ${linkData.indexPath}.`,
         ...(healthIssueCount === undefined ? [] : [`Health check found ${healthIssueCount} issue(s).`]),
       ].join("\n"),
-      summary: `kb-refresh: ${compiledSourceIds.length} compiled`,
+      summary: `kb/refresh: ${compiledSourceIds.length} compiled`,
     };
   },
 } satisfies Procedure;

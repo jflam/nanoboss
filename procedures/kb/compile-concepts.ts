@@ -3,8 +3,8 @@ import { join } from "node:path";
 
 import typia from "typia";
 
-import { expectData } from "../src/core/run-result.ts";
-import { jsonType, type Procedure } from "../src/core/types.ts";
+import { expectData } from "../../src/core/run-result.ts";
+import { jsonType, type Procedure } from "../../src/core/types.ts";
 import {
   appendKnowledgeBaseLog,
   collapseWhitespace,
@@ -23,7 +23,7 @@ import {
   type ConceptManifestEntry,
   type KnowledgeBaseCompileConceptsData,
   type SourceManifestEntry,
-} from "./kb/lib/repository.ts";
+} from "./lib/repository.ts";
 
 interface CompiledConceptResult {
   title: string;
@@ -51,7 +51,7 @@ const CompiledConceptResultType = jsonType<CompiledConceptResult>(
 );
 
 export default {
-  name: "kb-compile-concepts",
+  name: "kb/compile-concepts",
   description: "Compile concept pages from source summaries",
   inputHint: "Optional concept=<id-or-name>",
   async execute(prompt, ctx) {
@@ -79,7 +79,7 @@ export default {
       return {
         data: emptyData,
         display: "No compiled source concepts are available yet.\n",
-        summary: "kb-compile-concepts: no concepts",
+          summary: "kb/compile-concepts: no concepts",
       };
     }
 
@@ -183,7 +183,7 @@ export default {
       display: touchedConceptIds.length === 0
         ? `Concept manifest is current with ${nextEntries.length} concept page(s).\n`
         : `Compiled ${touchedConceptIds.length} concept page(s); ${nextEntries.length} total tracked.\n`,
-      summary: `kb-compile-concepts: ${touchedConceptIds.length} touched / ${nextEntries.length} total`,
+      summary: `kb/compile-concepts: ${touchedConceptIds.length} touched / ${nextEntries.length} total`,
     };
   },
 } satisfies Procedure;

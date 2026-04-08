@@ -1,7 +1,7 @@
 import typia from "typia";
 
-import { expectData } from "../src/core/run-result.ts";
-import { jsonType, type Procedure } from "../src/core/types.ts";
+import { expectData } from "../../src/core/run-result.ts";
+import { jsonType, type Procedure } from "../../src/core/types.ts";
 import {
   answerIdFromPath,
   appendKnowledgeBaseLog,
@@ -17,7 +17,7 @@ import {
   writeDatedKnowledgeMarkdown,
   type AnswerManifestEntry,
   type KnowledgeBaseAnswerData,
-} from "./kb/lib/repository.ts";
+} from "./lib/repository.ts";
 
 interface KnowledgeAnswerResult {
   title: string;
@@ -33,15 +33,15 @@ const KnowledgeAnswerResultType = jsonType<KnowledgeAnswerResult>(
 );
 
 export default {
-  name: "kb-answer",
+  name: "kb/answer",
   description: "Answer a question against the compiled knowledge base",
   inputHint: "Question to answer from wiki/index.md and compiled pages",
   async execute(prompt, ctx) {
     const question = prompt.trim();
     if (!question) {
       return {
-        display: "Provide a question for /kb-answer.\n",
-        summary: "kb-answer: missing prompt",
+        display: "Provide a question for /kb/answer.\n",
+        summary: "kb/answer: missing prompt",
       };
     }
 
@@ -49,8 +49,8 @@ export default {
       .filter((entry) => entry.summaryPath && !needsSourceCompilation(entry));
     if (compiledSources.length === 0) {
       return {
-        display: "No compiled source pages are available yet. Run /kb-refresh first.\n",
-        summary: "kb-answer: missing corpus",
+        display: "No compiled source pages are available yet. Run /kb/refresh first.\n",
+        summary: "kb/answer: missing corpus",
       };
     }
 
@@ -121,7 +121,7 @@ export default {
     return {
       data,
       display: `${entry.abstract}\n\nWrote answer page to ${answerPath}.\n`,
-      summary: `kb-answer: ${truncateQuestion(question)} -> ${answerPath}`,
+      summary: `kb/answer: ${truncateQuestion(question)} -> ${answerPath}`,
     };
   },
 } satisfies Procedure;

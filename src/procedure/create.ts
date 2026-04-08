@@ -5,6 +5,7 @@ import typia from "typia";
 
 import { expectData } from "../core/run-result.ts";
 import { jsonType } from "../core/types.ts";
+import { normalizeProcedureName, resolveProcedureImportPrefix } from "./names.ts";
 import type {
   Procedure,
   ProcedureRegistryLike,
@@ -58,10 +59,10 @@ export function createCreateProcedure(registry: ProcedureRegistryLike): Procedur
           "- put user-facing output in `display`",
           "- put a short discovery string in `summary`",
           "",
-           "Generated procedures are persisted at procedures/<procedure-name>/index.ts.",
-           "When you need nanoboss runtime imports from src/, use paths like `../../src/core/types.ts` from that location.",
+           "Generated procedures are persisted at `procedures/<name>.ts` for unscoped names and `procedures/<package>/<leaf>.ts` for scoped names.",
+           "When you need nanoboss runtime imports from src/, use a relative path from that persisted file location, for example `../src/core/types.ts` for `/review` and `../../src/core/types.ts` for `/kb/answer`.",
            "",
-           "Use existing built-in packages as style references:",
+           "Use existing built-in procedures as style references:",
           examples,
           "",
           `User request: ${prompt}`,
@@ -110,7 +111,7 @@ function loadExamples(): string {
   const examples = ["commit.ts", "linter.ts"]
     .map((file) => {
       try {
-        return `// ${file}\n${readFileSync(join(cwd, "packages", file), "utf8")}`;
+        return `// ${file}\n${readFileSync(join(cwd, "procedures", file), "utf8")}`;
       } catch {
         return "";
       }
@@ -121,21 +122,16 @@ function loadExamples(): string {
 }
 
 function sanitizeProcedureName(value: string): string {
-  const trimmed = value.trim().replace(/^\/+/, "");
-  const sanitized = trimmed
-    .replace(/[^a-zA-Z0-9_-]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .toLowerCase();
-
-  if (!sanitized) {
+  try {
+    return normalizeProcedureName(value);
+  } catch {
     throw new Error("Generated procedure name was empty");
   }
-
-  return sanitized;
 }
 
 function normalizeGeneratedProcedureSource(source: string, procedureName: string): string {
+  const importPrefix = resolveProcedureImportPrefix(procedureName);
   return source
     .replace(/name:\s*["'`][^"'`]+["'`]/, `name: "${procedureName}"`)
-    .replace(/(["'`])\.\.\/src\//g, "$1../../src/");
+    .replace(/(["'`])(?:\.\.\/)+src\//g, `$1${importPrefix}src/`);
 }

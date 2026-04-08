@@ -2,7 +2,7 @@
 
 Nanoboss supports grouping related procedures and helpers into a subdirectory under:
 
-- `packages/` for built-in procedures in the nanoboss repo
+- `procedures/` for built-in procedures in the nanoboss repo
 - `./.nanoboss/procedures/` for repo-local disk procedures
 - `~/.nanoboss/procedures/` for profile-level disk procedures
 
@@ -12,7 +12,7 @@ This lets you keep a procedure's entrypoints and helper modules together instead
 
 **No.** There is no separate `manifest.json`, `package.json`, or `procedure.yaml` file for procedure packages.
 
-Instead, nanoboss scans `.ts` files recursively under each command root and infers lightweight procedure metadata directly from the source file. For disk-loaded procedures, keep these fields as static string literals on the default export:
+Instead, nanoboss scans `.ts` files recursively under each procedure root and infers lightweight procedure metadata directly from the source file. For disk-loaded procedures, keep these fields as static string literals on the default export:
 
 - `name`
 - `description`
@@ -22,7 +22,7 @@ Instead, nanoboss scans `.ts` files recursively under each command root and infe
 ## Recommended layout
 
 ```text
-packages/
+procedures/
   autoresearch/
     index.ts
     start.ts
@@ -44,7 +44,7 @@ The entrypoint files export procedures. The other files are plain helpers import
 
 ## How discovery works
 
-Nanoboss recursively walks the command roots and registers `.ts` files that look like procedure modules.
+Nanoboss recursively walks the procedure roots and registers `.ts` files that look like procedure modules.
 
 A file is treated as a procedure when it exports a default object with procedure-shaped metadata and an `execute(...)` handler. Helper files are ignored as long as they do not export a default procedure.
 
@@ -55,7 +55,7 @@ import type { Procedure } from "../../src/core/types.ts";
 import { executeAutoresearchStartCommand } from "./runner.ts";
 
 export default {
-  name: "autoresearch-start",
+  name: "autoresearch/start",
   description: "Create a new autoresearch session and run a bounded foreground loop",
   inputHint: "Optimization goal",
   async execute(prompt, ctx) {
@@ -84,11 +84,11 @@ export function chooseNextExperiment(): string {
 
 There are two ways procedure packages show up in nanoboss:
 
-1. **Disk-loaded procedures** live under a workspace or profile command root and are discovered automatically.
+1. **Disk-loaded procedures** live under a workspace or profile procedure root and are discovered automatically.
 2. **Built-in procedures** live in the repo and are imported explicitly from `src/procedure/registry.ts`.
 
-If you are adding a new built-in package to nanoboss itself, create it under `packages/` and update the builtin imports in `src/procedure/registry.ts`.
+If you are adding a new built-in procedure package to nanoboss itself, create it under `procedures/` and update the builtin imports in `src/procedure/registry.ts`.
 
-## Current limitation
+## Generated procedure layout
 
-`/create` now writes to `procedures/<procedure-name>/index.ts`, which gives every generated procedure its own package directory by default. If you want several procedures in one shared package, restructure that directory manually.
+`/create` writes unscoped procedures to `procedures/<name>.ts` and scoped procedures to `procedures/<package>/<leaf>.ts`. That keeps shared package helpers and multiple entrypoints under the same directory when you create slash commands such as `/kb/answer`.

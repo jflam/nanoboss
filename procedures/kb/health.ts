@@ -1,4 +1,4 @@
-import type { Procedure } from "../src/core/types.ts";
+import type { Procedure } from "../../src/core/types.ts";
 import {
   appendKnowledgeBaseLog,
   ensureKnowledgeBaseLayout,
@@ -11,10 +11,10 @@ import {
   writeDatedKnowledgeMarkdown,
   type HealthRepairIssue,
   type KnowledgeBaseHealthData,
-} from "./kb/lib/repository.ts";
+} from "./lib/repository.ts";
 
 export default {
-  name: "kb-health",
+  name: "kb/health",
   description: "Check KB consistency and write a deterministic repair queue",
   async execute(_prompt, ctx) {
     const paths = await ensureKnowledgeBaseLayout(ctx.cwd);
@@ -65,7 +65,7 @@ export default {
       display: issues.length === 0
         ? `Health check passed. Queue refreshed at ${data.queuePath}.\n`
         : `Health check found ${issues.length} issue(s): ${errorCount} error(s), ${warningCount} warning(s).\nReport written to ${reportPath}.\n`,
-      summary: `kb-health: ${issues.length} issues`,
+      summary: `kb/health: ${issues.length} issues`,
     };
   },
 } satisfies Procedure;

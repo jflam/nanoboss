@@ -1,7 +1,7 @@
 import typia from "typia";
 
-import { expectData } from "../src/core/run-result.ts";
-import { jsonType, type Procedure } from "../src/core/types.ts";
+import { expectData } from "../../src/core/run-result.ts";
+import { jsonType, type Procedure } from "../../src/core/types.ts";
 import {
   appendKnowledgeBaseLog,
   collapseWhitespace,
@@ -17,7 +17,7 @@ import {
   type KnowledgeBaseRenderData,
   type KnowledgeRenderKind,
   type RenderManifestEntry,
-} from "./kb/lib/repository.ts";
+} from "./lib/repository.ts";
 
 interface RenderResult {
   title: string;
@@ -37,15 +37,15 @@ const RenderResultType = jsonType<RenderResult>(
 );
 
 export default {
-  name: "kb-render",
+  name: "kb/render",
   description: "Render derived reports or decks from stored KB pages",
   inputHint: "kind=report|deck page=wiki/concepts/foo.md",
   async execute(prompt, ctx) {
     const options = parseRenderOptions(prompt);
     if (options.sourcePages.length === 0) {
       return {
-        display: "Provide at least one source page for /kb-render.\n",
-        summary: "kb-render: missing source pages",
+        display: "Provide at least one source page for /kb/render.\n",
+        summary: "kb/render: missing source pages",
       };
     }
 
@@ -120,7 +120,7 @@ export default {
     return {
       data,
       display: `${entry.abstract}\n\nWrote ${entry.kind} output to ${outputPath}.\n`,
-      summary: `kb-render: ${entry.kind} -> ${outputPath}`,
+      summary: `kb/render: ${entry.kind} -> ${outputPath}`,
     };
   },
 } satisfies Procedure;

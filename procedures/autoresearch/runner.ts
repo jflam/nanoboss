@@ -82,15 +82,15 @@ export async function executeAutoresearchCommand(
   const trimmed = prompt.trim();
   const lines = [
     "Autoresearch v1 uses explicit commands:",
-    "- /autoresearch-start <goal>",
-    "- /autoresearch-continue [note]",
-    "- /autoresearch-status",
-    "- /autoresearch-finalize",
-    "- /autoresearch-clear",
+    "- /autoresearch/start <goal>",
+    "- /autoresearch/continue [note]",
+    "- /autoresearch/status",
+    "- /autoresearch/finalize",
+    "- /autoresearch/clear",
   ];
 
   if (trimmed.length > 0) {
-    lines.push("", `Use /autoresearch-start or /autoresearch-continue instead of \`/autoresearch ${trimmed}\`.`);
+    lines.push("", `Use /autoresearch/start or /autoresearch/continue instead of \`/autoresearch ${trimmed}\`.`);
   }
 
   return {
@@ -106,8 +106,8 @@ export async function executeAutoresearchStartCommand(
   const goal = prompt.trim();
   if (!goal) {
     return {
-      display: "Provide an optimization goal for /autoresearch-start.\n",
-      summary: "autoresearch-start: missing goal",
+      display: "Provide an optimization goal for /autoresearch/start.\n",
+      summary: "autoresearch/start: missing goal",
     };
   }
 
@@ -121,9 +121,9 @@ export async function executeAutoresearchStartCommand(
       },
       display: [
         `Autoresearch state already exists on ${state.branchName}.`,
-        "Use /autoresearch-continue [note] to keep going, or /autoresearch-clear to reset the session.",
+        "Use /autoresearch/continue [note] to keep going, or /autoresearch/clear to reset the session.",
       ].join("\n") + "\n",
-      summary: "autoresearch-start: existing session",
+      summary: "autoresearch/start: existing session",
     };
   }
 
@@ -140,7 +140,7 @@ export async function executeAutoresearchContinueCommand(
   if (!state) {
     return {
       display: formatMissingAutoresearchDisplay("continue"),
-      summary: "autoresearch-continue: missing state",
+      summary: "autoresearch/continue: missing state",
     };
   }
 
@@ -153,9 +153,9 @@ export async function executeAutoresearchContinueCommand(
       },
       display: [
         `Autoresearch has already reached its iteration budget on ${state.branchName}.`,
-        "Use /autoresearch-finalize to review kept wins, or /autoresearch-clear to start over.",
+        "Use /autoresearch/finalize to review kept wins, or /autoresearch/clear to start over.",
       ].join("\n") + "\n",
-      summary: "autoresearch-continue: iteration budget exhausted",
+      summary: "autoresearch/continue: iteration budget exhausted",
     };
   }
 
@@ -167,9 +167,9 @@ export async function executeAutoresearchContinueCommand(
       },
       display: [
         `Cannot continue autoresearch on ${state.branchName} because the baseline never completed successfully.`,
-        "Run /autoresearch-clear and start a new session with /autoresearch-start <goal>.",
+        "Run /autoresearch/clear and start a new session with /autoresearch/start <goal>.",
       ].join("\n") + "\n",
-      summary: "autoresearch-continue: baseline unavailable",
+      summary: "autoresearch/continue: baseline unavailable",
     };
   }
 
@@ -214,14 +214,14 @@ export async function executeAutoresearchClearCommand(
   if (!state) {
     return {
       display: formatMissingAutoresearchDisplay("clear"),
-      summary: "autoresearch-clear: missing state",
+      summary: "autoresearch/clear: missing state",
     };
   }
 
   if (state.status === "active") {
     return {
       display: "Autoresearch is currently running. Wait for it to finish before clearing state.\n",
-      summary: "autoresearch-clear: active session",
+      summary: "autoresearch/clear: active session",
     };
   }
 
@@ -234,7 +234,7 @@ export async function executeAutoresearchClearCommand(
       storageDir: paths.storageDir,
     },
     display: `Cleared autoresearch state from ${paths.storageDir}.\n`,
-    summary: "autoresearch-clear: cleared state",
+    summary: "autoresearch/clear: cleared state",
   };
 }
 
@@ -248,7 +248,7 @@ export async function executeAutoresearchFinalizeCommand(
   if (!state) {
     return {
       display: formatMissingAutoresearchDisplay("finalize"),
-      summary: "autoresearch-finalize: missing state",
+      summary: "autoresearch/finalize: missing state",
     };
   }
 
@@ -261,7 +261,7 @@ export async function executeAutoresearchFinalizeCommand(
         branches: [],
       },
       display: "No kept experiment commits were logged, so there is nothing to finalize.\n",
-      summary: "autoresearch-finalize: no kept commits",
+      summary: "autoresearch/finalize: no kept commits",
     };
   }
 
@@ -303,7 +303,7 @@ export async function executeAutoresearchFinalizeCommand(
       `Created ${createdBranches.length} review branch${createdBranches.length === 1 ? "" : "es"} from ${state.mergeBaseCommit.slice(0, 12)}:`,
       ...createdBranches.map((branch) => `- ${branch.branchName}: ${branch.cherryPickedCommit.slice(0, 12)} (${branch.runId})`),
     ].join("\n") + "\n",
-    summary: `autoresearch-finalize: ${createdBranches.length} branches`,
+    summary: `autoresearch/finalize: ${createdBranches.length} branches`,
   };
 }
 
@@ -897,7 +897,7 @@ function buildStatusResult(
   if (!state) {
     return {
       display: formatMissingAutoresearchDisplay("status"),
-      summary: "autoresearch-status: no state",
+      summary: "autoresearch/status: no state",
     };
   }
 
@@ -920,7 +920,7 @@ function buildStatusResult(
       lastRecord ? `Last run: ${lastRecord.id} (${lastRecord.decision.status}).` : "Last run: none.",
       `State: ${paths.statePath}.`,
     ].join("\n") + "\n",
-    summary: `autoresearch-status: ${state.status} ${state.branchName}`,
+    summary: `autoresearch/status: ${state.status} ${state.branchName}`,
   };
 }
 
@@ -929,9 +929,9 @@ function formatMissingAutoresearchDisplay(
 ): string {
   switch (action) {
     case "status":
-      return "No autoresearch session exists in this repository yet. Run /autoresearch-start <goal> to create one.\n";
+      return "No autoresearch session exists in this repository yet. Run /autoresearch/start <goal> to create one.\n";
     case "continue":
-      return "Cannot continue autoresearch: no session exists in this repository yet. Run /autoresearch-start <goal> to create one.\n";
+      return "Cannot continue autoresearch: no session exists in this repository yet. Run /autoresearch/start <goal> to create one.\n";
     case "clear":
       return "Cannot clear autoresearch: no session exists in this repository yet.\n";
     case "finalize":
@@ -966,7 +966,7 @@ function prepareAutoresearchBranch(
           branchName: nextState.branchName,
         },
         display: `Autoresearch paused: ${formatErrorMessage(error)}\n`,
-        summary: "autoresearch-continue: paused on dirty worktree",
+        summary: "autoresearch/continue: paused on dirty worktree",
       },
     };
   }

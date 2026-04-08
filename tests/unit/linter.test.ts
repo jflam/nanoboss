@@ -8,7 +8,7 @@ import {
   parseEslintJsonOutput,
   runPlannedLinter,
   selectFixWave,
-} from "../../packages/linter.ts";
+} from "../../procedures/linter.ts";
 
 describe("/linter helpers", () => {
   test("groups relative and absolute paths by normalized file", () => {

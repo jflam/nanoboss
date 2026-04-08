@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import modelProcedure from "../../packages/model.ts";
+import modelProcedure from "../../procedures/model.ts";
 import type { CommandContext, DownstreamAgentConfig } from "../../src/core/types.ts";
 
 describe("/model command", () => {

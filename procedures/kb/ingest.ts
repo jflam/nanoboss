@@ -1,4 +1,4 @@
-import type { Procedure } from "../src/core/types.ts";
+import type { Procedure } from "../../src/core/types.ts";
 import {
   appendKnowledgeBaseLog,
   createSourceManifestEntry,
@@ -11,7 +11,7 @@ import {
   scanRawSources,
   summarizeList,
   type KnowledgeBaseIngestData,
-} from "./kb/lib/repository.ts";
+} from "./lib/repository.ts";
 
 interface IngestOptions {
   path?: string;
@@ -20,7 +20,7 @@ interface IngestOptions {
 }
 
 export default {
-  name: "kb-ingest",
+  name: "kb/ingest",
   description: "Scan raw sources and update knowledge-base manifests",
   inputHint: "Optional raw path or path=raw/article.md",
   async execute(prompt, ctx) {
@@ -73,7 +73,7 @@ export default {
         `Manifest updated at ${data.manifestPath}.`,
         `Index updated at ${data.indexPath}.`,
       ].join("\n"),
-      summary: `kb-ingest: ${changed.length} changed / ${nextEntries.length} total`,
+      summary: `kb/ingest: ${changed.length} changed / ${nextEntries.length} total`,
     };
   },
 } satisfies Procedure;

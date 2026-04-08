@@ -5,30 +5,31 @@ import { tmpdir } from "node:os";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
-import autoresearchProcedure from "../../packages/autoresearch/index.ts";
-import autoresearchContinueProcedure from "../../packages/autoresearch/continue.ts";
-import autoresearchClearProcedure from "../../packages/autoresearch/clear.ts";
-import autoresearchFinalizeProcedure from "../../packages/autoresearch/finalize.ts";
-import autoresearchStartProcedure from "../../packages/autoresearch/start.ts";
-import autoresearchStatusProcedure from "../../packages/autoresearch/status.ts";
-import commitProcedure from "../../packages/commit.ts";
-import defaultProcedure from "../../packages/default.ts";
-import kbAnswerProcedure from "../../packages/kb-answer.ts";
-import kbCompileConceptsProcedure from "../../packages/kb-compile-concepts.ts";
-import kbCompileSourceProcedure from "../../packages/kb-compile-source.ts";
-import kbHealthProcedure from "../../packages/kb-health.ts";
-import kbIngestProcedure from "../../packages/kb-ingest.ts";
-import kbLinkProcedure from "../../packages/kb-link.ts";
-import kbRenderProcedure from "../../packages/kb-render.ts";
-import kbRefreshProcedure from "../../packages/kb-refresh.ts";
-import linterProcedure from "../../packages/linter.ts";
-import modelProcedure from "../../packages/model.ts";
-import secondOpinionProcedure from "../../packages/second-opinion.ts";
-import tokensProcedure from "../../packages/tokens.ts";
+import autoresearchProcedure from "../../procedures/autoresearch/index.ts";
+import autoresearchContinueProcedure from "../../procedures/autoresearch/continue.ts";
+import autoresearchClearProcedure from "../../procedures/autoresearch/clear.ts";
+import autoresearchFinalizeProcedure from "../../procedures/autoresearch/finalize.ts";
+import autoresearchStartProcedure from "../../procedures/autoresearch/start.ts";
+import autoresearchStatusProcedure from "../../procedures/autoresearch/status.ts";
+import commitProcedure from "../../procedures/commit.ts";
+import defaultProcedure from "../../procedures/default.ts";
+import kbAnswerProcedure from "../../procedures/kb/answer.ts";
+import kbCompileConceptsProcedure from "../../procedures/kb/compile-concepts.ts";
+import kbCompileSourceProcedure from "../../procedures/kb/compile-source.ts";
+import kbHealthProcedure from "../../procedures/kb/health.ts";
+import kbIngestProcedure from "../../procedures/kb/ingest.ts";
+import kbLinkProcedure from "../../procedures/kb/link.ts";
+import kbRenderProcedure from "../../procedures/kb/render.ts";
+import kbRefreshProcedure from "../../procedures/kb/refresh.ts";
+import linterProcedure from "../../procedures/linter.ts";
+import modelProcedure from "../../procedures/model.ts";
+import secondOpinionProcedure from "../../procedures/second-opinion.ts";
+import tokensProcedure from "../../procedures/tokens.ts";
 
 import { getProcedureRuntimeDir } from "../core/config.ts";
 import { resolveProfileProcedureRoot, resolveRepoProcedureRoot, resolveWorkspaceProcedureRoot } from "../core/procedure-paths.ts";
 import { createCreateProcedure } from "./create.ts";
+import { resolveProcedureEntryRelativePath } from "./names.ts";
 import { sessionToolProcedures } from "../mcp/session-tool-procedures.ts";
 import type { Procedure, ProcedureRegistryLike } from "../core/types.ts";
 import { createTypiaBunPlugin } from "./typia-bun-plugin.ts";
@@ -168,15 +169,14 @@ export class ProcedureRegistry implements ProcedureRegistryLike {
   }
 
   async persist(procedure: Procedure, source: string, cwd?: string): Promise<string> {
-    const packageDir = resolvePersistProcedurePackageDir({
+    const procedureRoot = resolvePersistProcedureRoot({
       cwd,
       fallbackProcedureRoot: this.localProcedureRoot,
       profileProcedureRoot: this.profileProcedureRoot,
-      packageName: procedure.name,
     });
 
-    mkdirSync(packageDir, { recursive: true });
-    const filePath = join(packageDir, "index.ts");
+    const filePath = join(procedureRoot, resolveProcedureEntryRelativePath(procedure.name));
+    mkdirSync(dirname(filePath), { recursive: true });
     writeFileSync(filePath, source, "utf8");
     return filePath;
   }
@@ -616,31 +616,15 @@ function resolveDiskProcedureWorkspaceRoot(procedureRoot: string): string {
     : resolvedProcedureRoot;
 }
 
-function resolvePersistProcedurePackageDir(params: {
+function resolvePersistProcedureRoot(params: {
   cwd?: string;
   fallbackProcedureRoot?: string;
   profileProcedureRoot: string;
-  packageName: string;
 }): string {
   const workingDir = params.cwd ? resolve(params.cwd) : undefined;
   const repoProcedureRoot = workingDir ? resolveRepoProcedureRoot(workingDir) : undefined;
   const procedureRoot = repoProcedureRoot
     ?? (workingDir ? params.profileProcedureRoot : params.fallbackProcedureRoot ?? params.profileProcedureRoot);
 
-  return join(resolve(procedureRoot), sanitizeProcedurePackageName(params.packageName));
-}
-
-function sanitizeProcedurePackageName(value: string): string {
-  const sanitized = value
-    .trim()
-    .replace(/^\/+/, "")
-    .replace(/[^a-zA-Z0-9_-]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .toLowerCase();
-
-  if (!sanitized) {
-    throw new Error("Procedure package name was empty");
-  }
-
-  return sanitized;
+  return resolve(procedureRoot);
 }

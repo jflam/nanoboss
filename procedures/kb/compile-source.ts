@@ -1,8 +1,8 @@
 import typia from "typia";
 import { join } from "node:path";
 
-import { expectData } from "../src/core/run-result.ts";
-import { jsonType, type Procedure } from "../src/core/types.ts";
+import { expectData } from "../../src/core/run-result.ts";
+import { jsonType, type Procedure } from "../../src/core/types.ts";
 import {
   appendKnowledgeBaseLog,
   collapseWhitespace,
@@ -19,7 +19,7 @@ import {
   summarizeList,
   type KnowledgeBaseCompileData,
   type SourceManifestEntry,
-} from "./kb/lib/repository.ts";
+} from "./lib/repository.ts";
 
 interface CompiledSourceResult {
   title: string;
@@ -45,14 +45,14 @@ const CompiledSourceResultType = jsonType<CompiledSourceResult>(
 );
 
 export default {
-  name: "kb-compile-source",
+  name: "kb/compile-source",
   description: "Compile one ingested source into a durable wiki page",
   inputHint: "sourceId=<id> or path=raw/article.md",
   async execute(prompt, ctx) {
     const options = parseCompileOptions(prompt);
     const sources = await readSourcesManifest(ctx.cwd);
     if (sources.length === 0) {
-      throw new Error("No ingested sources found. Run /kb-ingest first.");
+      throw new Error("No ingested sources found. Run /kb/ingest first.");
     }
 
     const target = resolveTargetSource(sources, options);
@@ -72,7 +72,7 @@ export default {
       return {
         data: skippedData,
         display: `${target.title ?? target.sourceId} is already compiled at ${target.summaryPath}.\n`,
-        summary: `kb-compile-source: skipped ${target.sourceId}`,
+        summary: `kb/compile-source: skipped ${target.sourceId}`,
       };
     }
 
@@ -148,7 +148,7 @@ export default {
     return {
       data,
       display: `${updatedEntry.abstract}\n\nCompiled ${updatedEntry.rawPath} -> ${summaryPath}.\n`,
-      summary: `kb-compile-source: ${updatedEntry.sourceId} -> ${summaryPath}`,
+      summary: `kb/compile-source: ${updatedEntry.sourceId} -> ${summaryPath}`,
     };
   },
 } satisfies Procedure;

@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from "node
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import researchProcedure from "../../packages/research.ts";
+import researchProcedure from "../../procedures/research.ts";
 import type { CommandContext, DownstreamAgentConfig, RunResult } from "../../src/core/types.ts";
 
 const tempDirs: string[] = [];

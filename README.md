@@ -51,28 +51,32 @@ default:
 - `./.nanoboss/procedures` in the current repository root
 - `~/.nanoboss/procedures`
 
-Those procedure roots contain package directories such as
-`.nanoboss/procedures/review/index.ts`; nanoboss recursively discovers `.ts`
-files that export a default procedure, so helper modules can live alongside
-procedure entrypoints without being registered as slash commands.
+Those procedure roots contain entrypoint files such as
+`.nanoboss/procedures/review.ts` or `.nanoboss/procedures/kb/answer.ts`;
+nanoboss recursively discovers `.ts` files that export a default procedure, so
+helper modules can live alongside procedure entrypoints without being
+registered as slash commands.
 
-See [`docs/procedure-packages.md`](docs/procedure-packages.md) for the package
-layout, discovery rules, and manifest expectations.
+See [`docs/procedure-packages.md`](docs/procedure-packages.md) for the built-in
+and disk procedure layout, discovery rules, and manifest expectations.
 
 The profile directory is the default place for user-defined procedures. When
-`/create` runs inside a git repository, it writes a package under that repo's
+`/create` runs inside a git repository, it writes under that repo's
 `.nanoboss/procedures/`. Otherwise it writes under `~/.nanoboss/procedures/`.
+Unscoped procedures persist as `procedures/<name>.ts`; scoped procedures persist
+as `procedures/<package>/<leaf>.ts`.
 
-Built-in commands now also include the knowledge-base workflow:
+Built-in procedures are exposed as slash commands and now also include the
+knowledge-base workflow:
 
-- `/kb-ingest`
-- `/kb-compile-source`
-- `/kb-compile-concepts`
-- `/kb-link`
-- `/kb-render`
-- `/kb-health`
-- `/kb-refresh`
-- `/kb-answer`
+- `/kb/ingest`
+- `/kb/compile-source`
+- `/kb/compile-concepts`
+- `/kb/link`
+- `/kb/render`
+- `/kb/health`
+- `/kb/refresh`
+- `/kb/answer`
 
 If you need to disable runtime disk command loading, set:
 

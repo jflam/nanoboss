@@ -12,14 +12,14 @@ import {
   executeAutoresearchFinalizeCommand,
   executeAutoresearchStartCommand,
   executeAutoresearchStatusCommand,
-} from "../../packages/autoresearch/runner.ts";
-import { readExperimentLog } from "../../packages/autoresearch/log.ts";
-import { readAutoresearchState, resolveAutoresearchPaths } from "../../packages/autoresearch/state.ts";
+} from "../../procedures/autoresearch/runner.ts";
+import { readExperimentLog } from "../../procedures/autoresearch/log.ts";
+import { readAutoresearchState, resolveAutoresearchPaths } from "../../procedures/autoresearch/state.ts";
 import type {
   AutoresearchApplyResult,
   AutoresearchExperimentSpec,
   AutoresearchInitPlan,
-} from "../../packages/autoresearch/types.ts";
+} from "../../procedures/autoresearch/types.ts";
 import type { CommandContext, DownstreamAgentConfig, RunResult } from "../../src/core/types.ts";
 
 const tempDirs: string[] = [];
@@ -378,12 +378,12 @@ describe("autoresearch procedures", () => {
     const clear = await executeAutoresearchClearCommand("", ctx);
     const finalize = await executeAutoresearchFinalizeCommand("", ctx);
 
-    expect(overview.display).toContain("/autoresearch-start <goal>");
+    expect(overview.display).toContain("/autoresearch/start <goal>");
     expect(status.display).toBe(
-      "No autoresearch session exists in this repository yet. Run /autoresearch-start <goal> to create one.\n",
+      "No autoresearch session exists in this repository yet. Run /autoresearch/start <goal> to create one.\n",
     );
     expect(continuation.display).toBe(
-      "Cannot continue autoresearch: no session exists in this repository yet. Run /autoresearch-start <goal> to create one.\n",
+      "Cannot continue autoresearch: no session exists in this repository yet. Run /autoresearch/start <goal> to create one.\n",
     );
     expect(clear.display).toBe("Cannot clear autoresearch: no session exists in this repository yet.\n");
     expect(finalize.display).toBe("Cannot finalize autoresearch: no session exists in this repository yet.\n");

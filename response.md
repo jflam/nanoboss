@@ -18,10 +18,10 @@ connection.prompt({ sessionId, prompt: [{ type: "text", text: line }] })
 `Nanoboss.prompt()` receives the ACP prompt:
 1. `extractPromptText()` pulls the raw text
 2. `resolveCommand()` splits on `/` → `commandName = "second-opinion"`, `commandPrompt = "What is quantum computing?"`
-3. Looks up the `Procedure` from the registry (loaded from `packages/second-opinion.ts` at startup)
+3. Looks up the `Procedure` from the registry (loaded from `procedures/second-opinion.ts` at startup)
 4. Creates a `CommandContextImpl` and calls `procedure.execute(commandPrompt, ctx)`
 
-### 3. Second-Opinion Execution (`packages/second-opinion.ts`)
+### 3. Second-Opinion Execution (`procedures/second-opinion.ts`)
 
 Two sequential agent calls:
 
@@ -146,7 +146,7 @@ There are two ACP hops here, not one:
 - Important context: the server session is almost stateless. `SessionState` only keeps `cwd` and an `AbortController`; it does not store conversation history.
 
 3. `/second-opinion` does two separate downstream agent calls
-- `packages/second-opinion.ts` calls `ctx.callAgent()` twice, sequentially, both with `stream: false`.
+- `procedures/second-opinion.ts` calls `ctx.callAgent()` twice, sequentially, both with `stream: false`.
 - First pass: Claude with provider `claude`, model `opus`.
 - Second pass: Codex with provider `codex`, model `gpt-5.4`, using the `CritiqueResultType` schema.
 - The typed second pass goes through `src/call-agent.ts`, which appends schema instructions to the prompt and retries up to 2 times if the response cannot be parsed as valid JSON or fails schema validation.

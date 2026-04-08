@@ -122,7 +122,7 @@ describe("ProcedureRegistry", () => {
 
   test("loads typia-based procedures through the runtime build pipeline", async () => {
     const registry = new ProcedureRegistry(mkdtempSync(join(tmpdir(), "nab-procedures-")));
-    const procedure = await registry.loadProcedureFromPath(join(process.cwd(), "packages", "second-opinion.ts"));
+    const procedure = await registry.loadProcedureFromPath(join(process.cwd(), "procedures", "second-opinion.ts"));
 
     expect(procedure.name).toBe("second-opinion");
     expect(procedure.description).toContain("Codex");
@@ -130,18 +130,18 @@ describe("ProcedureRegistry", () => {
 
   test("loads typia-based procedures for a workspace without its own node_modules", async () => {
     const workspaceRoot = mkdtempSync(join(tmpdir(), "nab-workspace-no-modules-"));
-    const packagesDir = join(workspaceRoot, "packages");
-    mkdirSync(packagesDir, { recursive: true });
+    const proceduresDir = join(workspaceRoot, "procedures");
+    mkdirSync(proceduresDir, { recursive: true });
     symlinkSync(join(process.cwd(), "src"), join(workspaceRoot, "src"), "dir");
     writeFileSync(join(workspaceRoot, "tsconfig.json"), readFileSync(join(process.cwd(), "tsconfig.json"), "utf8"), "utf8");
     writeFileSync(
-      join(packagesDir, "second-opinion.ts"),
-      readFileSync(join(process.cwd(), "packages", "second-opinion.ts"), "utf8"),
+      join(proceduresDir, "second-opinion.ts"),
+      readFileSync(join(process.cwd(), "procedures", "second-opinion.ts"), "utf8"),
       "utf8",
     );
 
     const registry = new ProcedureRegistry(mkdtempSync(join(tmpdir(), "nab-procedures-")));
-    const procedure = await registry.loadProcedureFromPath(join(packagesDir, "second-opinion.ts"));
+    const procedure = await registry.loadProcedureFromPath(join(proceduresDir, "second-opinion.ts"));
 
     expect(procedure.name).toBe("second-opinion");
     expect(existsSync(join(workspaceRoot, "node_modules"))).toBe(false);
@@ -165,7 +165,7 @@ describe("ProcedureRegistry", () => {
       },
     }, "export default { name: \"generated-profile\", description: \"generated\", async execute() { return {}; } };", workspaceDir);
 
-    expect(filePath).toBe(join(profileProcedureRoot, "generated-profile", "index.ts"));
+    expect(filePath).toBe(join(profileProcedureRoot, "generated-profile.ts"));
     expect(existsSync(filePath)).toBe(true);
   });
 
@@ -191,8 +191,30 @@ describe("ProcedureRegistry", () => {
       },
     }, "export default { name: \"generated-repo\", description: \"generated\", async execute() { return {}; } };", repoRoot);
 
-    expect(filePath.endsWith("/.nanoboss/procedures/generated-repo/index.ts")).toBe(true);
+    expect(filePath.endsWith("/.nanoboss/procedures/generated-repo.ts")).toBe(true);
     expect(readFileSync(filePath, "utf8")).toContain("generated-repo");
+  });
+
+  test("persists scoped generated procedures into package directories", async () => {
+    const repoProcedureRoot = mkdtempSync(join(tmpdir(), "nab-repo-procedures-"));
+    const profileProcedureRoot = mkdtempSync(join(tmpdir(), "nab-profile-procedures-"));
+    const workspaceDir = mkdtempSync(join(tmpdir(), "nab-workspace-"));
+    const registry = new ProcedureRegistry({
+      localProcedureRoot: repoProcedureRoot,
+      profileProcedureRoot,
+      diskProcedureRoots: [repoProcedureRoot, profileProcedureRoot],
+    });
+
+    const filePath = await registry.persist({
+      name: "kb/answer",
+      description: "generated",
+      async execute() {
+        return {};
+      },
+    }, "export default { name: \"kb/answer\", description: \"generated\", async execute() { return {}; } };", workspaceDir);
+
+    expect(filePath).toBe(join(profileProcedureRoot, "kb", "answer.ts"));
+    expect(existsSync(filePath)).toBe(true);
   });
 
   test("get returns undefined for unknown procedures", () => {
@@ -239,39 +261,39 @@ describe("ProcedureRegistry", () => {
 
     expect(registry.get("default")).toBeDefined();
     expect(registry.get("autoresearch")).toBeDefined();
-    expect(registry.get("autoresearch-start")).toBeDefined();
-    expect(registry.get("autoresearch-continue")).toBeDefined();
-    expect(registry.get("autoresearch-status")).toBeDefined();
-    expect(registry.get("autoresearch-clear")).toBeDefined();
-    expect(registry.get("autoresearch-finalize")).toBeDefined();
+    expect(registry.get("autoresearch/start")).toBeDefined();
+    expect(registry.get("autoresearch/continue")).toBeDefined();
+    expect(registry.get("autoresearch/status")).toBeDefined();
+    expect(registry.get("autoresearch/clear")).toBeDefined();
+    expect(registry.get("autoresearch/finalize")).toBeDefined();
     expect(registry.get("model")).toBeDefined();
-    expect(registry.get("kb-ingest")).toBeDefined();
-    expect(registry.get("kb-compile-source")).toBeDefined();
-    expect(registry.get("kb-compile-concepts")).toBeDefined();
-    expect(registry.get("kb-link")).toBeDefined();
-    expect(registry.get("kb-render")).toBeDefined();
-    expect(registry.get("kb-health")).toBeDefined();
-    expect(registry.get("kb-refresh")).toBeDefined();
-    expect(registry.get("kb-answer")).toBeDefined();
+    expect(registry.get("kb/ingest")).toBeDefined();
+    expect(registry.get("kb/compile-source")).toBeDefined();
+    expect(registry.get("kb/compile-concepts")).toBeDefined();
+    expect(registry.get("kb/link")).toBeDefined();
+    expect(registry.get("kb/render")).toBeDefined();
+    expect(registry.get("kb/health")).toBeDefined();
+    expect(registry.get("kb/refresh")).toBeDefined();
+    expect(registry.get("kb/answer")).toBeDefined();
     expect(registry.get("top_level_runs")).toBeDefined();
     expect(registry.get("cell_get")).toBeDefined();
     expect(registry.get("ref_read")).toBeDefined();
     expect(registry.toAvailableCommands().some((command) => command.name === "default")).toBe(false);
     expect(registry.toAvailableCommands().some((command) => command.name === "autoresearch")).toBe(true);
-    expect(registry.toAvailableCommands().some((command) => command.name === "autoresearch-start")).toBe(true);
-    expect(registry.toAvailableCommands().some((command) => command.name === "autoresearch-continue")).toBe(true);
-    expect(registry.toAvailableCommands().some((command) => command.name === "autoresearch-status")).toBe(true);
-    expect(registry.toAvailableCommands().some((command) => command.name === "autoresearch-clear")).toBe(true);
-    expect(registry.toAvailableCommands().some((command) => command.name === "autoresearch-finalize")).toBe(true);
+    expect(registry.toAvailableCommands().some((command) => command.name === "autoresearch/start")).toBe(true);
+    expect(registry.toAvailableCommands().some((command) => command.name === "autoresearch/continue")).toBe(true);
+    expect(registry.toAvailableCommands().some((command) => command.name === "autoresearch/status")).toBe(true);
+    expect(registry.toAvailableCommands().some((command) => command.name === "autoresearch/clear")).toBe(true);
+    expect(registry.toAvailableCommands().some((command) => command.name === "autoresearch/finalize")).toBe(true);
     expect(registry.toAvailableCommands().some((command) => command.name === "model")).toBe(true);
-    expect(registry.toAvailableCommands().some((command) => command.name === "kb-ingest")).toBe(true);
-    expect(registry.toAvailableCommands().some((command) => command.name === "kb-compile-source")).toBe(true);
-    expect(registry.toAvailableCommands().some((command) => command.name === "kb-compile-concepts")).toBe(true);
-    expect(registry.toAvailableCommands().some((command) => command.name === "kb-link")).toBe(true);
-    expect(registry.toAvailableCommands().some((command) => command.name === "kb-render")).toBe(true);
-    expect(registry.toAvailableCommands().some((command) => command.name === "kb-health")).toBe(true);
-    expect(registry.toAvailableCommands().some((command) => command.name === "kb-refresh")).toBe(true);
-    expect(registry.toAvailableCommands().some((command) => command.name === "kb-answer")).toBe(true);
+    expect(registry.toAvailableCommands().some((command) => command.name === "kb/ingest")).toBe(true);
+    expect(registry.toAvailableCommands().some((command) => command.name === "kb/compile-source")).toBe(true);
+    expect(registry.toAvailableCommands().some((command) => command.name === "kb/compile-concepts")).toBe(true);
+    expect(registry.toAvailableCommands().some((command) => command.name === "kb/link")).toBe(true);
+    expect(registry.toAvailableCommands().some((command) => command.name === "kb/render")).toBe(true);
+    expect(registry.toAvailableCommands().some((command) => command.name === "kb/health")).toBe(true);
+    expect(registry.toAvailableCommands().some((command) => command.name === "kb/refresh")).toBe(true);
+    expect(registry.toAvailableCommands().some((command) => command.name === "kb/answer")).toBe(true);
     expect(registry.toAvailableCommands().some((command) => command.name === "top_level_runs")).toBe(true);
     expect(registry.toAvailableCommands().some((command) => command.name === "cell_get")).toBe(true);
     expect(registry.toAvailableCommands().some((command) => command.name === "ref_read")).toBe(true);
