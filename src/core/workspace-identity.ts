@@ -1,28 +1,27 @@
-import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
-import { getNanobossHome } from "./config.ts";
+import { detectRepoRoot, resolveWorkspaceProcedureRoots } from "./procedure-paths.ts";
 
 export interface WorkspaceIdentity {
   cwd: string;
   repoRoot?: string;
   workspaceKey: string;
-  commandDirs: string[];
-  commandsFingerprint: string;
+  procedureRoots: string[];
+  proceduresFingerprint: string;
 }
 
 export function getWorkspaceIdentity(cwd: string): WorkspaceIdentity {
   const resolvedCwd = resolve(cwd);
   const repoRoot = detectRepoRoot(resolvedCwd);
-  const commandDirs = resolveWorkspaceCommandDirs(resolvedCwd);
+  const procedureRoots = resolveWorkspaceProcedureRoots(resolvedCwd);
   return {
     cwd: resolvedCwd,
     repoRoot,
     workspaceKey: repoRoot ?? resolvedCwd,
-    commandDirs,
-    commandsFingerprint: computeCommandsFingerprint(commandDirs),
+    procedureRoots,
+    proceduresFingerprint: computeProceduresFingerprint(procedureRoots),
   };
 }
 
@@ -30,27 +29,20 @@ export function resolveWorkspaceKey(cwd: string): string {
   return getWorkspaceIdentity(cwd).workspaceKey;
 }
 
-export function resolveWorkspaceCommandDirs(cwd: string): string[] {
-  return uniquePaths([
-    resolve(cwd, "commands"),
-    join(getNanobossHome(), "commands"),
-  ]);
-}
-
-export function computeCommandsFingerprint(commandDirs: string[]): string {
+export function computeProceduresFingerprint(procedureRoots: string[]): string {
   const hash = createHash("sha256");
 
-  for (const commandDir of uniquePaths(commandDirs)) {
-    hash.update(`${commandDir}\n`);
-    if (!existsSync(commandDir)) {
+  for (const procedureRoot of uniquePaths(procedureRoots)) {
+    hash.update(`${procedureRoot}\n`);
+    if (!existsSync(procedureRoot)) {
       hash.update("<missing>\n");
       continue;
     }
 
-    const files = listTypeScriptFiles(commandDir);
+    const files = listTypeScriptFiles(procedureRoot);
 
     for (const file of files) {
-      const path = join(commandDir, file);
+      const path = join(procedureRoot, file);
       hash.update(`${file}\n`);
       hash.update(readFileSync(path));
       hash.update("\n");
@@ -82,19 +74,6 @@ function listTypeScriptFiles(rootDir: string, prefix = ""): string[] {
   }
 
   return files;
-}
-
-function detectRepoRoot(cwd: string): string | undefined {
-  try {
-    const root = execFileSync("git", ["rev-parse", "--show-toplevel"], {
-      cwd,
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "ignore"],
-    }).trim();
-    return root ? resolve(root) : undefined;
-  } catch {
-    return undefined;
-  }
 }
 
 function uniquePaths(paths: string[]): string[] {

@@ -11,7 +11,7 @@ export default tseslint.config(
     ignores: [
       "coverage/**",
       "dist/**",
-      ".tmp-linter-fixture-*/**",
+      ".tmp-*/**",
       "eslint.config.js",
       "out/**",
       "tests/fixtures/**",

@@ -86,14 +86,16 @@ async function createRegistryWithWorkspace(commandFiles: Record<string, string> 
   registry: ProcedureRegistry;
 }> {
   const cwd = mkdtempSync(join(tmpdir(), "nab-workspace-"));
-  const commandsDir = join(cwd, "commands");
-  mkdirSync(commandsDir, { recursive: true });
+  const procedureRoot = join(cwd, ".nanoboss", "procedures");
+  mkdirSync(procedureRoot, { recursive: true });
 
   for (const [name, content] of Object.entries(commandFiles)) {
-    writeFileSync(join(commandsDir, `${name}.ts`), content, "utf8");
+    const packageDir = join(procedureRoot, name);
+    mkdirSync(packageDir, { recursive: true });
+    writeFileSync(join(packageDir, "index.ts"), content, "utf8");
   }
 
-  const registry = new ProcedureRegistry(commandsDir);
+  const registry = new ProcedureRegistry(procedureRoot);
   registry.loadBuiltins();
   await registry.loadFromDisk();
   return { cwd, registry };

@@ -63,8 +63,8 @@ export function describeWorkspaceMismatch(
     return `server cwd is ${health.cwd}, but this workspace is ${expected.cwd}`;
   }
 
-  if (health.commandsFingerprint && health.commandsFingerprint !== expected.commandsFingerprint) {
-    return `server command fingerprint ${health.commandsFingerprint} does not match this workspace (${expected.commandsFingerprint})`;
+  if (health.proceduresFingerprint && health.proceduresFingerprint !== expected.proceduresFingerprint) {
+    return `server procedure fingerprint ${health.proceduresFingerprint} does not match this workspace (${expected.proceduresFingerprint})`;
   }
 
   return undefined;

@@ -23,13 +23,13 @@ describe("http server supervisor", () => {
       status: "ok",
       workspaceKey: "/repo-two",
       repoRoot: "/repo-two",
-      commandsFingerprint: "def456",
+      proceduresFingerprint: "def456",
     }, {
       ...getWorkspaceIdentity("/repo-one"),
       cwd: "/repo-one",
       repoRoot: "/repo-one",
       workspaceKey: "/repo-one",
-      commandsFingerprint: "abc123",
+      proceduresFingerprint: "abc123",
     })).toContain("/repo-two");
   });
 });

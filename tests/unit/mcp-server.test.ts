@@ -331,13 +331,14 @@ describe("nanoboss MCP API", () => {
   test("lists and dispatches procedures through the async MCP surface", async () => {
     const rootDir = mkdtempSync(join(process.cwd(), ".tmp-mcp-test-session-"));
     const cwd = mkdtempSync(join(process.cwd(), ".tmp-mcp-test-session-workspace-"));
-    const commandsDir = join(cwd, "commands");
-    mkdirSync(commandsDir, { recursive: true });
+    const procedureRoot = join(cwd, ".nanoboss", "procedures");
+    const reviewPackageDir = join(procedureRoot, "review");
+    mkdirSync(reviewPackageDir, { recursive: true });
     tempDirs.push(rootDir, cwd);
 
-    const registry = new ProcedureRegistry(commandsDir);
+    const registry = new ProcedureRegistry(procedureRoot);
     registry.loadBuiltins();
-    await Bun.write(join(commandsDir, "review.ts"), [
+    await Bun.write(join(reviewPackageDir, "index.ts"), [
       "export default {",
       '  name: "review",',
       '  description: "store a durable review result",',

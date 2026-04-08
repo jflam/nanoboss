@@ -10,7 +10,7 @@ export interface ServerHealthResponse {
   cwd?: string;
   repoRoot?: string;
   workspaceKey?: string;
-  commandsFingerprint?: string;
+  proceduresFingerprint?: string;
 }
 
 interface SessionResponse {

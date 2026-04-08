@@ -85,9 +85,10 @@ function readStoredMockSession(sessionStoreDir: string): {
 describe("default session memory bridge", () => {
   test("routes slash commands through async procedure dispatch polling and skips delayed memory injection", async () => {
     const cwd = mkdtempSync(join(tmpdir(), "nab-memory-workspace-"));
-    const commandsDir = join(cwd, "commands");
-    mkdirSync(commandsDir, { recursive: true });
-    writeFileSync(join(commandsDir, "review.ts"), [
+    const procedureRoot = join(cwd, ".nanoboss", "procedures");
+    const reviewPackageDir = join(procedureRoot, "review");
+    mkdirSync(reviewPackageDir, { recursive: true });
+    writeFileSync(join(reviewPackageDir, "index.ts"), [
       "export default {",
       '  name: "review",',
       '  description: "store a durable review result",',
@@ -107,7 +108,7 @@ describe("default session memory bridge", () => {
     ].join("\n"), "utf8");
     tempDirs.push(cwd);
 
-    const registry = new ProcedureRegistry(commandsDir);
+    const registry = new ProcedureRegistry(procedureRoot);
     registry.loadBuiltins();
     await registry.loadFromDisk();
 

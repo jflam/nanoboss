@@ -49,7 +49,7 @@ export function createCreateProcedure(registry: ProcedureRegistryLike): Procedur
           `- \`ctx.cwd\` for the current working directory (${ctx.cwd})`,
           "",
           "For typed agent outputs:",
-          "- import `typia` from `typia` and `jsonType` from `../src/core/types.ts`",
+           "- import `typia` from `typia` and `jsonType` from `../../src/core/types.ts`",
           "- define descriptors as `const ResultType = jsonType<Result>(typia.json.schema<Result>(), typia.createValidate<Result>())`",
           "- do not hand-write JSON schema or `validate()` boilerplate when the `typia` + `jsonType(...)` pattern can express the shape",
           "",
@@ -58,7 +58,10 @@ export function createCreateProcedure(registry: ProcedureRegistryLike): Procedur
           "- put user-facing output in `display`",
           "- put a short discovery string in `summary`",
           "",
-          "Use existing commands as style references:",
+           "Generated procedures are persisted at procedures/<procedure-name>/index.ts.",
+           "When you need nanoboss runtime imports from src/, use paths like `../../src/core/types.ts` from that location.",
+           "",
+           "Use existing built-in packages as style references:",
           examples,
           "",
           `User request: ${prompt}`,
@@ -73,10 +76,7 @@ export function createCreateProcedure(registry: ProcedureRegistryLike): Procedur
       );
 
       const procedureName = sanitizeProcedureName(generatedData.name);
-      const source = generatedData.source.replace(
-        /name:\s*["'`][^"'`]+["'`]/,
-        `name: "${procedureName}"`,
-      );
+      const source = normalizeGeneratedProcedureSource(generatedData.source, procedureName);
 
       const filePath = await registry.persist(
         {
@@ -110,7 +110,7 @@ function loadExamples(): string {
   const examples = ["commit.ts", "linter.ts"]
     .map((file) => {
       try {
-        return `// ${file}\n${readFileSync(join(cwd, "commands", file), "utf8")}`;
+        return `// ${file}\n${readFileSync(join(cwd, "packages", file), "utf8")}`;
       } catch {
         return "";
       }
@@ -132,4 +132,10 @@ function sanitizeProcedureName(value: string): string {
   }
 
   return sanitized;
+}
+
+function normalizeGeneratedProcedureSource(source: string, procedureName: string): string {
+  return source
+    .replace(/name:\s*["'`][^"'`]+["'`]/, `name: "${procedureName}"`)
+    .replace(/(["'`])\.\.\/src\//g, "$1../../src/");
 }

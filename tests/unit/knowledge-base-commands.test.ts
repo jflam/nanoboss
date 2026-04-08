@@ -3,14 +3,14 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import kbAnswerProcedure from "../../commands/kb-answer.ts";
-import kbCompileConceptsProcedure from "../../commands/kb-compile-concepts.ts";
-import kbCompileSourceProcedure from "../../commands/kb-compile-source.ts";
-import kbHealthProcedure from "../../commands/kb-health.ts";
-import kbIngestProcedure from "../../commands/kb-ingest.ts";
-import kbLinkProcedure from "../../commands/kb-link.ts";
-import kbRenderProcedure from "../../commands/kb-render.ts";
-import kbRefreshProcedure from "../../commands/kb-refresh.ts";
+import kbAnswerProcedure from "../../packages/kb-answer.ts";
+import kbCompileConceptsProcedure from "../../packages/kb-compile-concepts.ts";
+import kbCompileSourceProcedure from "../../packages/kb-compile-source.ts";
+import kbHealthProcedure from "../../packages/kb-health.ts";
+import kbIngestProcedure from "../../packages/kb-ingest.ts";
+import kbLinkProcedure from "../../packages/kb-link.ts";
+import kbRenderProcedure from "../../packages/kb-render.ts";
+import kbRefreshProcedure from "../../packages/kb-refresh.ts";
 import type {
   CommandContext,
   DownstreamAgentConfig,

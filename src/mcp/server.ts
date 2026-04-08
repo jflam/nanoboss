@@ -1,4 +1,3 @@
-import { resolve } from "node:path";
 
 import { getBuildLabel } from "../core/build-info.ts";
 import { inferDataShape } from "../core/data-shape.ts";
@@ -776,7 +775,7 @@ function serializeToolResult(toolName: string, result: unknown): string {
 
 async function loadMcpRegistry(cwd: string): Promise<ProcedureRegistryLike> {
   const registry = new ProcedureRegistry({
-    commandsDir: resolve(cwd, "commands"),
+    workspaceDir: cwd,
   });
   registry.loadBuiltins();
   if (shouldLoadDiskCommands()) {

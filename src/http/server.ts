@@ -116,7 +116,7 @@ export async function runHttpServerCommand(argv: string[] = []): Promise<ReturnT
           cwd: workspace.cwd,
           repoRoot: workspace.repoRoot,
           workspaceKey: workspace.workspaceKey,
-          commandsFingerprint: workspace.commandsFingerprint,
+          proceduresFingerprint: workspace.proceduresFingerprint,
         });
       }
 

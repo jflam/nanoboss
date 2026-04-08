@@ -104,7 +104,7 @@ export function isBuildRelevantRepoPath(path: string): boolean {
     normalized === "bunfig.toml" ||
     normalized === "tsconfig.json" ||
     normalized.startsWith("src/") ||
-    normalized.startsWith("commands/")
+    normalized.startsWith("packages/")
   );
 }
 

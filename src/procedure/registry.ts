@@ -5,37 +5,39 @@ import { tmpdir } from "node:os";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
-import autoresearchProcedure from "../../commands/autoresearch/index.ts";
-import autoresearchContinueProcedure from "../../commands/autoresearch/continue.ts";
-import autoresearchClearProcedure from "../../commands/autoresearch/clear.ts";
-import autoresearchFinalizeProcedure from "../../commands/autoresearch/finalize.ts";
-import autoresearchStartProcedure from "../../commands/autoresearch/start.ts";
-import autoresearchStatusProcedure from "../../commands/autoresearch/status.ts";
-import commitProcedure from "../../commands/commit.ts";
-import defaultProcedure from "../../commands/default.ts";
-import kbAnswerProcedure from "../../commands/kb-answer.ts";
-import kbCompileConceptsProcedure from "../../commands/kb-compile-concepts.ts";
-import kbCompileSourceProcedure from "../../commands/kb-compile-source.ts";
-import kbHealthProcedure from "../../commands/kb-health.ts";
-import kbIngestProcedure from "../../commands/kb-ingest.ts";
-import kbLinkProcedure from "../../commands/kb-link.ts";
-import kbRenderProcedure from "../../commands/kb-render.ts";
-import kbRefreshProcedure from "../../commands/kb-refresh.ts";
-import linterProcedure from "../../commands/linter.ts";
-import modelProcedure from "../../commands/model.ts";
-import secondOpinionProcedure from "../../commands/second-opinion.ts";
-import tokensProcedure from "../../commands/tokens.ts";
+import autoresearchProcedure from "../../packages/autoresearch/index.ts";
+import autoresearchContinueProcedure from "../../packages/autoresearch/continue.ts";
+import autoresearchClearProcedure from "../../packages/autoresearch/clear.ts";
+import autoresearchFinalizeProcedure from "../../packages/autoresearch/finalize.ts";
+import autoresearchStartProcedure from "../../packages/autoresearch/start.ts";
+import autoresearchStatusProcedure from "../../packages/autoresearch/status.ts";
+import commitProcedure from "../../packages/commit.ts";
+import defaultProcedure from "../../packages/default.ts";
+import kbAnswerProcedure from "../../packages/kb-answer.ts";
+import kbCompileConceptsProcedure from "../../packages/kb-compile-concepts.ts";
+import kbCompileSourceProcedure from "../../packages/kb-compile-source.ts";
+import kbHealthProcedure from "../../packages/kb-health.ts";
+import kbIngestProcedure from "../../packages/kb-ingest.ts";
+import kbLinkProcedure from "../../packages/kb-link.ts";
+import kbRenderProcedure from "../../packages/kb-render.ts";
+import kbRefreshProcedure from "../../packages/kb-refresh.ts";
+import linterProcedure from "../../packages/linter.ts";
+import modelProcedure from "../../packages/model.ts";
+import secondOpinionProcedure from "../../packages/second-opinion.ts";
+import tokensProcedure from "../../packages/tokens.ts";
 
-import { getNanobossHome, getProcedureRuntimeDir } from "../core/config.ts";
+import { getProcedureRuntimeDir } from "../core/config.ts";
+import { resolveProfileProcedureRoot, resolveRepoProcedureRoot, resolveWorkspaceProcedureRoot } from "../core/procedure-paths.ts";
 import { createCreateProcedure } from "./create.ts";
 import { sessionToolProcedures } from "../mcp/session-tool-procedures.ts";
 import type { Procedure, ProcedureRegistryLike } from "../core/types.ts";
 import { createTypiaBunPlugin } from "./typia-bun-plugin.ts";
 
 interface ProcedureRegistryOptions {
-  commandsDir?: string;
-  profileCommandsDir?: string;
-  diskCommandDirs?: string[];
+  workspaceDir?: string;
+  localProcedureRoot?: string;
+  profileProcedureRoot?: string;
+  diskProcedureRoots?: string[];
 }
 
 interface ProcedureManifest {
@@ -77,24 +79,31 @@ const PROCEDURE_SOURCE_EXTENSIONS = [
 export class ProcedureRegistry implements ProcedureRegistryLike {
   private readonly procedures = new Map<string, Procedure>();
   private readonly diskProcedureEntries = new Map<string, DiskProcedureEntry>();
-  readonly commandsDir: string;
-  readonly profileCommandsDir: string;
-  readonly diskCommandDirs: string[];
+  readonly localProcedureRoot?: string;
+  readonly profileProcedureRoot: string;
+  readonly diskProcedureRoots: string[];
 
-  constructor(optionsOrCommandsDir: string | ProcedureRegistryOptions = {}) {
-    if (typeof optionsOrCommandsDir === "string") {
-      this.commandsDir = optionsOrCommandsDir;
-      this.profileCommandsDir = join(getNanobossHome(), "commands");
-      this.diskCommandDirs = uniquePaths([optionsOrCommandsDir]);
+  constructor(optionsOrProcedureRoot: string | ProcedureRegistryOptions = {}) {
+    if (typeof optionsOrProcedureRoot === "string") {
+      const resolvedProcedureRoot = resolve(optionsOrProcedureRoot);
+      this.localProcedureRoot = resolvedProcedureRoot;
+      this.profileProcedureRoot = resolveProfileProcedureRoot();
+      this.diskProcedureRoots = uniquePaths([resolvedProcedureRoot]);
       return;
     }
 
-    const repoCommandsDir = optionsOrCommandsDir.commandsDir ?? resolve(process.cwd(), "commands");
-    const profileCommandsDir = optionsOrCommandsDir.profileCommandsDir ?? join(getNanobossHome(), "commands");
+    const workspaceDir = resolve(optionsOrProcedureRoot.workspaceDir ?? process.cwd());
+    const localProcedureRoot = optionsOrProcedureRoot.localProcedureRoot ?? resolveWorkspaceProcedureRoot(workspaceDir);
+    const profileProcedureRoot = optionsOrProcedureRoot.profileProcedureRoot ?? resolveProfileProcedureRoot();
 
-    this.commandsDir = repoCommandsDir;
-    this.profileCommandsDir = profileCommandsDir;
-    this.diskCommandDirs = uniquePaths(optionsOrCommandsDir.diskCommandDirs ?? [repoCommandsDir, profileCommandsDir]);
+    this.localProcedureRoot = localProcedureRoot ? resolve(localProcedureRoot) : undefined;
+    this.profileProcedureRoot = resolve(profileProcedureRoot);
+    this.diskProcedureRoots = uniquePaths(
+      optionsOrProcedureRoot.diskProcedureRoots ?? [
+        ...(this.localProcedureRoot ? [this.localProcedureRoot] : []),
+        this.profileProcedureRoot,
+      ],
+    );
   }
 
   get(name: string): Procedure | undefined {
@@ -139,13 +148,13 @@ export class ProcedureRegistry implements ProcedureRegistryLike {
   }
 
   async loadFromDisk(): Promise<void> {
-    for (const commandsDir of this.diskCommandDirs) {
-      if (!existsSync(commandsDir)) {
+    for (const procedureRoot of this.diskProcedureRoots) {
+      if (!existsSync(procedureRoot)) {
         continue;
       }
 
-      for (const filePath of listProcedureSourcePaths(commandsDir)) {
-        this.registerDiskProcedure(filePath, commandsDir);
+      for (const filePath of listProcedureSourcePaths(procedureRoot)) {
+        this.registerDiskProcedure(filePath, resolveDiskProcedureWorkspaceRoot(procedureRoot));
       }
     }
   }
@@ -159,14 +168,15 @@ export class ProcedureRegistry implements ProcedureRegistryLike {
   }
 
   async persist(procedure: Procedure, source: string, cwd?: string): Promise<string> {
-    const commandsDir = resolvePersistCommandsDir({
+    const packageDir = resolvePersistProcedurePackageDir({
       cwd,
-      fallbackCommandsDir: this.commandsDir,
-      profileCommandsDir: this.profileCommandsDir,
+      fallbackProcedureRoot: this.localProcedureRoot,
+      profileProcedureRoot: this.profileProcedureRoot,
+      packageName: procedure.name,
     });
 
-    mkdirSync(commandsDir, { recursive: true });
-    const filePath = join(commandsDir, `${procedure.name}.ts`);
+    mkdirSync(packageDir, { recursive: true });
+    const filePath = join(packageDir, "index.ts");
     writeFileSync(filePath, source, "utf8");
     return filePath;
   }
@@ -504,29 +514,22 @@ function walkProcedureSourcePaths(dir: string, files: string[]): void {
 
 async function withProcedureBuildNodeModules<T>(workspaceRoot: string, run: () => Promise<T>): Promise<T> {
   const nodeModulesPath = join(workspaceRoot, "node_modules");
+  const srcPath = join(workspaceRoot, "src");
+  const runtimeSourcePath = resolveProcedureBuildSourcePath();
   if (existsSync(nodeModulesPath)) {
+    if (!existsSync(srcPath) && runtimeSourcePath) {
+      return await withTemporarySymlink(srcPath, runtimeSourcePath, run);
+    }
     return await run();
   }
 
   const runtimeNodeModulesPath = resolveProcedureBuildNodeModulesPath();
-  let createdSymlink = false;
-
-  try {
-    symlinkSync(runtimeNodeModulesPath, nodeModulesPath, "dir");
-    createdSymlink = true;
-  } catch (error) {
-    if (!(error instanceof Error) || !("code" in error) || error.code !== "EEXIST") {
-      throw error;
+  return await withTemporarySymlink(nodeModulesPath, runtimeNodeModulesPath, async () => {
+    if (!runtimeSourcePath || existsSync(srcPath)) {
+      return await run();
     }
-  }
-
-  try {
-    return await run();
-  } finally {
-    if (createdSymlink && isSymlinkPath(nodeModulesPath)) {
-      rmSync(nodeModulesPath, { recursive: true, force: true });
-    }
-  }
+    return await withTemporarySymlink(srcPath, runtimeSourcePath, run);
+  });
 }
 
 function resolveProcedureWorkspaceRoot(path: string, workspaceRoot?: string): string {
@@ -536,7 +539,11 @@ function resolveProcedureWorkspaceRoot(path: string, workspaceRoot?: string): st
 
   const fileDir = dirname(resolve(path));
   for (let current = fileDir; ; current = dirname(current)) {
-    if (basename(current) === "commands") {
+    if (basename(current) === "packages") {
+      return dirname(current);
+    }
+
+    if (basename(current) === "procedures") {
       return dirname(current);
     }
 
@@ -563,6 +570,16 @@ function resolveProcedureBuildNodeModulesPath(): string {
   );
 }
 
+function resolveProcedureBuildSourcePath(): string | undefined {
+  const sourcePath = resolve(import.meta.dir, "..", "..", "src");
+  if (existsSync(sourcePath)) {
+    return sourcePath;
+  }
+
+  const installedRuntimeSourcePath = join(getProcedureRuntimeDir(), "src");
+  return existsSync(installedRuntimeSourcePath) ? installedRuntimeSourcePath : undefined;
+}
+
 function isSymlinkPath(path: string): boolean {
   try {
     return lstatSync(path).isSymbolicLink();
@@ -571,35 +588,59 @@ function isSymlinkPath(path: string): boolean {
   }
 }
 
-function resolvePersistCommandsDir(params: {
-  cwd?: string;
-  fallbackCommandsDir: string;
-  profileCommandsDir: string;
-}): string {
-  const workingDir = params.cwd ? resolve(params.cwd) : undefined;
-  if (workingDir && isNanobossRepoRoot(workingDir)) {
-    return join(workingDir, "commands");
-  }
+async function withTemporarySymlink<T>(targetPath: string, sourcePath: string, run: () => Promise<T>): Promise<T> {
+  let createdSymlink = false;
 
-  return resolve(params.profileCommandsDir || params.fallbackCommandsDir);
-}
-
-function isNanobossRepoRoot(cwd: string): boolean {
-  const packageJsonPath = join(cwd, "package.json");
-  const commandsDir = join(cwd, "commands");
-  const nanobossEntrypoint = join(cwd, "nanoboss.ts");
-
-  if (!existsSync(packageJsonPath) || !existsSync(commandsDir) || !existsSync(nanobossEntrypoint)) {
-    return false;
+  try {
+    symlinkSync(sourcePath, targetPath, "dir");
+    createdSymlink = true;
+  } catch (error) {
+    if (!(error instanceof Error) || !("code" in error) || error.code !== "EEXIST") {
+      throw error;
+    }
   }
 
   try {
-    const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf8")) as {
-      name?: unknown;
-      module?: unknown;
-    };
-    return packageJson.name === "nanoboss" && packageJson.module === "nanoboss.ts";
-  } catch {
-    return false;
+    return await run();
+  } finally {
+    if (createdSymlink && isSymlinkPath(targetPath)) {
+      rmSync(targetPath, { recursive: true, force: true });
+    }
   }
+}
+
+function resolveDiskProcedureWorkspaceRoot(procedureRoot: string): string {
+  const resolvedProcedureRoot = resolve(procedureRoot);
+  return basename(resolvedProcedureRoot) === "procedures"
+    ? dirname(resolvedProcedureRoot)
+    : resolvedProcedureRoot;
+}
+
+function resolvePersistProcedurePackageDir(params: {
+  cwd?: string;
+  fallbackProcedureRoot?: string;
+  profileProcedureRoot: string;
+  packageName: string;
+}): string {
+  const workingDir = params.cwd ? resolve(params.cwd) : undefined;
+  const repoProcedureRoot = workingDir ? resolveRepoProcedureRoot(workingDir) : undefined;
+  const procedureRoot = repoProcedureRoot
+    ?? (workingDir ? params.profileProcedureRoot : params.fallbackProcedureRoot ?? params.profileProcedureRoot);
+
+  return join(resolve(procedureRoot), sanitizeProcedurePackageName(params.packageName));
+}
+
+function sanitizeProcedurePackageName(value: string): string {
+  const sanitized = value
+    .trim()
+    .replace(/^\/+/, "")
+    .replace(/[^a-zA-Z0-9_-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .toLowerCase();
+
+  if (!sanitized) {
+    throw new Error("Procedure package name was empty");
+  }
+
+  return sanitized;
 }

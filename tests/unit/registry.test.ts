@@ -6,10 +6,10 @@ import { join } from "node:path";
 import { ProcedureRegistry } from "../../src/procedure/registry.ts";
 
 describe("ProcedureRegistry", () => {
-  test("loads procedures from the commands directory", async () => {
-    const commandsDir = mkdtempSync(join(tmpdir(), "nab-commands-"));
+  test("loads procedures from the procedure root", async () => {
+    const procedureRoot = mkdtempSync(join(tmpdir(), "nab-procedures-"));
     writeFileSync(
-      join(commandsDir, "hello.ts"),
+      join(procedureRoot, "hello.ts"),
       [
         "export default {",
         '  name: "hello",',
@@ -20,7 +20,7 @@ describe("ProcedureRegistry", () => {
       "utf8",
     );
 
-    const registry = new ProcedureRegistry(commandsDir);
+    const registry = new ProcedureRegistry(procedureRoot);
     await registry.loadFromDisk();
 
     expect(registry.get("hello")?.description).toBe("hello world");
@@ -28,8 +28,8 @@ describe("ProcedureRegistry", () => {
   });
 
   test("loads packaged procedures from nested directories and ignores helpers", async () => {
-    const commandsDir = mkdtempSync(join(tmpdir(), "nab-packaged-commands-"));
-    const packageDir = join(commandsDir, "autoresearch");
+    const procedureRoot = mkdtempSync(join(tmpdir(), "nab-packaged-procedures-"));
+    const packageDir = join(procedureRoot, "autoresearch");
     mkdirSync(packageDir, { recursive: true });
     writeFileSync(
       join(packageDir, "hello.ts"),
@@ -52,7 +52,7 @@ describe("ProcedureRegistry", () => {
       "utf8",
     );
 
-    const registry = new ProcedureRegistry(commandsDir);
+    const registry = new ProcedureRegistry(procedureRoot);
     await registry.loadFromDisk();
 
     expect(registry.get("packaged-hello")?.description).toBe("packaged hello world");
@@ -60,12 +60,12 @@ describe("ProcedureRegistry", () => {
     await expect(registry.get("packaged-hello")?.execute("", {} as never)).resolves.toBe("packaged");
   });
 
-  test("loads procedures from both repo and profile command directories", async () => {
-    const repoCommandsDir = mkdtempSync(join(tmpdir(), "nab-repo-commands-"));
-    const profileCommandsDir = mkdtempSync(join(tmpdir(), "nab-profile-commands-"));
+  test("loads procedures from both repo and profile procedure roots", async () => {
+    const repoProcedureRoot = mkdtempSync(join(tmpdir(), "nab-repo-procedures-"));
+    const profileProcedureRoot = mkdtempSync(join(tmpdir(), "nab-profile-procedures-"));
 
     writeFileSync(
-      join(repoCommandsDir, "repo-only.ts"),
+      join(repoProcedureRoot, "repo-only.ts"),
       [
         "export default {",
         '  name: "repo-only",',
@@ -76,7 +76,7 @@ describe("ProcedureRegistry", () => {
       "utf8",
     );
     writeFileSync(
-      join(profileCommandsDir, "profile-only.ts"),
+      join(profileProcedureRoot, "profile-only.ts"),
       [
         "export default {",
         '  name: "profile-only",',
@@ -88,9 +88,9 @@ describe("ProcedureRegistry", () => {
     );
 
     const registry = new ProcedureRegistry({
-      commandsDir: repoCommandsDir,
-      profileCommandsDir,
-      diskCommandDirs: [repoCommandsDir, profileCommandsDir],
+      localProcedureRoot: repoProcedureRoot,
+      profileProcedureRoot,
+      diskProcedureRoots: [repoProcedureRoot, profileProcedureRoot],
     });
     await registry.loadFromDisk();
 
@@ -99,9 +99,9 @@ describe("ProcedureRegistry", () => {
   });
 
   test("defers disk procedure compilation until first execution", async () => {
-    const commandsDir = mkdtempSync(join(tmpdir(), "nab-lazy-commands-"));
+    const procedureRoot = mkdtempSync(join(tmpdir(), "nab-lazy-procedures-"));
     writeFileSync(
-      join(commandsDir, "broken.ts"),
+      join(procedureRoot, "broken.ts"),
       [
         'import "./missing.ts";',
         "export default {",
@@ -113,7 +113,7 @@ describe("ProcedureRegistry", () => {
       "utf8",
     );
 
-    const registry = new ProcedureRegistry(commandsDir);
+    const registry = new ProcedureRegistry(procedureRoot);
     await expect(registry.loadFromDisk()).resolves.toBeUndefined();
 
     expect(registry.get("broken")?.description).toBe("broken command");
@@ -121,8 +121,8 @@ describe("ProcedureRegistry", () => {
   });
 
   test("loads typia-based procedures through the runtime build pipeline", async () => {
-    const registry = new ProcedureRegistry(mkdtempSync(join(tmpdir(), "nab-commands-")));
-    const procedure = await registry.loadProcedureFromPath(join(process.cwd(), "commands", "second-opinion.ts"));
+    const registry = new ProcedureRegistry(mkdtempSync(join(tmpdir(), "nab-procedures-")));
+    const procedure = await registry.loadProcedureFromPath(join(process.cwd(), "packages", "second-opinion.ts"));
 
     expect(procedure.name).toBe("second-opinion");
     expect(procedure.description).toContain("Codex");
@@ -130,31 +130,31 @@ describe("ProcedureRegistry", () => {
 
   test("loads typia-based procedures for a workspace without its own node_modules", async () => {
     const workspaceRoot = mkdtempSync(join(tmpdir(), "nab-workspace-no-modules-"));
-    const commandsDir = join(workspaceRoot, "commands");
-    mkdirSync(commandsDir, { recursive: true });
+    const packagesDir = join(workspaceRoot, "packages");
+    mkdirSync(packagesDir, { recursive: true });
     symlinkSync(join(process.cwd(), "src"), join(workspaceRoot, "src"), "dir");
     writeFileSync(join(workspaceRoot, "tsconfig.json"), readFileSync(join(process.cwd(), "tsconfig.json"), "utf8"), "utf8");
     writeFileSync(
-      join(commandsDir, "second-opinion.ts"),
-      readFileSync(join(process.cwd(), "commands", "second-opinion.ts"), "utf8"),
+      join(packagesDir, "second-opinion.ts"),
+      readFileSync(join(process.cwd(), "packages", "second-opinion.ts"), "utf8"),
       "utf8",
     );
 
-    const registry = new ProcedureRegistry(commandsDir);
-    const procedure = await registry.loadProcedureFromPath(join(commandsDir, "second-opinion.ts"));
+    const registry = new ProcedureRegistry(mkdtempSync(join(tmpdir(), "nab-procedures-")));
+    const procedure = await registry.loadProcedureFromPath(join(packagesDir, "second-opinion.ts"));
 
     expect(procedure.name).toBe("second-opinion");
     expect(existsSync(join(workspaceRoot, "node_modules"))).toBe(false);
   });
 
-  test("persists generated procedures into the profile commands directory outside the repo", async () => {
-    const repoCommandsDir = mkdtempSync(join(tmpdir(), "nab-repo-commands-"));
-    const profileCommandsDir = mkdtempSync(join(tmpdir(), "nab-profile-commands-"));
+  test("persists generated procedures into the profile procedure root outside the repo", async () => {
+    const repoProcedureRoot = mkdtempSync(join(tmpdir(), "nab-repo-procedures-"));
+    const profileProcedureRoot = mkdtempSync(join(tmpdir(), "nab-profile-procedures-"));
     const workspaceDir = mkdtempSync(join(tmpdir(), "nab-workspace-"));
     const registry = new ProcedureRegistry({
-      commandsDir: repoCommandsDir,
-      profileCommandsDir,
-      diskCommandDirs: [repoCommandsDir, profileCommandsDir],
+      localProcedureRoot: repoProcedureRoot,
+      profileProcedureRoot,
+      diskProcedureRoots: [repoProcedureRoot, profileProcedureRoot],
     });
 
     const filePath = await registry.persist({
@@ -165,21 +165,22 @@ describe("ProcedureRegistry", () => {
       },
     }, "export default { name: \"generated-profile\", description: \"generated\", async execute() { return {}; } };", workspaceDir);
 
-    expect(filePath).toBe(join(profileCommandsDir, "generated-profile.ts"));
+    expect(filePath).toBe(join(profileProcedureRoot, "generated-profile", "index.ts"));
     expect(existsSync(filePath)).toBe(true);
   });
 
-  test("persists generated procedures into the repo commands directory when running in the nanoboss repo", async () => {
+  test("persists generated procedures into the repo-local procedure root when running in a repo", async () => {
     const repoRoot = mkdtempSync(join(tmpdir(), "nab-repo-root-"));
-    const repoCommandsDir = join(repoRoot, "commands");
-    const profileCommandsDir = mkdtempSync(join(tmpdir(), "nab-profile-commands-"));
-    mkdirSync(repoCommandsDir, { recursive: true });
-    writeFileSync(join(repoRoot, "nanoboss.ts"), "export {};\n", "utf8");
-    writeFileSync(join(repoRoot, "package.json"), JSON.stringify({ name: "nanoboss", module: "nanoboss.ts" }), "utf8");
+    const repoProcedureRoot = join(repoRoot, ".nanoboss", "procedures");
+    const profileProcedureRoot = mkdtempSync(join(tmpdir(), "nab-profile-procedures-"));
+    mkdirSync(repoProcedureRoot, { recursive: true });
+    writeFileSync(join(repoRoot, "README.md"), "# repo\n", "utf8");
+    writeFileSync(join(repoRoot, ".gitignore"), ".nanoboss/\n", "utf8");
+    Bun.spawnSync(["git", "init"], { cwd: repoRoot, stdio: ["ignore", "ignore", "ignore"] });
     const registry = new ProcedureRegistry({
-      commandsDir: repoCommandsDir,
-      profileCommandsDir,
-      diskCommandDirs: [repoCommandsDir, profileCommandsDir],
+      localProcedureRoot: repoProcedureRoot,
+      profileProcedureRoot,
+      diskProcedureRoots: [repoProcedureRoot, profileProcedureRoot],
     });
 
     const filePath = await registry.persist({
@@ -190,17 +191,17 @@ describe("ProcedureRegistry", () => {
       },
     }, "export default { name: \"generated-repo\", description: \"generated\", async execute() { return {}; } };", repoRoot);
 
-    expect(filePath).toBe(join(repoCommandsDir, "generated-repo.ts"));
+    expect(filePath.endsWith("/.nanoboss/procedures/generated-repo/index.ts")).toBe(true);
     expect(readFileSync(filePath, "utf8")).toContain("generated-repo");
   });
 
   test("get returns undefined for unknown procedures", () => {
-    const registry = new ProcedureRegistry(mkdtempSync(join(tmpdir(), "nab-commands-")));
+    const registry = new ProcedureRegistry(mkdtempSync(join(tmpdir(), "nab-procedures-")));
     expect(registry.get("missing")).toBeUndefined();
   });
 
   test("register makes procedures available", () => {
-    const registry = new ProcedureRegistry(mkdtempSync(join(tmpdir(), "nab-commands-")));
+    const registry = new ProcedureRegistry(mkdtempSync(join(tmpdir(), "nab-procedures-")));
     registry.register({
       name: "double",
       description: "double a number",
@@ -213,7 +214,7 @@ describe("ProcedureRegistry", () => {
   });
 
   test("toAvailableCommands returns ACP formatted command descriptors", () => {
-    const registry = new ProcedureRegistry(mkdtempSync(join(tmpdir(), "nab-commands-")));
+    const registry = new ProcedureRegistry(mkdtempSync(join(tmpdir(), "nab-procedures-")));
     registry.register({
       name: "double",
       description: "double a number",
@@ -233,7 +234,7 @@ describe("ProcedureRegistry", () => {
   });
 
   test("loadBuiltins registers default but keeps it hidden from slash commands", () => {
-    const registry = new ProcedureRegistry(mkdtempSync(join(tmpdir(), "nab-commands-")));
+    const registry = new ProcedureRegistry(mkdtempSync(join(tmpdir(), "nab-procedures-")));
     registry.loadBuiltins();
 
     expect(registry.get("default")).toBeDefined();

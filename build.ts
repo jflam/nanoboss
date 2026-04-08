@@ -40,16 +40,18 @@ if (!result.success) {
   });
   const target = join(installDir, "nanoboss");
   const typiaRuntimeNodeModulesTarget = join(getProcedureRuntimeDir(), "node_modules");
+  const procedureRuntimeSourceTarget = join(getProcedureRuntimeDir(), "src");
 
   mkdirSync(dirname(outfile), { recursive: true });
   mkdirSync(installDir, { recursive: true });
-  installProcedureRuntimePackages(typiaRuntimeNodeModulesTarget);
+  installProcedureRuntimeAssets(typiaRuntimeNodeModulesTarget, procedureRuntimeSourceTarget);
   copyFileSync(outfile, target);
   chmodSync(target, 0o755);
 
   console.log(`Built nanoboss-${buildCommit}`);
   console.log(`Installed nanoboss to ${target}`);
   console.log(`Installed procedure runtime packages to ${typiaRuntimeNodeModulesTarget}`);
+  console.log(`Installed procedure runtime source to ${procedureRuntimeSourceTarget}`);
 
   try {
     accessSync(installDir, constants.W_OK | constants.X_OK);
@@ -88,9 +90,11 @@ function isDirtyWorkingTree(): boolean {
   }
 }
 
-function installProcedureRuntimePackages(targetNodeModulesDir: string): void {
+function installProcedureRuntimeAssets(targetNodeModulesDir: string, targetSourceDir: string): void {
   rmSync(targetNodeModulesDir, { recursive: true, force: true });
   mkdirSync(targetNodeModulesDir, { recursive: true });
+  rmSync(targetSourceDir, { recursive: true, force: true });
+  cpSync(join(process.cwd(), "src"), targetSourceDir, { recursive: true });
 
   const copiedPackages = new Set<string>();
   copyPackageClosure("typia", targetNodeModulesDir, copiedPackages);

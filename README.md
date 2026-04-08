@@ -44,23 +44,24 @@ NANOBOSS_INSTALL_DIR=~/bin bun run build
 Each build embeds the current git commit hash. On startup, the server and CLI
 print a banner like `nanoboss-<commit>`.
 
-At startup, nanoboss loads built-in commands and also loads additional `.ts`
-commands from these locations by default:
+At startup, nanoboss loads built-in procedure packages from `./packages` in the
+source tree and also loads additional disk procedures from these locations by
+default:
 
-- `./commands` relative to the nanoboss process working directory
-- `~/.nanoboss/commands`
+- `./.nanoboss/procedures` in the current repository root
+- `~/.nanoboss/procedures`
 
-Those command directories can now contain nested procedure packages such as
-`commands/autoresearch/*.ts`; nanoboss recursively discovers `.ts` files that
-export a default procedure, so helper modules can live alongside procedure
-entrypoints without being registered as slash commands.
+Those procedure roots contain package directories such as
+`.nanoboss/procedures/review/index.ts`; nanoboss recursively discovers `.ts`
+files that export a default procedure, so helper modules can live alongside
+procedure entrypoints without being registered as slash commands.
 
 See [`docs/procedure-packages.md`](docs/procedure-packages.md) for the package
 layout, discovery rules, and manifest expectations.
 
-The profile directory is the default place for user-defined dynamic commands.
-When `/create` runs inside the nanoboss repo, it writes into the repo's
-`commands/` directory. Otherwise it writes into `~/.nanoboss/commands`.
+The profile directory is the default place for user-defined procedures. When
+`/create` runs inside a git repository, it writes a package under that repo's
+`.nanoboss/procedures/`. Otherwise it writes under `~/.nanoboss/procedures/`.
 
 Built-in commands now also include the knowledge-base workflow:
 

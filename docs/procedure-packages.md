@@ -1,9 +1,10 @@
 # Procedure packages
 
-Nanoboss supports grouping related procedures and helpers into a subdirectory under a command root such as:
+Nanoboss supports grouping related procedures and helpers into a subdirectory under:
 
-- `./commands` in the current workspace
-- `~/.nanoboss/commands` in the profile directory
+- `packages/` for built-in procedures in the nanoboss repo
+- `./.nanoboss/procedures/` for repo-local disk procedures
+- `~/.nanoboss/procedures/` for profile-level disk procedures
 
 This lets you keep a procedure's entrypoints and helper modules together instead of splitting thin wrappers from implementation code.
 
@@ -21,7 +22,7 @@ Instead, nanoboss scans `.ts` files recursively under each command root and infe
 ## Recommended layout
 
 ```text
-commands/
+packages/
   autoresearch/
     index.ts
     start.ts
@@ -36,6 +37,8 @@ commands/
     benchmark.ts
     types.ts
 ```
+
+For disk-loaded procedures, the analogous structure lives under `.nanoboss/procedures/<package>/`.
 
 The entrypoint files export procedures. The other files are plain helpers imported by those entrypoints.
 
@@ -84,8 +87,8 @@ There are two ways procedure packages show up in nanoboss:
 1. **Disk-loaded procedures** live under a workspace or profile command root and are discovered automatically.
 2. **Built-in procedures** live in the repo and are imported explicitly from `src/procedure/registry.ts`.
 
-If you are adding a new built-in package to nanoboss itself, create the package directory under `commands/` and update the builtin imports in `src/procedure/registry.ts`.
+If you are adding a new built-in package to nanoboss itself, create it under `packages/` and update the builtin imports in `src/procedure/registry.ts`.
 
 ## Current limitation
 
-`/create` still writes a single `.ts` procedure file today. If you want a packaged procedure, create the directory structure manually and move the generated file into it.
+`/create` now writes to `procedures/<procedure-name>/index.ts`, which gives every generated procedure its own package directory by default. If you want several procedures in one shared package, restructure that directory manually.

@@ -36,7 +36,7 @@
     "scripts/compact-test.ts",
     "scripts/probe-acp-usage.ts",
     "src/**/*.ts",
-    "commands/**/*.ts",
+    "packages/**/*.ts",
     "tests/**/*.ts"
   ]
 }
