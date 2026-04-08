@@ -53,10 +53,7 @@ export function writeSessionMetadata(metadata: SessionMetadata): SessionMetadata
 export function readSessionMetadata(sessionId: string, rootDir?: string): SessionMetadata | undefined {
   try {
     const raw = JSON.parse(readFileSync(getSessionMetadataPath(sessionId, rootDir), "utf8")) as Record<string, unknown>;
-    return parseSessionMetadata(raw, {
-      fallbackSessionId: sessionId,
-      fallbackRootDir: rootDir,
-    });
+    return parseSessionMetadata(raw);
   } catch {
     return undefined;
   }
@@ -162,22 +159,18 @@ function readCurrentWorkspaceIndex(): Record<string, SessionMetadata> {
 function parseSessionMetadata(
   raw: Record<string, unknown>,
   options: {
-    fallbackSessionId?: string;
-    fallbackRootDir?: string;
     allowMissingCreatedAt?: boolean;
   } = {},
 ): SessionMetadata | undefined {
-  const sessionId = asNonEmptyString(raw.sessionId) ?? options.fallbackSessionId;
-  const resolvedRootDir = asNonEmptyString(raw.rootDir)
-    ?? options.fallbackRootDir
-    ?? (sessionId ? getSessionDir(sessionId) : undefined);
+  const sessionId = asNonEmptyString(raw.sessionId);
+  const rootDir = asNonEmptyString(raw.rootDir);
   const createdAt = asNonEmptyString(raw.createdAt);
   const updatedAt = asNonEmptyString(raw.updatedAt);
   const cwd = asNonEmptyString(raw.cwd);
 
   if (
     !sessionId ||
-    !resolvedRootDir ||
+    !rootDir ||
     !cwd ||
     !updatedAt ||
     (!createdAt && !options.allowMissingCreatedAt)
@@ -188,7 +181,7 @@ function parseSessionMetadata(
   return {
     sessionId,
     cwd,
-    rootDir: resolvedRootDir,
+    rootDir,
     createdAt: createdAt ?? updatedAt,
     updatedAt,
     initialPrompt: asNonEmptyString(raw.initialPrompt),

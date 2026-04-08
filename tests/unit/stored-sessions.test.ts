@@ -72,7 +72,9 @@ describe("session persistence", () => {
       const sessionRoot = join(tempHome, ".nanoboss", "sessions", "session-fast");
       mkdirSync(sessionRoot, { recursive: true });
       writeFileSync(join(sessionRoot, "session.json"), `${JSON.stringify({
+        sessionId: "session-fast",
         cwd: "/repo",
+        rootDir: sessionRoot,
         createdAt: "2026-04-01T10:00:00.000Z",
         updatedAt: "2026-04-01T11:00:00.000Z",
         initialPrompt: "first prompt",
