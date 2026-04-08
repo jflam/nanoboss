@@ -48,7 +48,7 @@ Used so downstream agents can inspect durable nanoboss session cells and refs an
 This is **not** ACP. It is a globally registered MCP server surfaced as `nanoboss` over stdio.
 
 Relevant files:
-- `src/mcp/proxy.ts`
+- `nanoboss.ts`
 - `src/mcp/registration.ts`
 - `src/mcp/server.ts`
 - `src/session/store.ts`
@@ -72,7 +72,7 @@ flowchart TD
   Context --> AgentRuntime[ACP runtime\nsrc/agent/acp-runtime.ts]
 
   AgentRuntime -->|stdio ACP| Downstream[Downstream agent\nclaude / gemini / codex / copilot]
-  Downstream -->|stdio MCP tool calls| GlobalMcp[Global nanoboss MCP stdio server\nsrc/mcp/proxy.ts]
+  Downstream -->|stdio MCP tool calls| GlobalMcp[Global nanoboss MCP stdio server\nnanoboss.ts mcp]
   GlobalMcp --> SessionStore[SessionStore\nsrc/session/store.ts]
 ```
 
@@ -200,7 +200,7 @@ sequenceDiagram
 ```
 
 Relevant files:
-- `src/mcp/proxy.ts`
+- `nanoboss.ts`
 - `src/mcp/registration.ts`
 - `src/mcp/server.ts`
 - `src/session/store.ts`

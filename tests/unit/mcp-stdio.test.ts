@@ -28,7 +28,7 @@ describe("global nanoboss MCP stdio transport", () => {
     const originalHome = process.env.HOME;
     process.env.HOME = home;
 
-    const sessionId = `session-proxy-${crypto.randomUUID()}`;
+    const sessionId = `session-mcp-${crypto.randomUUID()}`;
     const store = new SessionStore({
       sessionId,
       cwd: process.cwd(),
@@ -52,7 +52,7 @@ describe("global nanoboss MCP stdio transport", () => {
       updatedAt: "2026-04-03T00:00:00.000Z",
     });
 
-    const command = resolveSelfCommand("mcp", ["proxy"]);
+    const command = resolveSelfCommand("mcp");
     const child = spawn(command.command, command.args, {
       cwd: process.cwd(),
       env: {

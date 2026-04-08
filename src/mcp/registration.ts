@@ -24,12 +24,12 @@ interface JsonObject {
 
 type JsonValue = null | boolean | number | string | JsonObject | JsonValue[];
 
-export function resolveMcpProxyCommand(): SelfCommand {
-  return resolveSelfCommand("mcp", ["proxy"]);
+export function resolveMcpCommand(): SelfCommand {
+  return resolveSelfCommand("mcp");
 }
 
 export function buildGlobalMcpStdioServer(
-  command = resolveMcpProxyCommand(),
+  command = resolveMcpCommand(),
 ): Extract<acp.NewSessionRequest["mcpServers"][number], { type: "stdio" }> {
   return {
     type: "stdio",
@@ -40,7 +40,7 @@ export function buildGlobalMcpStdioServer(
   };
 }
 
-export function registerSupportedAgentMcp(command = resolveMcpProxyCommand()): McpRegistrationResult[] {
+export function registerSupportedAgentMcp(command = resolveMcpCommand()): McpRegistrationResult[] {
   return [
     registerMcpClaude(command),
     registerMcpCodex(command),
@@ -49,7 +49,7 @@ export function registerSupportedAgentMcp(command = resolveMcpProxyCommand()): M
   ];
 }
 
-export function registerMcpClaude(command = resolveMcpProxyCommand()): McpRegistrationResult {
+export function registerMcpClaude(command = resolveMcpCommand()): McpRegistrationResult {
   if (!commandExists("claude")) {
     return {
       id: "claude",
@@ -88,7 +88,7 @@ export function registerMcpClaude(command = resolveMcpProxyCommand()): McpRegist
   };
 }
 
-export function registerMcpCodex(command = resolveMcpProxyCommand()): McpRegistrationResult {
+export function registerMcpCodex(command = resolveMcpCommand()): McpRegistrationResult {
   if (!commandExists("codex")) {
     return {
       id: "codex",
@@ -124,7 +124,7 @@ export function registerMcpCodex(command = resolveMcpProxyCommand()): McpRegistr
   };
 }
 
-export function registerMcpGemini(command = resolveMcpProxyCommand()): McpRegistrationResult {
+export function registerMcpGemini(command = resolveMcpCommand()): McpRegistrationResult {
   if (!commandExists("gemini")) {
     return {
       id: "gemini",
@@ -148,7 +148,7 @@ export function registerMcpGemini(command = resolveMcpProxyCommand()): McpRegist
   );
 }
 
-export function registerMcpCopilot(command = resolveMcpProxyCommand()): McpRegistrationResult {
+export function registerMcpCopilot(command = resolveMcpCommand()): McpRegistrationResult {
   if (!commandExists("copilot")) {
     return {
       id: "copilot",

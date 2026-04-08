@@ -27,7 +27,7 @@ afterEach(() => {
 describe("mcp registration", () => {
   test("builds the session-attached nanoboss stdio MCP server config", () => {
     const scriptPath = join(process.cwd(), "nanoboss.ts");
-    const command = resolveSelfCommandWithRuntime("mcp", ["proxy"], {
+    const command = resolveSelfCommandWithRuntime("mcp", [], {
       executable: "bun",
       scriptPath,
     });
@@ -36,7 +36,7 @@ describe("mcp registration", () => {
       type: "stdio",
       name: "nanoboss",
       command: "bun",
-      args: [scriptPath, "mcp", "proxy"],
+      args: [scriptPath, "mcp"],
       env: [],
     });
   });
@@ -56,7 +56,7 @@ describe("mcp registration", () => {
     writeExecutable(join(pathDir, "copilot"));
 
     const scriptPath = join(process.cwd(), "nanoboss.ts");
-    const command = resolveSelfCommandWithRuntime("mcp", ["proxy"], {
+    const command = resolveSelfCommandWithRuntime("mcp", [], {
       executable: "bun",
       scriptPath,
     });
@@ -74,13 +74,13 @@ describe("mcp registration", () => {
 
       expect(geminiConfig.mcpServers.nanoboss).toMatchObject({
         command: "bun",
-        args: [scriptPath, "mcp", "proxy"],
+        args: [scriptPath, "mcp"],
         timeout: 30_000,
       });
       expect(copilotConfig.mcpServers.nanoboss).toMatchObject({
         type: "stdio",
         command: "bun",
-        args: [scriptPath, "mcp", "proxy"],
+        args: [scriptPath, "mcp"],
       });
     } finally {
       restoreEnv("HOME", originalHome);
@@ -105,7 +105,7 @@ describe("mcp registration", () => {
     writeExecutable(join(pathDir, "codex"), `#!/bin/sh\necho "$0 $@" >> "${logPath}"\nexit 0\n`);
 
     const scriptPath = join(process.cwd(), "nanoboss.ts");
-    const command = resolveSelfCommandWithRuntime("mcp", ["proxy"], {
+    const command = resolveSelfCommandWithRuntime("mcp", [], {
       executable: "bun",
       scriptPath,
     });
@@ -115,8 +115,8 @@ describe("mcp registration", () => {
       expect(registerMcpCodex(command)).toMatchObject({ status: "registered" });
 
       const calls = readFileSync(logPath, "utf8");
-      expect(calls).toContain(`mcp add -s user nanoboss -- bun ${scriptPath} mcp proxy`);
-      expect(calls).toContain(`mcp add nanoboss -- bun ${scriptPath} mcp proxy`);
+      expect(calls).toContain(`mcp add -s user nanoboss -- bun ${scriptPath} mcp`);
+      expect(calls).toContain(`mcp add nanoboss -- bun ${scriptPath} mcp`);
     } finally {
       restoreEnv("HOME", originalHome);
       restoreEnv("PATH", originalPath);

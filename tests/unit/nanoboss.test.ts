@@ -39,9 +39,9 @@ describe("parseNanobossArgs", () => {
   });
 
   test("parses mcp command", () => {
-    expect(parseNanobossArgs(["mcp", "proxy"])).toEqual({
+    expect(parseNanobossArgs(["mcp"])).toEqual({
       command: "mcp",
-      args: ["proxy"],
+      args: [],
     });
   });
 

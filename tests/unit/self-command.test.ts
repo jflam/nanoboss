@@ -34,13 +34,13 @@ describe("resolveSelfCommandWithRuntime", () => {
   });
 
   test("uses the source entrypoint when running under bun without a real script path", () => {
-    const command = resolveSelfCommandWithRuntime("mcp", ["proxy"], {
+    const command = resolveSelfCommandWithRuntime("mcp", [], {
       executable: "/Users/jflam/.bun/bin/bun",
       scriptPath: undefined,
     });
 
     expect(command.command).toBe("/Users/jflam/.bun/bin/bun");
     expect(command.args[0]?.endsWith("nanoboss.ts")).toBe(true);
-    expect(command.args.slice(1)).toEqual(["mcp", "proxy"]);
+    expect(command.args.slice(1)).toEqual(["mcp"]);
   });
 });

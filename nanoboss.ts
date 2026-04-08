@@ -1,11 +1,4 @@
-import { runCliCommand } from "./cli.ts";
-import { runResumeCommand } from "./resume.ts";
 import { DEFAULT_HTTP_SERVER_PORT, DEFAULT_HTTP_SERVER_URL } from "./src/core/defaults.ts";
-import { runDoctorCommand } from "./src/core/doctor.ts";
-import { runHttpServerCommand } from "./src/http/server.ts";
-import { runMcpCommand } from "./src/mcp/proxy.ts";
-import { runProcedureDispatchWorkerCommand } from "./src/procedure/dispatch-jobs.ts";
-import { runAcpServerCommand } from "./src/core/acp-server.ts";
 
 export type NanobossSubcommand = "cli" | "resume" | "http" | "acp-server" | "procedure-dispatch-worker" | "doctor" | "mcp" | "help";
 
@@ -47,30 +40,65 @@ export async function runNanoboss(argv: string[]): Promise<void> {
 
   switch (parsed.command) {
     case "cli":
-      await runCliCommand(parsed.args);
+      await import("./cli.ts").then(({ runCliCommand }) => runCliCommand(parsed.args));
       return;
     case "resume":
-      await runResumeCommand(parsed.args);
+      await import("./resume.ts").then(({ runResumeCommand }) => runResumeCommand(parsed.args));
       return;
     case "http":
-      await runHttpServerCommand(parsed.args);
+      await import("./src/http/server.ts").then(({ runHttpServerCommand }) => runHttpServerCommand(parsed.args));
       return;
     case "acp-server":
-      await runAcpServerCommand();
+      await import("./src/core/acp-server.ts").then(({ runAcpServerCommand }) => runAcpServerCommand());
       return;
     case "mcp":
-      await runMcpCommand(parsed.args);
+      await runMcpSubcommand(parsed.args);
       return;
     case "procedure-dispatch-worker":
-      await runProcedureDispatchWorkerCommand(parsed.args);
+      await import("./src/procedure/dispatch-jobs.ts").then(({ runProcedureDispatchWorkerCommand }) => runProcedureDispatchWorkerCommand(parsed.args));
       return;
     case "doctor":
-      await runDoctorCommand(parsed.args);
+      await import("./src/core/doctor.ts").then(({ runDoctorCommand }) => runDoctorCommand(parsed.args));
       return;
     case "help":
       printHelp();
       return;
   }
+}
+
+async function runMcpSubcommand(argv: string[]): Promise<void> {
+  const [subcommand] = argv;
+
+  if (!subcommand) {
+    const {
+      createCurrentSessionBackedNanobossMcpApi,
+      MCP_INSTRUCTIONS,
+      MCP_SERVER_NAME,
+      runMcpServer,
+    } = await import("./src/mcp/server.ts");
+    const api = createCurrentSessionBackedNanobossMcpApi();
+    await runMcpServer(api, {
+      serverName: MCP_SERVER_NAME,
+      instructions: MCP_INSTRUCTIONS,
+    });
+    return;
+  }
+
+  if (subcommand === "help" || subcommand === "-h" || subcommand === "--help") {
+    printMcpHelp();
+    return;
+  }
+
+  throw new Error(`Unknown mcp command: ${subcommand}`);
+}
+
+function printMcpHelp(): void {
+  process.stdout.write([
+    "Usage: nanoboss mcp",
+    "",
+    "Launch the global nanoboss MCP stdio server.",
+    "",
+  ].join("\n"));
 }
 
 export function printHelp(): void {
