@@ -33,7 +33,6 @@ export function formatMemoryCardsLines(cards: Array<{
   dataPreview?: string;
   dataShape?: unknown;
   createdAt: string;
-  estimatedPromptTokens?: number;
 }>): string[] {
   const lines = [`[memory] injecting ${cards.length} card${cards.length === 1 ? "" : "s"}`];
 
@@ -64,10 +63,6 @@ export function formatMemoryCardsLines(cards: Array<{
     if (card.dataShape !== undefined) {
       lines.push(`│   data_shape: ${summarizeText(JSON.stringify(card.dataShape), 220)}`);
     }
-
-    if (card.estimatedPromptTokens !== undefined) {
-      lines.push(`│   estimated_tokens: ${formatInt(card.estimatedPromptTokens)}`);
-    }
   }
 
   return lines;
@@ -84,43 +79,11 @@ export function formatStoredMemoryCardLines(
     dataPreview?: string;
     dataShape?: unknown;
     createdAt: string;
-    estimatedPromptTokens?: number;
   },
-  estimate?: { method?: string; encoding?: string },
 ): string[] {
   const lines = [`[memory] stored /${card.procedure} @ ${card.createdAt}`];
   lines.push(...formatMemoryCardsLines([card]).slice(1));
-  if (card.estimatedPromptTokens !== undefined) {
-    const suffix = estimate?.method && estimate.encoding
-      ? ` via ${estimate.method}/${estimate.encoding}`
-      : "";
-    lines.push(`│   future_visible_context_tokens: ${formatInt(card.estimatedPromptTokens)}${suffix}`);
-  }
   return lines;
-}
-
-export function formatPromptDiagnosticsLine(diagnostics: {
-  method: string;
-  encoding: string;
-  totalTokens: number;
-  userMessageTokens: number;
-  memoryCardsTokens?: number;
-  guidanceTokens?: number;
-}): string {
-  const parts = [
-    `visible prompt ${formatInt(diagnostics.totalTokens)}`,
-    `user ${formatInt(diagnostics.userMessageTokens)}`,
-  ];
-
-  if (diagnostics.memoryCardsTokens !== undefined) {
-    parts.push(`memory ${formatInt(diagnostics.memoryCardsTokens)}`);
-  }
-
-  if (diagnostics.guidanceTokens !== undefined) {
-    parts.push(`guidance ${formatInt(diagnostics.guidanceTokens)}`);
-  }
-
-  return `[prompt] local ${diagnostics.method}/${diagnostics.encoding}: ${parts.join(", ")}`;
 }
 
 export function formatTokenUsageLine(usage: AgentTokenUsage): string {

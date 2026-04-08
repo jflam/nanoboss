@@ -2,7 +2,6 @@ import type * as acp from "@agentclientprotocol/sdk";
 
 import { parseAssistantNoticeText } from "../agent/acp-updates.ts";
 import type { ProcedureMemoryCard } from "../core/memory-cards.ts";
-import type { PromptTokenDiagnostics } from "../core/prompt-diagnostics.ts";
 import { normalizeAgentTokenUsage } from "../agent/token-usage.ts";
 import {
   summarizeToolCallStart,
@@ -42,19 +41,12 @@ export type FrontendEvent =
   | {
       type: "memory_cards";
       runId: string;
-      cards: Array<ProcedureMemoryCard & { estimatedPromptTokens?: number }>;
+      cards: ProcedureMemoryCard[];
     }
   | {
       type: "memory_card_stored";
       runId: string;
-      card: ProcedureMemoryCard & { estimatedPromptTokens?: number };
-      estimateMethod?: string;
-      estimateEncoding?: string;
-    }
-  | {
-      type: "prompt_diagnostics";
-      runId: string;
-      diagnostics: PromptTokenDiagnostics;
+      card: ProcedureMemoryCard;
     }
   | {
       type: "text_delta";

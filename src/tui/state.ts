@@ -70,7 +70,6 @@ export interface UiState {
   pendingStopRequest: boolean;
   stopRequestedRunId?: string;
   statusLine?: string;
-  promptDiagnosticsLine?: string;
   tokenUsageLine?: string;
   inputDisabled: boolean;
   showToolCalls: boolean;

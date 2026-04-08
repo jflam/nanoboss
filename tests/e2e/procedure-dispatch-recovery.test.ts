@@ -77,13 +77,6 @@ describeAsyncDispatchE2E("async procedure dispatch (real agent opt-in)", () => {
         );
         await waitForCompletedRuns(events, 2);
 
-        const diagnostics = [...events].reverse().find(
-          (event): event is Extract<FrontendEventEnvelope, { type: "prompt_diagnostics" }> => event.type === "prompt_diagnostics",
-        );
-        if (diagnostics) {
-          expect(diagnostics.data.diagnostics.guidanceTokens).toBeUndefined();
-        }
-
         expect(errors).toEqual([]);
       } finally {
         stream.close();

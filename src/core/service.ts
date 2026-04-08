@@ -13,7 +13,6 @@ import {
   renderProcedureMemoryPreamble,
   renderSessionToolGuidance,
 } from "./memory-cards.ts";
-import { estimateDefaultPromptDiagnostics, estimateProcedureMemoryCardTokens } from "./prompt-diagnostics.ts";
 import {
   mapSessionUpdateToFrontendEvents,
   SessionEventLog,
@@ -364,31 +363,12 @@ export class NanobossService {
     const blocks: string[] = [];
     const preamble = renderProcedureMemoryPreamble(cards);
     const includeRecoveryGuidance = shouldIncludeRecoveredProcedureGuidance(session);
-    const includeGuidance = Boolean(preamble) || includeRecoveryGuidance;
-
-    const promptDiagnostics = estimateDefaultPromptDiagnostics(session.defaultAgentConfig, {
-      prompt,
-      cards,
-      includeGuidance,
-      promptIncludesUserMessageLabel: includeGuidance,
-    });
 
     if (cards.length > 0) {
       session.events.publish(session.store.sessionId, {
         type: "memory_cards",
         runId,
-        cards: cards.map((card, index) => ({
-          ...card,
-          estimatedPromptTokens: promptDiagnostics?.cards[index]?.estimatedTokens,
-        })),
-      });
-    }
-
-    if (promptDiagnostics) {
-      session.events.publish(session.store.sessionId, {
-        type: "prompt_diagnostics",
-        runId,
-        diagnostics: promptDiagnostics,
+        cards,
       });
     }
 
@@ -1015,9 +995,6 @@ function publishStoredMemoryCard(
   }
 
   const storedMemoryCard = materializeProcedureMemoryCard(session.store, cellRef);
-  const storedMemoryCardEstimate = storedMemoryCard
-    ? estimateProcedureMemoryCardTokens(session.defaultAgentConfig, storedMemoryCard)
-    : undefined;
   if (!storedMemoryCard) {
     return;
   }
@@ -1025,12 +1002,7 @@ function publishStoredMemoryCard(
   session.events.publish(sessionId, {
     type: "memory_card_stored",
     runId,
-    card: {
-      ...storedMemoryCard,
-      estimatedPromptTokens: storedMemoryCardEstimate?.estimatedTokens,
-    },
-    estimateMethod: storedMemoryCardEstimate?.method,
-    estimateEncoding: storedMemoryCardEstimate?.encoding,
+    card: storedMemoryCard,
   });
 }
 

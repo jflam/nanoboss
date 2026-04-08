@@ -4,7 +4,6 @@ import type { ToolCardThemeMode } from "./state.ts";
 
 import {
   formatMemoryCardsLines,
-  formatPromptDiagnosticsLine,
   formatStoredMemoryCardLines,
   formatTokenUsageLine,
   isWrapperToolTitle,
@@ -121,7 +120,6 @@ export function reduceUiState(state: UiState, action: UiAction): UiState {
         activeProcedure: undefined,
         activeAssistantTurnId: undefined,
         assistantParagraphBreakPending: undefined,
-        promptDiagnosticsLine: undefined,
         runStartedAtMs: Date.now(),
         activeRunAttemptedToolCallIds: [],
         activeRunSucceededToolCallIds: [],
@@ -288,7 +286,6 @@ function reduceFrontendEvent(state: UiState, event: FrontendEventEnvelope): UiSt
         activeWrapperToolCallIds: [],
         hiddenToolCallIds: [],
         runtimeNotes: [],
-        promptDiagnosticsLine: undefined,
         activeRunId: event.data.runId,
         activeProcedure: event.data.procedure,
         activeAssistantTurnId: undefined,
@@ -305,15 +302,7 @@ function reduceFrontendEvent(state: UiState, event: FrontendEventEnvelope): UiSt
     case "memory_cards":
       return appendRuntimeLines(state, formatMemoryCardsLines(event.data.cards));
     case "memory_card_stored":
-      return appendRuntimeLines(state, formatStoredMemoryCardLines(event.data.card, {
-        method: event.data.estimateMethod,
-        encoding: event.data.estimateEncoding,
-      }));
-    case "prompt_diagnostics":
-      return {
-        ...state,
-        promptDiagnosticsLine: formatPromptDiagnosticsLine(event.data.diagnostics),
-      };
+      return appendRuntimeLines(state, formatStoredMemoryCardLines(event.data.card));
     case "assistant_notice":
       if (shouldIgnoreMismatchedRunEvent(state, event.data.runId)) {
         return state;

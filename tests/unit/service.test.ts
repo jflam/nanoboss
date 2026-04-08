@@ -712,7 +712,6 @@ describe("NanobossService", () => {
 
       const events = service.getSessionEvents(session.sessionId)?.after(-1) ?? [];
       const completed = events.findLast((event) => event.type === "run_completed" && event.data.procedure === "slowreview");
-      const diagnostics = events.findLast((event) => event.type === "prompt_diagnostics");
       const stored = readStoredMockSession(sessionStoreDir);
       const promptTexts = stored.turns.filter((turn) => turn.role === "user").map((turn) => turn.text);
 
@@ -724,15 +723,12 @@ describe("NanobossService", () => {
         maxContextTokens: 8192,
       });
       expect(promptTexts.some((text) => text.includes("Nanoboss internal recovered procedure synchronization."))).toBe(false);
-      expect(diagnostics?.type).toBe("prompt_diagnostics");
-      expect(diagnostics?.data.diagnostics.guidanceTokens).toBeUndefined();
-      expect(diagnostics?.data.diagnostics.memoryCardsTokens).toBeUndefined();
     } finally {
       service.destroySession(session.sessionId);
     }
   }, 30_000);
 
-  test("publishes prompt diagnostics for openai-compatible default prompts without steady-state retrieval guidance after slash dispatch", async () => {
+  test("does not publish local prompt estimates for default prompts after slash dispatch", async () => {
     const { cwd, registry } = await createRegistryWithWorkspace({
       review: [
         "export default {",
@@ -768,18 +764,12 @@ describe("NanobossService", () => {
       const events = service.getSessionEvents(session.sessionId)?.after(-1) ?? [];
       const storedCard = events.find((event) => event.type === "memory_card_stored");
       const memoryCards = events.find((event) => event.type === "memory_cards");
-      const diagnostics = events.find((event) => event.type === "prompt_diagnostics");
-
       expect(storedCard?.type).toBe("memory_card_stored");
-      expect(storedCard?.data.card.estimatedPromptTokens).toBeGreaterThan(0);
+      if (storedCard?.type !== "memory_card_stored") {
+        throw new Error("Expected a stored memory card event");
+      }
       expect(memoryCards).toBeUndefined();
-      expect(diagnostics?.type).toBe("prompt_diagnostics");
-      expect(diagnostics?.data.diagnostics.method).toBe("tiktoken");
-      expect(diagnostics?.data.diagnostics.encoding).toBe("o200k_base");
-      expect(diagnostics?.data.diagnostics.totalTokens).toBeGreaterThan(0);
-      expect(diagnostics?.data.diagnostics.memoryCardsTokens).toBeUndefined();
-      expect(diagnostics?.data.diagnostics.guidanceTokens).toBeUndefined();
-      expect(diagnostics?.data.diagnostics.userMessageTokens).toBeGreaterThan(0);
+      expect("estimatedPromptTokens" in storedCard.data.card).toBe(false);
     } finally {
       service.destroySession(session.sessionId);
     }
