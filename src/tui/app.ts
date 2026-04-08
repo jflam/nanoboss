@@ -7,6 +7,12 @@ import {
 import { shouldDisableEditorSubmit } from "./commands.ts";
 
 import {
+  getProviderLabel,
+  listKnownProviders,
+  listSelectableModelOptions,
+} from "../agent/model-catalog.ts";
+import type { DownstreamAgentSelection, DownstreamAgentProvider } from "../core/types.ts";
+import {
   type AutocompleteItem,
   CombinedAutocompleteProvider,
   Editor,
@@ -15,7 +21,7 @@ import {
   isKeyRelease,
   matchesKey,
 } from "./pi-tui.ts";
-import { promptForModelSelection, promptToPersistModelSelection } from "./overlays/model-picker.ts";
+import { SelectOverlay, type SelectOverlayOptions } from "./overlays/select-overlay.ts";
 import type { UiState } from "./state.ts";
 import { createNanobossTuiTheme, type NanobossTuiTheme } from "./theme.ts";
 import { NanobossAppView } from "./views.ts";
@@ -53,6 +59,8 @@ interface TuiLike {
 
 interface ViewLike {
   setState(state: UiState): void;
+  showComposer(component: unknown): void;
+  showEditor(): void;
 }
 
 interface ControllerLike {
@@ -146,16 +154,10 @@ export class NanobossTuiApp {
 
     const controllerDeps: NanobossTuiControllerDeps = {
       promptForModelSelection: async (currentSelection) => {
-        const selection = await promptForModelSelection(this.tui, this.theme, currentSelection);
-        this.tui.setFocus(this.editor);
-        this.tui.requestRender(true);
-        return selection;
+        return await this.promptForInlineModelSelection(currentSelection);
       },
       confirmPersistDefaultAgentSelection: async (selection) => {
-        const shouldPersist = await promptToPersistModelSelection(this.tui, this.theme, selection);
-        this.tui.setFocus(this.editor);
-        this.tui.requestRender(true);
-        return shouldPersist;
+        return await this.promptToPersistInlineModelSelection(selection);
       },
       persistDefaultAgentSelection: (selection) => {
         writePersistedDefaultAgentSelection(selection);
@@ -287,6 +289,96 @@ export class NanobossTuiApp {
         this.cwd,
       ),
     );
+  }
+
+  private async promptForInlineModelSelection(
+    currentSelection?: DownstreamAgentSelection,
+  ): Promise<DownstreamAgentSelection | undefined> {
+    const provider = await this.promptWithInlineSelect<DownstreamAgentProvider>({
+      title: "Choose an agent",
+      items: listKnownProviders().map((value) => ({
+        value,
+        label: getProviderLabel(value),
+      })),
+      initialValue: currentSelection?.provider,
+      footer: "↑↓ navigate • enter select • esc cancel",
+    });
+    if (!provider) {
+      return undefined;
+    }
+
+    const model = await this.promptWithInlineSelect<string>({
+      title: `Choose a ${getProviderLabel(provider)} model`,
+      items: listSelectableModelOptions(provider).map((option) => ({
+        value: option.value,
+        label: option.label,
+        description: option.description,
+      })),
+      initialValue: currentSelection?.provider === provider ? currentSelection.model : undefined,
+      selectedDetailTitle: "Details",
+      renderSelectedDetail: (item) => item.description ?? "",
+      footer: "↑↓ navigate • enter select • esc cancel",
+    });
+    if (!model) {
+      return undefined;
+    }
+
+    return {
+      provider,
+      model,
+    };
+  }
+
+  private async promptToPersistInlineModelSelection(
+    selection: DownstreamAgentSelection,
+  ): Promise<boolean> {
+    const decision = await this.promptWithInlineSelect<"no" | "yes">({
+      title: `Make ${selection.provider}/${selection.model ?? "default"} the default for future runs?`,
+      items: [
+        {
+          value: "no",
+          label: "No",
+          description: "Keep this model change in the current session only",
+        },
+        {
+          value: "yes",
+          label: "Yes",
+          description: "Persist this choice for future nanoboss runs",
+        },
+      ],
+      initialValue: "no",
+      selectedDetailTitle: "Choice",
+      renderSelectedDetail: (item) => item.description ?? "",
+      footer: "↑↓ choose • enter confirm • esc keep No",
+      maxVisible: 4,
+    });
+
+    return decision === "yes";
+  }
+
+  private async promptWithInlineSelect<T extends string>(
+    options: SelectOverlayOptions<T>,
+  ): Promise<T | undefined> {
+    return await new Promise<T | undefined>((resolve) => {
+      const component = new SelectOverlay<T>(
+        this.tui as TUI,
+        this.theme,
+        options,
+        (value) => {
+          this.restoreEditorComposer();
+          resolve(value);
+        },
+      );
+      this.view.showComposer(component);
+      this.tui.setFocus(component);
+      this.tui.requestRender(true);
+    });
+  }
+
+  private restoreEditorComposer(): void {
+    this.view.showEditor();
+    this.tui.setFocus(this.editor);
+    this.tui.requestRender(true);
   }
 
   private async stop(): Promise<void> {

@@ -64,6 +64,16 @@ interface AutocompleteProviderLike {
   };
 }
 
+function createViewStub(onSetState?: () => void) {
+  return {
+    setState() {
+      onSetState?.();
+    },
+    showComposer() {},
+    showEditor() {},
+  };
+}
+
 describe("NanobossTuiApp", () => {
   test("keeps pi-tui submit enabled for steering input while a run is active", () => {
     const editor = new FakeEditor();
@@ -110,9 +120,7 @@ describe("NanobossTuiApp", () => {
             async stop() {},
           };
         },
-        createView: () => ({
-          setState() {},
-        }),
+        createView: () => createViewStub(),
       },
     );
 
@@ -173,9 +181,7 @@ describe("NanobossTuiApp", () => {
             async stop() {},
           };
         },
-        createView: () => ({
-          setState() {},
-        }),
+        createView: () => createViewStub(),
       },
     );
 
@@ -257,9 +263,7 @@ describe("NanobossTuiApp", () => {
           },
           async stop() {},
         }),
-        createView: () => ({
-          setState() {},
-        }),
+        createView: () => createViewStub(),
       },
     );
 
@@ -313,9 +317,7 @@ describe("NanobossTuiApp", () => {
           },
           async stop() {},
         }),
-        createView: () => ({
-          setState() {},
-        }),
+        createView: () => createViewStub(),
       },
     );
 
@@ -371,9 +373,7 @@ describe("NanobossTuiApp", () => {
           },
           async stop() {},
         }),
-        createView: () => ({
-          setState() {},
-        }),
+        createView: () => createViewStub(),
       },
     );
 
@@ -429,9 +429,7 @@ describe("NanobossTuiApp", () => {
           },
           async stop() {},
         }),
-        createView: () => ({
-          setState() {},
-        }),
+        createView: () => createViewStub(),
       },
     );
 
@@ -487,9 +485,7 @@ describe("NanobossTuiApp", () => {
           },
           async stop() {},
         }),
-        createView: () => ({
-          setState() {},
-        }),
+        createView: () => createViewStub(),
       },
     );
 
@@ -554,9 +550,7 @@ describe("NanobossTuiApp", () => {
             async stop() {},
           };
         },
-        createView: () => ({
-          setState() {},
-        }),
+        createView: () => createViewStub(),
       },
     );
 
@@ -612,9 +606,7 @@ describe("NanobossTuiApp", () => {
           },
           async stop() {},
         }),
-        createView: () => ({
-          setState() {},
-        }),
+        createView: () => createViewStub(),
       },
     );
 
@@ -678,10 +670,8 @@ describe("NanobossTuiApp", () => {
             async stop() {},
           };
         },
-        createView: () => ({
-          setState() {
-            setStateCalls += 1;
-          },
+        createView: () => createViewStub(() => {
+          setStateCalls += 1;
         }),
         setInterval(callback: () => void) {
           intervalCallbacks.push(callback);
@@ -744,9 +734,7 @@ describe("NanobossTuiApp", () => {
             async stop() {},
           };
         },
-        createView: () => ({
-          setState() {},
-        }),
+        createView: () => createViewStub(),
       },
     );
 

@@ -1,4 +1,4 @@
-import { Container, ProcessTerminal, SelectList, Spacer, Text, TUI, type Component, type OverlayHandle, type SelectItem } from "../pi-tui.ts";
+import { Container, ProcessTerminal, SelectList, Spacer, Text, TUI, type Component, type SelectItem } from "../pi-tui.ts";
 import type { NanobossTuiTheme } from "../theme.ts";
 
 export interface SelectOverlayOptions<T extends string> {
@@ -89,27 +89,6 @@ export class SelectOverlay<T extends string> implements Component {
     const text = item ? options.renderSelectedDetail(item) : "";
     this.selectedDetailText.setText(text);
   }
-}
-
-export async function showSelectOverlay<T extends string>(
-  tui: TUI,
-  theme: NanobossTuiTheme,
-  options: SelectOverlayOptions<T>,
-): Promise<T | undefined> {
-  return await new Promise<T | undefined>((resolve) => {
-    const component = new SelectOverlay<T>(tui, theme, options, (value) => {
-      handle.hide();
-      resolve(value);
-    });
-    const handle: OverlayHandle = tui.showOverlay(component, {
-      width: "70%",
-      maxHeight: "70%",
-      anchor: "center",
-      margin: 1,
-    });
-    handle.focus();
-    tui.requestRender(true);
-  });
 }
 
 export async function promptWithSelectList<T extends string>(

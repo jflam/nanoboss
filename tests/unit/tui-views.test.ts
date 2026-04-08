@@ -38,6 +38,33 @@ function stripAnsi(text: string): string {
 }
 
 describe("NanobossAppView", () => {
+  test("can swap the editor area for an inline picker and restore it", () => {
+    const state = {
+      ...createInitialUiState({ cwd: "/repo" }),
+      sessionId: "session-1",
+    };
+
+    const view = new NanobossAppView(
+      {
+        render: () => ["[editor]"],
+        invalidate() {},
+      } as never,
+      createNanobossTuiTheme(),
+      state,
+    );
+
+    view.showComposer({
+      render: () => ["[picker]"],
+      invalidate() {},
+    });
+    expect(stripAnsi(view.render(120).join("\n"))).toContain("[picker]");
+    expect(stripAnsi(view.render(120).join("\n"))).not.toContain("[editor]");
+
+    view.showEditor();
+    expect(stripAnsi(view.render(120).join("\n"))).toContain("[editor]");
+    expect(stripAnsi(view.render(120).join("\n"))).not.toContain("[picker]");
+  });
+
   test("shows a busy indicator while a run is active", () => {
     const state = {
       ...createInitialUiState({ cwd: "/repo" }),

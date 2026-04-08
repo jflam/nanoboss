@@ -385,6 +385,7 @@ export class NanobossTuiController {
   }
 
   private async openModelPicker(): Promise<void> {
+    this.deps.onClearInput?.();
     const selection = await this.deps.promptForModelSelection?.(this.state.defaultAgentSelection);
     if (!selection) {
       return;
@@ -394,7 +395,6 @@ export class NanobossTuiController {
     await this.maybePersistDefaultSelection(selection);
     const command = buildModelCommand(selection.provider, selection.model ?? "default");
     this.deps.onAddHistory?.(command);
-    this.deps.onClearInput?.();
     await this.forwardPrompt(command);
   }
 

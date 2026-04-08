@@ -1,4 +1,4 @@
-import { Container, Markdown, Spacer, Text, TruncatedText, type Component, type Editor } from "./pi-tui.ts";
+import { Container, Markdown, Spacer, Text, TruncatedText, type Component } from "./pi-tui.ts";
 import type { UiState, UiToolCall, UiTranscriptItem, UiTurn } from "./state.ts";
 import type { NanobossTuiTheme } from "./theme.ts";
 
@@ -8,11 +8,12 @@ import { formatElapsedRunTimer } from "./format.ts";
 
 export class NanobossAppView implements Component {
   private readonly container = new Container();
+  private readonly composerContainer = new Container();
   private readonly transcript: TranscriptComponent;
   private state: UiState;
 
   constructor(
-    private readonly editor: Editor,
+    private readonly editor: Component,
     private readonly theme: NanobossTuiTheme,
     initialState: UiState,
     private readonly nowProvider: () => number = Date.now,
@@ -25,7 +26,8 @@ export class NanobossAppView implements Component {
     this.container.addChild(new ComputedTruncatedText(() => this.buildStatusLine()));
     this.container.addChild(new Spacer(1));
     this.container.addChild(this.transcript);
-    this.container.addChild(this.editor);
+    this.composerContainer.addChild(this.editor);
+    this.container.addChild(this.composerContainer);
     this.container.addChild(new Spacer(1));
     this.container.addChild(new ComputedTruncatedText(() => this.buildActivityBarLine()));
     this.container.addChild(new ComputedTruncatedText(() => this.buildFooterLine()));
@@ -44,6 +46,16 @@ export class NanobossAppView implements Component {
   invalidate(): void {
     this.transcript.setState(this.state, true);
     this.container.invalidate();
+  }
+
+  showComposer(component: Component): void {
+    this.composerContainer.clear();
+    this.composerContainer.addChild(component);
+    this.container.invalidate();
+  }
+
+  showEditor(): void {
+    this.showComposer(this.editor);
   }
 
   private buildHeaderLine(): string {
