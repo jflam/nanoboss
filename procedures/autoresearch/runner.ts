@@ -585,6 +585,7 @@ async function buildInitializationPlan(prompt: string, ctx: CommandContext): Pro
     [
       "You are configuring a deterministic autoresearch optimization session for NanoBoss.",
       "Inspect the repository and the user's goal, then return a JSON object matching this schema exactly.",
+      "Include `maxIterations` explicitly in the JSON response as a positive integer.",
       "The benchmark and checks must use explicit argv arrays instead of shell pipelines.",
       "The metric must be deterministic and machine-readable using one of: stdout-regex, stderr-regex, exit-code, json-path.",
       "Choose a short, descriptive goalSummary and a safe branchName if helpful.",

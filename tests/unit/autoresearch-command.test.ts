@@ -40,8 +40,10 @@ describe("autoresearch procedures", () => {
 
     const result = await executeAutoresearchStartCommand(
       "reduce the score benchmark",
-      createMockContext(cwd, async (_prompt, callCount) => {
+      createMockContext(cwd, async (prompt, callCount) => {
         if (callCount === 1) {
+          expect(prompt).toContain("return a JSON object matching this schema exactly");
+          expect(prompt).toContain("Include `maxIterations` explicitly in the JSON response as a positive integer.");
           return buildInitPlan({ maxIterations: 1 });
         }
         if (callCount === 2) {
@@ -77,6 +79,48 @@ describe("autoresearch procedures", () => {
     expect(printed.join("")).toContain("Baseline: score -> 100.");
     expect(printed.join("")).toContain("Iteration 1/1: selecting the next experiment.");
     expect(printed.join("")).toContain("Result: 90, improvement kept.");
+  });
+
+  test("start falls back to the default maxIterations when the init plan omits it", async () => {
+    const cwd = createFixtureRepo();
+
+    const result = await executeAutoresearchStartCommand(
+      "reduce the score benchmark",
+      createMockContext(cwd, async (_prompt, callCount) => {
+        if (callCount === 1) {
+          return {
+            goalSummary: "reduce score",
+            branchName: "autoresearch/reduce-score",
+            filesInScope: ["score.txt"],
+            benchmark: {
+              argv: [
+                "bun",
+                "-e",
+                "import { readFileSync } from 'node:fs'; console.log('score=' + readFileSync('score.txt', 'utf8').trim())",
+              ],
+              metric: {
+                name: "score",
+                direction: "lower",
+                source: "stdout-regex",
+                pattern: "score=(\\d+(?:\\.\\d+)?)",
+              },
+            },
+          };
+        }
+        if (callCount === 2) {
+          return buildStopSpec("nothing useful to try");
+        }
+        throw new Error("autoresearch start should stop immediately after the fallback budget is applied");
+      }),
+    );
+
+    const state = readAutoresearchState(resolveAutoresearchPaths(cwd));
+    const resultData = result.data && typeof result.data === "object" ? result.data as Record<string, unknown> : undefined;
+
+    expect(state?.maxIterations).toBe(10);
+    expect(state?.iterationCount).toBe(0);
+    expect(resultData?.maxIterations).toBe(10);
+    expect(resultData?.iterationCount).toBe(0);
   });
 
   test("migrates legacy autoresearch storage out of .git", () => {
