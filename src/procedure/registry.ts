@@ -25,6 +25,7 @@ import linterProcedure from "../../procedures/linter.ts";
 import modelProcedure from "../../procedures/model.ts";
 import secondOpinionProcedure from "../../procedures/second-opinion.ts";
 import simplifyProcedure from "../../procedures/simplify.ts";
+import simplify2Procedure from "../../procedures/simplify2.ts";
 import tokensProcedure from "../../procedures/tokens.ts";
 
 import { getProcedureRuntimeDir } from "../core/config.ts";
@@ -142,6 +143,7 @@ export class ProcedureRegistry implements ProcedureRegistryLike {
     this.register(linterProcedure);
     this.register(modelProcedure);
     this.register(simplifyProcedure);
+    this.register(simplify2Procedure);
     this.register(tokensProcedure);
     this.register(secondOpinionProcedure);
   }
