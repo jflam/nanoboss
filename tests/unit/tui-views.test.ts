@@ -985,4 +985,120 @@ describe("NanobossAppView", () => {
     expect(errorLine).toContain("\u001b[48;2;32;32;32m");
     expect(labelLine).toContain("\u001b[31m");
   });
+
+  test("reuses transcript item components while assistant text and tool cards stream", () => {
+    const baseState = {
+      ...createInitialUiState({ cwd: "/repo", showToolCalls: true }),
+      sessionId: "session-1",
+      turns: [
+        {
+          id: "assistant-1",
+          role: "assistant" as const,
+          markdown: "Partial response",
+          status: "streaming" as const,
+        },
+      ],
+      toolCalls: [
+        {
+          id: "tool-1",
+          runId: "run-1",
+          title: "read",
+          kind: "read",
+          status: "pending",
+          depth: 0,
+          isWrapper: false,
+          callPreview: { header: "read README.md" },
+        },
+      ],
+      transcriptItems: [
+        { type: "turn" as const, id: "assistant-1" },
+        { type: "tool_call" as const, id: "tool-1" },
+      ],
+    };
+
+    const view = new NanobossAppView(
+      {
+        render: () => [""],
+        invalidate() {},
+      } as never,
+      createNanobossTuiTheme(),
+      baseState,
+    );
+
+    const transcript = (view as unknown as {
+      transcript: {
+        turnComponents: Map<string, unknown>;
+        toolComponents: Map<string, unknown>;
+      };
+    }).transcript;
+    const initialTurnComponent = transcript.turnComponents.get("assistant-1");
+    const initialToolComponent = transcript.toolComponents.get("tool-1");
+
+    view.setState({
+      ...baseState,
+      turns: [
+        {
+          ...baseState.turns[0],
+          markdown: "Partial response plus more",
+        },
+      ],
+      toolCalls: [
+        {
+          ...baseState.toolCalls[0],
+          status: "completed",
+          resultPreview: { bodyLines: ["done"] },
+        },
+      ],
+    });
+
+    expect(transcript.turnComponents.get("assistant-1")).toBe(initialTurnComponent);
+    expect(transcript.toolComponents.get("tool-1")).toBe(initialToolComponent);
+
+    const rendered = stripAnsi(view.render(120).join("\n"));
+    expect(rendered).toContain("Partial response plus more");
+    expect(rendered).toContain("done");
+  });
+
+  test("clears persistent transcript components when the session transcript resets", () => {
+    const populatedState = {
+      ...createInitialUiState({ cwd: "/repo", showToolCalls: true }),
+      sessionId: "session-1",
+      turns: [
+        {
+          id: "user-1",
+          role: "user" as const,
+          markdown: "hello",
+          status: "complete" as const,
+        },
+      ],
+      transcriptItems: [{ type: "turn" as const, id: "user-1" }],
+    };
+
+    const view = new NanobossAppView(
+      {
+        render: () => [""],
+        invalidate() {},
+      } as never,
+      createNanobossTuiTheme(),
+      populatedState,
+    );
+
+    view.setState({
+      ...createInitialUiState({ cwd: "/repo", showToolCalls: true }),
+      sessionId: "session-2",
+    });
+
+    const transcript = (view as unknown as {
+      transcript: {
+        turnComponents: Map<string, unknown>;
+        toolComponents: Map<string, unknown>;
+      };
+    }).transcript;
+    const rendered = stripAnsi(view.render(120).join("\n"));
+
+    expect(transcript.turnComponents.size).toBe(0);
+    expect(transcript.toolComponents.size).toBe(0);
+    expect(rendered).toContain("No turns yet. Send a prompt to start.");
+    expect(rendered).not.toContain("hello");
+  });
 });

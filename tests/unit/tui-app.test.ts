@@ -631,6 +631,7 @@ describe("NanobossTuiApp", () => {
     let currentState: UiState = createInitialUiState({ cwd: "/repo", showToolCalls: true });
     let capturedOnStateChange: ((state: UiState) => void) | undefined;
     let setStateCalls = 0;
+    let requestRenderCalls = 0;
     const intervalCallbacks: Array<() => void> = [];
     const clearedIntervals: number[] = [];
 
@@ -649,7 +650,9 @@ describe("NanobossTuiApp", () => {
           addChild() {},
           setFocus() {},
           start() {},
-          requestRender() {},
+          requestRender() {
+            requestRenderCalls += 1;
+          },
           stop() {},
         }),
         createEditor: () => editor,
@@ -692,7 +695,8 @@ describe("NanobossTuiApp", () => {
 
     await app.run();
 
-    expect(setStateCalls).toBe(3);
+    expect(setStateCalls).toBe(2);
+    expect(requestRenderCalls).toBe(4);
     expect(clearedIntervals).toEqual([1]);
   });
 

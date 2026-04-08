@@ -318,7 +318,6 @@ export class NanobossTuiApp {
         return;
       }
 
-      this.view.setState(this.state);
       this.tui.requestRender();
     }, 1_000);
   }

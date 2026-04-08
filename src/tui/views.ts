@@ -1,5 +1,5 @@
 import { Container, Markdown, Spacer, Text, TruncatedText, type Component, type Editor } from "./pi-tui.ts";
-import type { UiState, UiTurn } from "./state.ts";
+import type { UiState, UiToolCall, UiTranscriptItem, UiTurn } from "./state.ts";
 import type { NanobossTuiTheme } from "./theme.ts";
 
 import { MessageCardComponent } from "./components/message-card.ts";
@@ -8,6 +8,7 @@ import { formatElapsedRunTimer } from "./format.ts";
 
 export class NanobossAppView implements Component {
   private readonly container = new Container();
+  private readonly transcript: TranscriptComponent;
   private state: UiState;
 
   constructor(
@@ -17,12 +18,23 @@ export class NanobossAppView implements Component {
     private readonly nowProvider: () => number = Date.now,
   ) {
     this.state = initialState;
-    this.rebuild();
+    this.transcript = new TranscriptComponent(this.theme, this.state);
+
+    this.container.addChild(new ComputedTruncatedText(() => this.buildHeaderLine()));
+    this.container.addChild(new ComputedTruncatedText(() => this.buildSessionLine()));
+    this.container.addChild(new ComputedTruncatedText(() => this.buildStatusLine()));
+    this.container.addChild(new Spacer(1));
+    this.container.addChild(this.transcript);
+    this.container.addChild(this.editor);
+    this.container.addChild(new Spacer(1));
+    this.container.addChild(new ComputedTruncatedText(() => this.buildActivityBarLine()));
+    this.container.addChild(new ComputedTruncatedText(() => this.buildFooterLine()));
   }
 
   setState(state: UiState): void {
+    const forceTranscriptRefresh = this.state.toolCardThemeMode !== state.toolCardThemeMode;
     this.state = state;
-    this.rebuild();
+    this.transcript.setState(this.state, forceTranscriptRefresh);
   }
 
   render(width: number): string[] {
@@ -30,56 +42,8 @@ export class NanobossAppView implements Component {
   }
 
   invalidate(): void {
+    this.transcript.setState(this.state, true);
     this.container.invalidate();
-    this.rebuild();
-  }
-
-  private rebuild(): void {
-    this.container.clear();
-
-    this.container.addChild(new TruncatedText(this.buildHeaderLine()));
-    this.container.addChild(new TruncatedText(this.buildSessionLine()));
-
-    if (this.state.statusLine) {
-      this.container.addChild(new TruncatedText(styleStatusLine(this.theme, this.state.statusLine)));
-    }
-
-    this.container.addChild(new Spacer(1));
-    this.appendTranscript();
-    this.container.addChild(this.editor);
-    this.container.addChild(new Spacer(1));
-    this.container.addChild(new TruncatedText(this.buildActivityBarLine()));
-    this.container.addChild(new TruncatedText(this.buildFooterLine()));
-  }
-
-  private appendTranscript(): void {
-    if (this.state.transcriptItems.length === 0) {
-      this.container.addChild(new Text(this.theme.dim("No turns yet. Send a prompt to start.")));
-      this.container.addChild(new Spacer(1));
-      return;
-    }
-
-    for (const item of this.state.transcriptItems) {
-      if (item.type === "turn") {
-        const turn = this.state.turns.find((candidate) => candidate.id === item.id);
-        if (!turn) {
-          continue;
-        }
-
-        this.container.addChild(new TruncatedText(renderTurnLabel(this.theme, turn)));
-        this.container.addChild(renderTurnBody(this.theme, turn));
-        this.container.addChild(new Spacer(1));
-        continue;
-      }
-
-      const toolCall = this.state.toolCalls.find((candidate) => candidate.id === item.id);
-      if (!toolCall) {
-        continue;
-      }
-
-      this.container.addChild(new ToolCardComponent(this.theme, toolCall, this.state.expandedToolOutput));
-      this.container.addChild(new Spacer(1));
-    }
   }
 
   private buildHeaderLine(): string {
@@ -93,6 +57,14 @@ export class NanobossAppView implements Component {
     }
 
     return this.theme.dim(`session ${this.state.sessionId.slice(0, 8)} • retained transcript + pi-tui editor`);
+  }
+
+  private buildStatusLine(): string | undefined {
+    if (!this.state.statusLine) {
+      return undefined;
+    }
+
+    return styleStatusLine(this.theme, this.state.statusLine);
   }
 
   private buildActivityBarLine(): string {
@@ -132,6 +104,273 @@ export class NanobossAppView implements Component {
     }
     return this.theme.dim(parts.join(" • "));
   }
+}
+
+class ComputedTruncatedText implements Component {
+  constructor(private readonly getText: () => string | undefined) {}
+
+  render(width: number): string[] {
+    const text = this.getText();
+    if (!text) {
+      return [];
+    }
+
+    return new TruncatedText(text).render(width);
+  }
+}
+
+class TranscriptComponent implements Component {
+  private readonly container = new Container();
+  private readonly turnComponents = new Map<string, TurnTranscriptComponent>();
+  private readonly toolComponents = new Map<string, ToolTranscriptEntryComponent>();
+  private readonly emptyState: EmptyTranscriptComponent;
+  private keys: string[] = [];
+
+  constructor(
+    private readonly theme: NanobossTuiTheme,
+    initialState: UiState,
+  ) {
+    this.emptyState = new EmptyTranscriptComponent(this.theme);
+    this.setState(initialState, true);
+  }
+
+  setState(state: UiState, forceRefresh = false): void {
+    const nextKeys = state.transcriptItems.map(getTranscriptItemKey);
+    if (nextKeys.length === 0) {
+      this.keys = [];
+      this.turnComponents.clear();
+      this.toolComponents.clear();
+      this.container.clear();
+      this.container.addChild(this.emptyState);
+      return;
+    }
+
+    const turnById = new Map(state.turns.map((turn): [string, UiTurn] => [turn.id, turn]));
+    const toolById = new Map(state.toolCalls.map((toolCall): [string, UiToolCall] => [toolCall.id, toolCall]));
+
+    if (forceRefresh || this.requiresStructureRebuild(nextKeys)) {
+      this.rebuildStructure(state, turnById, toolById, state.expandedToolOutput);
+    } else {
+      for (const item of state.transcriptItems.slice(this.keys.length)) {
+        const component = this.getOrCreateComponent(item, turnById, toolById, state.expandedToolOutput);
+        if (component) {
+          this.container.addChild(component);
+        }
+      }
+    }
+
+    for (const item of state.transcriptItems) {
+      if (item.type === "turn") {
+        const turn = turnById.get(item.id);
+        if (!turn) {
+          continue;
+        }
+
+        const component = this.turnComponents.get(item.id);
+        component?.setTurn(turn, forceRefresh);
+        continue;
+      }
+
+      const toolCall = toolById.get(item.id);
+      if (!toolCall) {
+        continue;
+      }
+
+      const component = this.toolComponents.get(item.id);
+      component?.setToolCall(toolCall, state.expandedToolOutput, forceRefresh);
+    }
+
+    this.pruneMissingComponents(state.transcriptItems);
+    this.keys = nextKeys;
+  }
+
+  render(width: number): string[] {
+    return this.container.render(width);
+  }
+
+  invalidate(): void {
+    this.container.invalidate();
+  }
+
+  private requiresStructureRebuild(nextKeys: string[]): boolean {
+    if (this.container.children.length === 1 && this.container.children[0] === this.emptyState) {
+      return true;
+    }
+
+    if (nextKeys.length < this.keys.length) {
+      return true;
+    }
+
+    for (let index = 0; index < this.keys.length; index += 1) {
+      if (this.keys[index] !== nextKeys[index]) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  private rebuildStructure(
+    state: UiState,
+    turnById: Map<string, UiTurn>,
+    toolById: Map<string, UiToolCall>,
+    expandedToolOutput: boolean,
+  ): void {
+    this.container.clear();
+
+    for (const item of state.transcriptItems) {
+      const component = this.getOrCreateComponent(item, turnById, toolById, expandedToolOutput);
+      if (!component) {
+        continue;
+      }
+
+      this.container.addChild(component);
+    }
+  }
+
+  private getOrCreateComponent(
+    item: UiTranscriptItem,
+    turnById: Map<string, UiTurn>,
+    toolById: Map<string, UiToolCall>,
+    expandedToolOutput: boolean,
+  ): Component | undefined {
+    if (item.type === "turn") {
+      const turn = turnById.get(item.id);
+      if (!turn) {
+        return undefined;
+      }
+
+      const existing = this.turnComponents.get(item.id);
+      if (existing) {
+        return existing;
+      }
+
+      const component = new TurnTranscriptComponent(this.theme, turn);
+      this.turnComponents.set(item.id, component);
+      return component;
+    }
+
+    const toolCall = toolById.get(item.id);
+    if (!toolCall) {
+      return undefined;
+    }
+
+    const existing = this.toolComponents.get(item.id);
+    if (existing) {
+      return existing;
+    }
+
+    const component = new ToolTranscriptEntryComponent(this.theme, toolCall, expandedToolOutput);
+    this.toolComponents.set(item.id, component);
+    return component;
+  }
+
+  private pruneMissingComponents(items: UiTranscriptItem[]): void {
+    const turnIds = new Set(items.filter((item) => item.type === "turn").map((item) => item.id));
+    const toolIds = new Set(items.filter((item) => item.type === "tool_call").map((item) => item.id));
+
+    for (const turnId of this.turnComponents.keys()) {
+      if (!turnIds.has(turnId)) {
+        this.turnComponents.delete(turnId);
+      }
+    }
+
+    for (const toolId of this.toolComponents.keys()) {
+      if (!toolIds.has(toolId)) {
+        this.toolComponents.delete(toolId);
+      }
+    }
+  }
+}
+
+class EmptyTranscriptComponent implements Component {
+  private readonly container = new Container();
+
+  constructor(theme: NanobossTuiTheme) {
+    this.container.addChild(new Text(theme.dim("No turns yet. Send a prompt to start.")));
+    this.container.addChild(new Spacer(1));
+  }
+
+  render(width: number): string[] {
+    return this.container.render(width);
+  }
+}
+
+class TurnTranscriptComponent implements Component {
+  private readonly container = new Container();
+
+  constructor(
+    private readonly theme: NanobossTuiTheme,
+    private turn: UiTurn,
+  ) {
+    this.rebuild();
+  }
+
+  setTurn(turn: UiTurn, forceRefresh = false): void {
+    if (!forceRefresh && this.turn === turn) {
+      return;
+    }
+
+    this.turn = turn;
+    this.rebuild();
+  }
+
+  render(width: number): string[] {
+    return this.container.render(width);
+  }
+
+  invalidate(): void {
+    this.container.invalidate();
+    this.rebuild();
+  }
+
+  private rebuild(): void {
+    this.container.clear();
+    this.container.addChild(new TruncatedText(renderTurnLabel(this.theme, this.turn)));
+    this.container.addChild(renderTurnBody(this.theme, this.turn));
+    this.container.addChild(new Spacer(1));
+  }
+}
+
+class ToolTranscriptEntryComponent implements Component {
+  private readonly container = new Container();
+
+  constructor(
+    private readonly theme: NanobossTuiTheme,
+    private toolCall: UiToolCall,
+    private expanded: boolean,
+  ) {
+    this.rebuild();
+  }
+
+  setToolCall(toolCall: UiToolCall, expanded: boolean, forceRefresh = false): void {
+    if (!forceRefresh && this.toolCall === toolCall && this.expanded === expanded) {
+      return;
+    }
+
+    this.toolCall = toolCall;
+    this.expanded = expanded;
+    this.rebuild();
+  }
+
+  render(width: number): string[] {
+    return this.container.render(width);
+  }
+
+  invalidate(): void {
+    this.container.invalidate();
+    this.rebuild();
+  }
+
+  private rebuild(): void {
+    this.container.clear();
+    this.container.addChild(new ToolCardComponent(this.theme, this.toolCall, this.expanded));
+    this.container.addChild(new Spacer(1));
+  }
+}
+
+function getTranscriptItemKey(item: UiTranscriptItem): string {
+  return `${item.type}:${item.id}`;
 }
 
 function buildActivityBarParts(theme: NanobossTuiTheme, state: UiState): string[] {
