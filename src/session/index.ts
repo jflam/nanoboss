@@ -14,7 +14,6 @@ export {
   listSessionSummaries,
   readCurrentSessionMetadata,
   readSessionMetadata,
-  resolveMostRecentSessionSummary,
   writeCurrentSessionMetadata,
   writeSessionMetadata,
 } from "./repository.ts";

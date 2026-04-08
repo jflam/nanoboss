@@ -6,7 +6,6 @@ import { afterEach, describe, expect, test } from "bun:test";
 
 import {
   listSessionSummaries,
-  resolveMostRecentSessionSummary,
   writeSessionMetadata,
 } from "../../src/session/index.ts";
 
@@ -20,12 +19,19 @@ afterEach(() => {
 });
 
 describe("session persistence", () => {
-  test("lists persisted session metadata", () => {
+  test("lists persisted session metadata sorted by most recent update", () => {
     const originalHome = process.env.HOME;
     tempHome = mkdtempSync(join(tmpdir(), "nanoboss-stored-sessions-"));
     process.env.HOME = tempHome;
 
     try {
+      writeSessionMetadata({
+        sessionId: "session-older",
+        cwd: "/repo",
+        rootDir: join(tempHome, ".nanoboss", "sessions", "session-older"),
+        createdAt: "2026-04-01T09:00:00.000Z",
+        updatedAt: "2026-04-01T10:00:00.000Z",
+      });
       writeSessionMetadata({
         sessionId: "session-123",
         cwd: "/repo",
@@ -37,14 +43,17 @@ describe("session persistence", () => {
       });
 
       const sessions = listSessionSummaries();
-      expect(sessions).toHaveLength(1);
+      expect(sessions).toHaveLength(2);
+      expect(sessions.map((session) => session.sessionId)).toEqual([
+        "session-123",
+        "session-older",
+      ]);
       expect(sessions[0]).toMatchObject({
         sessionId: "session-123",
         cwd: "/repo",
         initialPrompt: "first prompt",
         hasNativeResume: true,
       });
-      expect(resolveMostRecentSessionSummary("/repo")?.sessionId).toBe("session-123");
     } finally {
       if (originalHome === undefined) {
         delete process.env.HOME;
@@ -54,7 +63,7 @@ describe("session persistence", () => {
     }
   });
 
-  test("uses stored metadata without traversing cells", () => {
+  test("parses stored metadata from session.json without traversing cells", () => {
     const originalHome = process.env.HOME;
     tempHome = mkdtempSync(join(tmpdir(), "nanoboss-stored-metadata-fastpath-"));
     process.env.HOME = tempHome;
@@ -62,14 +71,12 @@ describe("session persistence", () => {
     try {
       const sessionRoot = join(tempHome, ".nanoboss", "sessions", "session-fast");
       mkdirSync(sessionRoot, { recursive: true });
-      writeSessionMetadata({
-        sessionId: "session-fast",
+      writeFileSync(join(sessionRoot, "session.json"), `${JSON.stringify({
         cwd: "/repo",
-        rootDir: sessionRoot,
         createdAt: "2026-04-01T10:00:00.000Z",
         updatedAt: "2026-04-01T11:00:00.000Z",
         initialPrompt: "first prompt",
-      });
+      }, null, 2)}\n`, "utf8");
       writeFileSync(join(sessionRoot, "cells"), "not-a-directory\n", "utf8");
 
       const sessions = listSessionSummaries();
@@ -77,41 +84,9 @@ describe("session persistence", () => {
       expect(sessions[0]).toMatchObject({
         sessionId: "session-fast",
         cwd: "/repo",
+        rootDir: sessionRoot,
         initialPrompt: "first prompt",
       });
-      expect(resolveMostRecentSessionSummary("/repo")?.sessionId).toBe("session-fast");
-    } finally {
-      if (originalHome === undefined) {
-        delete process.env.HOME;
-      } else {
-        process.env.HOME = originalHome;
-      }
-    }
-  });
-
-  test("does not fall back to a newer session from another workspace", () => {
-    const originalHome = process.env.HOME;
-    tempHome = mkdtempSync(join(tmpdir(), "nanoboss-stored-sessions-isolated-"));
-    process.env.HOME = tempHome;
-
-    try {
-      writeSessionMetadata({
-        sessionId: "session-one",
-        cwd: "/repo-one",
-        rootDir: join(tempHome, ".nanoboss", "sessions", "session-one"),
-        createdAt: "2026-04-01T10:00:00.000Z",
-        updatedAt: "2026-04-01T11:00:00.000Z",
-      });
-      writeSessionMetadata({
-        sessionId: "session-two",
-        cwd: "/repo-two",
-        rootDir: join(tempHome, ".nanoboss", "sessions", "session-two"),
-        createdAt: "2026-04-01T12:00:00.000Z",
-        updatedAt: "2026-04-01T13:00:00.000Z",
-      });
-
-      expect(resolveMostRecentSessionSummary("/repo-one")?.sessionId).toBe("session-one");
-      expect(resolveMostRecentSessionSummary("/repo-three")).toBeUndefined();
     } finally {
       if (originalHome === undefined) {
         delete process.env.HOME;
@@ -154,7 +129,6 @@ describe("session persistence", () => {
       }, null, 2)}\n`);
 
       expect(listSessionSummaries()).toEqual([]);
-      expect(resolveMostRecentSessionSummary("/repo")).toBeUndefined();
     } finally {
       if (originalHome === undefined) {
         delete process.env.HOME;

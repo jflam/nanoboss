@@ -76,11 +76,6 @@ export function listSessionSummaries(): SessionSummary[] {
     .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
 }
 
-export function resolveMostRecentSessionSummary(cwd: string): SessionSummary | undefined {
-  const workspaceKey = resolveWorkspaceKey(cwd);
-  return listSessionSummaries().find((session) => resolveWorkspaceKey(session.cwd) === workspaceKey);
-}
-
 function getCurrentSessionMetadataPath(): string {
   return join(getNanobossHome(), CURRENT_SESSION_FILE);
 }
