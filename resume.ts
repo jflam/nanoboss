@@ -3,10 +3,8 @@ import { createNanobossTuiTheme } from "./src/tui/theme.ts";
 import { assertInteractiveTty, runTuiCli } from "./src/tui/run.ts";
 import { parseResumeOptions } from "./src/options/resume.ts";
 import {
-  findSessionSummary,
   listSessionSummaries,
-  readCurrentSessionSummary,
-  resolveMostRecentSessionSummary,
+  readCurrentSessionMetadata,
   type SessionSummary,
 } from "./src/session/index.ts";
 
@@ -65,20 +63,24 @@ export async function runResumeCommand(
 }
 
 function resolveExplicitSession(sessionId: string): SessionSummary | undefined {
-  return findSessionSummary(sessionId);
+  return listSessionSummaries().find((session) => session.sessionId === sessionId);
 }
 
 function resolveDefaultSession(cwd: string): SessionSummary | undefined {
-  const current = readCurrentSessionSummary(cwd);
-  if (current) {
-    return current;
+  const sessions = listSessionSummaries();
+  const currentSessionId = readCurrentSessionMetadata(cwd)?.sessionId;
+  if (currentSessionId) {
+    const current = sessions.find((session) => session.sessionId === currentSessionId);
+    if (current) {
+      return current;
+    }
   }
 
-  return resolveMostRecentSessionSummary(cwd);
+  return sessions.find((session) => session.cwd === cwd);
 }
 
 async function selectStoredSession(cwd: string): Promise<StoredSessionSelectionResult> {
-  const sessions = orderSessions(cwd, withCurrentSession(cwd, listSessionSummaries()));
+  const sessions = orderSessions(cwd, listSessionSummaries());
   if (sessions.length === 0) {
     return { kind: "empty" };
   }
@@ -87,18 +89,6 @@ async function selectStoredSession(cwd: string): Promise<StoredSessionSelectionR
   return selected
     ? { kind: "selected", session: selected }
     : { kind: "cancelled" };
-}
-
-function withCurrentSession(cwd: string, sessions: SessionSummary[]): SessionSummary[] {
-  const current = readCurrentSessionSummary(cwd);
-  if (!current || sessions.some((session) => session.sessionId === current.sessionId)) {
-    return sessions;
-  }
-
-  return [
-    current,
-    ...sessions,
-  ];
 }
 
 function orderSessions(cwd: string, sessions: SessionSummary[]): SessionSummary[] {
