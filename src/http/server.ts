@@ -319,10 +319,6 @@ function queueServerShutdown(server: ReturnType<typeof Bun.serve>): void {
   }, 50);
 }
 
-if (import.meta.main) {
-  await runHttpServerCommand(Bun.argv.slice(2));
-}
-
 function normalizeHost(value: string | undefined): string | undefined {
   const trimmed = value?.trim();
   return trimmed ? trimmed : undefined;

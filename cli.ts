@@ -32,7 +32,3 @@ function printHelp(): void {
     "",
   ].join("\n"));
 }
-
-if (import.meta.main) {
-  await runCliCommand(Bun.argv.slice(2));
-}

@@ -138,7 +138,3 @@ export async function runAcpServerCommand(): Promise<void> {
   );
   await connection.closed;
 }
-
-if (import.meta.main) {
-  await runAcpServerCommand();
-}

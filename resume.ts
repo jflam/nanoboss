@@ -118,7 +118,3 @@ function printHelp(): void {
     "",
   ].join("\n"));
 }
-
-if (import.meta.main) {
-  await runResumeCommand(Bun.argv.slice(2));
-}

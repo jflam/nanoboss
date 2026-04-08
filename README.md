@@ -148,13 +148,6 @@ Tool call progress lines are shown by default. Hide them with:
 bun run nanoboss cli --no-tool-calls
 ```
 
-The package scripts mirror the canonical entrypoints:
-
-```bash
-bun run cli
-bun run http
-```
-
 By default the local REPL path spawns `copilot --acp --allow-all-tools`. In that default path,
 nanoboss does not set a model, so the downstream Copilot CLI uses its own
 default model unless a procedure selects one explicitly. Override the downstream
