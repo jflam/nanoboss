@@ -801,6 +801,87 @@ describe("NanobossService", () => {
     }
   }, 30_000);
 
+  test("includes retrieval guidance alongside a memory-card preamble", async () => {
+    const { cwd, registry } = await createRegistryWithWorkspace();
+    const service = new NanobossService(registry);
+    const session = service.createSession({ cwd });
+    const sessionState = getInternalSessionState(service, session.sessionId);
+    const prepareDefaultPrompt = Reflect.get(service as object, "prepareDefaultPrompt") as
+      | ((session: InternalSessionState, prompt: string, runId: string) => { prompt: string; markSubmitted: () => void })
+      | undefined;
+
+    sessionState.store.finalizeCell(
+      sessionState.store.startCell({
+        procedure: "review",
+        input: "the code",
+        kind: "top_level",
+      }),
+      {
+        data: { subject: "the code", verdict: "mixed" },
+        display: "review output",
+        summary: "review summary for the code",
+        memory: "Most important issue for the code was missing edge-case analysis.",
+      },
+    );
+
+    try {
+      if (typeof prepareDefaultPrompt !== "function") {
+        throw new Error("Expected prepareDefaultPrompt");
+      }
+
+      const followUpPrompt = prepareDefaultPrompt(sessionState, "what mattered most?", "run-test").prompt;
+
+      expect(followUpPrompt).toContain("Nanoboss session memory update:");
+      expect(followUpPrompt).toContain("procedure: /review");
+      expect(followUpPrompt).toContain("Nanoboss session tool guidance:");
+      expect(followUpPrompt).toContain("Use top_level_runs(...) to find prior chat-visible commands");
+      expect(followUpPrompt).toContain("Never inspect ~/.nanoboss/agent-logs directly");
+    } finally {
+      service.destroySession(session.sessionId);
+    }
+  });
+
+  test("includes retrieval guidance without a memory-card preamble when recovery guidance is active", async () => {
+    const mockSessionStoreDir = mkdtempSync(join(tmpdir(), "nab-service-guidance-agent-"));
+    await withMockAgentEnv(async () => {
+      const registry = new ProcedureRegistry(mkdtempSync(join(tmpdir(), "nab-service-guidance-reg-")));
+      registry.loadBuiltins();
+
+      const service = new NanobossService(
+        registry,
+        (cwd) => ({
+          provider: "copilot",
+          command: "bun",
+          args: ["run", MOCK_AGENT_PATH],
+          cwd,
+          env: {
+            NANOBOSS_SELF_COMMAND: SELF_COMMAND_PATH,
+            MOCK_AGENT_SUPPORT_LOAD_SESSION: "1",
+            MOCK_AGENT_SESSION_STORE_DIR: mockSessionStoreDir,
+          },
+        }),
+      );
+      const session = service.createSession({ cwd: process.cwd() });
+      const sessionState = getInternalSessionState(service, session.sessionId) as InternalSessionState & {
+        recentRecoverySyncAtMs?: number;
+      };
+      sessionState.recentRecoverySyncAtMs = Date.now();
+
+      try {
+        await service.prompt(session.sessionId, "how did you do that earlier?");
+
+        const stored = readStoredMockSession(mockSessionStoreDir);
+        const userPrompt = stored.turns[0]?.text ?? "";
+        expect(userPrompt).toContain("Nanoboss session tool guidance:");
+        expect(userPrompt).toContain("Use top_level_runs(...) to find prior chat-visible commands");
+        expect(userPrompt).toContain("Never inspect ~/.nanoboss/agent-logs directly");
+        expect(userPrompt).not.toContain("Nanoboss session memory update:");
+      } finally {
+        service.destroySession(session.sessionId);
+      }
+    });
+  }, 30_000);
+
   test("/model updates the session default agent banner", async () => {
     await withMockAgentEnv(async () => {
       const { cwd, registry } = await createRegistryWithWorkspace();

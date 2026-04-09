@@ -4,7 +4,7 @@ import { join } from "node:path";
 
 import {
   collectUnsyncedProcedureMemoryCards,
-  renderProcedureMemoryPreamble,
+  renderProcedureMemoryCardsSection,
 } from "../../src/core/memory-cards.ts";
 import { SessionStore } from "../../src/session/index.ts";
 
@@ -94,21 +94,14 @@ describe("procedure memory cards", () => {
       critiqueMainIssue: "string",
     });
 
-    const preamble = renderProcedureMemoryPreamble(cards);
-    expect(preamble).toContain("Nanoboss session memory update:");
-    expect(preamble).toContain("procedure: /review");
-    expect(preamble).toContain("result_ref:");
-    expect(preamble).toContain("display_ref:");
-    expect(preamble).toContain("data_preview:");
-    expect(preamble).toContain("critiqueMainIssue");
-    expect(preamble).toContain("Use top_level_runs(...) to find prior chat-visible commands");
-    expect(preamble).toContain("Use cell_descendants(...) to inspect nested procedure and agent calls under one run; set maxDepth=1 when you only want direct children.");
-    expect(preamble).toContain("Use cell_ancestors(...) to identify which top-level run owns a nested cell; set limit=1 when you only want the direct parent.");
-    expect(preamble).toContain("Use session_recent(...) only for true global recency scans across the whole session; it is not the primary retrieval path.");
-    expect(preamble).toContain("If ref_read(...) returns nested refs such as critique or answer, call ref_read(...) on those refs too.");
-    expect(preamble).toContain("Do not treat not-found results from a bounded scan as proof of absence unless the search scope was exhaustive.");
-    expect(preamble).toContain("Do not inspect ~/.nanoboss/sessions directly unless the nanoboss MCP tools fail.");
-    expect(preamble).not.toContain("full rendered review output that should not be injected wholesale");
+    const cardsSection = renderProcedureMemoryCardsSection(cards);
+    expect(cardsSection).toContain("Nanoboss session memory update:");
+    expect(cardsSection).toContain("procedure: /review");
+    expect(cardsSection).toContain("result_ref:");
+    expect(cardsSection).toContain("display_ref:");
+    expect(cardsSection).toContain("data_preview:");
+    expect(cardsSection).toContain("critiqueMainIssue");
+    expect(cardsSection).not.toContain("full rendered review output that should not be injected wholesale");
   });
 
   test("falls back from memory to summary", () => {

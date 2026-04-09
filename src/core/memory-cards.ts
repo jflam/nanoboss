@@ -83,15 +83,6 @@ export function materializeProcedureMemoryCard(
   };
 }
 
-export function renderProcedureMemoryPreamble(cards: ProcedureMemoryCard[]): string | undefined {
-  const cardsSection = renderProcedureMemoryCardsSection(cards);
-  if (!cardsSection) {
-    return undefined;
-  }
-
-  return [cardsSection, renderSessionToolGuidance()].join("\n\n").trimEnd();
-}
-
 export function renderProcedureMemoryCardsSection(cards: ProcedureMemoryCard[]): string | undefined {
   if (cards.length === 0) {
     return undefined;
@@ -153,21 +144,6 @@ export function hasTopLevelNonDefaultProcedureHistory(store: SessionStore): bool
     const record = store.readCell(summary.cell);
     return record.procedure !== "default";
   });
-}
-
-export function renderSessionToolGuidance(): string {
-  return [
-    "Nanoboss session tool guidance:",
-    "- For prior stored procedure results, prefer the global `nanoboss` MCP tools over filesystem inspection.",
-    "- Use top_level_runs(...) to find prior chat-visible commands such as /default, /linter, or /second-opinion.",
-    "- Use cell_descendants(...) to inspect nested procedure and agent calls under one run; set maxDepth=1 when you only want direct children.",
-    "- Use cell_ancestors(...) to identify which top-level run owns a nested cell; set limit=1 when you only want the direct parent.",
-    "- After you find a candidate cell, use cell_get(...) for exact metadata and ref_read(...) for exact stored values.",
-    "- If ref_read(...) returns nested refs such as critique or answer, call ref_read(...) on those refs too.",
-    "- Use session_recent(...) only for true global recency scans across the whole session; it is not the primary retrieval path.",
-    "- Do not treat not-found results from a bounded scan as proof of absence unless the search scope was exhaustive.",
-    "- Do not inspect ~/.nanoboss/sessions directly unless the nanoboss MCP tools fail.",
-  ].join("\n");
 }
 
 function deriveProcedureMemory(
