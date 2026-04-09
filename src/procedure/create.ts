@@ -118,7 +118,7 @@ export function createCreateProcedure(registry: ProcedureRegistryLike): Procedur
 
 function loadExamples(): string {
   const cwd = process.cwd();
-  const examples = ["commit.ts", "linter.ts"]
+  const examples = ["nanoboss/commit.ts", "linter.ts"]
     .map((file) => {
       try {
         return `// ${file}\n${readFileSync(join(cwd, "procedures", file), "utf8")}`;

@@ -682,7 +682,7 @@ export default {
       ctx.print(
         `Round ${round + 1} resolved ${pluralize(resolvedThisRound, "error")}; ${pluralize(linter.errors.length, "error")} remain.\n`,
       );
-      await ctx.callProcedure("commit", `linter round ${round + 1}`);
+      await ctx.callProcedure("nanoboss/commit", `linter round ${round + 1}`);
     }
 
     ctx.print(

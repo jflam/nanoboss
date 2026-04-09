@@ -275,6 +275,9 @@ describe("ProcedureRegistry", () => {
     expect(registry.get("kb/health")).toBeDefined();
     expect(registry.get("kb/refresh")).toBeDefined();
     expect(registry.get("kb/answer")).toBeDefined();
+    expect(registry.get("commit")).toBeUndefined();
+    expect(registry.get("nanoboss/pre-commit-checks")).toBeDefined();
+    expect(registry.get("nanoboss/commit")).toBeDefined();
     expect(registry.get("simplify2")).toBeDefined();
     expect(registry.get("top_level_runs")).toBeUndefined();
     expect(registry.get("cell_get")).toBeUndefined();
@@ -295,6 +298,9 @@ describe("ProcedureRegistry", () => {
     expect(registry.toAvailableCommands().some((command) => command.name === "kb/health")).toBe(true);
     expect(registry.toAvailableCommands().some((command) => command.name === "kb/refresh")).toBe(true);
     expect(registry.toAvailableCommands().some((command) => command.name === "kb/answer")).toBe(true);
+    expect(registry.toAvailableCommands().some((command) => command.name === "commit")).toBe(false);
+    expect(registry.toAvailableCommands().some((command) => command.name === "nanoboss/pre-commit-checks")).toBe(true);
+    expect(registry.toAvailableCommands().some((command) => command.name === "nanoboss/commit")).toBe(true);
     expect(registry.toAvailableCommands().some((command) => command.name === "simplify2")).toBe(true);
     expect(registry.toAvailableCommands().some((command) => command.name === "top_level_runs")).toBe(false);
     expect(registry.toAvailableCommands().some((command) => command.name === "cell_get")).toBe(false);
