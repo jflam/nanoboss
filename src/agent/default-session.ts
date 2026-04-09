@@ -9,6 +9,7 @@ import {
 } from "./acp-runtime.ts";
 import { buildGlobalMcpStdioServer } from "../mcp/registration.ts";
 import { RunCancelledError, defaultCancellationMessage } from "../core/cancellation.ts";
+import { appendTimingTraceEvent, type RunTimingTrace } from "../core/timing-trace.ts";
 import { collectTokenSnapshot, enrichToolCallUpdateWithTokenUsage } from "./token-metrics.ts";
 import type { AgentTokenSnapshot, CallAgentOptions, DownstreamAgentConfig } from "../core/types.ts";
 
@@ -16,6 +17,7 @@ interface DefaultSessionPromptOptions {
   onUpdate?: CallAgentOptions["onUpdate"];
   signal?: AbortSignal;
   softStopSignal?: AbortSignal;
+  timingTrace?: RunTimingTrace;
 }
 
 interface DefaultSessionPromptResult {
@@ -43,6 +45,8 @@ export class DefaultConversationSession {
   private liveSession?: PersistentAcpSession;
   private config: DownstreamAgentConfig;
   private lastTokenSnapshot?: AgentTokenSnapshot;
+  private sessionPromise?: Promise<PersistentAcpSession>;
+  private sessionGeneration = 0;
 
   constructor(params: DefaultConversationSessionParams) {
     this.config = params.config;
@@ -65,32 +69,21 @@ export class DefaultConversationSession {
     return this.liveSession?.currentTokenSnapshot ?? this.lastTokenSnapshot;
   }
 
+  async warm(timingTrace?: RunTimingTrace): Promise<void> {
+    try {
+      await this.ensureSession(timingTrace);
+    } catch {
+      // Warmup is a latency optimization; prompt() will retry on demand.
+    }
+  }
+
   async prompt(
     prompt: string,
     options: DefaultSessionPromptOptions = {},
   ): Promise<DefaultSessionPromptResult> {
     const startedAt = Date.now();
-    let session = this.liveSession;
-
-    if (!session?.isAlive()) {
-      session?.close();
-      this.liveSession = undefined;
-      session = undefined;
-    }
-
-    if (!session && this.persistedSessionId) {
-      session = await PersistentAcpSession.load(this.config, this.persistedSessionId);
-      if (session) {
-        this.liveSession = session;
-      }
-    }
-
-    if (!session) {
-      session = await PersistentAcpSession.createFresh(this.config);
-      this.liveSession = session;
-    }
-
-    this.persistedSessionId = session.sessionId;
+    appendTimingTraceEvent(options.timingTrace, "default_session", "prompt_started");
+    const session = await this.ensureSession(options.timingTrace);
 
     try {
       const result = await session.prompt(prompt, options);
@@ -124,8 +117,83 @@ export class DefaultConversationSession {
   }
 
   closeLiveSession(): void {
+    this.sessionGeneration += 1;
+    this.sessionPromise = undefined;
     this.liveSession?.close();
     this.liveSession = undefined;
+  }
+
+  private async ensureSession(timingTrace?: RunTimingTrace): Promise<PersistentAcpSession> {
+    const liveSession = this.liveSession;
+    if (liveSession?.isAlive()) {
+      appendTimingTraceEvent(timingTrace, "default_session", "reused_live_session", {
+        sessionId: liveSession.sessionId,
+      });
+      return liveSession;
+    }
+
+    if (liveSession) {
+      liveSession.close();
+      this.liveSession = undefined;
+    }
+
+    if (this.sessionPromise) {
+      appendTimingTraceEvent(timingTrace, "default_session", "awaiting_inflight_session");
+      return await this.sessionPromise;
+    }
+
+    const generation = this.sessionGeneration;
+    appendTimingTraceEvent(timingTrace, "default_session", "establish_session_started", {
+      persistedSessionId: this.persistedSessionId,
+    });
+
+    const pending = this.establishSession(generation, timingTrace);
+    this.sessionPromise = pending;
+    try {
+      return await pending;
+    } finally {
+      if (this.sessionPromise === pending) {
+        this.sessionPromise = undefined;
+      }
+    }
+  }
+
+  private async establishSession(
+    generation: number,
+    timingTrace?: RunTimingTrace,
+  ): Promise<PersistentAcpSession> {
+    let session: PersistentAcpSession | undefined;
+
+    if (this.persistedSessionId) {
+      appendTimingTraceEvent(timingTrace, "default_session", "load_session_attempt_started", {
+        sessionId: this.persistedSessionId,
+      });
+      session = await PersistentAcpSession.load(this.config, this.persistedSessionId);
+      appendTimingTraceEvent(timingTrace, "default_session", "load_session_attempt_completed", {
+        sessionId: this.persistedSessionId,
+        loaded: session !== undefined,
+      });
+    }
+
+    if (!session) {
+      appendTimingTraceEvent(timingTrace, "default_session", "create_fresh_session_started");
+      session = await PersistentAcpSession.createFresh(this.config);
+      appendTimingTraceEvent(timingTrace, "default_session", "create_fresh_session_completed", {
+        sessionId: session.sessionId,
+      });
+    }
+
+    if (generation !== this.sessionGeneration) {
+      session.close();
+      throw new Error("Discarded stale default session establishment.");
+    }
+
+    this.liveSession = session;
+    this.persistedSessionId = session.sessionId;
+    appendTimingTraceEvent(timingTrace, "default_session", "session_ready", {
+      sessionId: session.sessionId,
+    });
+    return session;
   }
 }
 

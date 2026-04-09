@@ -302,7 +302,7 @@ function reduceFrontendEvent(state: UiState, event: FrontendEventEnvelope): UiSt
         activeRunSucceededToolCallIds: [],
         pendingStopRequest: false,
         stopRequestedRunId,
-        statusLine: stopRequestedRunId ? STOP_REQUESTED_STATUS : `[run] ${event.data.procedure} working…`,
+        statusLine: stopRequestedRunId ? STOP_REQUESTED_STATUS : `[run] invoking /${event.data.procedure}…`,
         inputDisabled: true,
       };
     }
@@ -346,7 +346,7 @@ function reduceFrontendEvent(state: UiState, event: FrontendEventEnvelope): UiSt
       const elapsedSeconds = Math.max(1, Math.round((now - startedAt) / 1_000));
       return {
         ...state,
-        statusLine: `[run] ${event.data.procedure} still working (${elapsedSeconds}s)`,
+        statusLine: `[run] /${event.data.procedure} still working (${elapsedSeconds}s)`,
       };
     }
     case "tool_started": {

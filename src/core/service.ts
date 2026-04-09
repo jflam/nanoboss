@@ -46,6 +46,7 @@ import {
 import { ProcedureRegistry } from "../procedure/registry.ts";
 import { formatAgentBanner } from "./runtime-banner.ts";
 import { shouldLoadDiskCommands } from "./runtime-mode.ts";
+import { appendTimingTraceEvent, createRunTimingTrace, type RunTimingTrace } from "./timing-trace.ts";
 import { isProcedureDispatchResult, isProcedureDispatchStatusResult } from "../mcp/server.ts";
 import type {
   AgentTokenUsage,
@@ -264,16 +265,20 @@ export class NanobossService {
       sessionId: params.sessionId,
       cwd: params.cwd,
     });
+    const defaultConversation = new DefaultConversationSession({
+      config: defaultAgentConfig,
+      persistedSessionId: params.defaultAcpSessionId,
+    });
+    if (shouldPrewarmDefaultConversation()) {
+      void defaultConversation.warm();
+    }
 
     return {
       cwd: params.cwd,
       store,
       events: new SessionEventLog(),
       defaultAgentConfig,
-      defaultConversation: new DefaultConversationSession({
-        config: defaultAgentConfig,
-        persistedSessionId: params.defaultAcpSessionId,
-      }),
+      defaultConversation,
       syncedProcedureMemoryCellIds: new Set(),
       commands,
       pendingProcedureContinuation: params.pendingProcedureContinuation,
@@ -452,15 +457,21 @@ export class NanobossService {
     procedureName: string,
     procedurePrompt: string,
     emitter: CompositeSessionUpdateEmitter,
+    timingTrace: RunTimingTrace,
     options: {
+      dispatchCorrelationId: string;
       signal?: AbortSignal;
       softStopSignal?: AbortSignal;
       assertCanStartBoundary?: () => void;
       activeRun?: ActiveRunState;
-    } = {},
+    },
   ): Promise<{ result: ProcedureExecutionResult; tokenUsage?: AgentTokenUsage }> {
-    const dispatchCorrelationId = crypto.randomUUID();
+    const dispatchCorrelationId = options.dispatchCorrelationId;
     options.activeRun?.dispatchCorrelationIds.add(dispatchCorrelationId);
+    appendTimingTraceEvent(timingTrace, "service", "dispatch_via_default_started", {
+      procedure: procedureName,
+      dispatchCorrelationId,
+    });
     const stopProgressBridge = startProcedureDispatchProgressBridge(
       session.store.rootDir,
       dispatchCorrelationId,
@@ -469,6 +480,10 @@ export class NanobossService {
 
     try {
       options.assertCanStartBoundary?.();
+      let sawDefaultPromptUpdate = false;
+      appendTimingTraceEvent(timingTrace, "service", "default_dispatch_prompt_started", {
+        procedure: procedureName,
+      });
       const promptResult = await session.defaultConversation.prompt(
         buildProcedureDispatchPrompt(
           session.store.sessionId,
@@ -480,7 +495,14 @@ export class NanobossService {
         {
           signal: options.signal,
           softStopSignal: options.softStopSignal,
+          timingTrace,
           onUpdate: async (update) => {
+            if (!sawDefaultPromptUpdate) {
+              sawDefaultPromptUpdate = true;
+              appendTimingTraceEvent(timingTrace, "service", "default_dispatch_prompt_first_update", {
+                updateType: update.sessionUpdate,
+              });
+            }
             if (
               update.sessionUpdate === "agent_message_chunk" ||
               update.sessionUpdate === "tool_call" ||
@@ -492,9 +514,15 @@ export class NanobossService {
           },
         },
       );
+      appendTimingTraceEvent(timingTrace, "service", "default_dispatch_prompt_completed", {
+        updateCount: promptResult.updates.length,
+      });
 
       const result = extractProcedureDispatchResult(promptResult.updates);
       if (result) {
+        appendTimingTraceEvent(timingTrace, "service", "dispatch_result_extracted_from_prompt", {
+          procedure: procedureName,
+        });
         session.syncedProcedureMemoryCellIds.add(result.cell.cellId);
         return {
           result,
@@ -505,12 +533,25 @@ export class NanobossService {
         };
       }
 
+      const dispatchId = extractProcedureDispatchId(promptResult.updates);
+      if (dispatchId) {
+        appendTimingTraceEvent(timingTrace, "service", "dispatch_id_received", {
+          dispatchId,
+        });
+      }
+
       const dispatchStatus = await this.waitForProcedureDispatchResult({
         session,
         promptUpdates: promptResult.updates,
         signal: options.signal,
         softStopSignal: options.softStopSignal,
       });
+      if (dispatchStatus) {
+        appendTimingTraceEvent(timingTrace, "service", "dispatch_wait_completed", {
+          dispatchId: dispatchStatus.dispatchId,
+          status: dispatchStatus.status,
+        });
+      }
       if (dispatchStatus?.status === "completed" && dispatchStatus.result) {
         session.syncedProcedureMemoryCellIds.add(dispatchStatus.result.cell.cellId);
         return {
@@ -540,6 +581,10 @@ export class NanobossService {
         softStopSignal: options.softStopSignal,
       });
       if (recoveredCell) {
+        appendTimingTraceEvent(timingTrace, "service", "dispatch_result_recovered_from_store", {
+          procedure: procedureName,
+          cellId: recoveredCell.cellId,
+        });
         return {
           result: procedureDispatchResultFromRecoveredCell(session.store.sessionId, recoveredCell),
           tokenUsage: normalizeAgentTokenUsage(
@@ -913,12 +958,21 @@ export class NanobossService {
         && procedure.executionMode !== "harness"
       ) {
         try {
+          const dispatchCorrelationId = crypto.randomUUID();
+          const timingTrace = createRunTimingTrace(session.store.rootDir, dispatchCorrelationId);
+          appendTimingTraceEvent(timingTrace, "service", "prompt_started", {
+            runId,
+            procedure: procedure.name,
+            mode: "dispatched",
+          });
           const dispatched = await this.dispatchProcedureIntoDefaultConversation(
             session,
             procedure.name,
             commandPrompt,
             emitter,
+            timingTrace,
             {
+              dispatchCorrelationId,
               signal: activeRun.abortController.signal,
               softStopSignal: activeRun.softStopController.signal,
               assertCanStartBoundary,
@@ -982,6 +1036,12 @@ export class NanobossService {
         }
       } else {
         try {
+          const timingTrace = createRunTimingTrace(session.store.rootDir, runId);
+          appendTimingTraceEvent(timingTrace, "service", "prompt_started", {
+            runId,
+            procedure: procedure.name,
+            mode: continuation ? "resume" : "direct",
+          });
           const result = await executeTopLevelProcedure({
             cwd: session.cwd,
             sessionId,
@@ -1005,6 +1065,7 @@ export class NanobossService {
               ctx.print(errorText);
             },
             assertCanStartBoundary,
+            timingTrace,
             resume: continuation
               ? {
                   prompt: commandPrompt,
@@ -1138,6 +1199,10 @@ export class NanobossService {
 
     return { stopReason: "end_turn", runId };
   }
+}
+
+function shouldPrewarmDefaultConversation(): boolean {
+  return process.env.NANOBOSS_PREWARM_DEFAULT_SESSION !== "0";
 }
 
 function getRestoredRunEndedAt(replayEvents: PersistedFrontendEvent[] | undefined): string | undefined {

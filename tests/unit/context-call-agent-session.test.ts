@@ -86,14 +86,7 @@ describe("CommandContext callAgent session selection", () => {
     expect(submittedCount).toBe(2);
     expect(emittedUpdates.some((update) => update.sessionUpdate === "agent_message_chunk")).toBe(false);
 
-    const completion = emittedUpdates.findLast((update) => update.sessionUpdate === "tool_call_update");
-    expect(completion?.sessionUpdate).toBe("tool_call_update");
-    if (completion?.sessionUpdate !== "tool_call_update") {
-      throw new Error("Missing completion update");
-    }
-    expect(completion.rawOutput).toMatchObject({
-      sessionId: "default-session-1",
-    });
+    expect(emittedUpdates).toEqual([]);
   });
 
   test("untyped default-session calls use the same unified callAgent path", async () => {
@@ -132,17 +125,7 @@ describe("CommandContext callAgent session selection", () => {
     expect(prompts[0]).toBe("Prepared default prompt\n\nUser message:\nWhat is 2 + 2?");
     expect(submittedCount).toBe(1);
 
-    const started = emittedUpdates.find((update) => update.sessionUpdate === "tool_call");
-    expect(started?.sessionUpdate).toBe("tool_call");
-    if (started?.sessionUpdate !== "tool_call") {
-      throw new Error("Missing start update");
-    }
-    expect(started.title).toBe("Calling default procedure");
-    expect(started.rawInput).toEqual({
-      callPreview: {
-        header: "Calling default procedure",
-      },
-    });
+    expect(emittedUpdates).toEqual([]);
   });
 });
 

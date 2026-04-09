@@ -390,6 +390,9 @@ function buildActivityBarParts(theme: NanobossTuiTheme, state: UiState): string[
   if (state.inputDisabled) {
     parts.push(theme.warning("● busy"));
   }
+  if (state.activeProcedure) {
+    parts.push(theme.warning(`procedure /${state.activeProcedure}`));
+  }
   if (state.pendingProcedureContinuation) {
     parts.push(theme.warning(`continuation /${state.pendingProcedureContinuation.procedure}`));
   }

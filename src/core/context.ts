@@ -7,6 +7,7 @@ import { resolveDownstreamAgentConfig } from "./config.ts";
 import { formatErrorMessage } from "./error-format.ts";
 import type { DefaultConversationSession } from "../agent/default-session.ts";
 import type { RunLogger } from "./logger.ts";
+import { appendTimingTraceEvent, type RunTimingTrace } from "./timing-trace.ts";
 import { normalizeAgentTokenUsage } from "../agent/token-usage.ts";
 import {
   normalizeProcedureResult,
@@ -39,7 +40,8 @@ type ActiveCell = ReturnType<SessionStore["startCell"]>;
 interface StartedAgentRun {
   childSpanId: string;
   startedAt: number;
-  toolCallId: string;
+  toolCallId?: string;
+  emitToolCallEvents: boolean;
   childCell: ActiveCell;
 }
 
@@ -70,6 +72,7 @@ interface CommandContextParams {
   setDefaultAgentSelection?: (selection: DownstreamAgentSelection) => DownstreamAgentConfig;
   prepareDefaultPrompt?: (prompt: string) => PreparedDefaultPrompt;
   assertCanStartBoundary?: () => void;
+  timingTrace?: RunTimingTrace;
 }
 
 export class CommandContextImpl implements CommandContext {
@@ -92,6 +95,7 @@ export class CommandContextImpl implements CommandContext {
   private readonly setDefaultAgentSelectionValue: (selection: DownstreamAgentSelection) => DownstreamAgentConfig;
   private readonly prepareDefaultPromptValue?: (prompt: string) => PreparedDefaultPrompt;
   private readonly assertCanStartBoundaryValue?: () => void;
+  private readonly timingTrace?: RunTimingTrace;
 
   constructor(params: CommandContextParams) {
     this.cwd = params.cwd;
@@ -112,6 +116,7 @@ export class CommandContextImpl implements CommandContext {
       ?? ((selection) => resolveDownstreamAgentConfig(this.cwd, selection));
     this.prepareDefaultPromptValue = params.prepareDefaultPrompt;
     this.assertCanStartBoundaryValue = params.assertCanStartBoundary;
+    this.timingTrace = params.timingTrace;
     this.refs = new CommandRefs(this.store, this.cwd);
     this.session = new CommandSession(this.store, this.cell.cell.cellId);
   }
@@ -166,12 +171,7 @@ export class CommandContextImpl implements CommandContext {
         : this.getDefaultAgentConfigValue();
     const started = this.beginAgentRun(prompt, useDefaultSession
       ? {
-          title: "Calling default procedure",
-          rawInput: {
-            callPreview: {
-              header: "Calling default procedure",
-            },
-          },
+          emitToolCallEvents: false,
           agent: options?.agent,
         }
       : {
@@ -181,6 +181,7 @@ export class CommandContextImpl implements CommandContext {
             agent: options?.agent,
             refs: options?.refs,
           },
+          emitToolCallEvents: true,
           agent: options?.agent,
         });
     const namedRefs = resolveNamedRefs(this.store, options?.refs);
@@ -242,6 +243,7 @@ export class CommandContextImpl implements CommandContext {
           signal: options.signal,
           softStopSignal: options.softStopSignal,
           onUpdate: options.onUpdate,
+          timingTrace: this.timingTrace,
         });
 
         preparedPrompt.markSubmitted?.();
@@ -295,6 +297,7 @@ export class CommandContextImpl implements CommandContext {
         setDefaultAgentSelection: this.setDefaultAgentSelectionValue,
         prepareDefaultPrompt: this.prepareDefaultPromptValue,
         assertCanStartBoundary: this.assertCanStartBoundaryValue,
+        timingTrace: this.timingTrace,
       });
       const rawResult = await procedure.execute(prompt, childContext);
       const result = normalizeProcedureResult(rawResult);
@@ -327,8 +330,9 @@ export class CommandContextImpl implements CommandContext {
   private beginAgentRun(
     prompt: string,
     params: {
-      title: string;
-      rawInput: unknown;
+      title?: string;
+      rawInput?: unknown;
+      emitToolCallEvents: boolean;
       agent?: DownstreamAgentSelection;
     },
   ): StartedAgentRun {
@@ -337,7 +341,8 @@ export class CommandContextImpl implements CommandContext {
     const started: StartedAgentRun = {
       childSpanId: this.logger.newSpan(this.spanId),
       startedAt: Date.now(),
-      toolCallId: crypto.randomUUID(),
+      toolCallId: params.emitToolCallEvents ? crypto.randomUUID() : undefined,
+      emitToolCallEvents: params.emitToolCallEvents,
       childCell: this.store.startCell({
         procedure: "callAgent",
         input: prompt,
@@ -355,15 +360,32 @@ export class CommandContextImpl implements CommandContext {
       agentProvider: params.agent?.provider,
       agentModel: params.agent?.model,
     });
-
-    this.emitter.emit({
-      sessionUpdate: "tool_call",
-      toolCallId: started.toolCallId,
+    appendTimingTraceEvent(this.timingTrace, "context", "agent_run_started", {
+      procedure: this.procedureName,
+      agentProvider: params.agent?.provider,
+      agentModel: params.agent?.model,
+      sessionMode: params.emitToolCallEvents ? "fresh" : "default",
       title: params.title,
-      kind: "other",
-      status: "pending",
-      rawInput: params.rawInput,
     });
+    if (this.timingTrace && !this.timingTrace.shared.firstAgentActionRecorded) {
+      this.timingTrace.shared.firstAgentActionRecorded = true;
+      appendTimingTraceEvent(this.timingTrace, "context", "first_agent_action", {
+        procedure: this.procedureName,
+        sessionMode: params.emitToolCallEvents ? "fresh" : "default",
+        title: params.title,
+      });
+    }
+
+    if (started.emitToolCallEvents && started.toolCallId && params.title) {
+      this.emitter.emit({
+        sessionUpdate: "tool_call",
+        toolCallId: started.toolCallId,
+        title: params.title,
+        kind: "other",
+        status: "pending",
+        rawInput: params.rawInput,
+      });
+    }
 
     return started;
   }
@@ -404,19 +426,21 @@ export class CommandContextImpl implements CommandContext {
       agentModel: params.agent?.model,
     });
 
-    this.emitter.emit({
-      sessionUpdate: "tool_call_update",
-      toolCallId: started.toolCallId,
-      status: "completed",
-      rawOutput: {
-        cell: finalized.cell,
-        dataRef: finalized.dataRef,
-        durationMs: params.durationMs,
-        logFile: params.logFile,
-        expandedContent: params.raw,
-        ...params.rawOutputExtra,
-      },
-    });
+    if (started.emitToolCallEvents && started.toolCallId) {
+      this.emitter.emit({
+        sessionUpdate: "tool_call_update",
+        toolCallId: started.toolCallId,
+        status: "completed",
+        rawOutput: {
+          cell: finalized.cell,
+          dataRef: finalized.dataRef,
+          durationMs: params.durationMs,
+          logFile: params.logFile,
+          expandedContent: params.raw,
+          ...params.rawOutputExtra,
+        },
+      });
+    }
 
     return finalized;
   }
@@ -443,12 +467,14 @@ export class CommandContextImpl implements CommandContext {
       agentModel: agent?.model,
     });
 
-    this.emitter.emit({
-      sessionUpdate: "tool_call_update",
-      toolCallId: started.toolCallId,
-      status: cancelled ? "cancelled" : "failed",
-      rawOutput: { error: message },
-    });
+    if (started.emitToolCallEvents && started.toolCallId) {
+      this.emitter.emit({
+        sessionUpdate: "tool_call_update",
+        toolCallId: started.toolCallId,
+        status: cancelled ? "cancelled" : "failed",
+        rawOutput: { error: message },
+      });
+    }
 
     throw cancelled ?? error;
   }

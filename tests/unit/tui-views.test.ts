@@ -757,7 +757,7 @@ describe("NanobossAppView", () => {
     expect(addedLine).toContain("\u001b[38;2;74;222;128m");
   });
 
-  test("default procedure cards do not repeat the user prompt", () => {
+  test("activity bar shows the active procedure while a run is busy", () => {
     const view = new NanobossAppView(
       {
         render: () => [""],
@@ -767,27 +767,13 @@ describe("NanobossAppView", () => {
       {
         ...createInitialUiState({ cwd: "/repo", showToolCalls: true }),
         sessionId: "session-1",
-        toolCalls: [
-          {
-            id: "tool-1",
-            runId: "run-1",
-            title: "Calling default procedure",
-            kind: "other",
-            status: "completed",
-            depth: 0,
-            isWrapper: true,
-            callPreview: { header: "Calling default procedure" },
-            resultPreview: { bodyLines: ["explain to me what you fixed in the last commit"] },
-            durationMs: 17,
-          },
-        ],
-        transcriptItems: [{ type: "tool_call" as const, id: "tool-1" }],
+        inputDisabled: true,
+        activeProcedure: "linter",
       },
     );
 
     const rendered = stripAnsi(view.render(120).join("\n"));
-    expect(rendered).toContain("Calling default procedure");
-    expect(rendered).not.toContain("explain to me what you fixed in the last commit");
+    expect(rendered).toContain("procedure /linter");
   });
 
   test("collapsed tool output can be expanded globally", () => {

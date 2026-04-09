@@ -12,6 +12,7 @@ import { join } from "node:path";
 
 import { defaultCancellationMessage } from "../core/cancellation.ts";
 import { resolveDownstreamAgentConfig } from "../core/config.ts";
+import { appendTimingTraceEvent, createRunTimingTrace } from "../core/timing-trace.ts";
 import { findRecoveredProcedureDispatchCell } from "./dispatch-recovery.ts";
 import {
   ProcedureDispatchProgressEmitter,
@@ -138,10 +139,28 @@ export class ProcedureDispatchJobManager {
       this.params.rootDir,
       job.dispatchCorrelationId,
     );
+    appendTimingTraceEvent(
+      createRunTimingTrace(this.params.rootDir, job.dispatchCorrelationId),
+      "dispatch_job",
+      "start_requested",
+      {
+        procedure: args.name,
+        cancelledBeforeStart: cancellationRequested,
+      },
+    );
     this.writeJob(cancellationRequested ? markJobCancelled(job) : job);
     if (!cancellationRequested) {
       const workerPid = this.spawnWorker(dispatchId);
       this.writeJobWorkerPid(dispatchId, workerPid);
+      appendTimingTraceEvent(
+        createRunTimingTrace(this.params.rootDir, job.dispatchCorrelationId),
+        "dispatch_job",
+        "worker_spawned",
+        {
+          dispatchId,
+          workerPid,
+        },
+      );
     }
 
     return {
@@ -198,14 +217,23 @@ export class ProcedureDispatchJobManager {
 
   async run(dispatchId: string): Promise<void> {
     let job = this.readJob(dispatchId);
+    const timingTrace = createRunTimingTrace(this.params.rootDir, job.dispatchCorrelationId);
+    appendTimingTraceEvent(timingTrace, "dispatch_worker", "run_started", {
+      dispatchId,
+      procedure: job.procedure,
+    });
     if (job.status === "cancelled" || isProcedureDispatchCancellationRequested(this.params.rootDir, job.dispatchCorrelationId)) {
       if (job.status !== "cancelled") {
         this.writeJob(markJobCancelled(job));
       }
+      appendTimingTraceEvent(timingTrace, "dispatch_worker", "run_aborted_before_start");
       return;
     }
 
     if (isTerminalStatus(job.status)) {
+      appendTimingTraceEvent(timingTrace, "dispatch_worker", "run_skipped_terminal_status", {
+        status: job.status,
+      });
       return;
     }
 
@@ -231,11 +259,15 @@ export class ProcedureDispatchJobManager {
 
     try {
       const registry = await this.params.getRegistry();
+      appendTimingTraceEvent(timingTrace, "dispatch_worker", "registry_loaded");
       const procedure = registry.get(job.procedure);
       if (!procedure) {
         throw new Error(`Unknown procedure: ${job.procedure}`);
       }
 
+      appendTimingTraceEvent(timingTrace, "dispatch_worker", "procedure_execution_started", {
+        procedure: job.procedure,
+      });
       const result = await executeTopLevelProcedure({
         cwd: this.params.cwd,
         sessionId: this.params.sessionId,
@@ -252,6 +284,7 @@ export class ProcedureDispatchJobManager {
           return nextConfig;
         },
         dispatchCorrelationId: job.dispatchCorrelationId,
+        timingTrace,
       });
 
       const completedAt = new Date().toISOString();
@@ -277,6 +310,10 @@ export class ProcedureDispatchJobManager {
         error: undefined,
         defaultAgentSelection: result.defaultAgentSelection ?? job.defaultAgentSelection,
       });
+      appendTimingTraceEvent(timingTrace, "dispatch_worker", "procedure_execution_completed", {
+        procedure: job.procedure,
+        cellId: result.cell.cellId,
+      });
     } catch (error) {
       const completedAt = new Date().toISOString();
       const latest = this.readJob(dispatchId);
@@ -299,6 +336,10 @@ export class ProcedureDispatchJobManager {
         updatedAt: completedAt,
         completedAt,
         cell,
+        error: message,
+      });
+      appendTimingTraceEvent(timingTrace, "dispatch_worker", "procedure_execution_failed", {
+        procedure: job.procedure,
         error: message,
       });
       throw error;

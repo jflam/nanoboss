@@ -15,6 +15,7 @@ import {
   normalizeProcedureResult,
 } from "../session/index.ts";
 import { toDownstreamAgentSelection } from "../core/config.ts";
+import { appendTimingTraceEvent, type RunTimingTrace } from "../core/timing-trace.ts";
 import { summarizeText } from "../util/text.ts";
 import type {
   AgentTokenUsage,
@@ -90,6 +91,7 @@ export async function executeTopLevelProcedure(params: {
   onError?: (ctx: CommandContextImpl, errorText: string) => void | Promise<void>;
   dispatchCorrelationId?: string;
   assertCanStartBoundary?: () => void;
+  timingTrace?: RunTimingTrace;
   resume?: {
     prompt: string;
     state: KernelValue;
@@ -123,6 +125,7 @@ export async function executeTopLevelProcedure(params: {
     setDefaultAgentSelection: params.setDefaultAgentSelection,
     prepareDefaultPrompt: params.prepareDefaultPrompt,
     assertCanStartBoundary: params.assertCanStartBoundary,
+    timingTrace: params.timingTrace,
   });
 
   logger.write({
@@ -130,6 +133,9 @@ export async function executeTopLevelProcedure(params: {
     procedure: params.procedure.name,
     kind: "procedure_start",
     prompt: params.prompt,
+  });
+  appendTimingTraceEvent(params.timingTrace, "procedure_runner", "top_level_procedure_started", {
+    procedure: params.procedure.name,
   });
 
   try {
