@@ -304,6 +304,7 @@ describe("nanoboss/commit procedure", () => {
 
     expect(calls[0]).toBe("procedure:nanoboss/pre-commit-checks:");
     expect(calls[1]).toContain("Pre-commit checks have already passed");
+    expect(calls[1]).toContain("User-provided commit intent: message context.");
     expect(result).toMatchObject({
       data: {
         checks: {
@@ -378,7 +379,39 @@ describe("nanoboss/commit procedure", () => {
     );
 
     expect(calls[0]).toBe("procedure:nanoboss/pre-commit-checks:--refresh");
-    expect(calls[1]).toContain("Context: tighten message");
+    expect(calls[1]).toContain("User-provided commit intent: tighten message.");
+  });
+
+  test("tells the agent to treat a referenced plan or file as primary commit intent", async () => {
+    const calls: string[] = [];
+    const procedure = createNanobossCommitProcedure();
+
+    await procedure.execute(
+      "commit this work described in plans/2026-04-09-pre-commit-checks-and-commit-fingerprint-plan.md",
+      createMockContext({
+        cwd: "/repo",
+        async callProcedure() {
+          return {
+            cell: { sessionId: "session", cellId: "checks" },
+            data: passingChecks({ cacheHit: true }),
+          } satisfies RunResult<PreCommitChecksResult>;
+        },
+        async callAgent(prompt) {
+          calls.push(prompt);
+          return {
+            cell: { sessionId: "session", cellId: "agent" },
+            data: "committed\n",
+            dataRef: makeValueRef("agent"),
+          } satisfies RunResult<string>;
+        },
+      }),
+    );
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toContain(
+      "User-provided commit intent: commit this work described in plans/2026-04-09-pre-commit-checks-and-commit-fingerprint-plan.md.",
+    );
+    expect(calls[0]).toContain("If it references a repo file or plan, read that file first");
   });
 });
 

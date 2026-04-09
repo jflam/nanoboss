@@ -67,10 +67,14 @@ export function parseCommitPrompt(prompt: string): { refresh: boolean; commitCon
 
 function buildCommitPrompt(cwd: string, commitContext: string): string {
   return [
-    `Git commit the staged or recent changes in ${cwd} with a descriptive message.`,
+    `Create one git commit for the current workspace in ${cwd}.`,
     "Pre-commit checks have already passed for the current workspace state.",
     "Do not rerun tests, lint, or other validation commands.",
-    commitContext.length > 0 ? `Context: ${commitContext}` : undefined,
+    commitContext.length > 0
+      ? `User-provided commit intent: ${commitContext}. Treat this as the primary description of the intended work. If it references a repo file or plan, read that file first and avoid unrelated exploration.`
+      : undefined,
+    "Prefer a concise single-line commit message under 72 characters.",
+    "Do not narrate your reasoning or progress. Return only the commit sha, message, and whether the tree is clean.",
   ].filter((value): value is string => Boolean(value)).join(" ");
 }
 

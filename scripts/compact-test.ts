@@ -75,17 +75,7 @@ function resolveOptimizedPlan(args: string[]): CompactTestRunPlanEntry[] | undef
 
   const normalizedArgs = args.map(normalizeTestArg);
   if (normalizedArgs.length === 0) {
-    if (process.env.NANOBOSS_RUN_E2E === "1") {
-      return undefined;
-    }
-
-    return [
-      ...buildUnitPlan(),
-      {
-        label: "e2e",
-        args: ["tests/e2e"],
-      },
-    ];
+    return buildUnitPlan();
   }
 
   if (normalizedArgs.length === 1 && normalizedArgs[0] === "tests/unit") {

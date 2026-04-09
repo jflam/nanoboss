@@ -173,15 +173,14 @@ bun run lint
 
 ## Testing
 
-Run the full test suite:
+Run the fast local test suite:
 
 ```bash
 bun run test
 ```
 
-This runs a compact wrapper around `bun test` that emits `.` for pass, `S` for skip, and `F` for fail,
-then prints detailed failure output only when tests fail. Real-agent end-to-end tests still skip unless
-`NANOBOSS_RUN_E2E=1` is set.
+This runs a compact wrapper around the unit test suite and emits `.` for pass, `S` for skip, and `F` for fail,
+then prints detailed failure output only when tests fail.
 
 Run unit tests only:
 
@@ -190,6 +189,14 @@ bun run test:unit
 ```
 
 This runs the compact test wrapper against `tests/unit`.
+
+Run every test file with raw `bun test` discovery:
+
+```bash
+bun run test:raw
+```
+
+This includes unit and e2e tests.
 
 Run end-to-end tests with the default gating behavior:
 
