@@ -3,18 +3,30 @@ import { join } from "node:path";
 
 import typia from "typia";
 
-import { expectData } from "../src/core/run-result.ts";
+import { expectData, expectDataRef } from "../src/core/run-result.ts";
 import {
   jsonType,
   type CommandContext,
   type Procedure,
 } from "../src/core/types.ts";
 
+interface ResearchBrief {
+  researchQuestion: string;
+  contextSummary: string;
+  mustCover: string[];
+  constraints: string[];
+}
+
 interface ResearchResult {
   report: string;
   abstract: string;
   descriptionWords: string[];
 }
+
+const ResearchBriefType = jsonType<ResearchBrief>(
+  typia.json.schema<ResearchBrief>(),
+  typia.createValidate<ResearchBrief>(),
+);
 
 const ResearchResultType = jsonType<ResearchResult>(
   typia.json.schema<ResearchResult>(),
@@ -37,11 +49,34 @@ export default {
     }
 
     ctx.print("Starting research...\n");
+    ctx.print("Preparing a research brief from the current conversation...\n");
+
+    const briefResult = await ctx.callAgent(
+      buildResearchBriefPrompt(trimmed),
+      ResearchBriefType,
+      {
+        session: "default",
+        stream: false,
+      },
+    );
+    const brief = expectData(briefResult, "Research brief returned no data");
+    const briefDataRef = expectDataRef(briefResult, "Research brief returned no data ref");
+
+    if (!brief.researchQuestion.trim()) {
+      throw new Error("Research brief question was empty");
+    }
+
+    ctx.print("Dispatching an isolated research agent...\n");
 
     const result = await ctx.callAgent(
-      buildResearchPrompt(trimmed),
+      buildResearchExecutionPrompt(trimmed),
       ResearchResultType,
-      { stream: false },
+      {
+        refs: {
+          brief: briefDataRef,
+        },
+        stream: false,
+      },
     );
     const research = expectData(result, "Research returned no data");
 
@@ -71,9 +106,27 @@ export default {
   },
 } satisfies Procedure;
 
-function buildResearchPrompt(prompt: string): string {
+function buildResearchBriefPrompt(prompt: string): string {
   return [
-    "You are a research agent.",
+    "You are preparing a research brief for a separate worker agent.",
+    "Use the current conversation and the user request below to clarify the task.",
+    "Return a JSON object with exactly four fields: `researchQuestion`, `contextSummary`, `mustCover`, and `constraints`.",
+    "`researchQuestion` must restate the core research task as a single explicit question or objective.",
+    "`contextSummary` must capture the relevant chat context that the worker should know before researching.",
+    "`mustCover` must be an array of concrete points the final report should address.",
+    "`constraints` must be an array of concrete limitations, preferences, or uncertainties from the conversation.",
+    "If the conversation does not provide extra context for a field, use an empty string or empty array rather than inventing details.",
+    "Return no extra keys and no prose outside the JSON object.",
+    "",
+    `User request:\n${prompt}`,
+  ].join("\n");
+}
+
+function buildResearchExecutionPrompt(prompt: string): string {
+  return [
+    "You are a research agent working from the referenced brief `brief`.",
+    "Treat `brief.researchQuestion` as the primary task.",
+    "Use `brief.contextSummary`, `brief.mustCover`, and `brief.constraints` to scope the work.",
     "Research the user's request and return a JSON object with exactly three fields: `report`, `abstract`, and `descriptionWords`.",
     "`report` must be a detailed Markdown research report.",
     "Every researched factual claim in `report` must have an inline citation immediately adjacent to the claim.",
@@ -85,7 +138,7 @@ function buildResearchPrompt(prompt: string): string {
     "Choose words that capture the topic of the research rather than generic words like report or research.",
     "Return no extra keys and no prose outside the JSON object.",
     "",
-    `User request:\n${prompt}`,
+    `Original user request:\n${prompt}`,
   ].join("\n");
 }
 

@@ -19,11 +19,16 @@ afterEach(() => {
 });
 
 describe("/research", () => {
-  test("always writes the cited report to the plans directory", async () => {
+  test("uses a default-session brief before dispatching isolated research", async () => {
     const cwd = mkdtempSync(join(tmpdir(), "nab-research-"));
     tempDirs.push(cwd);
 
     const prints: string[] = [];
+    const calls: Array<{
+      prompt: string;
+      descriptor?: unknown;
+      options?: unknown;
+    }> = [];
     const report = [
       "# Findings",
       "",
@@ -42,10 +47,58 @@ describe("/research", () => {
         print: (text) => {
           prints.push(text);
         },
-        agentResult: {
-          report,
-          abstract,
-          descriptionWords: ["pi", "tui", "review"],
+        callAgent: async (prompt, descriptorOrOptions, maybeOptions) => {
+          const descriptor = isDescriptor(descriptorOrOptions) ? descriptorOrOptions : undefined;
+          const options = (descriptor ? maybeOptions : descriptorOrOptions) as
+            | Record<string, unknown>
+            | undefined;
+
+          calls.push({
+            prompt,
+            descriptor,
+            options,
+          });
+
+          if (calls.length === 1) {
+            return {
+              cell: {
+                sessionId: "test-session",
+                cellId: "brief-cell",
+              },
+              data: {
+                researchQuestion: "What changed in the pi-tui update?",
+                contextSummary: "The user wants a concise summary of the renderer migration.",
+                mustCover: ["what changed", "why it matters"],
+                constraints: ["keep it concise"],
+              },
+              dataRef: {
+                cell: {
+                  sessionId: "test-session",
+                  cellId: "brief-cell",
+                },
+                path: "data",
+              },
+            } satisfies RunResult<unknown>;
+          }
+
+          return {
+            cell: {
+              sessionId: "test-session",
+              cellId: "report-cell",
+            },
+            data: {
+              report,
+              abstract,
+              descriptionWords: ["pi", "tui", "review"],
+            },
+            dataRef: {
+              cell: {
+                sessionId: "test-session",
+                cellId: "report-cell",
+              },
+              path: "data",
+            },
+          } satisfies RunResult<unknown>;
         },
       }),
     );
@@ -66,6 +119,31 @@ describe("/research", () => {
     expect(result.memory).toBe(
       `Research completed for summarize the pi-tui update. The cited report was also written to ${relativePath}.`,
     );
+    expect(calls).toHaveLength(2);
+    expect(calls[0].prompt).toContain("You are preparing a research brief for a separate worker agent.");
+    expect(calls[0].prompt).toContain("User request:\nsummarize the pi-tui update");
+    expect(isDescriptor(calls[0].descriptor)).toBe(true);
+    expect(calls[0].options).toEqual({
+      session: "default",
+      stream: false,
+    });
+    expect(calls[1].prompt).toContain("You are a research agent working from the referenced brief `brief`.");
+    expect(calls[1].prompt).toContain("Original user request:\nsummarize the pi-tui update");
+    expect(isDescriptor(calls[1].descriptor)).toBe(true);
+    expect(calls[1].options).toEqual({
+      refs: {
+        brief: {
+          cell: {
+            sessionId: "test-session",
+            cellId: "brief-cell",
+          },
+          path: "data",
+        },
+      },
+      stream: false,
+    });
+    expect(prints).toContain("Preparing a research brief from the current conversation...\n");
+    expect(prints).toContain("Dispatching an isolated research agent...\n");
     expect(prints).toContain("Starting research...\n");
     expect(prints).toContain(`Wrote detailed report to ${relativePath}.\n`);
     expect(prints).toContain("Completed research.\n");
@@ -75,11 +153,7 @@ describe("/research", () => {
 function createMockContext(params: {
   cwd: string;
   print(text: string): void;
-  agentResult: {
-    report: string;
-    abstract: string;
-    descriptionWords: string[];
-  };
+  callAgent: CommandContext["callAgent"];
 }): CommandContext {
   const defaultAgentConfig: DownstreamAgentConfig = {
     provider: "copilot",
@@ -87,14 +161,6 @@ function createMockContext(params: {
     args: [],
     cwd: params.cwd,
   };
-
-  const callAgent = async () => ({
-    cell: {
-      sessionId: "test-session",
-      cellId: "test-cell",
-    },
-    data: params.agentResult,
-  }) as RunResult<typeof params.agentResult>;
 
   return {
     cwd: params.cwd,
@@ -140,10 +206,19 @@ function createMockContext(params: {
     async getDefaultAgentTokenUsage() {
       return undefined;
     },
-    callAgent: callAgent as CommandContext["callAgent"],
+    callAgent: params.callAgent,
     async callProcedure() {
       throw new Error("Not implemented in test");
     },
     print: params.print,
   };
+}
+
+function isDescriptor(value: unknown): boolean {
+  return Boolean(
+    value
+      && typeof value === "object"
+      && "schema" in value
+      && "validate" in value,
+  );
 }
