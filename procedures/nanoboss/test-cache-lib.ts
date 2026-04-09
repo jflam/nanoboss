@@ -134,7 +134,7 @@ export function loadCachedPreCommitChecksResult(cachePath: string): CachedPreCom
   }
 
   try {
-    const parsed = JSON.parse(readFileSync(cachePath, "utf8"));
+    const parsed: unknown = JSON.parse(readFileSync(cachePath, "utf8"));
     return isCachedPreCommitChecksResult(parsed) ? parsed : undefined;
   } catch {
     return undefined;

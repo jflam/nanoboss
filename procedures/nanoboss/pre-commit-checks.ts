@@ -21,26 +21,27 @@ export function createPreCommitChecksProcedure(
     description: "Run or replay the repo pre-commit validation command",
     async execute(prompt, ctx) {
       const refresh = hasRefreshFlag(prompt);
-      let freshRunAnnounced = false;
-      let streamedFreshOutput = false;
+      let streamedFreshOutputLength = 0;
       const result = await resolveChecks({
         cwd: ctx.cwd,
         refresh,
         onFreshRun(event) {
-          freshRunAnnounced = true;
           ctx.print(renderFreshRunHeader(event.reason, event.command));
         },
         onOutputChunk(chunk) {
-          streamedFreshOutput = true;
+          streamedFreshOutputLength += chunk.length;
           ctx.print(chunk);
         },
       });
 
-      if (result.cacheHit || !freshRunAnnounced) {
+      if (result.cacheHit) {
         ctx.print(renderHeader(result, refresh));
-      }
-      if (result.cacheHit || !streamedFreshOutput) {
         ctx.print(ensureTrailingNewline(result.combinedOutput));
+      } else {
+        const remainingFreshOutput = result.combinedOutput.slice(streamedFreshOutputLength);
+        if (remainingFreshOutput.length > 0) {
+          ctx.print(ensureTrailingNewline(remainingFreshOutput));
+        }
       }
 
       return {

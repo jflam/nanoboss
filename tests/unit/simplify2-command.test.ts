@@ -345,10 +345,10 @@ describe("simplify2 procedure", () => {
       ]),
     );
 
-    const pausedState = normalizeProcedureResult(executeResult).pause?.state;
+    const pausedState = requirePauseState(normalizeProcedureResult(executeResult));
     const resumeResult = await simplify2Procedure.resume(
       "approve it",
-      pausedState!,
+      pausedState,
       createMockContext(cwd, [
         {
           kind: "approve_hypothesis",
@@ -439,11 +439,11 @@ describe("simplify2 procedure", () => {
       ]),
     );
 
-    const pausedState = normalizeProcedureResult(executeResult).pause?.state;
+    const pausedState = requirePauseState(normalizeProcedureResult(executeResult));
     const resumePrompts: string[] = [];
     const resumeResult = await simplify2Procedure.resume(
       "the boundary is real because it reflects deployment constraints",
-      pausedState!,
+      pausedState,
       createMockContext(cwd, [
         {
           kind: "design_update",
@@ -638,4 +638,13 @@ function normalizeProcedureResult(value: ProcedureResult | string | void): Proce
   }
 
   return value;
+}
+
+function requirePauseState(result: ProcedureResult): NonNullable<NonNullable<ProcedureResult["pause"]>["state"]> {
+  const pausedState = result.pause?.state;
+  expect(pausedState).toBeDefined();
+  if (!pausedState) {
+    throw new Error("Expected procedure result to include pause state");
+  }
+  return pausedState;
 }

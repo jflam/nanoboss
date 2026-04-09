@@ -306,6 +306,7 @@ interface Simplify2ActionFinish {
 
 interface Simplify2ActionPause {
   kind: "pause_for_human";
+  checkpoint: SimplifyCheckpoint;
   question: string;
 }
 
@@ -671,6 +672,7 @@ function decideNextAction(state: Simplify2State): Simplify2Action {
     const checkpoint = state.notebook.currentCheckpoint ?? buildCheckpoint(best);
     return {
       kind: "pause_for_human",
+      checkpoint,
       question: checkpoint.question,
     };
   }
@@ -687,7 +689,7 @@ async function continueFromAnalysis(
 ): Promise<ProcedureResult | string | void> {
   let current = state;
 
-  while (true) {
+  for (;;) {
     const next = decideNextAction(current);
     if (next.kind === "finish") {
       current = markFinished(current);
@@ -697,7 +699,7 @@ async function continueFromAnalysis(
     if (next.kind === "pause_for_human") {
       current.mode = "checkpoint";
       current.notebook.status = "awaiting_human";
-      current.notebook.currentCheckpoint = current.notebook.currentCheckpoint ?? buildCheckpoint(current.notebook.candidateHypotheses[0]!);
+      current.notebook.currentCheckpoint = next.checkpoint;
       current = appendCheckpointJournal(current);
       return buildPausedResult(current, next.question);
     }
@@ -1232,7 +1234,7 @@ function runSelectedValidation(state: Simplify2State): ValidationSummary {
     cwd: repoRoot,
     encoding: "utf8",
   });
-  const output = `${result.stdout ?? ""}${result.stderr ?? ""}`.trim();
+  const output = `${result.stdout}${result.stderr}`.trim();
   const outputSummary = summarizeText(output, 240) || `bun ${args.join(" ")} finished with status ${result.status ?? 1}`;
 
   return {
@@ -1508,9 +1510,10 @@ function reconcileRankedHypotheses(
       && !state.history.resolvedHypothesisIds.includes(hypothesis.id))
     .map((hypothesis) => {
       const ranking = rankingById.get(hypothesis.id);
+      const score = ranking?.score;
       return {
         ...hypothesis,
-        score: Number.isFinite(ranking?.score) ? ranking!.score : 0,
+        score: typeof score === "number" && Number.isFinite(score) ? score : 0,
         needsHumanCheckpoint: ranking?.needsHumanCheckpoint ?? hypothesis.needsHumanCheckpoint,
         ...(ranking?.reason ? { rankingReason: ranking.reason } : {}),
       };
@@ -1665,10 +1668,10 @@ function createJournalEntry(params: {
   if (params.validationStatus) {
     entry.validationStatus = params.validationStatus;
   }
-  return Simplify2JournalEntryType.validate(entry) ? entry : {
-    ...entry,
-    details: [],
-  };
+  if (!Simplify2JournalEntryType.validate(entry)) {
+    entry.details = [];
+  }
+  return entry;
 }
 
 function createSyntheticObservation(
