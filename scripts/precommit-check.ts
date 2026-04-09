@@ -1,15 +1,10 @@
 import { spawn } from "node:child_process";
-
-const MARKER_PREFIX = "[[nanoboss-precommit]] ";
-
-type PhaseName = "lint" | "typecheck" | "test";
-type PhaseStatus = "passed" | "failed" | "not_run";
-
-interface PhaseResult {
-  phase: PhaseName;
-  status: PhaseStatus;
-  exitCode?: number;
-}
+import {
+  PRE_COMMIT_MARKER_PREFIX,
+  type PreCommitPhaseName as PhaseName,
+  type PreCommitPhaseResult as PhaseResult,
+  type PreCommitPhaseStatus as PhaseStatus,
+} from "../procedures/nanoboss/pre-commit-checks-protocol.ts";
 
 const phases: Array<{
   phase: PhaseName;
@@ -128,5 +123,5 @@ for (let index = 0; index < phases.length; index += 1) {
 }
 
 function emitMarker(payload: object): void {
-  process.stdout.write(`${MARKER_PREFIX}${JSON.stringify(payload)}\n`);
+  process.stdout.write(`${PRE_COMMIT_MARKER_PREFIX}${JSON.stringify(payload)}\n`);
 }
