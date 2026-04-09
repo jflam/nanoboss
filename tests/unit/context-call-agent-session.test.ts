@@ -7,6 +7,7 @@ import typia from "typia";
 
 import { DefaultConversationSession } from "../../src/agent/default-session.ts";
 import { CommandContextImpl } from "../../src/core/context.ts";
+import { resolveDownstreamAgentConfig } from "../../src/core/config.ts";
 import { RunLogger } from "../../src/core/logger.ts";
 import { jsonType, type DownstreamAgentConfig } from "../../src/core/types.ts";
 import { ProcedureRegistry } from "../../src/procedure/registry.ts";
@@ -127,12 +128,168 @@ describe("CommandContext callAgent session selection", () => {
 
     expect(emittedUpdates).toEqual([]);
   });
+
+  test("callProcedure inherits the current default-session binding by default", async () => {
+    const { conversation, ctx, registry } = createContext();
+    const prompts: string[] = [];
+
+    Reflect.set(conversation as object, "persistedSessionId", "default-session-procedure-inherit");
+    Reflect.set(
+      conversation as object,
+      "prompt",
+      async (prompt: string) => {
+        prompts.push(prompt);
+        return {
+          raw: "inherited",
+          updates: [],
+          durationMs: 0,
+        };
+      },
+    );
+
+    registry.register({
+      name: "child",
+      description: "test child procedure",
+      async execute(prompt, childCtx) {
+        const reply = await childCtx.callAgent(prompt, {
+          session: "default",
+          stream: false,
+        });
+        return {
+          data: reply.data,
+        };
+      },
+    });
+
+    const result = await ctx.callProcedure("child", "reuse the bound session");
+
+    expect(result.data).toBe("inherited");
+    expect(prompts).toEqual(["reuse the bound session"]);
+  });
+
+  test("callProcedure with session fresh gives the child a private default binding", async () => {
+    const { conversation, ctx, registry } = createContext();
+    const rootConfigBefore = ctx.getDefaultAgentConfig();
+    const promptedConversations: DefaultConversationSession[] = [];
+    const originalPrompt = DefaultConversationSession.prototype.prompt;
+
+    Reflect.set(conversation as object, "persistedSessionId", "default-session-root");
+
+    Reflect.set(
+      DefaultConversationSession.prototype as object,
+      "prompt",
+      async function prompt(
+        this: DefaultConversationSession,
+        promptText: string,
+      ) {
+        promptedConversations.push(this);
+        return {
+          raw: `${promptText} via ${this === conversation ? "root" : "fresh"}`,
+          updates: [],
+          durationMs: 0,
+        };
+      },
+    );
+
+    registry.register({
+      name: "child",
+      description: "test fresh child procedure",
+      async execute(prompt, childCtx) {
+        childCtx.setDefaultAgentSelection({
+          provider: "codex",
+          model: "gpt-5.4/high",
+        });
+
+        const reply = await childCtx.callAgent(prompt, {
+          session: "default",
+          stream: false,
+        });
+
+        return {
+          data: {
+            reply: reply.data,
+            selection: childCtx.getDefaultAgentConfig(),
+          },
+        };
+      },
+    });
+
+    try {
+      const result = await ctx.callProcedure<{
+        reply: string;
+        selection: DownstreamAgentConfig;
+      }>("child", "private child session", { session: "fresh" });
+
+      expect(result.data?.reply).toBe("private child session via fresh");
+      expect(promptedConversations).toHaveLength(1);
+      expect(promptedConversations[0]).not.toBe(conversation);
+      expect(result.data?.selection.provider).toBe("codex");
+      expect(result.data?.selection.model).toBe("gpt-5.4/high");
+      expect(ctx.getDefaultAgentConfig()).toEqual(rootConfigBefore);
+    } finally {
+      Reflect.set(DefaultConversationSession.prototype as object, "prompt", originalPrompt);
+    }
+  });
+
+  test("callProcedure with session default rebinds nested children to the master session", async () => {
+    const { conversation, ctx, registry } = createContext();
+    const promptedConversations: DefaultConversationSession[] = [];
+    const originalPrompt = DefaultConversationSession.prototype.prompt;
+
+    Reflect.set(conversation as object, "persistedSessionId", "default-session-master");
+    Reflect.set(
+      DefaultConversationSession.prototype as object,
+      "prompt",
+      async function prompt(this: DefaultConversationSession) {
+        promptedConversations.push(this);
+        return {
+          raw: "master session reply",
+          updates: [],
+          durationMs: 0,
+        };
+      },
+    );
+
+    registry.register({
+      name: "inner",
+      description: "test nested child procedure",
+      async execute(_prompt, innerCtx) {
+        const reply = await innerCtx.callAgent("use the master binding", {
+          session: "default",
+          stream: false,
+        });
+        return {
+          data: reply.data,
+        };
+      },
+    });
+    registry.register({
+      name: "outer",
+      description: "test outer child procedure",
+      async execute(_prompt, outerCtx) {
+        const result = await outerCtx.callProcedure("inner", "", { session: "default" });
+        return {
+          data: result.data,
+        };
+      },
+    });
+
+    try {
+      const result = await ctx.callProcedure("outer", "", { session: "fresh" });
+
+      expect(result.data).toBe("master session reply");
+      expect(promptedConversations).toEqual([conversation]);
+    } finally {
+      Reflect.set(DefaultConversationSession.prototype as object, "prompt", originalPrompt);
+    }
+  });
 });
 
 function createContext(): {
   conversation: DefaultConversationSession;
   ctx: CommandContextImpl;
   emittedUpdates: acp.SessionUpdate[];
+  registry: ProcedureRegistry;
 } {
   const cwd = mkdtempSync(join(tmpdir(), "nab-call-agent-session-"));
   tempDirs.push(cwd);
@@ -145,7 +302,7 @@ function createContext(): {
     cwd,
   });
   const emittedUpdates: acp.SessionUpdate[] = [];
-  const config = createMockConfig(cwd);
+  let config = createMockConfig(cwd);
   const conversation = new DefaultConversationSession({
     config,
   });
@@ -170,13 +327,19 @@ function createContext(): {
     }),
     defaultConversation: conversation,
     getDefaultAgentConfig: () => config,
-    setDefaultAgentSelection: () => config,
+    setDefaultAgentSelection: (selection) => {
+      const nextConfig = resolveDownstreamAgentConfig(cwd, selection);
+      config = nextConfig;
+      conversation.updateConfig(nextConfig);
+      return nextConfig;
+    },
   });
 
   return {
     conversation,
     ctx,
     emittedUpdates,
+    registry,
   };
 }
 

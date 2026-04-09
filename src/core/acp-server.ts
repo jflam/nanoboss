@@ -53,7 +53,7 @@ class Nanoboss implements acp.Agent {
 
   async newSession(params: acp.NewSessionRequest): Promise<acp.NewSessionResponse> {
     const requestedSessionId = extractNanobossSessionId(params);
-    const session = this.service.createSession({
+    const session = await this.service.createSessionReady({
       cwd: params.cwd,
       defaultAgentSelection: extractDefaultAgentSelection(params),
       sessionId: requestedSessionId,

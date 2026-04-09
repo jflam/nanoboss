@@ -2,7 +2,6 @@ import type * as acp from "@agentclientprotocol/sdk";
 
 import { parseAssistantNoticeText } from "./acp-updates.ts";
 import {
-  applyAcpSessionConfig,
   closeAcpConnection,
   openAcpConnection,
   type OpenAcpConnection,
@@ -33,6 +32,8 @@ interface PromptCollector {
   updates: acp.SessionUpdate[];
   onUpdate?: CallAgentOptions["onUpdate"];
   lastTask: Promise<void>;
+  firstUpdateRecorded: boolean;
+  timingTrace?: RunTimingTrace;
 }
 
 interface DefaultConversationSessionParams {
@@ -89,11 +90,21 @@ export class DefaultConversationSession {
       const result = await session.prompt(prompt, options);
       this.persistedSessionId = session.sessionId;
       this.lastTokenSnapshot = result.tokenSnapshot ?? this.lastTokenSnapshot;
+      appendTimingTraceEvent(options.timingTrace, "default_session", "prompt_completed", {
+        sessionId: session.sessionId,
+        durationMs: Date.now() - startedAt,
+        updateCount: result.updates.length,
+      });
       return {
         ...result,
         durationMs: Date.now() - startedAt,
       };
     } catch (error) {
+      appendTimingTraceEvent(options.timingTrace, "default_session", "prompt_failed", {
+        sessionId: session.sessionId,
+        durationMs: Date.now() - startedAt,
+        error: error instanceof Error ? error.message : String(error),
+      });
       if (!session.isAlive()) {
         session.close();
         if (this.liveSession === session) {
@@ -168,7 +179,7 @@ export class DefaultConversationSession {
       appendTimingTraceEvent(timingTrace, "default_session", "load_session_attempt_started", {
         sessionId: this.persistedSessionId,
       });
-      session = await PersistentAcpSession.load(this.config, this.persistedSessionId);
+      session = await PersistentAcpSession.load(this.config, this.persistedSessionId, timingTrace);
       appendTimingTraceEvent(timingTrace, "default_session", "load_session_attempt_completed", {
         sessionId: this.persistedSessionId,
         loaded: session !== undefined,
@@ -177,7 +188,7 @@ export class DefaultConversationSession {
 
     if (!session) {
       appendTimingTraceEvent(timingTrace, "default_session", "create_fresh_session_started");
-      session = await PersistentAcpSession.createFresh(this.config);
+      session = await PersistentAcpSession.createFresh(this.config, timingTrace);
       appendTimingTraceEvent(timingTrace, "default_session", "create_fresh_session_completed", {
         sessionId: session.sessionId,
       });
@@ -213,16 +224,26 @@ class PersistentAcpSession {
 
   static async createFresh(
     config: DownstreamAgentConfig,
+    timingTrace?: RunTimingTrace,
   ): Promise<PersistentAcpSession> {
+    appendTimingTraceEvent(timingTrace, "default_session", "acp_connection_open_started");
     const state = await openAcpConnection(config);
+    appendTimingTraceEvent(timingTrace, "default_session", "acp_connection_open_completed", {
+      childPid: state.child.pid,
+      hasLoadSession: state.capabilities?.loadSession === true,
+    });
 
     try {
+      appendTimingTraceEvent(timingTrace, "default_session", "new_session_rpc_started");
       const session = await state.connection.newSession({
         cwd: state.cwd,
         mcpServers: [buildGlobalMcpStdioServer()],
       });
+      appendTimingTraceEvent(timingTrace, "default_session", "new_session_rpc_completed", {
+        sessionId: session.sessionId,
+      });
       const runtime = new PersistentAcpSession(state, config, session.sessionId);
-      await applyAcpSessionConfig(state.connection, session.sessionId, config);
+      await applyConfiguredSessionOptions(state.connection, session.sessionId, config, timingTrace);
       return runtime;
     } catch (error) {
       closeAcpConnection(state);
@@ -233,8 +254,14 @@ class PersistentAcpSession {
   static async load(
     config: DownstreamAgentConfig,
     sessionId: acp.SessionId,
+    timingTrace?: RunTimingTrace,
   ): Promise<PersistentAcpSession | undefined> {
+    appendTimingTraceEvent(timingTrace, "default_session", "acp_connection_open_started");
     const state = await openAcpConnection(config);
+    appendTimingTraceEvent(timingTrace, "default_session", "acp_connection_open_completed", {
+      childPid: state.child.pid,
+      hasLoadSession: state.capabilities?.loadSession === true,
+    });
 
     try {
       if (!state.capabilities?.loadSession) {
@@ -242,14 +269,20 @@ class PersistentAcpSession {
         return undefined;
       }
 
+      appendTimingTraceEvent(timingTrace, "default_session", "load_session_rpc_started", {
+        sessionId,
+      });
       await state.connection.loadSession({
         cwd: state.cwd,
         mcpServers: [buildGlobalMcpStdioServer()],
         sessionId,
       });
+      appendTimingTraceEvent(timingTrace, "default_session", "load_session_rpc_completed", {
+        sessionId,
+      });
 
       const runtime = new PersistentAcpSession(state, config, sessionId);
-      await applyAcpSessionConfig(state.connection, sessionId, config);
+      await applyConfiguredSessionOptions(state.connection, sessionId, config, timingTrace);
       return runtime;
     } catch {
       closeAcpConnection(state);
@@ -298,6 +331,8 @@ class PersistentAcpSession {
       updates: [],
       onUpdate: options.onUpdate,
       lastTask: Promise.resolve(),
+      firstUpdateRecorded: false,
+      timingTrace: options.timingTrace,
     };
     this.activeCollector = collector;
 
@@ -316,6 +351,10 @@ class PersistentAcpSession {
     try {
       let promptResponse: acp.PromptResponse;
       try {
+        appendTimingTraceEvent(options.timingTrace, "default_session", "prompt_rpc_started", {
+          sessionId: this.sessionId,
+          promptLength: prompt.length,
+        });
         promptResponse = await this.state.connection.prompt({
           sessionId: this.sessionId,
           prompt: [
@@ -324,6 +363,9 @@ class PersistentAcpSession {
               text: prompt,
             },
           ],
+        });
+        appendTimingTraceEvent(options.timingTrace, "default_session", "prompt_rpc_completed", {
+          sessionId: this.sessionId,
         });
       } catch (error) {
         if (options.softStopSignal?.aborted) {
@@ -386,6 +428,13 @@ class PersistentAcpSession {
       });
       this.tokenSnapshot = tokenSnapshot ?? this.tokenSnapshot;
       collector.updates.push(update);
+      if (!collector.firstUpdateRecorded) {
+        collector.firstUpdateRecorded = true;
+        appendTimingTraceEvent(collector.timingTrace, "default_session", "prompt_first_update", {
+          sessionId: this.sessionId,
+          updateType: update.sessionUpdate,
+        });
+      }
 
       if (
         update.sessionUpdate === "agent_message_chunk" &&
@@ -420,6 +469,44 @@ class PersistentAcpSession {
 function getPromptSettleMs(): number {
   const value = Number(process.env.NANOBOSS_ACP_PROMPT_SETTLE_MS ?? "50");
   return Number.isFinite(value) && value >= 0 ? value : 50;
+}
+
+async function applyConfiguredSessionOptions(
+  connection: acp.ClientSideConnection,
+  sessionId: acp.SessionId,
+  config: DownstreamAgentConfig,
+  timingTrace?: RunTimingTrace,
+): Promise<void> {
+  if (config.model) {
+    appendTimingTraceEvent(timingTrace, "default_session", "set_session_model_started", {
+      sessionId,
+      model: config.model,
+    });
+    await connection.unstable_setSessionModel({
+      sessionId,
+      modelId: config.model,
+    });
+    appendTimingTraceEvent(timingTrace, "default_session", "set_session_model_completed", {
+      sessionId,
+      model: config.model,
+    });
+  }
+
+  if (config.reasoningEffort) {
+    appendTimingTraceEvent(timingTrace, "default_session", "set_reasoning_effort_started", {
+      sessionId,
+      reasoningEffort: config.reasoningEffort,
+    });
+    await connection.setSessionConfigOption({
+      sessionId,
+      configId: "reasoning_effort",
+      value: config.reasoningEffort,
+    });
+    appendTimingTraceEvent(timingTrace, "default_session", "set_reasoning_effort_completed", {
+      sessionId,
+      reasoningEffort: config.reasoningEffort,
+    });
+  }
 }
 
 function sameAgentConfig(left: DownstreamAgentConfig, right: DownstreamAgentConfig): boolean {

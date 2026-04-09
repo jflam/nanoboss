@@ -5,7 +5,7 @@ import { invokeAgent } from "../agent/call-agent.ts";
 import { RunCancelledError, defaultCancellationMessage, normalizeRunCancelledError } from "./cancellation.ts";
 import { resolveDownstreamAgentConfig } from "./config.ts";
 import { formatErrorMessage } from "./error-format.ts";
-import type { DefaultConversationSession } from "../agent/default-session.ts";
+import { DefaultConversationSession } from "../agent/default-session.ts";
 import type { RunLogger } from "./logger.ts";
 import { appendTimingTraceEvent, type RunTimingTrace } from "./timing-trace.ts";
 import { normalizeAgentTokenUsage } from "../agent/token-usage.ts";
@@ -21,10 +21,12 @@ import type {
   CellRef,
   CallAgentTransport,
   CommandCallAgentOptions,
+  CommandCallProcedureOptions,
   CommandContext,
   DownstreamAgentConfig,
   DownstreamAgentSelection,
   ProcedureRegistryLike,
+  ProcedureSessionMode,
   KernelValue,
   RefsApi,
   RunResult,
@@ -71,8 +73,19 @@ interface CommandContextParams {
   getDefaultAgentConfig?: () => DownstreamAgentConfig;
   setDefaultAgentSelection?: (selection: DownstreamAgentSelection) => DownstreamAgentConfig;
   prepareDefaultPrompt?: (prompt: string) => PreparedDefaultPrompt;
+  rootDefaultConversation?: DefaultConversationSession;
+  rootGetDefaultAgentConfig?: () => DownstreamAgentConfig;
+  rootSetDefaultAgentSelection?: (selection: DownstreamAgentSelection) => DownstreamAgentConfig;
+  rootPrepareDefaultPrompt?: (prompt: string) => PreparedDefaultPrompt;
   assertCanStartBoundary?: () => void;
   timingTrace?: RunTimingTrace;
+}
+
+interface ProcedureInvocationBinding {
+  defaultConversation?: DefaultConversationSession;
+  getDefaultAgentConfig: () => DownstreamAgentConfig;
+  setDefaultAgentSelection: (selection: DownstreamAgentSelection) => DownstreamAgentConfig;
+  prepareDefaultPrompt?: (prompt: string) => PreparedDefaultPrompt;
 }
 
 export class CommandContextImpl implements CommandContext {
@@ -94,6 +107,10 @@ export class CommandContextImpl implements CommandContext {
   private readonly getDefaultAgentConfigValue: () => DownstreamAgentConfig;
   private readonly setDefaultAgentSelectionValue: (selection: DownstreamAgentSelection) => DownstreamAgentConfig;
   private readonly prepareDefaultPromptValue?: (prompt: string) => PreparedDefaultPrompt;
+  private readonly rootDefaultConversation?: DefaultConversationSession;
+  private readonly rootGetDefaultAgentConfigValue: () => DownstreamAgentConfig;
+  private readonly rootSetDefaultAgentSelectionValue: (selection: DownstreamAgentSelection) => DownstreamAgentConfig;
+  private readonly rootPrepareDefaultPromptValue?: (prompt: string) => PreparedDefaultPrompt;
   private readonly assertCanStartBoundaryValue?: () => void;
   private readonly timingTrace?: RunTimingTrace;
 
@@ -115,6 +132,10 @@ export class CommandContextImpl implements CommandContext {
     this.setDefaultAgentSelectionValue = params.setDefaultAgentSelection
       ?? ((selection) => resolveDownstreamAgentConfig(this.cwd, selection));
     this.prepareDefaultPromptValue = params.prepareDefaultPrompt;
+    this.rootDefaultConversation = params.rootDefaultConversation ?? this.defaultConversation;
+    this.rootGetDefaultAgentConfigValue = params.rootGetDefaultAgentConfig ?? this.getDefaultAgentConfigValue;
+    this.rootSetDefaultAgentSelectionValue = params.rootSetDefaultAgentSelection ?? this.setDefaultAgentSelectionValue;
+    this.rootPrepareDefaultPromptValue = params.rootPrepareDefaultPrompt ?? this.prepareDefaultPromptValue;
     this.assertCanStartBoundaryValue = params.assertCanStartBoundary;
     this.timingTrace = params.timingTrace;
     this.refs = new CommandRefs(this.store, this.cwd);
@@ -255,6 +276,7 @@ export class CommandContextImpl implements CommandContext {
   async callProcedure<T extends KernelValue = never>(
     name: string,
     prompt: string,
+    options?: CommandCallProcedureOptions,
   ): Promise<RunResult<T>> {
     const procedure = this.registry.get(name);
     if (!procedure) {
@@ -280,6 +302,7 @@ export class CommandContextImpl implements CommandContext {
     });
 
     try {
+      const binding = this.resolveProcedureInvocationBinding(options?.session ?? "inherit");
       const childContext = new CommandContextImpl({
         cwd: this.cwd,
         sessionId: this.sessionId,
@@ -292,10 +315,14 @@ export class CommandContextImpl implements CommandContext {
         cell: childCell,
         signal: this.signal,
         softStopSignal: this.softStopSignal,
-        defaultConversation: this.defaultConversation,
-        getDefaultAgentConfig: this.getDefaultAgentConfigValue,
-        setDefaultAgentSelection: this.setDefaultAgentSelectionValue,
-        prepareDefaultPrompt: this.prepareDefaultPromptValue,
+        defaultConversation: binding.defaultConversation,
+        getDefaultAgentConfig: binding.getDefaultAgentConfig,
+        setDefaultAgentSelection: binding.setDefaultAgentSelection,
+        prepareDefaultPrompt: binding.prepareDefaultPrompt,
+        rootDefaultConversation: this.rootDefaultConversation,
+        rootGetDefaultAgentConfig: this.rootGetDefaultAgentConfigValue,
+        rootSetDefaultAgentSelection: this.rootSetDefaultAgentSelectionValue,
+        rootPrepareDefaultPrompt: this.rootPrepareDefaultPromptValue,
         assertCanStartBoundary: this.assertCanStartBoundaryValue,
         timingTrace: this.timingTrace,
       });
@@ -325,6 +352,45 @@ export class CommandContextImpl implements CommandContext {
       });
       throw error;
     }
+  }
+
+  private resolveProcedureInvocationBinding(
+    sessionMode: ProcedureSessionMode,
+  ): ProcedureInvocationBinding {
+    if (sessionMode === "default") {
+      return {
+        defaultConversation: this.rootDefaultConversation,
+        getDefaultAgentConfig: this.rootGetDefaultAgentConfigValue,
+        setDefaultAgentSelection: this.rootSetDefaultAgentSelectionValue,
+        prepareDefaultPrompt: this.rootPrepareDefaultPromptValue,
+      };
+    }
+
+    if (sessionMode === "fresh") {
+      let defaultAgentConfig = cloneDownstreamAgentConfig(this.getDefaultAgentConfigValue());
+      const defaultConversation = new DefaultConversationSession({
+        config: defaultAgentConfig,
+      });
+
+      return {
+        defaultConversation,
+        getDefaultAgentConfig: () => defaultAgentConfig,
+        setDefaultAgentSelection: (selection) => {
+          const nextConfig = resolveDownstreamAgentConfig(this.cwd, selection);
+          defaultAgentConfig = nextConfig;
+          defaultConversation.updateConfig(nextConfig);
+          return nextConfig;
+        },
+        prepareDefaultPrompt: this.prepareDefaultPromptValue,
+      };
+    }
+
+    return {
+      defaultConversation: this.defaultConversation,
+      getDefaultAgentConfig: this.getDefaultAgentConfigValue,
+      setDefaultAgentSelection: this.setDefaultAgentSelectionValue,
+      prepareDefaultPrompt: this.prepareDefaultPromptValue,
+    };
   }
 
   private beginAgentRun(
@@ -565,6 +631,14 @@ function formatAgentLabel(agent?: DownstreamAgentSelection): string {
   }
 
   return agent.model ? ` [${agent.provider}:${agent.model}]` : ` [${agent.provider}]`;
+}
+
+function cloneDownstreamAgentConfig(config: DownstreamAgentConfig): DownstreamAgentConfig {
+  return {
+    ...config,
+    args: [...config.args],
+    env: config.env ? { ...config.env } : undefined,
+  };
 }
 
 function isTypeDescriptor<T>(value: unknown): value is TypeDescriptor<T> {

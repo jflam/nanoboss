@@ -332,6 +332,7 @@ export interface ProcedureRegistryLike {
 }
 
 export type AgentSessionMode = "fresh" | "default";
+export type ProcedureSessionMode = AgentSessionMode | "inherit";
 
 export interface CommandCallAgentOptions {
   /**
@@ -352,6 +353,19 @@ export interface CommandCallAgentOptions {
   agent?: DownstreamAgentSelection;
   stream?: boolean;
   refs?: Record<string, CellRef | ValueRef>;
+}
+
+export interface CommandCallProcedureOptions {
+  /**
+   * Default-conversation binding for the invoked procedure.
+   *
+   * - "inherit" keeps the caller's current default-conversation binding.
+   * - "default" rebinds the child procedure to the top-level/master default conversation.
+   * - "fresh" gives the child procedure a private default conversation and private default-agent selection state.
+   *
+   * Defaults to "inherit" so nested procedures preserve the caller's session behavior unless explicitly changed.
+   */
+  session?: ProcedureSessionMode;
 }
 
 export interface CommandContext {
@@ -376,6 +390,7 @@ export interface CommandContext {
   callProcedure<T extends KernelValue = KernelValue>(
     name: string,
     prompt: string,
+    options?: CommandCallProcedureOptions,
   ): Promise<RunResult<T>>;
   print(text: string): void;
 }

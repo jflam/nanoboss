@@ -9,10 +9,8 @@ const SELF_COMMAND_PATH = join(process.cwd(), "dist", "nanoboss");
 const BUILD_HOOK_TIMEOUT_MS = 30_000;
 
 import { DefaultConversationSession } from "../../src/agent/default-session.ts";
-import type { CellRef, Procedure } from "../../src/core/types.ts";
+import type { Procedure } from "../../src/core/types.ts";
 import { ProcedureRegistry } from "../../src/procedure/registry.ts";
-import { buildProcedureDispatchJobsDir, ProcedureDispatchJobManager } from "../../src/procedure/dispatch-jobs.ts";
-import { TopLevelProcedureCancelledError } from "../../src/procedure/runner.ts";
 import { SessionStore } from "../../src/session/index.ts";
 import { extractProcedureDispatchResult, NanobossService } from "../../src/core/service.ts";
 
@@ -116,29 +114,6 @@ function readStoredMockSession(sessionStoreDir: string): {
   };
 }
 
-function extractDispatchRequest(prompt: string): {
-  sessionId: string;
-  name: string;
-  prompt: string;
-  defaultAgentSelection?: unknown;
-  dispatchCorrelationId?: string;
-} {
-  const payload = prompt
-    .split("\n\n")
-    .find((part) => part.trimStart().startsWith('{"sessionId"'));
-  if (!payload) {
-    throw new Error("Missing internal dispatch JSON payload");
-  }
-
-  return JSON.parse(payload) as {
-    sessionId: string;
-    name: string;
-    prompt: string;
-    defaultAgentSelection?: unknown;
-    dispatchCorrelationId?: string;
-  };
-}
-
 async function waitForCondition(
   predicate: () => boolean,
   timeoutMs = 5_000,
@@ -175,13 +150,6 @@ function getInternalSessionState(service: NanobossService, sessionId: string): I
   }
 
   return sessionState;
-}
-
-function setDispatchProcedureIntoDefaultConversation(
-  service: NanobossService,
-  dispatch: (...args: unknown[]) => Promise<never>,
-): void {
-  Reflect.set(service as object, "dispatchProcedureIntoDefaultConversation", dispatch);
 }
 
 function createPausedWizardProcedure(): Procedure {
@@ -437,7 +405,7 @@ describe("NanobossService", () => {
     });
   }, 30_000);
 
-  test("slash commands dispatch through async procedure dispatch tools inside the default session", async () => {
+  test("slash commands execute locally and stream nested tool output", async () => {
     await withMockAgentEnv(async () => {
       const { cwd, registry } = await createRegistryWithWorkspace({
         probe: [
@@ -466,8 +434,8 @@ describe("NanobossService", () => {
         .map((event) => event.data.text);
       const completed = events.findLast((event) => event.type === "run_completed" && event.data.procedure === "probe");
 
-      expect(toolTitles).toContain("procedure_dispatch_start");
-      expect(toolTitles).toContain("procedure_dispatch_wait");
+      expect(toolTitles).not.toContain("procedure_dispatch_start");
+      expect(toolTitles).not.toContain("procedure_dispatch_wait");
       expect(toolTitles).toContain("Mock read README.md");
       expect(textEvents).toContain("done");
       expect(completed?.type).toBe("run_completed");
@@ -484,102 +452,93 @@ describe("NanobossService", () => {
     });
   }, 30_000);
 
-  test("streams async dispatch assistant progress before the final slash-command result", async () => {
-    await withMockAgentEnv(async () => {
-      const { cwd, registry } = await createRegistryWithWorkspace({
-        slowreview: [
-          "export default {",
-          '  name: "slowreview",',
-          '  description: "slow async procedure",',
-          '  async execute(prompt) {',
-          '    await Bun.sleep(200);',
-          '    return {',
-          '      display: `completed: ${prompt}`,',
-          '    };',
-          '  },',
-          "};",
-        ].join("\n"),
-      });
-
-      const service = new NanobossService(registry);
-      const session = service.createSession({ cwd });
-
-      try {
-        await service.prompt(session.sessionId, "/slowreview patch");
-
-        const events = service.getSessionEvents(session.sessionId)?.after(-1) ?? [];
-        const firstProgressIndex = events.findIndex((event) => event.type === "text_delta" && event.data.text.includes("Running the dispatch through the global nanoboss MCP implementation"));
-        const completedIndex = events.findIndex((event) => event.type === "run_completed" && event.data.procedure === "slowreview");
-
-        expect(firstProgressIndex).toBeGreaterThanOrEqual(0);
-        expect(completedIndex).toBeGreaterThan(firstProgressIndex);
-      } finally {
-        service.destroySession(session.sessionId);
-      }
-    }, {
-      MOCK_AGENT_STREAM_ASYNC_DISPATCH_PROGRESS: "1",
+  test("streams direct procedure progress before the final slash-command result", async () => {
+    const { cwd, registry } = await createRegistryWithWorkspace({
+      slowreview: [
+        "export default {",
+        '  name: "slowreview",',
+        '  description: "slow direct procedure",',
+        '  async execute(prompt, ctx) {',
+        '    ctx.print(`starting: ${prompt}\\n`);',
+        '    await Bun.sleep(50);',
+        '    return {',
+        '      display: `completed: ${prompt}`,',
+        '    };',
+        '  },',
+        "};",
+      ].join("\n"),
     });
-  }, 30_000);
 
-  test("recovers async dispatch completion when the provider omits the terminal structured tool payload", async () => {
-    await withMockAgentEnv(async () => {
-      const { cwd, registry } = await createRegistryWithWorkspace({
-        slowreview: [
-          "export default {",
-          '  name: "slowreview",',
-          '  description: "slow async procedure",',
-          '  async execute(prompt) {',
-          '    await Bun.sleep(50);',
-          '    return {',
-          '      data: { subject: prompt, verdict: "completed" },',
-          '      display: `completed: ${prompt}`,',
-          '      summary: `completed ${prompt}`,',
-          '      memory: `Completed durable result for ${prompt}.`,',
-          '    };',
-          '  },',
-          "};",
-        ].join("\n"),
-      });
-
-      const service = new NanobossService(registry);
-      const session = service.createSession({ cwd });
-
-      try {
-        await service.prompt(session.sessionId, "/slowreview patch");
-
-        const events = service.getSessionEvents(session.sessionId)?.after(-1) ?? [];
-        const completed = events.findLast((event) => event.type === "run_completed" && event.data.procedure === "slowreview");
-        const failed = events.findLast((event) => event.type === "run_failed" && event.data.procedure === "slowreview");
-
-        expect(completed?.type).toBe("run_completed");
-        expect(completed?.data.display).toBe("completed: patch");
-        expect(failed).toBeUndefined();
-      } finally {
-        service.destroySession(session.sessionId);
-      }
-    }, {
-      MOCK_AGENT_STRIP_ASYNC_WAIT_RAW_OUTPUT: "1",
-    });
-  }, 30_000);
-
-  test("keeps deterministic polling when the default session returns a non-terminal async dispatch status", async () => {
-    const originalRecoveryWaitMs = process.env.NANOBOSS_PROCEDURE_DISPATCH_RECOVERY_WAIT_MS;
-    process.env.NANOBOSS_PROCEDURE_DISPATCH_RECOVERY_WAIT_MS = "100";
+    const service = new NanobossService(registry);
+    const session = service.createSession({ cwd });
 
     try {
+      await service.prompt(session.sessionId, "/slowreview patch");
+
+      const events = service.getSessionEvents(session.sessionId)?.after(-1) ?? [];
+      const firstProgressIndex = events.findIndex((event) => event.type === "text_delta" && event.data.text.includes("starting: patch"));
+      const completedIndex = events.findIndex((event) => event.type === "run_completed" && event.data.procedure === "slowreview");
+
+      expect(firstProgressIndex).toBeGreaterThanOrEqual(0);
+      expect(completedIndex).toBeGreaterThan(firstProgressIndex);
+    } finally {
+      service.destroySession(session.sessionId);
+    }
+  }, 30_000);
+
+  test("slash commands persist durable results without internal dispatch tooling", async () => {
+    const { cwd, registry } = await createRegistryWithWorkspace({
+      slowreview: [
+        "export default {",
+        '  name: "slowreview",',
+        '  description: "durable direct procedure",',
+        '  async execute(prompt) {',
+        '    return {',
+        '      data: { subject: prompt, verdict: "completed" },',
+        '      display: `completed: ${prompt}`,',
+        '      summary: `completed ${prompt}`,',
+        '      memory: `Completed durable result for ${prompt}.`,',
+        '    };',
+        '  },',
+        "};",
+      ].join("\n"),
+    });
+
+    const service = new NanobossService(registry);
+    const session = service.createSession({ cwd });
+
+    try {
+      await service.prompt(session.sessionId, "/slowreview patch");
+
+      const events = service.getSessionEvents(session.sessionId)?.after(-1) ?? [];
+      const completed = events.findLast((event) => event.type === "run_completed" && event.data.procedure === "slowreview");
+      const failed = events.findLast((event) => event.type === "run_failed" && event.data.procedure === "slowreview");
+      const toolTitles = events
+        .filter((event) => event.type === "tool_started")
+        .map((event) => event.data.title);
+
+      expect(completed?.type).toBe("run_completed");
+      expect(completed?.data.display).toBe("completed: patch");
+      expect(failed).toBeUndefined();
+      expect(toolTitles).not.toContain("procedure_dispatch_start");
+      expect(toolTitles).not.toContain("procedure_dispatch_wait");
+    } finally {
+      service.destroySession(session.sessionId);
+    }
+  }, 30_000);
+
+  test("slash commands reuse the master default session when procedures opt into session default", async () => {
+    const sessionStoreDir = mkdtempSync(join(tmpdir(), "nab-service-master-session-"));
+
+    await withMockAgentEnv(async () => {
       const { cwd, registry } = await createRegistryWithWorkspace({
-        slowreview: [
+        probe: [
           "export default {",
-          '  name: "slowreview",',
-          '  description: "slow async procedure",',
-          '  async execute(prompt) {',
-          '    await Bun.sleep(1500);',
-          '    return {',
-          '      data: { subject: prompt, verdict: "completed" },',
-          '      display: `completed: ${prompt}`,',
-          '      summary: `completed ${prompt}`,',
-          '      memory: `Completed durable result for ${prompt}.`,',
-          '    };',
+          '  name: "probe",',
+          '  description: "reuse the master default session",',
+          '  async execute(_prompt, ctx) {',
+          '    const reply = await ctx.callAgent("nested default session demo", { session: "default", stream: false });',
+          '    return { display: String(reply.data) };',
           '  },',
           "};",
         ].join("\n"),
@@ -587,113 +546,27 @@ describe("NanobossService", () => {
 
       const service = new NanobossService(registry);
       const session = service.createSession({ cwd });
-      const sessionState = getInternalSessionState(service, session.sessionId);
-      const manager = new ProcedureDispatchJobManager({
-        cwd,
-        sessionId: session.sessionId,
-        rootDir: sessionState.store.rootDir,
-        getRegistry: async () => registry,
-      });
-      const originalPrompt = sessionState.defaultConversation.prompt.bind(sessionState.defaultConversation);
-      const originalGetCurrentTokenSnapshot = sessionState.defaultConversation.getCurrentTokenSnapshot
-        .bind(sessionState.defaultConversation);
-
-      Reflect.set(
-        sessionState.defaultConversation as object,
-        "prompt",
-        async (controlPrompt: string, options: { onUpdate?: (update: unknown) => Promise<void> | void } = {}) => {
-          const dispatch = extractDispatchRequest(controlPrompt);
-          const startResult = await manager.start({
-            name: dispatch.name,
-            prompt: dispatch.prompt,
-            defaultAgentSelection: dispatch.defaultAgentSelection as never,
-            dispatchCorrelationId: dispatch.dispatchCorrelationId,
-          });
-
-          let runningResult = await manager.wait(startResult.dispatchId, 25);
-          for (let attempt = 0; attempt < 20 && runningResult.status === "queued"; attempt += 1) {
-            runningResult = await manager.wait(startResult.dispatchId, 25);
-          }
-
-          expect(runningResult.status).toBe("running");
-
-          const updates = [
-            {
-              sessionUpdate: "tool_call",
-              toolCallId: "dispatch-start",
-              title: "procedure_dispatch_start",
-              kind: "other",
-              status: "pending",
-              rawInput: dispatch,
-            },
-            {
-              sessionUpdate: "tool_call_update",
-              toolCallId: "dispatch-start",
-              status: "completed",
-              rawOutput: startResult,
-            },
-            {
-              sessionUpdate: "tool_call",
-              toolCallId: "dispatch-wait",
-              title: "procedure_dispatch_wait",
-              kind: "other",
-              status: "pending",
-              rawInput: {
-                dispatchId: startResult.dispatchId,
-                waitMs: 25,
-              },
-            },
-            {
-              sessionUpdate: "tool_call_update",
-              toolCallId: "dispatch-wait",
-              status: "completed",
-              rawOutput: runningResult,
-            },
-          ] as const;
-
-          for (const update of updates) {
-            await options.onUpdate?.(update);
-          }
-
-          return {
-            raw: JSON.stringify(runningResult),
-            updates: [...updates],
-            durationMs: 0,
-          };
-        },
-      );
-      Reflect.set(
-        sessionState.defaultConversation as object,
-        "getCurrentTokenSnapshot",
-        async () => undefined,
-      );
 
       try {
-        await service.prompt(session.sessionId, "/slowreview patch");
+        await service.prompt(session.sessionId, "/probe");
 
+        const stored = readStoredMockSession(sessionStoreDir);
+        const userPrompt = stored.turns.find((turn) => turn.role === "user")?.text ?? "";
         const events = service.getSessionEvents(session.sessionId)?.after(-1) ?? [];
-        const completed = events.findLast((event) => event.type === "run_completed" && event.data.procedure === "slowreview");
-        const failed = events.findLast((event) => event.type === "run_failed" && event.data.procedure === "slowreview");
+        const toolTitles = events
+          .filter((event) => event.type === "tool_started")
+          .map((event) => event.data.title);
 
-        expect(completed?.type).toBe("run_completed");
-        expect(completed?.data.display).toBe("completed: patch");
-        expect(failed).toBeUndefined();
+        expect(userPrompt).toContain("nested default session demo");
+        expect(userPrompt).not.toContain("Nanoboss internal slash-command dispatch.");
+        expect(toolTitles).not.toContain("procedure_dispatch_start");
+        expect(toolTitles).not.toContain("procedure_dispatch_wait");
       } finally {
-        Reflect.set(sessionState.defaultConversation as object, "prompt", originalPrompt);
-        Reflect.set(
-          sessionState.defaultConversation as object,
-          "getCurrentTokenSnapshot",
-          originalGetCurrentTokenSnapshot,
-        );
         service.destroySession(session.sessionId);
       }
-    } finally {
-      if (originalRecoveryWaitMs === undefined) {
-        delete process.env.NANOBOSS_PROCEDURE_DISPATCH_RECOVERY_WAIT_MS;
-      } else {
-        process.env.NANOBOSS_PROCEDURE_DISPATCH_RECOVERY_WAIT_MS = originalRecoveryWaitMs;
-      }
-    }
+    }, {
+      MOCK_AGENT_SESSION_STORE_DIR: sessionStoreDir,
+    });
   }, 30_000);
 
   test.skip("long-running slash commands survive short per-request MCP deadlines via async dispatch polling", async () => {
@@ -754,7 +627,7 @@ describe("NanobossService", () => {
     }
   }, 30_000);
 
-  test("does not publish local prompt estimates for default prompts after slash dispatch", async () => {
+  test("publishes stored memory cards on the next default prompt after a direct slash command", async () => {
     const { cwd, registry } = await createRegistryWithWorkspace({
       review: [
         "export default {",
@@ -794,7 +667,11 @@ describe("NanobossService", () => {
       if (storedCard?.type !== "memory_card_stored") {
         throw new Error("Expected a stored memory card event");
       }
-      expect(memoryCards).toBeUndefined();
+      expect(memoryCards?.type).toBe("memory_cards");
+      if (memoryCards?.type !== "memory_cards") {
+        throw new Error("Expected a memory_cards event");
+      }
+      expect(memoryCards.data.cards.some((card) => card.procedure === "review")).toBe(true);
       expect("estimatedPromptTokens" in storedCard.data.card).toBe(false);
     } finally {
       service.destroySession(session.sessionId);
@@ -895,14 +772,11 @@ describe("NanobossService", () => {
     });
   }, 30_000);
 
-  test("/model executes in the harness instead of dispatching through the default conversation", async () => {
+  test("/model runs locally without internal dispatch tools", async () => {
     const { cwd, registry } = await createRegistryWithWorkspace();
 
     const service = new NanobossService(registry);
     const session = service.createSession({ cwd });
-    setDispatchProcedureIntoDefaultConversation(service, async () => {
-      throw new Error("/model should not use async procedure dispatch");
-    });
 
     await service.prompt(session.sessionId, "/model copilot gpt-5.4/xhigh");
 
@@ -914,56 +788,53 @@ describe("NanobossService", () => {
     expect(toolTitles).not.toContain("procedure_dispatch_wait");
   });
 
-  test("cancelled slash-command dispatches still publish a terminal run_cancelled event", async () => {
-    const registry = new ProcedureRegistry(mkdtempSync(join(tmpdir(), "nab-service-dispatch-stop-")));
-    registry.register({
-      name: "default",
-      description: "test default",
-      async execute() {
-        return { display: "default" };
-      },
+  test("cancelled slash commands still publish a terminal run_cancelled event", async () => {
+    await withMockAgentEnv(async () => {
+      const { cwd, registry } = await createRegistryWithWorkspace({
+        review: [
+          "export default {",
+          '  name: "review",',
+          '  description: "test review cancellation",',
+          '  async execute(_prompt, ctx) {',
+          '    await ctx.callAgent("cooperative cancel demo", { stream: false });',
+          '    return { display: "done" };',
+          '  },',
+          "};",
+        ].join("\n"),
+      });
+
+      const service = new NanobossService(registry);
+      const session = service.createSession({ cwd });
+      const promptPromise = service.prompt(session.sessionId, "/review the code");
+
+      await waitForCondition(() => {
+        const events = service.getSessionEvents(session.sessionId)?.after(-1) ?? [];
+        return events.some((event) => event.type === "tool_started" && event.data.title.includes("cooperative cancel demo"));
+      });
+
+      const runStarted = (service.getSessionEvents(session.sessionId)?.after(-1) ?? []).findLast(
+        (event) => event.type === "run_started",
+      );
+      if (runStarted?.type !== "run_started") {
+        throw new Error("Missing run_started event");
+      }
+
+      service.cancel(session.sessionId, runStarted.data.runId);
+      await promptPromise;
+
+      const events = service.getSessionEvents(session.sessionId)?.after(-1) ?? [];
+      const cancelledRun = events.findLast((event) => event.type === "run_cancelled");
+
+      expect(cancelledRun?.type).toBe("run_cancelled");
+      if (cancelledRun?.type !== "run_cancelled") {
+        throw new Error("Missing run_cancelled event");
+      }
+      expect(cancelledRun.data.message).toBe("Stopped.");
+      expect(events.some((event) => event.type === "run_failed")).toBe(false);
+    }, {
+      MOCK_AGENT_COOPERATIVE_CANCEL: "1",
     });
-    registry.register({
-      name: "review",
-      description: "test review",
-      async execute() {
-        return { display: "review" };
-      },
-    });
-
-    const service = new NanobossService(registry);
-    const session = service.createSession({ cwd: process.cwd() });
-    const sessionState = getInternalSessionState(service, session.sessionId);
-
-    const cancelledResult = sessionState.store.finalizeCell(
-      sessionState.store.startCell({
-        procedure: "review",
-        input: "/review the code",
-        kind: "top_level",
-      }),
-      {
-        display: "Stopped.",
-        summary: "Stopped.",
-      },
-    );
-    const cancelledCell: CellRef = cancelledResult.cell;
-    setDispatchProcedureIntoDefaultConversation(service, async () => {
-      throw new TopLevelProcedureCancelledError("Stopped.", cancelledCell);
-    });
-
-    await service.prompt(session.sessionId, "/review the code");
-
-    const events = service.getSessionEvents(session.sessionId)?.after(-1) ?? [];
-    const cancelledRun = events.findLast((event) => event.type === "run_cancelled");
-
-    expect(cancelledRun?.type).toBe("run_cancelled");
-    if (cancelledRun?.type !== "run_cancelled") {
-      throw new Error("Missing run_cancelled event");
-    }
-    expect(cancelledRun.data.message).toBe("Stopped.");
-    expect(cancelledRun.data.cell).toEqual(cancelledCell);
-    expect(events.some((event) => event.type === "run_failed")).toBe(false);
-  });
+  }, 30_000);
 
   test("soft stop cancels the in-flight agent and blocks the next boundary", async () => {
     await withMockAgentEnv(async () => {
@@ -1026,7 +897,7 @@ describe("NanobossService", () => {
     });
   }, 30_000);
 
-  test("soft stop cancels slash-command dispatch workers and their nested agents", async () => {
+  test("soft stop cancels slash-command procedures and their nested agents", async () => {
     await withMockAgentEnv(async () => {
       const { cwd, registry } = await createRegistryWithWorkspace({
         review: [
@@ -1043,17 +914,12 @@ describe("NanobossService", () => {
 
       const service = new NanobossService(registry);
       const session = service.createSession({ cwd });
-      const sessionState = getInternalSessionState(service, session.sessionId);
-      const jobsDir = buildProcedureDispatchJobsDir(sessionState.store.rootDir);
       const promptPromise = service.prompt(session.sessionId, "/review stop this");
 
       await waitForCondition(() => {
-        try {
-          return readdirSync(jobsDir).some((file) => file.endsWith(".json"));
-        } catch {
-          return false;
-        }
-      }, 10_000, "Timed out waiting for procedure dispatch job");
+        const events = service.getSessionEvents(session.sessionId)?.after(-1) ?? [];
+        return events.some((event) => event.type === "tool_started" && event.data.title.includes("cooperative cancel demo"));
+      }, 10_000, "Timed out waiting for nested agent start");
 
       const runStarted = (service.getSessionEvents(session.sessionId)?.after(-1) ?? []).findLast(
         (event) => event.type === "run_started",
@@ -1064,14 +930,6 @@ describe("NanobossService", () => {
 
       service.cancel(session.sessionId, runStarted.data.runId);
       await promptPromise;
-      await waitForCondition(() => {
-        const fileName = readdirSync(jobsDir).find((file) => file.endsWith(".json"));
-        if (!fileName) {
-          return false;
-        }
-        const job = JSON.parse(readFileSync(join(jobsDir, fileName), "utf8")) as { status?: string; error?: string };
-        return job.status === "cancelled" && job.error === "Stopped.";
-      }, 10_000, "Timed out waiting for cancelled dispatch job");
 
       const events = service.getSessionEvents(session.sessionId)?.after(-1) ?? [];
       const cancelledRun = events.findLast((event) => event.type === "run_cancelled");

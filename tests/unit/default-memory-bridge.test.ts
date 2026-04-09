@@ -83,7 +83,7 @@ function readStoredMockSession(sessionStoreDir: string): {
 }
 
 describe("default session memory bridge", () => {
-  test("routes slash commands through async procedure dispatch polling and skips delayed memory injection", async () => {
+  test("injects slash-command memory into the first default follow-up without replaying full output", async () => {
     const cwd = mkdtempSync(join(tmpdir(), "nab-memory-workspace-"));
     const procedureRoot = join(cwd, ".nanoboss", "procedures");
     const reviewPackageDir = join(procedureRoot, "review");
@@ -125,28 +125,28 @@ describe("default session memory bridge", () => {
       await service.prompt(session.sessionId, "/review the code");
 
       const storedAfterReview = readStoredMockSession(mockSessionStoreDir);
-      const dispatchPrompt = storedAfterReview.turns[0]?.text;
       expect(storedAfterReview.mcpServers?.some((server) => server.name === "nanoboss" && server.type === "stdio")).toBe(true);
-      expect(dispatchPrompt).toContain("Nanoboss internal slash-command dispatch.");
-      expect(dispatchPrompt).toContain('"name":"review"');
-      expect(dispatchPrompt).toContain('"prompt":"the code"');
-      expect(dispatchPrompt).not.toContain("Nanoboss internal session synchronization.");
-      expect(dispatchPrompt).not.toContain("full rendered review output that should stay out of the default prompt");
+      expect(storedAfterReview.turns).toHaveLength(0);
 
       await service.prompt(session.sessionId, "what mattered most?");
 
       const storedAfterFirstDefault = readStoredMockSession(mockSessionStoreDir);
-      const firstUserPrompt = storedAfterFirstDefault.turns[2]?.text;
+      const firstUserPrompt = storedAfterFirstDefault.turns[0]?.text ?? "";
       expect(firstUserPrompt).toContain("what mattered most?");
-      expect(firstUserPrompt).not.toContain("Nanoboss session memory update:");
-      expect(firstUserPrompt).not.toContain("procedure: /review");
+      expect(firstUserPrompt).toContain("Nanoboss session memory update:");
+      expect(firstUserPrompt).toContain("procedure: /review");
+      expect(firstUserPrompt).toContain("The most important issue for the code was missing edge-case analysis.");
+      expect(firstUserPrompt).toContain("Nanoboss session tool guidance:");
+      expect(firstUserPrompt).not.toContain("Nanoboss internal slash-command dispatch.");
+      expect(firstUserPrompt).not.toContain("full rendered review output that should stay out of the default prompt");
 
       await service.prompt(session.sessionId, "and now?");
 
       const storedAfterSecondDefault = readStoredMockSession(mockSessionStoreDir);
-      const secondUserPrompt = storedAfterSecondDefault.turns[4]?.text;
+      const secondUserPrompt = storedAfterSecondDefault.turns[2]?.text ?? "";
       expect(secondUserPrompt).toContain("and now?");
       expect(secondUserPrompt).not.toContain("Nanoboss session memory update:");
+      expect(secondUserPrompt).not.toContain("procedure: /review");
     } finally {
       service.destroySession(session.sessionId);
     }

@@ -127,7 +127,7 @@ export async function runHttpServerCommand(argv: string[] = []): Promise<ReturnT
 
       if (request.method === "POST" && path === "/v1/sessions") {
         const body = await readJson<{ cwd?: string; defaultAgentSelection?: DownstreamAgentSelection }>(request);
-        const session = service.createSession({
+        const session = await service.createSessionReady({
           cwd: body.cwd ?? process.cwd(),
           defaultAgentSelection: body.defaultAgentSelection,
         });
@@ -146,7 +146,7 @@ export async function runHttpServerCommand(argv: string[] = []): Promise<ReturnT
         }
 
         try {
-          const session = service.resumeSession({
+          const session = await service.resumeSessionReady({
             sessionId,
             cwd: body.cwd ?? process.cwd(),
             defaultAgentSelection: body.defaultAgentSelection,

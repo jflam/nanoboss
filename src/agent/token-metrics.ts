@@ -369,17 +369,21 @@ function collectCopilotProcessFamilyPids(rootPid: number): number[] {
 }
 
 function readPsOutput(): string | undefined {
-  const result = Bun.spawnSync({
-    cmd: ["ps", "-ax", "-o", "pid=,ppid=,command="],
-    env: process.env,
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-  if (result.exitCode !== 0) {
+  try {
+    const result = Bun.spawnSync({
+      cmd: ["ps", "-ax", "-o", "pid=,ppid=,command="],
+      env: process.env,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    if (result.exitCode !== 0) {
+      return undefined;
+    }
+
+    return new TextDecoder().decode(result.stdout);
+  } catch {
     return undefined;
   }
-
-  return new TextDecoder().decode(result.stdout);
 }
 
 function findMostRecentCopilotLogs(dir: string, entries: string[], limit: number): string[] {

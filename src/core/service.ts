@@ -206,6 +206,13 @@ export class NanobossService {
     return this.buildSessionDescriptor(sessionId, state);
   }
 
+  async createSessionReady(
+    params: { cwd: string; defaultAgentSelection?: DownstreamAgentSelection; sessionId?: string },
+  ): Promise<SessionDescriptor> {
+    const session = this.createSession(params);
+    return await this.awaitDefaultConversationWarm(session.sessionId);
+  }
+
   resumeSession(params: {
     sessionId: string;
     cwd?: string;
@@ -243,12 +250,32 @@ export class NanobossService {
     return this.buildSessionDescriptor(params.sessionId, state);
   }
 
+  async resumeSessionReady(params: {
+    sessionId: string;
+    cwd?: string;
+    defaultAgentSelection?: DownstreamAgentSelection;
+  }): Promise<SessionDescriptor> {
+    const session = this.resumeSession(params);
+    return await this.awaitDefaultConversationWarm(session.sessionId);
+  }
+
   getSession(sessionId: string): SessionDescriptor | undefined {
     const state = this.sessions.get(sessionId);
     if (!state) {
       return undefined;
     }
 
+    return this.buildSessionDescriptor(sessionId, state);
+  }
+
+  private async awaitDefaultConversationWarm(sessionId: string): Promise<SessionDescriptor> {
+    const state = this.sessions.get(sessionId);
+    if (!state) {
+      throw new Error(`Unknown session: ${sessionId}`);
+    }
+
+    await state.defaultConversation.warm();
+    this.persistSessionState(state);
     return this.buildSessionDescriptor(sessionId, state);
   }
 
@@ -408,7 +435,12 @@ export class NanobossService {
     session: SessionState,
     prompt: string,
     runId: string,
+    timingTrace?: RunTimingTrace,
   ): { prompt: string; markSubmitted: () => void } {
+    appendTimingTraceEvent(timingTrace, "service", "prepare_default_prompt_started", {
+      runId,
+      promptLength: prompt.length,
+    });
     const cards = collectUnsyncedProcedureMemoryCards(
       session.store,
       session.syncedProcedureMemoryCellIds,
@@ -434,6 +466,13 @@ export class NanobossService {
     }
 
     if (blocks.length === 0) {
+      appendTimingTraceEvent(timingTrace, "service", "prepare_default_prompt_completed", {
+        runId,
+        cardCount: cards.length,
+        includedRecoveryGuidance: includeRecoveryGuidance,
+        wrappedPrompt: false,
+        promptLength: prompt.length,
+      });
       return {
         prompt,
         markSubmitted() {},
@@ -442,8 +481,17 @@ export class NanobossService {
 
     blocks.push(`User message:\n${prompt}`);
 
+    const preparedPrompt = blocks.join("\n\n");
+    appendTimingTraceEvent(timingTrace, "service", "prepare_default_prompt_completed", {
+      runId,
+      cardCount: cards.length,
+      includedRecoveryGuidance: includeRecoveryGuidance,
+      wrappedPrompt: true,
+      promptLength: preparedPrompt.length,
+    });
+
     return {
-      prompt: blocks.join("\n\n"),
+      prompt: preparedPrompt,
       markSubmitted: () => {
         for (const card of cards) {
           session.syncedProcedureMemoryCellIds.add(card.cell.cellId);
@@ -830,7 +878,6 @@ export class NanobossService {
       text,
       session.pendingProcedureContinuation,
     );
-    this.persistSessionState(session, { prompt: text });
     const procedure = commandName === DISMISS_CONTINUATION_COMMAND_NAME
       ? createDismissContinuationProcedure(session)
       : this.registry.get(commandName);
@@ -844,6 +891,15 @@ export class NanobossService {
     };
     session.activeRun = activeRun;
     const runId = activeRun.runId;
+    const directTimingTrace = procedure
+      ? createRunTimingTrace(session.store.rootDir, runId)
+      : undefined;
+    appendTimingTraceEvent(directTimingTrace, "service", "submit_received", {
+      runId,
+      procedure: procedureName,
+      promptLength: commandPrompt.length,
+      mode: continuation ? "resume" : "direct",
+    });
     const startedAt = Date.now();
     const assertCanStartBoundary = () => {
       if (activeRun.softStopRequested) {
@@ -951,188 +1007,103 @@ export class NanobossService {
         return { stopReason: "end_turn", runId };
       }
 
-      if (
-        text.startsWith("/")
-        && !continuation
-        && procedure.name !== "default"
-        && procedure.executionMode !== "harness"
-      ) {
-        try {
-          const dispatchCorrelationId = crypto.randomUUID();
-          const timingTrace = createRunTimingTrace(session.store.rootDir, dispatchCorrelationId);
-          appendTimingTraceEvent(timingTrace, "service", "prompt_started", {
-            runId,
-            procedure: procedure.name,
-            mode: "dispatched",
-          });
-          const dispatched = await this.dispatchProcedureIntoDefaultConversation(
-            session,
-            procedure.name,
-            commandPrompt,
-            emitter,
-            timingTrace,
-            {
-              dispatchCorrelationId,
-              signal: activeRun.abortController.signal,
-              softStopSignal: activeRun.softStopController.signal,
-              assertCanStartBoundary,
-              activeRun,
-            },
-          );
+      try {
+        const timingTrace = directTimingTrace;
+        appendTimingTraceEvent(timingTrace, "service", "prompt_started", {
+          runId,
+          procedure: procedure.name,
+          mode: continuation ? "resume" : "direct",
+        });
+        const result = await executeTopLevelProcedure({
+          cwd: session.cwd,
+          sessionId,
+          store: session.store,
+          registry: this.registry,
+          procedure,
+          prompt: commandPrompt,
+          emitter,
+          signal: activeRun.abortController.signal,
+          softStopSignal: activeRun.softStopController.signal,
+          defaultConversation: session.defaultConversation,
+          getDefaultAgentConfig: () => session.defaultAgentConfig,
+          setDefaultAgentSelection: (selection) => {
+            const nextConfig = this.resolveDefaultAgentConfig(session.cwd, selection);
+            session.defaultAgentConfig = nextConfig;
+            session.defaultConversation.updateConfig(nextConfig);
+            return nextConfig;
+          },
+          prepareDefaultPrompt: (prompt) => this.prepareDefaultPrompt(session, prompt, runId, timingTrace),
+          onError: (ctx, errorText) => {
+            ctx.print(errorText);
+          },
+          assertCanStartBoundary,
+          timingTrace,
+          resume: continuation
+            ? {
+                prompt: commandPrompt,
+                state: continuation.state,
+              }
+            : undefined,
+        });
 
-          if (dispatched.result.pause) {
-            this.setPendingProcedureContinuation(
-              sessionId,
-              session,
-              buildPendingProcedureContinuation(procedure.name, dispatched.result),
-            );
-            this.publishRunPaused({
-              session,
-              sessionId,
-              runId,
-              procedure: procedure.name,
-              result: dispatched.result,
-              tokenUsage: dispatched.tokenUsage,
-              emitter,
-              markRunActivity,
-            });
-          } else {
-            this.publishRunCompleted({
-              session,
-              sessionId,
-              runId,
-              procedure: procedure.name,
-              result: dispatched.result,
-              tokenUsage: dispatched.tokenUsage,
-              emitter,
-              markRunActivity,
-            });
-          }
-          persistedTopLevelCell = dispatched.result.cell;
-        } catch (error) {
-          if (error instanceof TopLevelProcedureExecutionError) {
-            this.publishRunFailed({
-              session,
-              sessionId,
-              runId,
-              procedure: procedure.name,
-              error: error.message,
-              cell: error.cell,
-              markRunActivity,
-            });
-          } else if (error instanceof TopLevelProcedureCancelledError) {
-            this.publishRunCancelled({
-              session,
-              sessionId,
-              runId,
-              procedure: procedure.name,
-              message: error.message,
-              cell: error.cell,
-              markRunActivity,
-            });
-            persistedTopLevelCell = error.cell;
-          }
-          throw error;
-        }
-      } else {
-        try {
-          const timingTrace = createRunTimingTrace(session.store.rootDir, runId);
-          appendTimingTraceEvent(timingTrace, "service", "prompt_started", {
-            runId,
-            procedure: procedure.name,
-            mode: continuation ? "resume" : "direct",
-          });
-          const result = await executeTopLevelProcedure({
-            cwd: session.cwd,
+        if (result.pause) {
+          this.setPendingProcedureContinuation(
             sessionId,
-            store: session.store,
-            registry: this.registry,
-            procedure,
-            prompt: commandPrompt,
+            session,
+            buildPendingProcedureContinuation(procedure.name, result),
+          );
+          this.publishRunPaused({
+            session,
+            sessionId,
+            runId,
+            procedure: procedure.name,
+            result,
+            tokenUsage: result.tokenUsage,
             emitter,
-            signal: activeRun.abortController.signal,
-            softStopSignal: activeRun.softStopController.signal,
-            defaultConversation: session.defaultConversation,
-            getDefaultAgentConfig: () => session.defaultAgentConfig,
-            setDefaultAgentSelection: (selection) => {
-              const nextConfig = this.resolveDefaultAgentConfig(session.cwd, selection);
-              session.defaultAgentConfig = nextConfig;
-              session.defaultConversation.updateConfig(nextConfig);
-              return nextConfig;
-            },
-            prepareDefaultPrompt: (prompt) => this.prepareDefaultPrompt(session, prompt, runId),
-            onError: (ctx, errorText) => {
-              ctx.print(errorText);
-            },
-            assertCanStartBoundary,
-            timingTrace,
-            resume: continuation
-              ? {
-                  prompt: commandPrompt,
-                  state: continuation.state,
-                }
-              : undefined,
+            markRunActivity,
           });
-
-          if (result.pause) {
-            this.setPendingProcedureContinuation(
-              sessionId,
-              session,
-              buildPendingProcedureContinuation(procedure.name, result),
-            );
-            this.publishRunPaused({
-              session,
-              sessionId,
-              runId,
-              procedure: procedure.name,
-              result,
-              tokenUsage: result.tokenUsage,
-              emitter,
-              markRunActivity,
-            });
-          } else {
-            if (continuation) {
-              this.setPendingProcedureContinuation(sessionId, session, undefined);
-            } else if (procedure.name === DISMISS_CONTINUATION_COMMAND_NAME) {
-              this.setPendingProcedureContinuation(sessionId, session, undefined);
-            }
-            this.publishRunCompleted({
-              session,
-              sessionId,
-              runId,
-              procedure: procedure.name,
-              result,
-              tokenUsage: result.tokenUsage,
-              emitter,
-              markRunActivity,
-            });
+        } else {
+          if (continuation) {
+            this.setPendingProcedureContinuation(sessionId, session, undefined);
+          } else if (procedure.name === DISMISS_CONTINUATION_COMMAND_NAME) {
+            this.setPendingProcedureContinuation(sessionId, session, undefined);
           }
-          persistedTopLevelCell = result.cell;
-        } catch (error) {
-          if (error instanceof TopLevelProcedureExecutionError) {
-            this.publishRunFailed({
-              session,
-              sessionId,
-              runId,
-              procedure: procedure.name,
-              error: error.message,
-              cell: error.cell,
-              markRunActivity,
-            });
-          } else if (error instanceof TopLevelProcedureCancelledError) {
-            this.publishRunCancelled({
-              session,
-              sessionId,
-              runId,
-              procedure: procedure.name,
-              message: error.message,
-              cell: error.cell,
-              markRunActivity,
-            });
-            persistedTopLevelCell = error.cell;
-          }
-          throw error;
+          this.publishRunCompleted({
+            session,
+            sessionId,
+            runId,
+            procedure: procedure.name,
+            result,
+            tokenUsage: result.tokenUsage,
+            emitter,
+            markRunActivity,
+          });
         }
+        persistedTopLevelCell = result.cell;
+      } catch (error) {
+        if (error instanceof TopLevelProcedureExecutionError) {
+          this.publishRunFailed({
+            session,
+            sessionId,
+            runId,
+            procedure: procedure.name,
+            error: error.message,
+            cell: error.cell,
+            markRunActivity,
+          });
+        } else if (error instanceof TopLevelProcedureCancelledError) {
+          this.publishRunCancelled({
+            session,
+            sessionId,
+            runId,
+            procedure: procedure.name,
+            message: error.message,
+            cell: error.cell,
+            markRunActivity,
+          });
+          persistedTopLevelCell = error.cell;
+        }
+        throw error;
       }
     } catch (error) {
       const cancelled = normalizeRunCancelledError(
@@ -1191,7 +1162,7 @@ export class NanobossService {
           },
         });
       }
-      this.persistSessionState(session);
+      this.persistSessionState(session, { prompt: text });
       if (session.activeRun === activeRun) {
         session.activeRun = undefined;
       }
