@@ -4,7 +4,7 @@ import { spawn, type ChildProcessByStdio } from "node:child_process";
 import { join } from "node:path";
 import { Readable, Writable } from "node:stream";
 
-import { getAgentTranscriptDir } from "../core/config.ts";
+import { getAgentTranscriptDir, getNanobossHome } from "../core/config.ts";
 import type { DownstreamAgentConfig } from "../core/types.ts";
 
 export type AcpSessionUpdateHandler = (params: acp.SessionNotification) => Promise<void> | void;
@@ -71,6 +71,17 @@ export async function openAcpConnection(config: DownstreamAgentConfig): Promise<
 
   const client: acp.Client = {
     async requestPermission(params) {
+      const blockedReason = describeBlockedNanobossAccess(params.toolCall);
+      if (blockedReason) {
+        writeEvent({
+          event: "permission",
+          toolCall: params.toolCall,
+          selected: "cancelled",
+          blockedReason,
+        });
+        return { outcome: { outcome: "cancelled" } };
+      }
+
       const selected =
         params.options.find((option) => option.kind.startsWith("allow")) ??
         params.options[0];
@@ -150,4 +161,79 @@ export async function applyAcpSessionConfig(
 
 function createTranscriptPath(): string {
   return join(getAgentTranscriptDir(), `${crypto.randomUUID()}.jsonl`);
+}
+
+export function describeBlockedNanobossAccess(toolCall: unknown): string | undefined {
+  const strings = collectStringLeaves(toolCall);
+
+  if (strings.some((value) => referencesAgentTranscriptDir(value))) {
+    return "Direct access to ~/.nanoboss/agent-logs is blocked to avoid recursive transcript blowups. Use durable session cells/refs through the global `nanoboss` MCP tools instead.";
+  }
+
+  if (isBroadNanobossHomeShellAccess(toolCall, strings)) {
+    return "Broad access to ~/.nanoboss is blocked because it can recurse into live agent transcripts. Use the `nanoboss` MCP tools or scope filesystem fallback to ~/.nanoboss/sessions/<sessionId> or current-sessions.json.";
+  }
+
+  return undefined;
+}
+
+function isBroadNanobossHomeShellAccess(toolCall: unknown, strings: string[]): boolean {
+  const record = asRecord(toolCall);
+  const kind = typeof record?.kind === "string" ? record.kind : undefined;
+  if (kind !== "search" && kind !== "execute") {
+    return false;
+  }
+
+  return strings.some((value) => referencesBroadNanobossHomeTarget(value));
+}
+
+function referencesAgentTranscriptDir(value: string): boolean {
+  const normalized = normalizePathLikeString(value);
+  return normalized.includes(normalizePathLikeString(getAgentTranscriptDir()))
+    || normalized.includes("~/.nanoboss/agent-logs");
+}
+
+function referencesBroadNanobossHomeTarget(value: string): boolean {
+  return matchesExactPathToken(value, getNanobossHome())
+    || matchesExactPathToken(value, "~/.nanoboss");
+}
+
+function matchesExactPathToken(value: string, target: string): boolean {
+  const escaped = escapeRegExp(target);
+  return new RegExp("(^|[\\s\"'=:(])" + escaped + "(?=$|[\\s\"'`;|&)])").test(value);
+}
+
+function normalizePathLikeString(value: string): string {
+  return value.replaceAll("\\", "/");
+}
+
+function collectStringLeaves(value: unknown, seen = new Set<unknown>()): string[] {
+  if (typeof value === "string") {
+    return [value];
+  }
+
+  if (!value || typeof value !== "object") {
+    return [];
+  }
+
+  if (seen.has(value)) {
+    return [];
+  }
+  seen.add(value);
+
+  if (Array.isArray(value)) {
+    return value.flatMap((entry) => collectStringLeaves(entry, seen));
+  }
+
+  return Object.values(value).flatMap((entry) => collectStringLeaves(entry, seen));
+}
+
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : undefined;
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
