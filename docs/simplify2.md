@@ -157,6 +157,97 @@ instruction:
 
 That makes the command more inspectable and easier to steer than `/simplify`.
 
+## EXECUTION FLOW
+
+```mermaid
+flowchart TD
+  Start["start: execute or resume"] --> Dirty{"clean git worktree?"}
+  Dirty -- "no" --> Block["return blocked or paused result"]
+  Dirty -- "yes" --> Load["load simplify2 artifacts<br/>architecture-memory.json, journal.json, test-map.json, cache files"]
+
+  Load --> Analyze["analyzeCurrentFocus"]
+  Analyze --> Reuse{"analysis cache state"}
+
+  Reuse -- "full refresh" --> Refresh["ctx.callAgent: architecture refresh<br/>context = fresh, new child ACP session"]
+  Refresh --> Observe["ctx.callAgent: observation collection<br/>context = fresh, new child ACP session"]
+
+  Reuse -- "stale subset" --> ObserveScoped["ctx.callAgent: observation collection for touched files<br/>context = fresh, new child ACP session"]
+  Reuse -- "reusable" --> SkipRefresh["reuse cached observations"]
+
+  Observe --> HypGen
+  ObserveScoped --> HypGen
+  SkipRefresh --> HypGen
+
+  HypGen["ctx.callAgent: hypothesis generation<br/>context = fresh, new child ACP session"] --> Rank["ctx.callAgent: hypothesis ranking<br/>context = fresh, new child ACP session"]
+  Rank --> Decide{"best next action"}
+
+  Decide -- "no worthwhile slice" --> Finish["build finished result"]
+  Decide -- "risky, design update, or checkpoint" --> Pause["pause for human checkpoint"]
+  Decide -- "safe low-risk slice" --> Apply["ctx.callAgent: apply slice<br/>context = fresh, new child ACP session"]
+
+  Pause --> ResumeTurn["resume with human reply"]
+  ResumeTurn --> HumanDecision["ctx.callAgent: human reply interpretation<br/>context = fresh, new child ACP session"]
+  HumanDecision --> HumanRoute{"decision"}
+  HumanRoute -- "stop" --> Finish
+  HumanRoute -- "reject, redirect, or design update" --> Reset["reset notebook for fresh analysis"]
+  HumanRoute -- "approve" --> Apply
+
+  Apply --> Validate["runSelectedValidation<br/>local bun test slice"]
+  Validate --> Reconcile["ctx.callAgent: reconciliation<br/>context = fresh, new child ACP session"]
+  Reconcile --> ValidationOK{"validation passed?"}
+
+  ValidationOK -- "no" --> Finish
+  ValidationOK -- "yes" --> CommitProc["ctx.callProcedure: nanoboss/commit<br/>procedure context = inherit parent or default binding"]
+  CommitProc --> CommitAgent["nanoboss/commit -> ctx.callAgent: commit authoring<br/>context = fresh, new child ACP session"]
+  CommitAgent --> StopLoop{"commit failed or iteration budget reached?"}
+
+  StopLoop -- "yes" --> Finish
+  StopLoop -- "no" --> Reset
+  Reset --> Analyze
+```
+
+## CALLAGENT SESSION CONTEXT
+
+All direct `ctx.callAgent(...)` invocations inside `procedures/simplify2.ts` omit
+`session`, so they use the default agent session mode: `"fresh"`. In nanoboss,
+that means each call runs in a new isolated downstream ACP session rather than
+continuing the parent/default conversation.
+
+This behavior comes from the core API:
+
+- `CommandCallAgentOptions.session` defaults to `"fresh"` ([src/core/types.ts](/Users/jflam/agentboss/workspaces/nanoboss/src/core/types.ts))
+- `CommandContextImpl.callAgent()` resolves `const sessionMode = options?.session ?? "fresh"` ([src/core/context.ts](/Users/jflam/agentboss/workspaces/nanoboss/src/core/context.ts))
+
+So `/simplify2` is a multi-step loop in *procedure state*, but not a single
+continuous downstream-agent conversation.
+
+### Direct `callAgent()` sites in `/simplify2`
+
+| Phase | Source | Output type | Session context |
+| --- | --- | --- | --- |
+| Architecture refresh | `refreshArchitectureMemory()` at `procedures/simplify2.ts:722` | `ArchitectureRefreshProposalType` | `fresh` -> new child ACP session |
+| Observation collection | `collectObservations()` at `procedures/simplify2.ts:767` | `ObservationBatchType` | `fresh` -> new child ACP session |
+| Hypothesis generation | `generateAndRankHypotheses()` at `procedures/simplify2.ts:786` | `HypothesisBatchType` | `fresh` -> new child ACP session |
+| Hypothesis ranking | `generateAndRankHypotheses()` at `procedures/simplify2.ts:792` | `HypothesisRankingBatchType` | `fresh` -> new child ACP session |
+| Apply slice | `applySimplificationSlice()` at `procedures/simplify2.ts:895` | `SimplifyApplyResultType` | `fresh` -> new child ACP session |
+| Reconciliation | `validateAndReconcile()` at `procedures/simplify2.ts:940` | `ReconciliationResultType` | `fresh` -> new child ACP session |
+| Human-reply interpretation | `interpretHumanReply()` at `procedures/simplify2.ts:1031` | `SimplifyHumanDecisionType` | `fresh` -> new child ACP session |
+
+### Nested commit path
+
+The commit step is slightly different:
+
+1. `/simplify2` calls `ctx.callProcedure("nanoboss/commit", ...)` at
+   `procedures/simplify2.ts:964`
+2. `callProcedure()` defaults to `session: "inherit"`, so the child procedure
+   inherits the caller's default-conversation binding
+3. inside `nanoboss/commit`, the actual commit-authoring agent call is still
+   `ctx.callAgent(..., { stream: false })` with no explicit `session`, so that
+   nested call is also `fresh` -> a new child ACP session
+
+That means the procedure context is inherited, but the commit authoring agent
+call itself is still isolated.
+
 ## EXAMPLES
 
 General repo review:
