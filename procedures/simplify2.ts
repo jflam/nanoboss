@@ -12,12 +12,15 @@ import {
   type KernelValue,
   type Procedure,
   type ProcedureResult,
+  type RunResult,
+  type Simplify2CheckpointContinuationUi,
 } from "../src/core/types.ts";
+import { formatErrorMessage } from "../src/core/error-format.ts";
 import { computeRepoFingerprint } from "../src/core/repo-fingerprint.ts";
 import { resolveRepoArtifactDir, writeJsonFileAtomicSync } from "../src/util/repo-artifacts.ts";
 import { summarizeText } from "../src/util/text.ts";
 
-import { ensureGitLocalExclude, resolveGitRepoRoot } from "./autoresearch/git.ts";
+import { ensureGitLocalExclude, getWorktreeStatus, resolveGitRepoRoot } from "./autoresearch/git.ts";
 
 type SimplifyMode = "explore" | "checkpoint" | "apply" | "reconcile" | "finished";
 type ObservationKind =
@@ -164,6 +167,21 @@ interface SimplifyAppliedSlice {
   hypothesisId: string;
   title: string;
   result: SimplifyApplyResult;
+  commit?: SimplifyCommitStatus;
+}
+
+interface SimplifyCommitStatus {
+  status: "created" | "failed";
+  commitContext: string;
+  summary: string;
+  display: string;
+}
+
+interface NanobossCommitProcedureResult {
+  checks: {
+    passed: boolean;
+  };
+  commit?: KernelValue;
 }
 
 interface ArchitectureRefreshProposal {
@@ -497,6 +515,35 @@ const HIGH_SENSITIVITY_ANALYSIS_PATH_PATTERNS = [
   /^src\/core\//,
   /^src\/mcp\//,
 ];
+const SIMPLIFY2_CONTINUATION_UI: Simplify2CheckpointContinuationUi = {
+  kind: "simplify2_checkpoint",
+  title: "Simplify2 checkpoint",
+  actions: [
+    {
+      id: "approve",
+      label: "Continue",
+      reply: "approve it",
+      description: "Approve the current simplify2 slice and apply it now.",
+    },
+    {
+      id: "stop",
+      label: "Stop",
+      reply: "stop",
+      description: "Stop simplify2 without applying the paused slice.",
+    },
+    {
+      id: "focus_tests",
+      label: "Focus on Tests",
+      reply: "focus on tests instead",
+      description: "Redirect simplify2 toward test cleanup instead of this slice.",
+    },
+    {
+      id: "other",
+      label: "Something Else",
+      description: "Type a custom continuation reply for simplify2.",
+    },
+  ],
+};
 
 export default {
   name: "simplify2",
@@ -504,6 +551,11 @@ export default {
   inputHint: "Optional focus or scope",
   executionMode: "harness",
   async execute(prompt, ctx) {
+    const blocked = buildBlockedDirtyWorktreeStartResult(ctx.cwd);
+    if (blocked) {
+      return blocked;
+    }
+
     let state = initializeState(prompt);
 
     ctx.print("Loading simplify2 artifacts...\n");
@@ -517,6 +569,14 @@ export default {
 
     ctx.print(`Interpreting simplify2 guidance for iteration ${state.iteration}...\n`);
     const decision = await interpretHumanReply(prompt, state, ctx);
+
+    if (decision.kind === "approve_hypothesis") {
+      const blocked = buildBlockedDirtyWorktreeResumeResult(state, ctx.cwd);
+      if (blocked) {
+        return blocked;
+      }
+    }
+
     state = applyHumanDecision(state, decision);
     state = appendJournalForHumanDecision(state, decision);
 
@@ -534,6 +594,11 @@ export default {
       const completion = maybeFinishAfterApply(state);
       if (completion) {
         return completion;
+      }
+      state = await commitAppliedSlice(state, hypothesis, ctx);
+      const postCommitCompletion = maybeFinishAfterCommit(state);
+      if (postCommitCompletion) {
+        return postCommitCompletion;
       }
       state = resetNotebookForFreshAnalysis(state);
       state = await analyzeCurrentFocus(state, ctx);
@@ -808,6 +873,11 @@ async function continueFromAnalysis(
     if (completion) {
       return completion;
     }
+    current = await commitAppliedSlice(current, next.hypothesis, ctx);
+    const postCommitCompletion = maybeFinishAfterCommit(current);
+    if (postCommitCompletion) {
+      return postCommitCompletion;
+    }
 
     current = resetNotebookForFreshAnalysis(current);
     ctx.print(`Continuing simplify2 analysis for iteration ${current.iteration}...\n`);
@@ -879,6 +949,38 @@ async function validateAndReconcile(
   return state;
 }
 
+async function commitAppliedSlice(
+  state: Simplify2State,
+  hypothesis: SimplifyHypothesis,
+  ctx: CommandContext,
+): Promise<Simplify2State> {
+  const latestApply = state.notebook.latestApply;
+  if (!latestApply) {
+    return state;
+  }
+
+  const commitContext = buildCommitContext(state, hypothesis);
+  try {
+    const result = await ctx.callProcedure<NanobossCommitProcedureResult>("nanoboss/commit", commitContext);
+    const commitResult = expectData(result, "Missing simplify2 commit result");
+    const commit = createCommitStatus({
+      succeeded: commitResult.checks.passed && commitResult.commit !== undefined,
+      commitContext,
+      display: getRunResultDisplay(result),
+      summary: result.summary,
+    });
+    return appendJournalAfterCommit(applyCommitStatus(state, commit), commit);
+  } catch (error) {
+    const message = formatErrorMessage(error);
+    const commit = createCommitStatus({
+      succeeded: false,
+      commitContext,
+      display: `Automatic commit failed: ${message}`,
+    });
+    return appendJournalAfterCommit(applyCommitStatus(state, commit), commit);
+  }
+}
+
 function maybeFinishAfterApply(state: Simplify2State): ProcedureResult | undefined {
   const latestApply = state.notebook.latestApply;
   const validation = state.testContext.lastValidation;
@@ -890,6 +992,20 @@ function maybeFinishAfterApply(state: Simplify2State): ProcedureResult | undefin
       latestApply
         ? `Validation failed after applying ${latestApply.title}.`
         : "Validation failed after the applied simplification slice.",
+      lead,
+    );
+  }
+
+  return undefined;
+}
+
+function maybeFinishAfterCommit(state: Simplify2State): ProcedureResult | undefined {
+  const latestApply = state.notebook.latestApply;
+  const lead = buildLatestApplyLead(state);
+  if (latestApply?.commit?.status === "failed") {
+    return buildFinishedResult(
+      markFinished(state),
+      `Automatic commit failed after applying ${latestApply.title}.`,
       lead,
     );
   }
@@ -1135,6 +1251,26 @@ function appendJournalAfterApply(
   return appendJournalEntry(state, entry);
 }
 
+function appendJournalAfterCommit(
+  state: Simplify2State,
+  commit: SimplifyCommitStatus,
+): Simplify2State {
+  const latestApply = state.notebook.latestApply;
+  const entry = createJournalEntry({
+    kind: "run",
+    summary: commit.status === "created"
+      ? `Committed simplify2 slice: ${latestApply?.title ?? "latest slice"}`
+      : `Failed to commit simplify2 slice: ${latestApply?.title ?? "latest slice"}`,
+    details: [
+      commit.summary,
+      commit.display,
+      commit.commitContext,
+    ],
+    hypothesisId: latestApply?.hypothesisId,
+  });
+  return appendJournalEntry(state, entry);
+}
+
 function appendJournalEntry(
   state: Simplify2State,
   entry: Simplify2JournalEntry,
@@ -1156,18 +1292,66 @@ function appendJournalEntry(
   };
 }
 
+function applyCommitStatus(
+  state: Simplify2State,
+  commit: SimplifyCommitStatus,
+): Simplify2State {
+  const latestApply = state.notebook.latestApply;
+  if (!latestApply) {
+    return state;
+  }
+
+  return {
+    ...state,
+    notebook: {
+      ...state.notebook,
+      latestApply: {
+        ...latestApply,
+        commit,
+      },
+    },
+  };
+}
+
+function createCommitStatus(params: {
+  succeeded: boolean;
+  commitContext: string;
+  display?: string;
+  summary?: string;
+}): SimplifyCommitStatus {
+  const display = (params.display ?? params.summary ?? "").trim();
+  const fallback = params.succeeded
+    ? "Created a simplify2 slice commit."
+    : "Failed to create a simplify2 slice commit.";
+  return {
+    status: params.succeeded ? "created" : "failed",
+    commitContext: params.commitContext,
+    summary: summarizeText(display || fallback, 240),
+    display: display || fallback,
+  };
+}
+
+function buildCommitContext(
+  state: Simplify2State,
+  hypothesis: SimplifyHypothesis,
+): string {
+  const latestApply = state.notebook.latestApply;
+  const validation = state.testContext.lastValidation;
+  return [
+    `commit the simplify2 slice "${hypothesis.title}"`,
+    latestApply?.result.summary ? `applied summary: ${latestApply.result.summary}` : "",
+    validation ? `validation: ${validation.status}` : "",
+    "keep the message concise and focused on the conceptual simplification",
+  ].filter(Boolean).join("; ");
+}
+
 function buildPausedResult(
   state: Simplify2State,
   question: string,
 ): ProcedureResult {
-  const best = state.notebook.candidateHypotheses[0];
+  const best = getSelectedCheckpointHypothesis(state);
   return {
-    display: [
-      buildLatestApplyLead(state),
-      renderHypothesis(best, state.iteration),
-      question,
-      renderCheckpointOptions(state.notebook.currentCheckpoint),
-    ].filter(Boolean).join("\n\n") + "\n",
+    display: renderPausedDisplay(state, question),
     summary: best
       ? `simplify2: paused on ${best.title}`
       : "simplify2: paused for checkpoint",
@@ -1179,6 +1363,7 @@ function buildPausedResult(
       state,
       inputHint: "Reply with approve, reject, redirect the search, revise the design, or stop",
       suggestedReplies: SUGGESTED_REPLIES,
+      continuationUi: SIMPLIFY2_CONTINUATION_UI,
     },
   };
 }
@@ -1736,7 +1921,85 @@ function buildLatestApplyLead(state: Simplify2State): string | undefined {
     latestApply.result.summary.trim(),
     renderTouchedFiles(latestApply.result.touchedFiles),
     renderValidationLine(state.testContext.lastValidation),
+    renderCommitLine(latestApply.commit),
   ].filter(Boolean).join("\n");
+}
+
+function renderPausedDisplay(state: Simplify2State, question: string, lead?: string): string {
+  const selected = getSelectedCheckpointHypothesis(state);
+  const lines = [
+    lead,
+    buildLatestApplyLead(state),
+    renderPausedProposalSummary(selected, state.iteration),
+    renderHypothesisCandidates(state.notebook.candidateHypotheses),
+    renderSelectedHypothesisSummary(selected),
+    question,
+    renderPausedActions(),
+  ].filter(Boolean);
+  return `${lines.join("\n\n")}\n`;
+}
+
+function buildBlockedDirtyWorktreeStartResult(cwd: string): ProcedureResult | undefined {
+  const status = getSimplify2DirtyWorktreeStatus(cwd);
+  if (!status) {
+    return undefined;
+  }
+
+  return {
+    display: renderDirtyWorktreeMessage(status.repoRoot, status.output),
+    summary: "simplify2: blocked by dirty worktree",
+    memory: "Simplify2 refused to start because the worktree was dirty.",
+  };
+}
+
+function buildBlockedDirtyWorktreeResumeResult(
+  state: Simplify2State,
+  cwd: string,
+): ProcedureResult | undefined {
+  const status = getSimplify2DirtyWorktreeStatus(cwd);
+  if (!status) {
+    return undefined;
+  }
+
+  const question = state.notebook.currentCheckpoint?.question ?? "Clean the worktree, then reply again.";
+  const lead = [
+    "Simplify2 cannot continue until the git worktree is clean again.",
+    renderDirtyWorktreeMessage(status.repoRoot, status.output).trim(),
+  ].join("\n\n");
+  const best = getSelectedCheckpointHypothesis(state);
+  return {
+    display: renderPausedDisplay(state, question, lead),
+    summary: best
+      ? `simplify2: blocked by dirty worktree while paused on ${best.title}`
+      : "simplify2: blocked by dirty worktree while paused",
+    memory: "Simplify2 stayed paused because the worktree was dirty.",
+    pause: {
+      question,
+      state,
+      inputHint: "Reply with approve, reject, redirect the search, revise the design, or stop",
+      suggestedReplies: SUGGESTED_REPLIES,
+      continuationUi: SIMPLIFY2_CONTINUATION_UI,
+    },
+  };
+}
+
+function getSimplify2DirtyWorktreeStatus(cwd: string): { repoRoot: string; output: string } | undefined {
+  try {
+    const repoRoot = resolveGitRepoRoot(cwd);
+    const output = getWorktreeStatus(repoRoot);
+    return output.length > 0 ? { repoRoot, output } : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function renderDirtyWorktreeMessage(repoRoot: string, statusOutput: string): string {
+  return [
+    "Simplify2 requires a clean git worktree before it can apply or commit a slice.",
+    `Repo root: ${repoRoot}`,
+    "Current git status (--porcelain=v1 --untracked-files=all):",
+    statusOutput,
+  ].join("\n") + "\n";
 }
 
 function maybeCreateCheckpoint(hypotheses: SimplifyHypothesis[]): SimplifyCheckpoint | undefined {
@@ -1958,18 +2221,56 @@ function renderTestMapSummary(testMap: Simplify2TestMap): string {
   ].join("\n");
 }
 
-function renderHypothesis(hypothesis: SimplifyHypothesis | undefined, iteration: number): string {
+function renderPausedProposalSummary(hypothesis: SimplifyHypothesis | undefined, iteration: number): string {
   if (!hypothesis) {
-    return `Simplify2 iteration ${iteration}: no current hypothesis`;
+    return `Simplify2 iteration ${iteration}: no current checkpoint proposal`;
   }
 
   return [
-    `Simplify2 iteration ${iteration}: ${hypothesis.title}`,
-    hypothesis.summary.trim(),
-    `Kind: ${hypothesis.kind}; risk=${hypothesis.risk}; score=${hypothesis.score}`,
-    `Why this helps: ${hypothesis.rationale.trim()}`,
-    renderFiles(hypothesis.implementationScope),
-  ].filter(Boolean).join("\n");
+    "I have a simplification proposal:",
+    `- title: ${hypothesis.title}`,
+    `- summary: ${hypothesis.summary}`,
+    `- kind/risk/score: ${hypothesis.kind} / ${hypothesis.risk} / ${hypothesis.score}`,
+    `- scope: ${hypothesis.implementationScope.join(", ") || "(none listed)"}`,
+    `- why this reduces conceptual complexity: ${hypothesis.rationale}`,
+  ].join("\n");
+}
+
+function renderHypothesisCandidates(hypotheses: SimplifyHypothesis[]): string {
+  if (hypotheses.length === 0) {
+    return "I have proposed 0 hypotheses for this simplification.";
+  }
+
+  return [
+    `I have proposed ${hypotheses.length} hypotheses for this simplification:`,
+    ...hypotheses.map((hypothesis, index) => {
+      const scope = hypothesis.implementationScope.join(", ") || "(none listed)";
+      return `${index + 1}. ${hypothesis.title} | ${hypothesis.kind} | risk=${hypothesis.risk} | score=${hypothesis.score} | scope=${scope}`;
+    }),
+  ].join("\n");
+}
+
+function renderSelectedHypothesisSummary(hypothesis: SimplifyHypothesis | undefined): string | undefined {
+  if (!hypothesis) {
+    return undefined;
+  }
+
+  return [
+    `I have selected hypothesis "${hypothesis.title}":`,
+    `- ranking reason: ${hypothesis.rankingReason ?? "No ranking reason was recorded."}`,
+    `- checkpoint reason: ${hypothesis.checkpointReason ?? `risk=${hypothesis.risk}`}`,
+    `- concrete change: ${hypothesis.summary}`,
+  ].join("\n");
+}
+
+function getSelectedCheckpointHypothesis(state: Simplify2State): SimplifyHypothesis | undefined {
+  const checkpointHypothesisId = state.notebook.currentCheckpoint?.hypothesisId;
+  if (checkpointHypothesisId) {
+    return state.notebook.candidateHypotheses.find((hypothesis) => hypothesis.id === checkpointHypothesisId)
+      ?? state.notebook.candidateHypotheses[0];
+  }
+
+  return state.notebook.candidateHypotheses[0];
 }
 
 function renderHypothesisSummary(hypothesis: SimplifyHypothesis | undefined): string {
@@ -2000,21 +2301,27 @@ function renderCheckpoint(checkpoint: SimplifyCheckpoint | undefined): string {
   ].filter(Boolean).join("\n");
 }
 
-function renderCheckpointOptions(checkpoint: SimplifyCheckpoint | undefined): string | undefined {
-  if (!checkpoint?.options?.length) {
-    return undefined;
-  }
-  return `Suggested replies: ${checkpoint.options.join(" | ")}`;
-}
-
-function renderFiles(files: string[]): string | undefined {
-  const normalized = normalizePaths(files);
-  return normalized.length > 0 ? `Scope: ${normalized.join(", ")}` : undefined;
+function renderPausedActions(): string {
+  return [
+    "Available actions:",
+    "1. approve it",
+    "2. stop",
+    "3. focus on tests instead",
+    "4. something else",
+  ].join("\n");
 }
 
 function renderTouchedFiles(files: string[]): string | undefined {
   const normalized = normalizePaths(files);
   return normalized.length > 0 ? `Touched files: ${normalized.join(", ")}` : undefined;
+}
+
+function getRunResultDisplay(result: RunResult): string | undefined {
+  if (!("display" in result) || typeof result.display !== "string") {
+    return undefined;
+  }
+
+  return result.display;
 }
 
 function renderValidationLine(validation: ValidationSummary | undefined): string | undefined {
@@ -2023,6 +2330,14 @@ function renderValidationLine(validation: ValidationSummary | undefined): string
   }
 
   return `Validation: ${validation.status}. ${validation.outputSummary}`;
+}
+
+function renderCommitLine(commit: SimplifyCommitStatus | undefined): string | undefined {
+  if (!commit) {
+    return undefined;
+  }
+
+  return `Commit: ${commit.status}. ${commit.summary}`;
 }
 
 function persistAnalysisArtifacts(

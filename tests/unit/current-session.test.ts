@@ -81,6 +81,51 @@ test("keeps derived current session cache entries isolated by workspace", () => 
   }
 });
 
+test("round-trips continuation UI metadata through stored session snapshots", () => {
+  const originalHome = process.env.HOME;
+  tempHome = mkdtempSync(join(tmpdir(), "nanoboss-current-session-continuation-ui-"));
+  process.env.HOME = tempHome;
+
+  try {
+    const rootDir = join(tempHome, ".nanoboss", "sessions", "session-ui");
+    const metadata = writeSessionMetadata({
+      sessionId: "session-ui",
+      cwd: "/repo",
+      rootDir,
+      createdAt: "2026-04-01T10:00:00.000Z",
+      updatedAt: "2026-04-01T11:00:00.000Z",
+      pendingProcedureContinuation: {
+        procedure: "simplify2",
+        cell: {
+          sessionId: "session-ui",
+          cellId: "cell-1",
+        },
+        question: "Approve this simplify2 slice?",
+        state: {
+          step: 1,
+        },
+        continuationUi: {
+          kind: "simplify2_checkpoint",
+          title: "Simplify2 checkpoint",
+          actions: [
+            { id: "approve", label: "Continue", reply: "approve it" },
+            { id: "other", label: "Something Else" },
+          ],
+        },
+      },
+    });
+
+    expect(readSessionMetadata("session-ui", rootDir)).toEqual(metadata);
+    expect(readCurrentSessionMetadata("/repo")).toEqual(metadata);
+  } finally {
+    if (originalHome === undefined) {
+      delete process.env.HOME;
+    } else {
+      process.env.HOME = originalHome;
+    }
+  }
+});
+
 test("ignores current session workspace entries missing createdAt", () => {
   const originalHome = process.env.HOME;
   tempHome = mkdtempSync(join(tmpdir(), "nanoboss-current-session-invalid-"));

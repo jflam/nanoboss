@@ -76,6 +76,10 @@ export type UiAction =
       mode: ToolCardThemeMode;
     }
   | {
+      type: "local_simplify2_auto_approve";
+      enabled: boolean;
+    }
+  | {
       type: "toggle_tool_output";
     }
   | {
@@ -94,6 +98,7 @@ export function reduceUiState(state: UiState, action: UiAction): UiState {
           showToolCalls: state.showToolCalls,
           expandedToolOutput: state.expandedToolOutput,
           toolCardThemeMode: state.toolCardThemeMode,
+          simplify2AutoApprove: state.simplify2AutoApprove,
         }),
         sessionId: action.sessionId,
         buildLabel: action.buildLabel,
@@ -212,6 +217,12 @@ export function reduceUiState(state: UiState, action: UiAction): UiState {
         ...state,
         toolCardThemeMode: action.mode,
         statusLine: `[theme] tool cards ${action.mode}`,
+      };
+    case "local_simplify2_auto_approve":
+      return {
+        ...state,
+        simplify2AutoApprove: action.enabled,
+        statusLine: `[simplify2] auto-approve ${action.enabled ? "on" : "off"}`,
       };
     case "toggle_tool_output":
       return {
@@ -510,6 +521,7 @@ function reduceFrontendEvent(state: UiState, event: FrontendEventEnvelope): UiSt
           question: event.data.question,
           inputHint: event.data.inputHint,
           suggestedReplies: event.data.suggestedReplies,
+          continuationUi: event.data.continuationUi,
         },
       };
     }

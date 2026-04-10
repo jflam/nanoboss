@@ -11,7 +11,13 @@ import {
   listKnownProviders,
   listSelectableModelOptions,
 } from "../agent/model-catalog.ts";
-import type { DownstreamAgentSelection, DownstreamAgentProvider } from "../core/types.ts";
+import type {
+  DownstreamAgentSelection,
+  DownstreamAgentProvider,
+  FrontendPendingProcedureContinuation,
+  Simplify2CheckpointContinuationUi,
+  Simplify2CheckpointContinuationUiAction,
+} from "../core/types.ts";
 import {
   type AutocompleteItem,
   CombinedAutocompleteProvider,
@@ -22,6 +28,7 @@ import {
   matchesKey,
 } from "./pi-tui.ts";
 import { SelectOverlay, type SelectOverlayOptions } from "./overlays/select-overlay.ts";
+import { Simplify2ContinuationOverlay } from "./overlays/simplify2-continuation-overlay.ts";
 import type { UiState } from "./state.ts";
 import { createNanobossTuiTheme, type NanobossTuiTheme } from "./theme.ts";
 import { NanobossAppView } from "./views.ts";
@@ -31,6 +38,7 @@ export interface NanobossTuiAppParams {
   serverUrl: string;
   showToolCalls: boolean;
   sessionId?: string;
+  simplify2AutoApprove?: boolean;
 }
 
 interface EditorLike {
@@ -70,6 +78,7 @@ interface ControllerLike {
   queuePrompt(text: string): Promise<void>;
   cancelActiveRun(): Promise<void>;
   toggleToolOutput(): void;
+  toggleSimplify2AutoApprove(): void;
   requestExit(): void;
   run(): Promise<string | undefined>;
   stop(): Promise<void>;
@@ -89,6 +98,10 @@ export interface NanobossTuiAppDeps {
   clearInterval?: typeof globalThis.clearInterval;
   now?: () => number;
 }
+
+type FrontendSimplify2CheckpointContinuation = FrontendPendingProcedureContinuation & {
+  continuationUi: Simplify2CheckpointContinuationUi;
+};
 
 const TOOL_OUTPUT_TOGGLE_COOLDOWN_MS = 150;
 const CTRL_C_EXIT_WINDOW_MS = 500;
@@ -138,6 +151,10 @@ export class NanobossTuiApp {
   private liveRefreshInterval?: ReturnType<typeof setInterval>;
   private lastToolOutputToggleAt = Number.NEGATIVE_INFINITY;
   private lastCtrlCAt = Number.NEGATIVE_INFINITY;
+  private inlineComposerMode: "editor" | "select" | "simplify2" = "editor";
+  private openSimplify2ContinuationSignature?: string;
+  private lastSeenSimplify2ContinuationSignature?: string;
+  private dismissedSimplify2ContinuationSignature?: string;
 
   constructor(
     private readonly params: NanobossTuiAppParams,
@@ -217,6 +234,11 @@ export class NanobossTuiApp {
         return { consume: true };
       }
 
+      if (matchesKey(data, "ctrl+y")) {
+        this.controller.toggleSimplify2AutoApprove();
+        return { consume: true };
+      }
+
       if (!matchesKey(data, "ctrl+c")) {
         return undefined;
       }
@@ -259,6 +281,7 @@ export class NanobossTuiApp {
     this.updateEditorSubmitState();
     this.refreshAutocompleteProvider();
     this.view.setState(this.state);
+    this.syncSimplify2ContinuationComposer();
     this.tui.requestRender();
   }
 
@@ -365,6 +388,7 @@ export class NanobossTuiApp {
     options: SelectOverlayOptions<T>,
   ): Promise<T | undefined> {
     return await new Promise<T | undefined>((resolve) => {
+      this.inlineComposerMode = "select";
       const component = new SelectOverlay<T>(
         this.tui as TUI,
         this.theme,
@@ -381,9 +405,73 @@ export class NanobossTuiApp {
   }
 
   private restoreEditorComposer(): void {
+    this.inlineComposerMode = "editor";
+    this.openSimplify2ContinuationSignature = undefined;
     this.view.showEditor();
     this.tui.setFocus(this.editor);
     this.tui.requestRender(true);
+  }
+
+  private syncSimplify2ContinuationComposer(): void {
+    const continuation = getSimplify2CheckpointContinuation(this.state.pendingProcedureContinuation);
+    const signature = continuation ? buildSimplify2ContinuationSignature(continuation) : undefined;
+    if (signature !== this.lastSeenSimplify2ContinuationSignature) {
+      this.lastSeenSimplify2ContinuationSignature = signature;
+      this.dismissedSimplify2ContinuationSignature = undefined;
+    }
+
+    const shouldShow = Boolean(
+      continuation
+      && signature
+      && !this.state.simplify2AutoApprove
+      && !this.state.inputDisabled
+      && this.inlineComposerMode !== "select"
+      && this.dismissedSimplify2ContinuationSignature !== signature,
+    );
+
+    if (shouldShow && continuation && signature && this.inlineComposerMode !== "simplify2") {
+      this.showSimplify2ContinuationOverlay(continuation, signature);
+      return;
+    }
+
+    if (!shouldShow && this.inlineComposerMode === "simplify2") {
+      this.restoreEditorComposer();
+    }
+  }
+
+  private showSimplify2ContinuationOverlay(
+    continuation: FrontendSimplify2CheckpointContinuation,
+    signature: string,
+  ): void {
+    this.inlineComposerMode = "simplify2";
+    this.openSimplify2ContinuationSignature = signature;
+    const component = new Simplify2ContinuationOverlay(
+      this.tui as TUI,
+      this.theme,
+      continuation.continuationUi.title,
+      continuation.continuationUi.actions,
+      (action) => {
+        this.handleSimplify2ContinuationAction(action);
+      },
+    );
+    this.view.showComposer(component);
+    this.tui.setFocus(component);
+    this.tui.requestRender(true);
+  }
+
+  private handleSimplify2ContinuationAction(action: Simplify2CheckpointContinuationUiAction | undefined): void {
+    const signature = this.openSimplify2ContinuationSignature;
+    this.restoreEditorComposer();
+    if (!action || action.id === "other") {
+      if (signature) {
+        this.dismissedSimplify2ContinuationSignature = signature;
+      }
+      return;
+    }
+
+    if (action.reply) {
+      void this.controller.handleSubmit(action.reply);
+    }
   }
 
   private async stop(): Promise<void> {
@@ -428,4 +516,30 @@ export class NanobossTuiApp {
     clearIntervalFn(this.liveRefreshInterval);
     this.liveRefreshInterval = undefined;
   }
+}
+
+function getSimplify2CheckpointContinuation(
+  continuation: FrontendPendingProcedureContinuation | undefined,
+): FrontendSimplify2CheckpointContinuation | undefined {
+  if (
+    !continuation
+    || continuation.procedure !== "simplify2"
+    || continuation.continuationUi?.kind !== "simplify2_checkpoint"
+  ) {
+    return undefined;
+  }
+
+  return continuation as FrontendSimplify2CheckpointContinuation;
+}
+
+function buildSimplify2ContinuationSignature(
+  continuation: FrontendPendingProcedureContinuation,
+): string {
+  return JSON.stringify({
+    procedure: continuation.procedure,
+    question: continuation.question,
+    inputHint: continuation.inputHint,
+    suggestedReplies: continuation.suggestedReplies,
+    continuationUi: continuation.continuationUi,
+  });
 }

@@ -15,6 +15,8 @@ import type {
   DownstreamAgentSelection,
   KernelValue,
   PendingProcedureContinuation,
+  ProcedureContinuationUi,
+  Simplify2CheckpointContinuationUiAction,
 } from "../core/types.ts";
 
 const SESSION_METADATA_FILE = "session.json";
@@ -176,6 +178,52 @@ function parsePendingProcedureContinuation(value: unknown): PendingProcedureCont
     state: record?.state as KernelValue,
     inputHint: asNonEmptyString(record?.inputHint),
     suggestedReplies: suggestedReplies && suggestedReplies.length > 0 ? suggestedReplies : undefined,
+    continuationUi: parseContinuationUi(record?.continuationUi),
+  };
+}
+
+function parseContinuationUi(value: unknown): ProcedureContinuationUi | undefined {
+  const record = asRecord(value);
+  if (record?.kind !== "simplify2_checkpoint") {
+    return undefined;
+  }
+
+  const title = asNonEmptyString(record.title);
+  const actions = Array.isArray(record.actions)
+    ? record.actions
+      .map((entry) => parseSimplify2ContinuationAction(asRecord(entry)))
+      .filter((entry): entry is NonNullable<ReturnType<typeof parseSimplify2ContinuationAction>> => entry !== undefined)
+    : [];
+
+  if (!title || actions.length === 0) {
+    return undefined;
+  }
+
+  return {
+    kind: "simplify2_checkpoint",
+    title,
+    actions,
+  };
+}
+
+function parseSimplify2ContinuationAction(
+  record: Record<string, unknown> | undefined,
+): Simplify2CheckpointContinuationUiAction | undefined {
+  const id = asNonEmptyString(record?.id);
+  if (id !== "approve" && id !== "stop" && id !== "focus_tests" && id !== "other") {
+    return undefined;
+  }
+
+  const label = asNonEmptyString(record?.label);
+  if (!label) {
+    return undefined;
+  }
+
+  return {
+    id,
+    label,
+    reply: asNonEmptyString(record?.reply),
+    description: asNonEmptyString(record?.description),
   };
 }
 

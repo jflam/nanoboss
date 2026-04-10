@@ -118,6 +118,7 @@ describe("NanobossTuiApp", () => {
             async queuePrompt() {},
             async cancelActiveRun() {},
             toggleToolOutput() {},
+            toggleSimplify2AutoApprove() {},
             requestExit() {},
             async run() {
               return undefined;
@@ -179,6 +180,7 @@ describe("NanobossTuiApp", () => {
             async queuePrompt() {},
             async cancelActiveRun() {},
             toggleToolOutput() {},
+            toggleSimplify2AutoApprove() {},
             requestExit() {},
             async run() {
               return undefined;
@@ -255,13 +257,14 @@ describe("NanobossTuiApp", () => {
         }),
         createEditor: () => editor,
         createController: () => ({
-            getState: () => currentState,
-            async handleSubmit() {},
-            async queuePrompt() {},
-            async cancelActiveRun() {},
-            toggleToolOutput() {
-              toggles.push("toggle");
+          getState: () => currentState,
+          async handleSubmit() {},
+          async queuePrompt() {},
+          async cancelActiveRun() {},
+          toggleToolOutput() {
+            toggles.push("toggle");
           },
+          toggleSimplify2AutoApprove() {},
           requestExit() {},
           async run() {
             return undefined;
@@ -277,6 +280,137 @@ describe("NanobossTuiApp", () => {
 
     expect(result).toEqual({ consume: true });
     expect(toggles).toEqual(["toggle"]);
+  });
+
+  test("pressing ctrl+y toggles simplify2 auto-approve", async () => {
+    const editor = new FakeEditor();
+    const toggles: string[] = [];
+    const currentState: UiState = createInitialUiState({ cwd: "/repo", showToolCalls: true });
+    let inputListener: ((data: string) => unknown) | undefined;
+
+    new NanobossTuiApp(
+      {
+        serverUrl: "http://localhost:3000",
+        showToolCalls: true,
+      },
+      {
+        createTerminal: () => ({
+          setTitle() {},
+          async drainInput() {},
+        }),
+        createTui: () => ({
+          addInputListener(listener) {
+            inputListener = listener;
+          },
+          addChild() {},
+          setFocus() {},
+          start() {},
+          requestRender() {},
+          stop() {},
+        }),
+        createEditor: () => editor,
+        createController: () => ({
+          getState: () => currentState,
+          async handleSubmit() {},
+          async queuePrompt() {},
+          async cancelActiveRun() {},
+          toggleToolOutput() {},
+          toggleSimplify2AutoApprove() {
+            toggles.push("toggle");
+          },
+          requestExit() {},
+          async run() {
+            return undefined;
+          },
+          async stop() {},
+        }),
+        createView: () => createViewStub(),
+      },
+    );
+
+    const result = inputListener?.("\u0019");
+    await Promise.resolve();
+
+    expect(result).toEqual({ consume: true });
+    expect(toggles).toEqual(["toggle"]);
+  });
+
+  test("opens the simplify2 continuation overlay and action 1 submits approval", async () => {
+    const editor = new FakeEditor();
+    const submitted: string[] = [];
+    let currentState: UiState = createInitialUiState({ cwd: "/repo", showToolCalls: true });
+    let capturedOnStateChange: ((state: UiState) => void) | undefined;
+    let shownComposer: { handleInput?: (data: string) => void } | undefined;
+
+    new NanobossTuiApp(
+      {
+        serverUrl: "http://localhost:3000",
+        showToolCalls: true,
+      },
+      {
+        createTerminal: () => ({
+          setTitle() {},
+          async drainInput() {},
+        }),
+        createTui: () => ({
+          addInputListener() {},
+          addChild() {},
+          setFocus() {},
+          start() {},
+          requestRender() {},
+          stop() {},
+        }),
+        createEditor: () => editor,
+        createController: (_params, deps) => {
+          capturedOnStateChange = deps.onStateChange;
+          return {
+            getState: () => currentState,
+            async handleSubmit(text: string) {
+              submitted.push(text);
+            },
+            async queuePrompt() {},
+            async cancelActiveRun() {},
+            toggleToolOutput() {},
+            toggleSimplify2AutoApprove() {},
+            requestExit() {},
+            async run() {
+              return undefined;
+            },
+            async stop() {},
+          };
+        },
+        createView: () => ({
+          setState() {},
+          showComposer(component: unknown) {
+            shownComposer = component as { handleInput?: (data: string) => void };
+          },
+          showEditor() {},
+        }),
+      },
+    );
+
+    currentState = {
+      ...currentState,
+      sessionId: "session-1",
+      pendingProcedureContinuation: {
+        procedure: "simplify2",
+        question: "Approve this simplify2 slice?",
+        continuationUi: {
+          kind: "simplify2_checkpoint",
+          title: "Simplify2 checkpoint",
+          actions: [
+            { id: "approve", label: "Continue", reply: "approve it" },
+            { id: "other", label: "Something Else" },
+          ],
+        },
+      },
+    };
+    capturedOnStateChange?.(currentState);
+
+    shownComposer?.handleInput?.("1");
+    await Promise.resolve();
+
+    expect(submitted).toEqual(["approve it"]);
   });
 
   test("pressing ctrl+c once clears the editor without exiting", async () => {
@@ -314,6 +448,7 @@ describe("NanobossTuiApp", () => {
           async queuePrompt() {},
           async cancelActiveRun() {},
           toggleToolOutput() {},
+          toggleSimplify2AutoApprove() {},
           requestExit() {
             exits.push("exit");
           },
@@ -370,6 +505,7 @@ describe("NanobossTuiApp", () => {
           async queuePrompt() {},
           async cancelActiveRun() {},
           toggleToolOutput() {},
+          toggleSimplify2AutoApprove() {},
           requestExit() {
             exits.push("exit");
           },
@@ -426,6 +562,7 @@ describe("NanobossTuiApp", () => {
           async queuePrompt() {},
           async cancelActiveRun() {},
           toggleToolOutput() {},
+          toggleSimplify2AutoApprove() {},
           requestExit() {
             exits.push("exit");
           },
@@ -484,6 +621,7 @@ describe("NanobossTuiApp", () => {
           toggleToolOutput() {
             toggles.push("toggle");
           },
+          toggleSimplify2AutoApprove() {},
           requestExit() {},
           async run() {
             return undefined;
@@ -548,6 +686,7 @@ describe("NanobossTuiApp", () => {
               cancellations.push("cancel");
             },
             toggleToolOutput() {},
+            toggleSimplify2AutoApprove() {},
             requestExit() {},
             async run() {
               return undefined;
@@ -605,6 +744,7 @@ describe("NanobossTuiApp", () => {
           },
           async cancelActiveRun() {},
           toggleToolOutput() {},
+          toggleSimplify2AutoApprove() {},
           requestExit() {},
           async run() {
             return undefined;
@@ -661,6 +801,7 @@ describe("NanobossTuiApp", () => {
           },
           async cancelActiveRun() {},
           toggleToolOutput() {},
+          toggleSimplify2AutoApprove() {},
           requestExit() {},
           async run() {
             return undefined;
@@ -718,6 +859,7 @@ describe("NanobossTuiApp", () => {
             async queuePrompt() {},
             async cancelActiveRun() {},
             toggleToolOutput() {},
+            toggleSimplify2AutoApprove() {},
             requestExit() {},
             async run() {
               currentState = {
@@ -795,6 +937,7 @@ describe("NanobossTuiApp", () => {
             async queuePrompt() {},
             async cancelActiveRun() {},
             toggleToolOutput() {},
+            toggleSimplify2AutoApprove() {},
             requestExit() {},
             async run() {
               return undefined;

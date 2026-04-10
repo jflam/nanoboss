@@ -4,6 +4,7 @@ export type FrontendConnectionMode = "private" | "external";
 
 export interface FrontendConnectionOptions {
   showToolCalls: boolean;
+  simplify2AutoApprove: boolean;
   showHelp: boolean;
   connectionMode: FrontendConnectionMode;
   serverUrl?: string;
@@ -15,6 +16,7 @@ export interface ParsedFrontendConnectionOptions extends FrontendConnectionOptio
 
 export function parseFrontendConnectionOptions(argv: string[]): ParsedFrontendConnectionOptions {
   let showToolCalls = true;
+  let simplify2AutoApprove = false;
   let showHelp = false;
   let serverUrl = normalizeServerUrl(Bun.env.NANOBOSS_SERVER_URL);
   const remainingArgs: string[] = [];
@@ -31,6 +33,9 @@ export function parseFrontendConnectionOptions(argv: string[]): ParsedFrontendCo
         break;
       case "--no-tool-calls":
         showToolCalls = false;
+        break;
+      case "--simplify2-auto-approve":
+        simplify2AutoApprove = true;
         break;
       case "--server-url":
         serverUrl = requireValue(argv[index + 1], "--server-url");
@@ -53,6 +58,7 @@ export function parseFrontendConnectionOptions(argv: string[]): ParsedFrontendCo
 
   return {
     showToolCalls,
+    simplify2AutoApprove,
     showHelp,
     connectionMode: serverUrl ? "external" : "private",
     serverUrl,

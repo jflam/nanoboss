@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -12,6 +13,21 @@ import type {
 } from "../../src/core/types.ts";
 
 describe("simplify2 procedure", () => {
+  test("blocks execute when the git worktree is dirty", async () => {
+    const cwd = createFixtureWorkspace();
+    writeFileSync(join(cwd, "dirty.txt"), "not committed\n", "utf8");
+
+    const result = await simplify2Procedure.execute(
+      "",
+      createMockContext(cwd, []),
+    );
+
+    const normalized = normalizeProcedureResult(result);
+    expect(normalized.summary).toBe("simplify2: blocked by dirty worktree");
+    expect(normalized.display).toContain("Simplify2 requires a clean git worktree");
+    expect(normalized.display).toContain("?? dirty.txt");
+  });
+
   test("starts paused on a typed checkpoint and creates inspectable artifacts", async () => {
     const cwd = createFixtureWorkspace();
     const prompts: string[] = [];
@@ -61,7 +77,9 @@ describe("simplify2 procedure", () => {
 
     const normalized = normalizeProcedureResult(result);
     expect(normalized.pause?.question).toContain("Collapse duplicate continuation parsing ownership");
-    expect(normalized.display).toContain("Simplify2 iteration 1");
+    expect(normalized.display).toContain("I have a simplification proposal:");
+    expect(normalized.display).toContain("I have proposed 1 hypotheses for this simplification:");
+    expect(normalized.display).toContain("I have selected hypothesis \"Collapse duplicate continuation parsing ownership\":");
     expect(prompts[0]).toContain("Current focus: simplify the current project");
 
     const pausedState = normalized.pause?.state as {
@@ -70,12 +88,87 @@ describe("simplify2 procedure", () => {
     };
     expect(pausedState.mode).toBe("checkpoint");
     expect(pausedState.notebook.currentCheckpoint?.hypothesisId).toBe("hyp-boundary-checkpoint");
+    expect(normalized.pause?.continuationUi).toMatchObject({
+      kind: "simplify2_checkpoint",
+      actions: [
+        { id: "approve", reply: "approve it" },
+        { id: "stop", reply: "stop" },
+        { id: "focus_tests", reply: "focus on tests instead" },
+        { id: "other" },
+      ],
+    });
 
     expect(existsSync(join(cwd, ".nanoboss", "simplify2", "architecture-memory.json"))).toBe(true);
     expect(existsSync(join(cwd, ".nanoboss", "simplify2", "journal.json"))).toBe(true);
     expect(existsSync(join(cwd, ".nanoboss", "simplify2", "test-map.json"))).toBe(true);
     expect(existsSync(join(cwd, ".nanoboss", "simplify2", "observations.json"))).toBe(true);
     expect(existsSync(join(cwd, ".nanoboss", "simplify2", "analysis-cache.json"))).toBe(true);
+  });
+
+  test("keeps a paused checkpoint when resume hits a dirty worktree", async () => {
+    const cwd = createFixtureWorkspace();
+
+    const executeResult = await simplify2Procedure.execute(
+      "",
+      createMockContext(cwd, [
+        emptyRefreshProposal(),
+        observationBatch([
+          {
+            id: "obs-duplicate-boundary",
+            kind: "boundary_candidate",
+            summary: "Continuation parsing appears to be split across two layers.",
+            evidence: [{ kind: "file", ref: "src/session/repository.ts" }],
+            confidence: "medium",
+          },
+        ]),
+        hypothesisBatch([
+          {
+            id: "hyp-boundary-checkpoint",
+            title: "Collapse duplicate continuation parsing ownership",
+            kind: "collapse_boundary",
+            summary: "A fake boundary duplicates continuation parsing logic.",
+            rationale: "One owner should enforce the parsing invariant.",
+            evidence: [{ kind: "file", ref: "src/session/repository.ts" }],
+            expectedDelta: {
+              boundariesReduced: 1,
+              duplicateRepresentationsReduced: 1,
+            },
+            risk: "medium",
+            needsHumanCheckpoint: true,
+            checkpointReason: "This changes which layer owns continuation parsing.",
+            implementationScope: ["src/session/repository.ts", "src/core/service.ts"],
+            testImplications: ["strengthen invariant coverage around continuation parsing"],
+          },
+        ]),
+        rankingBatch([
+          {
+            hypothesisId: "hyp-boundary-checkpoint",
+            score: 9,
+            reason: "High conceptual reduction but the ownership move needs confirmation.",
+            needsHumanCheckpoint: true,
+          },
+        ]),
+      ]),
+    );
+
+    writeFileSync(join(cwd, "dirty.txt"), "not committed\n", "utf8");
+
+    const resumeResult = await simplify2Procedure.resume(
+      "approve it",
+      requirePauseState(normalizeProcedureResult(executeResult)),
+      createMockContext(cwd, [
+        {
+          kind: "approve_hypothesis",
+          reason: "Proceed.",
+          hypothesisId: "hyp-boundary-checkpoint",
+        },
+      ]),
+    );
+
+    const normalized = normalizeProcedureResult(resumeResult);
+    expect(normalized.pause?.question).toContain("Should I approve this slice");
+    expect(normalized.display).toContain("Simplify2 cannot continue until the git worktree is clean again.");
+    expect(normalized.display).toContain("?? dirty.txt");
   });
 
   test("auto-applies a low-risk slice, continues analysis, and finishes when no next slice stands out", async () => {
@@ -347,6 +440,7 @@ describe("simplify2 procedure", () => {
       ]),
     );
 
+    const procedureCalls: Array<{ name: string; prompt: string }> = [];
     const pausedState = requirePauseState(normalizeProcedureResult(executeResult));
     const resumeResult = await simplify2Procedure.resume(
       "approve it",
@@ -382,17 +476,128 @@ describe("simplify2 procedure", () => {
         observationBatch([]),
         hypothesisBatch([]),
         rankingBatch([]),
-      ]),
+      ], [], {
+        procedureCalls,
+      }),
     );
 
     const normalized = normalizeProcedureResult(resumeResult);
     expect(normalized.display).toContain("Applied: Collapse continuation parsing ownership.");
     expect(normalized.display).toContain("Validation: passed.");
+    expect(normalized.display).toContain("Commit: created.");
     expect(normalized.display).toContain("No worthwhile simplification hypothesis stood out after the current review cycle.");
+    expect(procedureCalls).toHaveLength(1);
+    const commitCall = procedureCalls[0];
+    expect(commitCall).toBeDefined();
+    expect(commitCall?.name).toBe("nanoboss/commit");
+    expect(commitCall?.prompt).toContain("commit the simplify2 slice \"Collapse continuation parsing ownership\"");
     expect(normalized.data).toMatchObject({
       appliedCount: 1,
       latestHypothesis: "Collapse continuation parsing ownership",
       validationStatus: "passed",
+    });
+  });
+
+  test("stops after an automatic commit failure with a clear display", async () => {
+    const cwd = createFixtureWorkspace({
+      sourceFiles: ["src/session/repository.ts"],
+      tests: [
+        {
+          path: "tests/unit/current-session.test.ts",
+          contents: [
+            'import { expect, test } from "bun:test";',
+            'test("current session slice", () => {',
+            "  expect(1 + 1).toBe(2);",
+            "});",
+          ].join("\n"),
+        },
+      ],
+    });
+
+    const result = await simplify2Procedure.execute(
+      "focus on continuation persistence",
+      createMockContext(cwd, [
+        emptyRefreshProposal(),
+        observationBatch([
+          {
+            id: "obs-dup-parsing",
+            kind: "duplication",
+            summary: "Continuation parsing is duplicated in the session flow.",
+            evidence: [{ kind: "file", ref: "src/session/repository.ts" }],
+            confidence: "high",
+          },
+        ]),
+        hypothesisBatch([
+          {
+            id: "hyp-canonicalize-parsing",
+            title: "Canonicalize continuation parsing",
+            kind: "canonicalize_representation",
+            summary: "Use one representation for continuation parsing across the session flow.",
+            rationale: "This removes duplicate parsing logic and sharpens the invariant.",
+            evidence: [{ kind: "file", ref: "src/session/repository.ts" }],
+            expectedDelta: {
+              duplicateRepresentationsReduced: 1,
+            },
+            risk: "low",
+            needsHumanCheckpoint: false,
+            implementationScope: ["src/session/repository.ts"],
+            testImplications: ["keep a narrow invariant test for current session parsing"],
+          },
+        ]),
+        rankingBatch([
+          {
+            hypothesisId: "hyp-canonicalize-parsing",
+            score: 8,
+            reason: "Small, coherent, and high-value cleanup.",
+            needsHumanCheckpoint: false,
+          },
+        ]),
+        {
+          summary: "Canonicalized the continuation parsing path around a single representation.",
+          touchedFiles: ["src/session/repository.ts"],
+          conceptualChanges: ["one representation now owns continuation parsing"],
+          testChanges: ["kept the current session invariant test narrow"],
+          validationNotes: ["expected unit test slice should pass"],
+        },
+        {
+          journalSummary: "Recorded the parsing canonicalization as the new baseline.",
+          memorySummary: "Continuation parsing now has one canonical representation.",
+          memoryUpdates: {
+            concepts: ["continuation parsing"],
+            invariants: ["one canonical continuation representation"],
+            boundaries: ["session persistence"],
+            exceptions: [],
+            staleItems: [],
+          },
+          nextQuestions: [],
+          resolvedHypothesisIds: ["hyp-canonicalize-parsing"],
+          followupRecommendations: [],
+        },
+      ], [], {
+        procedureResults: [
+          {
+            cell: {
+              sessionId: "test-session",
+              cellId: "procedure-commit",
+            },
+            data: {
+              checks: {
+                passed: false,
+              },
+            },
+            display: "Pre-commit checks failed. Commit was not created.\n",
+            summary: "nanoboss/commit: blocked by failing pre-commit checks",
+          },
+        ],
+      }),
+    );
+
+    const normalized = normalizeProcedureResult(result);
+    expect(normalized.display).toContain("Commit: failed.");
+    expect(normalized.display).toContain("Automatic commit failed after applying Canonicalize continuation parsing.");
+    expect(normalized.data).toMatchObject({
+      appliedCount: 1,
+      latestHypothesis: "Canonicalize continuation parsing",
     });
   });
 
@@ -754,6 +959,12 @@ function createFixtureWorkspace(params?: {
     writeFileSync(filePath, `${testFile.contents}\n`, "utf8");
   }
 
+  runGitInFixture(cwd, ["init"]);
+  runGitInFixture(cwd, ["config", "user.email", "simplify2-tests@example.com"]);
+  runGitInFixture(cwd, ["config", "user.name", "Simplify2 Tests"]);
+  runGitInFixture(cwd, ["add", "."]);
+  runGitInFixture(cwd, ["commit", "-m", "Initial fixture"]);
+
   return cwd;
 }
 
@@ -784,8 +995,13 @@ function createMockContext(
   cwd: string,
   agentResults: unknown[],
   prompts: string[] = [],
+  options: {
+    procedureResults?: unknown[];
+    procedureCalls?: Array<{ name: string; prompt: string }>;
+  } = {},
 ): CommandContext {
   let callCount = 0;
+  let procedureCallCount = 0;
   const defaultAgentConfig: DownstreamAgentConfig = {
     provider: "copilot",
     command: "bun",
@@ -852,11 +1068,65 @@ function createMockContext(
         data: next,
       } as RunResult;
     }) as CommandContext["callAgent"],
-    async callProcedure() {
-      throw new Error("Not implemented in test");
-    },
+    callProcedure: (async (name: string, prompt: string) => {
+      options.procedureCalls?.push({ name, prompt });
+      const next = options.procedureResults?.shift();
+      if (typeof next === "object" && next !== null && "cell" in next) {
+        return next as RunResult;
+      }
+
+      if (next !== undefined) {
+        procedureCallCount += 1;
+        return {
+          cell: {
+            sessionId: "test-session",
+            cellId: `procedure-${procedureCallCount}`,
+          },
+          data: next,
+        } as RunResult;
+      }
+
+      if (name === "nanoboss/commit") {
+        procedureCallCount += 1;
+        return {
+          cell: {
+            sessionId: "test-session",
+            cellId: `procedure-${procedureCallCount}`,
+          },
+          data: {
+            checks: {
+              passed: true,
+            },
+            commit: {
+              cell: {
+                sessionId: "test-session",
+                cellId: `commit-${procedureCallCount}`,
+              },
+              path: "output.data",
+            },
+          },
+          display: "commit sha=abc123 message=\"simplify2 slice\" clean=true",
+          summary: "simplify2 slice commit",
+        } as RunResult;
+      }
+
+      throw new Error(`Unexpected callProcedure ${name}`);
+    }) as CommandContext["callProcedure"],
     print() {},
   };
+}
+
+function runGitInFixture(cwd: string, args: string[]): void {
+  const result = spawnSync("git", args, {
+    cwd,
+    encoding: "utf8",
+  });
+
+  if (result.status === 0) {
+    return;
+  }
+
+  throw new Error([result.stdout, result.stderr].filter(Boolean).join("\n"));
 }
 
 function normalizeProcedureResult(value: ProcedureResult | string | void): ProcedureResult {

@@ -1392,6 +1392,7 @@ function toPersistedReplayEvent(
         display: event.data.display,
         inputHint: event.data.inputHint,
         suggestedReplies: event.data.suggestedReplies,
+        continuationUi: event.data.continuationUi,
         tokenUsage: event.data.tokenUsage,
       };
     case "run_failed":
@@ -1714,6 +1715,7 @@ function toFrontendPendingProcedureContinuation(
     question: continuation.question,
     inputHint: continuation.inputHint,
     suggestedReplies: continuation.suggestedReplies,
+    continuationUi: continuation.continuationUi,
   };
 }
 
@@ -1753,6 +1755,7 @@ function buildPendingProcedureContinuation(
     state: result.pause.state,
     inputHint: result.pause.inputHint,
     suggestedReplies: result.pause.suggestedReplies,
+    continuationUi: result.pause.continuationUi,
   };
 }
 

@@ -290,6 +290,7 @@ export function buildRunPausedEvent(params: {
     display: params.result.display,
     inputHint: params.result.pause.inputHint,
     suggestedReplies: params.result.pause.suggestedReplies,
+    continuationUi: params.result.pause.continuationUi,
     tokenUsage: params.tokenUsage,
   };
 }

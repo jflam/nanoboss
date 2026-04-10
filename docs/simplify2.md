@@ -19,19 +19,58 @@ the design is clear, and pauses for human input when the boundary is ambiguous.
 Unlike `/simplify`, which asks the agent for one next opportunity at a time,
 `/simplify2` runs a structured loop with durable state:
 
-1. load inspectable simplify artifacts
-2. refresh architecture memory for the current focus
-3. collect typed observations
-4. generate and rank hypotheses
-5. choose one of:
+1. require a clean git worktree before starting
+2. load inspectable simplify artifacts
+3. refresh architecture memory for the current focus
+4. collect typed observations
+5. generate and rank hypotheses
+6. choose one of:
    - pause for a checkpoint
    - apply one low-risk slice
    - finish because no worthwhile next slice stands out
-6. after an apply, run a narrow validation slice, reconcile memory, and repeat
+7. after an apply, run a narrow validation slice, reconcile memory, auto-commit
+   the finished slice through `nanoboss/commit`, and repeat
 
 The current implementation uses a bounded foreground loop with a default budget
 of 3 applied hypotheses per run.
 
+If the worktree becomes dirty after a paused checkpoint, `/simplify2` stays
+paused and refuses to continue the apply path until the tree is clean again.
+
+## AUTO-COMMIT
+
+Each successfully applied simplify2 slice is committed automatically through the
+existing repo-local `nanoboss/commit` workflow. That means simplify2 keeps its
+own narrow validation slice, then reuses the repo's canonical pre-commit checks
+before creating the actual git commit.
+
+If the simplify2 validation fails, no commit is attempted.
+
+If the commit workflow fails, the simplify2 run stops and reports that failure
+instead of continuing to another iteration.
+
+## HUMAN CHECKPOINTS
+
+`/simplify2` pauses when the top-ranked next slice is not obviously safe to apply.
+Common pause cases:
+
+- ownership or boundary changes
+- design updates
+- any non-low-risk hypothesis
+
+Paused checkpoint output is rendered by the host from typed simplify2 state. It
+shows the selected proposal, the competing hypotheses, why the chosen
+hypothesis ranked highest, and the available actions.
+
+In the TUI, paused simplify2 checkpoints also expose a focused continuation card:
+
+- `1` continue
+- `2` stop
+- `3` focus on tests
+- `4` something else
+
+The CLI and TUI also support a local `--simplify2-auto-approve` mode, plus a
+`ctrl+y` toggle, that auto-submits `approve it` for simplify2 checkpoints only.
 ## WHAT IT LOOKS FOR
 
 `/simplify2` is generic across repositories, but it is not a single generic
@@ -46,15 +85,6 @@ of 3 applied hypotheses per run.
 
 It separates those concerns into typed phases rather than asking for one freeform
 proposal up front.
-
-## HUMAN CHECKPOINTS
-
-`/simplify2` pauses when the top-ranked next slice is not obviously safe to apply.
-Common pause cases:
-
-- ownership or boundary changes
-- design updates
-- any non-low-risk hypothesis
 
 When paused, plain-text user replies are interpreted into one of these decisions:
 
@@ -142,7 +172,8 @@ A run may:
 - stop after reaching the iteration budget
 
 Finished output includes the latest applied slice, validation result, and counts
-for applied and rejected hypotheses.
+for applied and rejected hypotheses. When a slice was committed successfully,
+the latest output also includes the commit status line for that slice.
 
 ## SEE ALSO
 

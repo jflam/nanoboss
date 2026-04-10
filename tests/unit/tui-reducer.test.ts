@@ -1025,6 +1025,18 @@ describe("tui reducer", () => {
     state = reduceUiState(state, { type: "toggle_tool_output" });
     expect(state.expandedToolOutput).toBe(false);
   });
+
+  test("tracks local simplify2 auto-approve mode", () => {
+    let state = createInitialUiState({ cwd: "/repo", showToolCalls: true });
+
+    state = reduceUiState(state, {
+      type: "local_simplify2_auto_approve",
+      enabled: true,
+    });
+
+    expect(state.simplify2AutoApprove).toBe(true);
+    expect(state.statusLine).toBe("[simplify2] auto-approve on");
+  });
 });
 
 function eventEnvelope<EventType extends FrontendEventEnvelope["type"]>(

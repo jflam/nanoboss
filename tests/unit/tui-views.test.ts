@@ -90,7 +90,7 @@ describe("NanobossAppView", () => {
       state,
     );
 
-    const plain = stripAnsi(view.render(120).join("\n"));
+    const plain = stripAnsi(view.render(200).join("\n"));
 
     expect(plain).toContain("● busy");
     expect(plain).toContain("steer 1");
@@ -124,10 +124,32 @@ describe("NanobossAppView", () => {
       () => 70_000,
     );
 
-    const plain = stripAnsi(view.render(120).join("\n"));
+    const plain = stripAnsi(view.render(200).join("\n"));
 
     expect(plain).toContain("[time] 1:05");
     expect(plain).toContain("[tokens] 512 / 8,192 (6.3%)");
+  });
+
+  test("shows simplify2 auto-approve state in the activity and footer lines", () => {
+    const state = {
+      ...createInitialUiState({ cwd: "/repo" }),
+      sessionId: "session-1",
+      simplify2AutoApprove: true,
+    };
+
+    const view = new NanobossAppView(
+      {
+        render: () => [""],
+        invalidate() {},
+      } as never,
+      createNanobossTuiTheme(),
+      state,
+    );
+
+    const plain = stripAnsi(view.render(200).join("\n"));
+
+    expect(plain).toContain("simplify2 auto-approve on");
+    expect(plain).toContain("ctrl+y auto-approve");
   });
 
   test("shows the active continuation and the /dismiss escape hatch in the status area", () => {
@@ -155,7 +177,7 @@ describe("NanobossAppView", () => {
       state,
     );
 
-    const plain = stripAnsi(view.render(120).join("\n"));
+    const plain = stripAnsi(view.render(200).join("\n"));
 
     expect(plain).toContain("[continuation] /simplify active - waiting for your reply");
     expect(plain).toContain("continuation /simplify");

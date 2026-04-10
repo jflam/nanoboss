@@ -12,6 +12,7 @@ import type {
   AgentTokenUsage,
   CellRef,
   FrontendPendingProcedureContinuation,
+  ProcedureContinuationUi,
 } from "../core/types.ts";
 
 export interface FrontendCommand {
@@ -123,6 +124,7 @@ export type FrontendEvent =
       display?: string;
       inputHint?: string;
       suggestedReplies?: string[];
+      continuationUi?: ProcedureContinuationUi;
       tokenUsage?: AgentTokenUsage;
     }
   | {

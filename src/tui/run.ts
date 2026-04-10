@@ -86,6 +86,7 @@ export async function runTuiCli(params: RunTuiCliParams, deps: RunTuiCliDeps = {
       cwd: params.cwd,
       serverUrl,
       showToolCalls: params.showToolCalls,
+      simplify2AutoApprove: params.simplify2AutoApprove,
       sessionId: params.sessionId,
     });
     if (exitSignal) {

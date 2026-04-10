@@ -97,6 +97,7 @@ export class NanobossAppView implements Component {
       this.state.inputDisabled ? "enter steer" : "enter send",
       "shift+enter newline",
       "ctrl+o tools",
+      "ctrl+y auto-approve",
       this.state.expandedToolOutput ? "expanded" : "collapsed",
       "/new",
       "/model",
@@ -392,7 +393,11 @@ function getTranscriptItemKey(item: UiTranscriptItem): string {
 }
 
 function buildActivityBarParts(theme: NanobossTuiTheme, state: UiState): string[] {
-  const parts: string[] = [];
+  const parts: string[] = [
+    state.simplify2AutoApprove
+      ? theme.success("simplify2 auto-approve on")
+      : theme.dim("simplify2 auto-approve off"),
+  ];
   if (state.inputDisabled) {
     parts.push(theme.warning("● busy"));
   }

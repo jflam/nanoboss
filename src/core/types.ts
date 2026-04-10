@@ -19,6 +19,7 @@ export interface ProcedurePause<TState extends KernelValue = KernelValue> {
   state: TState;
   inputHint?: string;
   suggestedReplies?: string[];
+  continuationUi?: ProcedureContinuationUi;
 }
 
 export interface PendingProcedureContinuation<TState extends KernelValue = KernelValue> extends ProcedurePause<TState> {
@@ -26,9 +27,24 @@ export interface PendingProcedureContinuation<TState extends KernelValue = Kerne
   cell: CellRef;
 }
 
+export interface Simplify2CheckpointContinuationUiAction {
+  id: "approve" | "stop" | "focus_tests" | "other";
+  label: string;
+  reply?: string;
+  description?: string;
+}
+
+export interface Simplify2CheckpointContinuationUi {
+  kind: "simplify2_checkpoint";
+  title: string;
+  actions: Simplify2CheckpointContinuationUiAction[];
+}
+
+export type ProcedureContinuationUi = Simplify2CheckpointContinuationUi;
+
 export type FrontendPendingProcedureContinuation = Pick<
   PendingProcedureContinuation,
-  "procedure" | "question" | "inputHint" | "suggestedReplies"
+  "procedure" | "question" | "inputHint" | "suggestedReplies" | "continuationUi"
 >;
 
 export type KernelValue =
@@ -237,6 +253,7 @@ export type PersistedFrontendEvent =
       display?: string;
       inputHint?: string;
       suggestedReplies?: string[];
+      continuationUi?: ProcedureContinuationUi;
       tokenUsage?: AgentTokenUsage;
     }
   | {

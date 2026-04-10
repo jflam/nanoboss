@@ -13,7 +13,7 @@ import {
 } from "../http/client.ts";
 import type { FrontendCommand, FrontendEventEnvelope } from "../http/frontend-events.ts";
 import { formatAgentBanner } from "../core/runtime-banner.ts";
-import type { DownstreamAgentSelection } from "../core/types.ts";
+import type { DownstreamAgentSelection, ProcedureContinuationUi } from "../core/types.ts";
 
 import {
   isExitRequest,
@@ -39,6 +39,7 @@ export interface NanobossTuiControllerParams {
   serverUrl: string;
   showToolCalls: boolean;
   sessionId?: string;
+  simplify2AutoApprove?: boolean;
 }
 
 export interface NanobossTuiControllerDeps {
@@ -73,6 +74,7 @@ export class NanobossTuiController {
   private stopped = false;
   private flushingPendingPrompt = false;
   private nextPendingPromptId = 1;
+  private lastAutoApprovedContinuationSignature?: string;
   private exitResolver?: () => void;
   private readonly exited: Promise<void>;
 
@@ -86,6 +88,7 @@ export class NanobossTuiController {
       buildLabel: getBuildLabel(),
       agentLabel: "connecting",
       showToolCalls: params.showToolCalls,
+      simplify2AutoApprove: params.simplify2AutoApprove,
     });
     this.exited = new Promise<void>((resolve) => {
       this.exitResolver = resolve;
@@ -235,6 +238,14 @@ export class NanobossTuiController {
     this.dispatch({ type: "toggle_tool_output" });
   }
 
+  toggleSimplify2AutoApprove(): void {
+    const enabled = !this.state.simplify2AutoApprove;
+    this.dispatch({ type: "local_simplify2_auto_approve", enabled });
+    if (enabled) {
+      void this.maybeAutoApproveCurrentContinuation();
+    }
+  }
+
   requestExit(): void {
     if (this.stopped) {
       return;
@@ -259,6 +270,15 @@ export class NanobossTuiController {
 
   private dispatch(action: UiAction): void {
     this.state = reduceUiState(this.state, action);
+    const continuation = this.state.pendingProcedureContinuation;
+    if (!continuation) {
+      this.lastAutoApprovedContinuationSignature = undefined;
+    } else if (
+      this.lastAutoApprovedContinuationSignature
+      && buildContinuationSignature(continuation) !== this.lastAutoApprovedContinuationSignature
+    ) {
+      this.lastAutoApprovedContinuationSignature = undefined;
+    }
     this.deps.onStateChange?.(this.state);
   }
 
@@ -284,6 +304,7 @@ export class NanobossTuiController {
       onEvent: (event) => {
         this.dispatch({ type: "frontend_event", event });
         this.maybeSendLatchedStopRequest(event);
+        void this.maybeAutoApproveSimplify2Pause(event);
         void this.maybeFlushPendingPrompt(event);
       },
       onError: (error) => {
@@ -449,6 +470,41 @@ export class NanobossTuiController {
       return false;
     }
   }
+
+  private async maybeAutoApproveSimplify2Pause(event: FrontendEventEnvelope): Promise<void> {
+    if (event.type !== "run_paused" || event.data.procedure !== "simplify2" || !this.state.simplify2AutoApprove) {
+      return;
+    }
+
+    await this.autoApproveSimplify2Continuation(buildContinuationSignature({
+      procedure: event.data.procedure,
+      question: event.data.question,
+      inputHint: event.data.inputHint,
+      suggestedReplies: event.data.suggestedReplies,
+      continuationUi: event.data.continuationUi,
+    }));
+  }
+
+  private async maybeAutoApproveCurrentContinuation(): Promise<void> {
+    const continuation = this.state.pendingProcedureContinuation;
+    if (!continuation || continuation.procedure !== "simplify2" || this.state.inputDisabled) {
+      return;
+    }
+
+    await this.autoApproveSimplify2Continuation(buildContinuationSignature(continuation));
+  }
+
+  private async autoApproveSimplify2Continuation(signature: string): Promise<void> {
+    if (signature.length === 0 || this.lastAutoApprovedContinuationSignature === signature) {
+      return;
+    }
+
+    this.lastAutoApprovedContinuationSignature = signature;
+    const sent = await this.forwardPrompt("approve it");
+    if (!sent) {
+      this.lastAutoApprovedContinuationSignature = undefined;
+    }
+  }
 }
 
 function getBusyLocalCommandLabel(trimmed: string): string | undefined {
@@ -477,4 +533,20 @@ function selectNextPendingPrompt(prompts: UiPendingPrompt[]): UiPendingPrompt | 
 
 function formatPendingPromptClearStatus(count: number): string {
   return `[run] cleared ${count} pending prompt${count === 1 ? "" : "s"} after send failed`;
+}
+
+function buildContinuationSignature(continuation: {
+  procedure: string;
+  question: string;
+  inputHint?: string;
+  suggestedReplies?: string[];
+  continuationUi?: ProcedureContinuationUi;
+}): string {
+  return JSON.stringify({
+    procedure: continuation.procedure,
+    question: continuation.question,
+    inputHint: continuation.inputHint,
+    suggestedReplies: continuation.suggestedReplies,
+    continuationUi: continuation.continuationUi,
+  });
 }

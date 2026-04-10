@@ -178,6 +178,33 @@ function createPausedWizardProcedure(): Procedure {
   };
 }
 
+function createPausedSimplify2LikeProcedure(): Procedure {
+  return {
+    name: "simplify2-like",
+    description: "pause with continuation UI metadata",
+    executionMode: "harness",
+    async execute() {
+      return {
+        display: "paused\n",
+        pause: {
+          question: "Approve this slice?",
+          state: {
+            step: 1,
+          },
+          continuationUi: {
+            kind: "simplify2_checkpoint",
+            title: "Simplify2 checkpoint",
+            actions: [
+              { id: "approve", label: "Continue", reply: "approve it" },
+              { id: "other", label: "Something Else" },
+            ],
+          },
+        },
+      };
+    },
+  };
+}
+
 describe("NanobossService", () => {
   test("extracts async procedure dispatch results from copilot-style tool payloads", () => {
     const parsed = extractProcedureDispatchResult([
@@ -1091,6 +1118,32 @@ describe("NanobossService", () => {
       throw new Error("Expected resumed run_completed event");
     }
     expect(completed.data.display).toContain("resumed with focus on dead code");
+  });
+
+  test("publishes continuation UI metadata for paused procedures", async () => {
+    const registry = new ProcedureRegistry(mkdtempSync(join(tmpdir(), "nab-service-pause-ui-")));
+    registry.register(createPausedSimplify2LikeProcedure());
+
+    const service = new NanobossService(registry);
+    const session = service.createSession({ cwd: process.cwd() });
+
+    await service.prompt(session.sessionId, "/simplify2-like");
+
+    const events = service.getSessionEvents(session.sessionId)?.after(-1) ?? [];
+    const paused = events.findLast((event) => event.type === "run_paused");
+    expect(paused?.type).toBe("run_paused");
+    if (paused?.type !== "run_paused") {
+      throw new Error("Expected run_paused event");
+    }
+
+    expect(paused.data.continuationUi).toEqual({
+      kind: "simplify2_checkpoint",
+      title: "Simplify2 checkpoint",
+      actions: [
+        { id: "approve", label: "Continue", reply: "approve it" },
+        { id: "other", label: "Something Else" },
+      ],
+    });
   });
 
   test("explicit slash commands do not consume a pending continuation", async () => {

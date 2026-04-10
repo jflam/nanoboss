@@ -581,6 +581,64 @@ describe("NanobossTuiController", () => {
     await runPromise;
   });
 
+  test("auto-approves simplify2 pauses when the local mode is enabled", async () => {
+    const sendCalls: string[] = [];
+    const streams: FakeStreamRecord[] = [];
+    const controller = new NanobossTuiController(
+      {
+        serverUrl: "http://localhost:3000",
+        showToolCalls: true,
+        simplify2AutoApprove: true,
+      },
+      {
+        ensureMatchingHttpServer: async () => {},
+        createHttpSession: async () => createSession("session-1"),
+        sendSessionPrompt: async (_baseUrl, _sessionId, prompt) => {
+          sendCalls.push(prompt);
+        },
+        startSessionEventStream: ({ sessionId, onEvent }) => createFakeStream(streams, sessionId, onEvent),
+      },
+    );
+
+    const runPromise = controller.run();
+    await waitFor(() => controller.getState().sessionId === "session-1");
+
+    await controller.handleSubmit("/simplify2");
+    expect(sendCalls).toEqual(["/simplify2"]);
+
+    streams[0]?.emit(eventEnvelope("run_started", {
+      runId: "run-1",
+      procedure: "simplify2",
+      prompt: "",
+      startedAt: new Date(0).toISOString(),
+    }));
+    streams[0]?.emit(eventEnvelope("run_paused", {
+      runId: "run-1",
+      procedure: "simplify2",
+      pausedAt: new Date(1).toISOString(),
+      cell: { sessionId: "session-1", cellId: "cell-1" },
+      question: "Approve this simplify2 slice?",
+      display: "paused",
+      continuationUi: {
+        kind: "simplify2_checkpoint",
+        title: "Simplify2 checkpoint",
+        actions: [
+          { id: "approve", label: "Continue", reply: "approve it" },
+          { id: "other", label: "Something Else" },
+        ],
+      },
+    }));
+
+    await waitFor(() => sendCalls.length === 2);
+
+    expect(sendCalls).toEqual(["/simplify2", "approve it"]);
+    expect(controller.getState().simplify2AutoApprove).toBe(true);
+    expect(controller.getState().inputDisabled).toBe(true);
+
+    controller.requestExit();
+    await runPromise;
+  });
+
   test("escape-triggered cancel latches a soft stop and debounces repeated requests", async () => {
     const cancelCalls: Array<{ sessionId: string; runId: string }> = [];
     const streams: FakeStreamRecord[] = [];
