@@ -227,6 +227,43 @@ describe("ProcedureRegistry", () => {
     });
   });
 
+  test("keeps canonical metadata stable when lazy loading reveals runtime-only fields", async () => {
+    const procedureRoot = mkdtempSync(join(tmpdir(), "nab-runtime-metadata-procedures-"));
+    writeFileSync(
+      join(procedureRoot, "runtime-shaped.ts"),
+      [
+        "export default {",
+        '  name: "runtime-shaped",',
+        '  description: "runtime metadata procedure",',
+        '  get inputHint() { return "runtime only hint"; },',
+        '  async execute() { return "runtime"; },',
+        "};",
+      ].join("\n"),
+      "utf8",
+    );
+
+    const registry = new ProcedureRegistry(procedureRoot);
+    await registry.loadFromDisk();
+
+    expect(registry.get("runtime-shaped")?.inputHint).toBeUndefined();
+    expect(registry.listMetadata().find((procedure) => procedure.name === "runtime-shaped")).toEqual({
+      name: "runtime-shaped",
+      description: "runtime metadata procedure",
+      inputHint: undefined,
+      executionMode: undefined,
+    });
+
+    await expect(registry.get("runtime-shaped")?.execute("", {} as never)).resolves.toBe("runtime");
+
+    expect(registry.get("runtime-shaped")?.inputHint).toBe("runtime only hint");
+    expect(registry.listMetadata().find((procedure) => procedure.name === "runtime-shaped")).toEqual({
+      name: "runtime-shaped",
+      description: "runtime metadata procedure",
+      inputHint: undefined,
+      executionMode: undefined,
+    });
+  });
+
   test("loads typia-based procedures through the runtime build pipeline", async () => {
     const registry = new ProcedureRegistry(mkdtempSync(join(tmpdir(), "nab-procedures-")));
     const procedure = await registry.loadProcedureFromPath(join(process.cwd(), "procedures", "second-opinion.ts"));

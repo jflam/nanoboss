@@ -119,6 +119,7 @@ const BUILTIN_PROCEDURE_SOURCES: BuiltinProcedureSource[] = [
 ];
 
 export class ProcedureRegistry implements ProcedureRegistryLike {
+  private readonly metadataByName = new Map<string, ProcedureMetadata>();
   private readonly procedures = new Map<string, Procedure>();
   private readonly deferredProcedureEntries = new Map<string, DeferredProcedureEntry>();
   readonly localProcedureRoot?: string;
@@ -157,12 +158,13 @@ export class ProcedureRegistry implements ProcedureRegistryLike {
   }
 
   listMetadata(): ProcedureMetadata[] {
-    return this.list().map(describeProcedureMetadata);
+    return [...this.metadataByName.values()].map(copyProcedureMetadata);
   }
 
   register(procedure: Procedure): void {
     this.assertProcedure(procedure);
     this.deferredProcedureEntries.delete(procedure.name);
+    this.metadataByName.set(procedure.name, copyProcedureMetadata(procedure));
     this.procedures.set(procedure.name, procedure);
   }
 
@@ -269,6 +271,7 @@ export class ProcedureRegistry implements ProcedureRegistryLike {
       return;
     }
 
+    this.metadataByName.set(definition.name, copyProcedureMetadata(definition));
     const entry: DeferredProcedureEntry = {
       definition,
     };
@@ -489,17 +492,17 @@ function looksLikeResumableProcedureModule(source: string): boolean {
 
 function describeDeferredProcedureMetadata(procedure: Procedure): DeferredProcedureMetadata {
   return {
-    ...describeProcedureMetadata(procedure),
+    ...copyProcedureMetadata(procedure),
     supportsResume: typeof procedure.resume === "function",
   };
 }
 
-function describeProcedureMetadata(procedure: Procedure): ProcedureMetadata {
+function copyProcedureMetadata(metadata: ProcedureMetadata): ProcedureMetadata {
   return {
-    name: procedure.name,
-    description: procedure.description,
-    inputHint: procedure.inputHint,
-    executionMode: procedure.executionMode,
+    name: metadata.name,
+    description: metadata.description,
+    inputHint: metadata.inputHint,
+    executionMode: metadata.executionMode,
   };
 }
 
