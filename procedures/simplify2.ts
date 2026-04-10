@@ -469,6 +469,7 @@ const Simplify2AnalysisCacheType = jsonType<Simplify2AnalysisCache>(
 
 const DEFAULT_FOCUS = "simplify the current project";
 const DEFAULT_MAX_ITERATIONS = 3;
+const MAX_ALLOWED_ITERATIONS = 20;
 const SIMPLIFY2_STORAGE_SUBDIR = [".nanoboss", "simplify2"] as const;
 const SIMPLIFY2_LOCAL_EXCLUDE_PATTERN = "/.nanoboss/";
 const ANALYSIS_STALE_FULL_REFRESH_THRESHOLD = 0.4;
@@ -548,7 +549,7 @@ const SIMPLIFY2_CONTINUATION_UI: Simplify2CheckpointContinuationUi = {
 export default {
   name: "simplify2",
   description: "Model conceptual simplification with explicit checkpoints and a bounded multi-step loop",
-  inputHint: "Optional focus or scope",
+  inputHint: 'Optional focus or scope; e.g. "max 5 iterations focus on session state"',
   executionMode: "harness",
   async execute(prompt, ctx) {
     const blocked = buildBlockedDirtyWorktreeStartResult(ctx.cwd);
@@ -567,7 +568,7 @@ export default {
   async resume(prompt, rawState, ctx) {
     let state = requireSimplify2State(rawState);
 
-    ctx.print(`Interpreting simplify2 guidance for iteration ${state.iteration}...\n`);
+    ctx.print(`Interpreting simplify2 guidance for ${formatIterationProgress(state.iteration, state.maxIterations)}...\n`);
     const decision = await interpretHumanReply(prompt, state, ctx);
 
     if (decision.kind !== "stop") {
@@ -617,12 +618,13 @@ export default {
 } satisfies Procedure;
 
 function initializeState(prompt: string): Simplify2State {
-  const focus = prompt.trim() || DEFAULT_FOCUS;
+  const parsed = parseSimplify2Prompt(prompt);
+  const focus = parsed.focus;
   return {
     version: 1,
     originalPrompt: focus,
     iteration: 1,
-    maxIterations: DEFAULT_MAX_ITERATIONS,
+    maxIterations: parsed.maxIterations,
     mode: "explore",
     focus: {
       scope: [],
@@ -672,6 +674,48 @@ function initializeState(prompt: string): Simplify2State {
       decisions: [],
     },
   };
+}
+
+function parseSimplify2Prompt(
+  prompt: string,
+): { focus: string; maxIterations: number } {
+  const trimmed = prompt.trim();
+  const patterns = [
+    /\bmax(?:imum)?\s+iterations?\s*[:=]?\s*(\d+)\b/i,
+    /\bmax(?:imum)?\s+(\d+)\s+iterations?\b/i,
+    /\biteration\s+budget\s*[:=]?\s*(\d+)\b/i,
+  ];
+
+  let maxIterations = DEFAULT_MAX_ITERATIONS;
+  let focus = trimmed;
+  for (const pattern of patterns) {
+    const match = focus.match(pattern);
+    if (!match) {
+      continue;
+    }
+
+    const parsedCount = Number.parseInt(match[1] ?? "", 10);
+    if (Number.isFinite(parsedCount) && parsedCount >= 1) {
+      maxIterations = Math.min(parsedCount, MAX_ALLOWED_ITERATIONS);
+    }
+    focus = `${focus.slice(0, match.index)} ${focus.slice((match.index ?? 0) + match[0].length)}`;
+    break;
+  }
+
+  focus = focus
+    .replace(/^[\s,;:.-]+/, "")
+    .replace(/[\s,;:.-]+$/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return {
+    focus: focus || DEFAULT_FOCUS,
+    maxIterations,
+  };
+}
+
+function formatIterationProgress(iteration: number, maxIterations: number): string {
+  return `Iteration ${iteration}/${maxIterations}`;
 }
 
 function loadArtifacts(state: Simplify2State, ctx: CommandContext): Simplify2State {
@@ -880,7 +924,7 @@ async function continueFromAnalysis(
     }
 
     current = resetNotebookForFreshAnalysis(current);
-    ctx.print(`Continuing simplify2 analysis for iteration ${current.iteration}...\n`);
+    ctx.print(`Continuing simplify2 analysis for ${formatIterationProgress(current.iteration, current.maxIterations)}...\n`);
     current = await analyzeCurrentFocus(current, ctx);
   }
 }
@@ -1390,6 +1434,7 @@ function buildFinishedResult(
     display: [
       lead,
       "Simplify2 is done for now.",
+      `${formatIterationProgress(state.iteration, state.maxIterations)}.`,
       `Reason: ${reason}`,
       `Applied hypotheses: ${appliedCount}.`,
       `Rejected hypotheses: ${rejectedCount}.`,
@@ -1930,7 +1975,7 @@ function renderPausedDisplay(state: Simplify2State, question: string, lead?: str
   const lines = [
     lead,
     buildLatestApplyLead(state),
-    renderPausedProposalSummary(selected, state.iteration),
+    renderPausedProposalSummary(selected, state.iteration, state.maxIterations),
     renderHypothesisCandidates(state.notebook.candidateHypotheses),
     renderSelectedHypothesisSummary(selected),
     question,
@@ -2221,12 +2266,18 @@ function renderTestMapSummary(testMap: Simplify2TestMap): string {
   ].join("\n");
 }
 
-function renderPausedProposalSummary(hypothesis: SimplifyHypothesis | undefined, iteration: number): string {
+function renderPausedProposalSummary(
+  hypothesis: SimplifyHypothesis | undefined,
+  iteration: number,
+  maxIterations: number,
+): string {
+  const iterationLine = formatIterationProgress(iteration, maxIterations);
   if (!hypothesis) {
-    return `Simplify2 iteration ${iteration}: no current checkpoint proposal`;
+    return `${iterationLine}\nNo current checkpoint proposal.`;
   }
 
   return [
+    iterationLine,
     "I have a simplification proposal:",
     `- title: ${hypothesis.title}`,
     `- summary: ${hypothesis.summary}`,

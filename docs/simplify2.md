@@ -34,6 +34,18 @@ Unlike `/simplify`, which asks the agent for one next opportunity at a time,
 The current implementation uses a bounded foreground loop with a default budget
 of 3 applied hypotheses per run.
 
+You can override that budget in the prompt with phrases like:
+
+```text
+/simplify2 max 5 iterations focus on session metadata ownership
+```
+
+or:
+
+```text
+/simplify2 max iterations 6 focus on continuation persistence
+```
+
 If the worktree becomes dirty after a paused checkpoint, `/simplify2` stays
 paused and refuses to continue the apply path until the tree is clean again.
 
@@ -59,8 +71,9 @@ Common pause cases:
 - any non-low-risk hypothesis
 
 Paused checkpoint output is rendered by the host from typed simplify2 state. It
-shows the selected proposal, the competing hypotheses, why the chosen
-hypothesis ranked highest, and the available actions.
+shows the current iteration as `Iteration N/M`, the selected proposal, the
+competing hypotheses, why the chosen hypothesis ranked highest, and the
+available actions.
 
 In the TUI, paused simplify2 checkpoints also expose a focused continuation card:
 
@@ -260,6 +273,12 @@ Focus on one subsystem:
 
 ```text
 /simplify2 focus on session metadata ownership and paused continuation handling
+```
+
+Use a larger iteration budget:
+
+```text
+/simplify2 max 5 iterations focus on session metadata ownership and paused continuation handling
 ```
 
 Bias toward a smaller first slice:

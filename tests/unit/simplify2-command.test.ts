@@ -77,6 +77,7 @@ describe("simplify2 procedure", () => {
 
     const normalized = normalizeProcedureResult(result);
     expect(normalized.pause?.question).toContain("Collapse duplicate continuation parsing ownership");
+    expect(normalized.display).toContain("Iteration 1/3");
     expect(normalized.display).toContain("I have a simplification proposal:");
     expect(normalized.display).toContain("I have proposed 1 hypotheses for this simplification:");
     expect(normalized.display).toContain("I have selected hypothesis \"Collapse duplicate continuation parsing ownership\":");
@@ -103,6 +104,60 @@ describe("simplify2 procedure", () => {
     expect(existsSync(join(cwd, ".nanoboss", "simplify2", "test-map.json"))).toBe(true);
     expect(existsSync(join(cwd, ".nanoboss", "simplify2", "observations.json"))).toBe(true);
     expect(existsSync(join(cwd, ".nanoboss", "simplify2", "analysis-cache.json"))).toBe(true);
+  });
+
+  test("accepts a max-iterations directive in the prompt", async () => {
+    const cwd = createFixtureWorkspace();
+    const prompts: string[] = [];
+
+    const result = await simplify2Procedure.execute(
+      "max 5 iterations focus on continuation persistence",
+      createMockContext(cwd, [
+        emptyRefreshProposal(),
+        observationBatch([
+          {
+            id: "obs-duplicate-boundary",
+            kind: "boundary_candidate",
+            summary: "Continuation parsing appears to be split across two layers.",
+            evidence: [{ kind: "file", ref: "src/session/repository.ts" }],
+            confidence: "medium",
+          },
+        ]),
+        hypothesisBatch([
+          {
+            id: "hyp-boundary-checkpoint",
+            title: "Collapse duplicate continuation parsing ownership",
+            kind: "collapse_boundary",
+            summary: "A fake boundary duplicates continuation parsing logic.",
+            rationale: "One owner should enforce the parsing invariant.",
+            evidence: [{ kind: "file", ref: "src/session/repository.ts" }],
+            expectedDelta: {
+              boundariesReduced: 1,
+              duplicateRepresentationsReduced: 1,
+            },
+            risk: "medium",
+            needsHumanCheckpoint: true,
+            checkpointReason: "This changes which layer owns continuation parsing.",
+            implementationScope: ["src/session/repository.ts", "src/core/service.ts"],
+            testImplications: ["strengthen invariant coverage around continuation parsing"],
+          },
+        ]),
+        rankingBatch([
+          {
+            hypothesisId: "hyp-boundary-checkpoint",
+            score: 9,
+            reason: "High conceptual reduction but the ownership move needs confirmation.",
+            needsHumanCheckpoint: true,
+          },
+        ]),
+      ], prompts),
+    );
+
+    const normalized = normalizeProcedureResult(result);
+    expect(normalized.display).toContain("Iteration 1/5");
+    expect(prompts[0]).toContain("Current focus: focus on continuation persistence");
+    expect(prompts[0]).not.toContain("max 5 iterations");
+    expect((normalized.pause?.state as { maxIterations: number }).maxIterations).toBe(5);
   });
 
   test("keeps a paused checkpoint when resume hits a dirty worktree", async () => {
