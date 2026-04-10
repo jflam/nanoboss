@@ -31,7 +31,7 @@ import tokensProcedure from "../../procedures/tokens.ts";
 
 import { getProcedureRuntimeDir } from "../core/config.ts";
 import { resolveProfileProcedureRoot, resolveRepoProcedureRoot, resolveWorkspaceProcedureRoot } from "../core/procedure-paths.ts";
-import { createCreateProcedure } from "./create.ts";
+import { CREATE_PROCEDURE_METADATA, createCreateProcedure } from "./create.ts";
 import { resolveProcedureEntryRelativePath } from "./names.ts";
 import type { Procedure, ProcedureRegistryLike } from "../core/types.ts";
 import { createTypiaBunPlugin } from "./typia-bun-plugin.ts";
@@ -57,6 +57,10 @@ interface DeferredProcedureEntry {
   loadPromise?: Promise<Procedure>;
 }
 
+type BuiltinProcedureSource = Omit<ProcedureDescriptor, "load"> & {
+  load: (registry: ProcedureRegistry) => Procedure | Promise<Procedure>;
+};
+
 interface ProcedureSourceFile {
   path: string;
   contents: string;
@@ -78,30 +82,40 @@ const PROCEDURE_SOURCE_EXTENSIONS = [
   ".cjs",
   ".json",
 ];
-const BUILTIN_PROCEDURES: Procedure[] = [
-  defaultProcedure,
-  autoresearchProcedure,
-  autoresearchStartProcedure,
-  autoresearchContinueProcedure,
-  autoresearchStatusProcedure,
-  autoresearchClearProcedure,
-  autoresearchFinalizeProcedure,
-  kbIngestProcedure,
-  kbCompileSourceProcedure,
-  kbCompileConceptsProcedure,
-  kbLinkProcedure,
-  kbRenderProcedure,
-  kbHealthProcedure,
-  kbRefreshProcedure,
-  kbAnswerProcedure,
-  linterProcedure,
-  modelProcedure,
-  nanobossPreCommitChecksProcedure,
-  nanobossCommitProcedure,
-  simplifyProcedure,
-  simplify2Procedure,
-  tokensProcedure,
-  secondOpinionProcedure,
+const BUILTIN_PROCEDURE_SOURCES: BuiltinProcedureSource[] = [
+  ...[
+    defaultProcedure,
+    autoresearchProcedure,
+    autoresearchStartProcedure,
+    autoresearchContinueProcedure,
+    autoresearchStatusProcedure,
+    autoresearchClearProcedure,
+    autoresearchFinalizeProcedure,
+    kbIngestProcedure,
+    kbCompileSourceProcedure,
+    kbCompileConceptsProcedure,
+    kbLinkProcedure,
+    kbRenderProcedure,
+    kbHealthProcedure,
+    kbRefreshProcedure,
+    kbAnswerProcedure,
+    linterProcedure,
+    modelProcedure,
+    nanobossPreCommitChecksProcedure,
+    nanobossCommitProcedure,
+    simplifyProcedure,
+    simplify2Procedure,
+    tokensProcedure,
+    secondOpinionProcedure,
+  ].map((procedure) => ({
+    ...describeProcedure(procedure),
+    load: () => procedure,
+  })),
+  {
+    ...CREATE_PROCEDURE_METADATA,
+    supportsResume: false,
+    load: (registry) => createCreateProcedure(registry),
+  },
 ];
 
 export class ProcedureRegistry implements ProcedureRegistryLike {
@@ -411,22 +425,10 @@ function resolveProcedureSourceGraph(path: string): ProcedureSourceFile[] {
 }
 
 function createBuiltinProcedureDescriptors(registry: ProcedureRegistry): ProcedureDescriptor[] {
-  return [
-    ...BUILTIN_PROCEDURES.map((procedure) => createLoadedProcedureDescriptor(procedure)),
-    {
-      name: "create",
-      description: "Create a new procedure from natural language",
-      inputHint: "Describe the procedure you want to create",
-      load: () => createCreateProcedure(registry),
-    },
-  ];
-}
-
-function createLoadedProcedureDescriptor(procedure: Procedure): ProcedureDescriptor {
-  return {
-    ...describeProcedure(procedure),
-    load: () => procedure,
-  };
+  return BUILTIN_PROCEDURE_SOURCES.map(({ load, ...descriptor }) => ({
+    ...descriptor,
+    load: () => load(registry),
+  }));
 }
 
 function listProcedureSourcePaths(rootDir: string): string[] {

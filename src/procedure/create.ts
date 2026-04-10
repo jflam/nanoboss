@@ -17,6 +17,12 @@ interface GeneratedProcedure {
   source: string;
 }
 
+export const CREATE_PROCEDURE_METADATA = {
+  name: "create",
+  description: "Create a new procedure from natural language",
+  inputHint: "Describe the procedure you want to create",
+} satisfies Pick<Procedure, "name" | "description" | "inputHint">;
+
 const GeneratedProcedureType = jsonType<GeneratedProcedure>(
   typia.json.schema<GeneratedProcedure>(),
   typia.createValidate<GeneratedProcedure>(),
@@ -24,9 +30,7 @@ const GeneratedProcedureType = jsonType<GeneratedProcedure>(
 
 export function createCreateProcedure(registry: ProcedureRegistryLike): Procedure {
   return {
-    name: "create",
-    description: "Create a new procedure from natural language",
-    inputHint: "Describe the procedure you want to create",
+    ...CREATE_PROCEDURE_METADATA,
     async execute(prompt, ctx) {
       const examples = loadExamples();
       const generated = await ctx.callAgent(

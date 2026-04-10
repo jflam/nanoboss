@@ -4,6 +4,7 @@ import { existsSync, mkdtempSync, mkdirSync, readFileSync, symlinkSync, writeFil
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import { CREATE_PROCEDURE_METADATA } from "../../src/procedure/create.ts";
 import { ProcedureRegistry } from "../../src/procedure/registry.ts";
 
 function describeLazyMetadata(
@@ -184,25 +185,41 @@ describe("ProcedureRegistry", () => {
     registry.loadBuiltins();
     await registry.loadFromDisk();
 
-    expect(describeLazyMetadata(registry.get("create"))).toEqual({
-      name: "create",
-      description: "Create a new procedure from natural language",
-      inputHint: "Describe the procedure you want to create",
-      executionMode: undefined,
-      supportsResume: false,
-    });
-    expect(describeLazyMetadata(registry.get("guided"))).toEqual({
-      name: "guided",
-      description: "guided command",
-      inputHint: "what to do",
-      executionMode: "defaultConversation",
-      supportsResume: false,
-    });
+    const expectedMetadata = [
+      {
+        ...CREATE_PROCEDURE_METADATA,
+        executionMode: undefined,
+        supportsResume: false,
+      },
+      {
+        name: "simplify",
+        description: "Find and apply simplifications one opportunity at a time",
+        inputHint: "Optional focus or scope",
+        executionMode: "harness" as const,
+        supportsResume: true,
+      },
+      {
+        name: "guided",
+        description: "guided command",
+        inputHint: "what to do",
+        executionMode: "defaultConversation" as const,
+        supportsResume: false,
+      },
+    ];
+    for (const expected of expectedMetadata) {
+      expect(describeLazyMetadata(registry.get(expected.name))).toEqual(expected);
+    }
+
     const expectedCommands: acp.AvailableCommand[] = [
       {
-        name: "create",
-        description: "Create a new procedure from natural language",
-        input: { hint: "Describe the procedure you want to create" },
+        name: CREATE_PROCEDURE_METADATA.name,
+        description: CREATE_PROCEDURE_METADATA.description,
+        input: { hint: CREATE_PROCEDURE_METADATA.inputHint },
+      },
+      {
+        name: "simplify",
+        description: "Find and apply simplifications one opportunity at a time",
+        input: { hint: "Optional focus or scope" },
       },
       {
         name: "guided",
@@ -211,8 +228,9 @@ describe("ProcedureRegistry", () => {
       },
     ];
     const availableCommands = registry.toAvailableCommands();
-    expect(availableCommands.find((command) => command.name === "create")).toEqual(expectedCommands[0]);
-    expect(availableCommands.find((command) => command.name === "guided")).toEqual(expectedCommands[1]);
+    for (const expected of expectedCommands) {
+      expect(availableCommands.find((command) => command.name === expected.name)).toEqual(expected);
+    }
   });
 
   test("loads typia-based procedures through the runtime build pipeline", async () => {
@@ -350,38 +368,51 @@ describe("ProcedureRegistry", () => {
     ]);
   });
 
-  test("loadBuiltins keeps builtin command metadata and continuation semantics", () => {
+  test("loadBuiltins keeps builtin pre-load metadata and slash command exposure aligned", () => {
     const registry = new ProcedureRegistry(mkdtempSync(join(tmpdir(), "nab-procedures-")));
     registry.loadBuiltins();
 
-    const defaultMetadata = describeLazyMetadata(registry.get("default"));
-    expect(defaultMetadata.name).toBe("default");
-    expect(typeof defaultMetadata.description).toBe("string");
-    expect(defaultMetadata.inputHint).toBeUndefined();
-    expect(defaultMetadata.executionMode).toBeUndefined();
-    expect(defaultMetadata.supportsResume).toBe(false);
-    expect(describeLazyMetadata(registry.get("create"))).toEqual({
-      name: "create",
-      description: "Create a new procedure from natural language",
-      inputHint: "Describe the procedure you want to create",
-      executionMode: undefined,
-      supportsResume: false,
-    });
-    expect(describeLazyMetadata(registry.get("simplify"))).toEqual({
-      name: "simplify",
-      description: "Find and apply simplifications one opportunity at a time",
-      inputHint: "Optional focus or scope",
-      executionMode: "harness",
-      supportsResume: true,
-    });
+    const expectedMetadata = [
+      {
+        name: "default",
+        description: registry.get("default")?.description,
+        inputHint: undefined,
+        executionMode: undefined,
+        supportsResume: false,
+      },
+      {
+        ...CREATE_PROCEDURE_METADATA,
+        executionMode: undefined,
+        supportsResume: false,
+      },
+      {
+        name: "simplify",
+        description: "Find and apply simplifications one opportunity at a time",
+        inputHint: "Optional focus or scope",
+        executionMode: "harness" as const,
+        supportsResume: true,
+      },
+    ];
+    for (const expected of expectedMetadata) {
+      expect(describeLazyMetadata(registry.get(expected.name))).toEqual(expected);
+    }
+
     expect(registry.get("nanoboss/commit")).toBeDefined();
     expect(registry.get("commit")).toBeUndefined();
 
-    const commandNames = new Set(registry.toAvailableCommands().map((command) => command.name));
-    expect(commandNames.has("default")).toBe(false);
-    expect(commandNames.has("create")).toBe(true);
-    expect(commandNames.has("simplify")).toBe(true);
-    expect(commandNames.has("nanoboss/commit")).toBe(true);
-    expect(commandNames.has("commit")).toBe(false);
+    const commandsByName = new Map(registry.toAvailableCommands().map((command) => [command.name, command]));
+    expect(commandsByName.has("default")).toBe(false);
+    expect(commandsByName.get(CREATE_PROCEDURE_METADATA.name)).toEqual({
+      name: CREATE_PROCEDURE_METADATA.name,
+      description: CREATE_PROCEDURE_METADATA.description,
+      input: { hint: CREATE_PROCEDURE_METADATA.inputHint },
+    });
+    expect(commandsByName.get("simplify")).toEqual({
+      name: "simplify",
+      description: "Find and apply simplifications one opportunity at a time",
+      input: { hint: "Optional focus or scope" },
+    });
+    expect(commandsByName.has("nanoboss/commit")).toBe(true);
+    expect(commandsByName.has("commit")).toBe(false);
   });
 });
