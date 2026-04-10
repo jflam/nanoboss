@@ -58,6 +58,25 @@ export function buildPausedFailurePreCommitResult(
   };
 }
 
+export function buildAutomaticFixFailedPreCommitResult(
+  result: ResolvedPreCommitChecksResult,
+  attemptCount: number,
+): ProcedureResult<PreCommitChecksResult> {
+  const attemptLine = attemptCount > 0
+    ? `Automatic fix attempt ${attemptCount} did not clear all issues.`
+    : undefined;
+
+  return {
+    data: serializeChecksResult(result),
+    display: [
+      renderPreCommitDisplay(result).trimEnd(),
+      attemptLine,
+      renderPreCommitFailureDigest(result),
+    ].filter((value): value is string => Boolean(value)).join("\n") + "\n",
+    summary: renderPreCommitSummary(result),
+  };
+}
+
 export function buildClarifyingPreCommitPauseResult(
   state: PreCommitChecksPauseState,
 ): ProcedureResult<PreCommitChecksResult> {

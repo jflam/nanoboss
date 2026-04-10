@@ -8,6 +8,7 @@ import { formatErrorMessage } from "../../src/core/error-format.ts";
 export const PRE_COMMIT_CHECKS_COMMAND = "bun run check:precommit";
 const PRE_COMMIT_CHECKS_CMD = ["bun", "run", "check:precommit"];
 const PRE_COMMIT_PROGRESS_ENV = "NANOBOSS_STREAM_TEST_PROGRESS";
+export const PRE_COMMIT_SKIP_CACHE_WRITE_ENV = "NANOBOSS_PRECOMMIT_SKIP_CACHE_WRITE";
 const PRE_COMMIT_CHECKS_CACHE_RELATIVE_PATH = ".nanoboss/pre-commit-checks.json";
 const EXCLUDED_PATH_SEGMENTS = new Set([".git", "node_modules", ".nanoboss", "dist", "coverage"]);
 const TEMP_FILE_PATTERNS = [
@@ -149,6 +150,30 @@ export function writeCachedPreCommitChecksResult(
   writeFileSync(cachePath, `${JSON.stringify(record, null, 2)}\n`, "utf8");
 }
 
+export function persistPreCommitChecksRun(
+  cwd: string,
+  result: CommandExecutionResult,
+  options: {
+    resolveRuntimeFingerprint?: () => string;
+  } = {},
+): CachedPreCommitChecksResult {
+  const record: CachedPreCommitChecksResult = {
+    version: 1,
+    command: PRE_COMMIT_CHECKS_COMMAND,
+    workspaceStateFingerprint: computeWorkspaceStateFingerprint(cwd),
+    runtimeFingerprint: (options.resolveRuntimeFingerprint ?? computeRuntimeFingerprint)(),
+    exitCode: result.exitCode,
+    stdout: result.stdout,
+    stderr: result.stderr,
+    combinedOutput: result.combinedOutput,
+    summary: result.summary,
+    createdAt: result.createdAt,
+    durationMs: result.durationMs,
+  };
+  writeCachedPreCommitChecksResult(getPreCommitChecksCachePath(cwd), record);
+  return record;
+}
+
 export async function resolvePreCommitChecks(
   options: ResolvePreCommitChecksOptions,
 ): Promise<ResolvedPreCommitChecksResult> {
@@ -195,20 +220,9 @@ export async function resolvePreCommitChecks(
     resolveGitRepoRoot(options.cwd),
     { onOutputChunk: options.onOutputChunk },
   );
-  const record: CachedPreCommitChecksResult = {
-    version: 1,
-    command: PRE_COMMIT_CHECKS_COMMAND,
-    workspaceStateFingerprint,
-    runtimeFingerprint,
-    exitCode: fresh.exitCode,
-    stdout: fresh.stdout,
-    stderr: fresh.stderr,
-    combinedOutput: fresh.combinedOutput,
-    summary: fresh.summary,
-    createdAt: fresh.createdAt,
-    durationMs: fresh.durationMs,
-  };
-  writeCachedPreCommitChecksResult(cachePath, record);
+  const record = persistPreCommitChecksRun(options.cwd, fresh, {
+    resolveRuntimeFingerprint: () => runtimeFingerprint,
+  });
 
   return {
     command: record.command,
@@ -254,6 +268,7 @@ async function runPreCommitValidationCommand(
       env: {
         ...process.env,
         [PRE_COMMIT_PROGRESS_ENV]: "1",
+        [PRE_COMMIT_SKIP_CACHE_WRITE_ENV]: "1",
       },
       stdio: ["ignore", "pipe", "pipe"],
     });

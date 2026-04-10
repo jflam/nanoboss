@@ -16,11 +16,13 @@ export function createNanobossCommitProcedure(
     name: "nanoboss/commit",
     description: "Run repo pre-commit checks, then create a descriptive git commit",
     async execute(prompt, ctx) {
-      const { refresh, commitContext } = parseCommitPrompt(prompt);
+      const { refresh, manualApprove, commitContext } = parseCommitPrompt(prompt);
       const checks = expectData(
         await ctx.callProcedure<PreCommitChecksResult>(
           preCommitChecksProcedureName,
-          refresh ? "--refresh" : "",
+          [refresh ? "--refresh" : undefined, manualApprove ? "manual-approve" : undefined]
+            .filter((value): value is string => Boolean(value))
+            .join(" "),
         ),
         "Missing pre-commit checks result",
       );
@@ -52,15 +54,22 @@ export function createNanobossCommitProcedure(
   };
 }
 
-export function parseCommitPrompt(prompt: string): { refresh: boolean; commitContext: string } {
+export function parseCommitPrompt(
+  prompt: string,
+): { refresh: boolean; manualApprove: boolean; commitContext: string } {
   const refresh = prompt.trim().split(/\s+/).includes("--refresh");
+  const manualApprove = prompt.trim().split(/\s+/).some((token) =>
+    token === "manual-approve" || token === "--manual-approve"
+  );
   const commitContext = prompt
     .replace(/(^|\s)--refresh(?=\s|$)/g, " ")
+    .replace(/(^|\s)(?:--)?manual-approve(?=\s|$)/g, " ")
     .replace(/\s+/g, " ")
     .trim();
 
   return {
     refresh,
+    manualApprove,
     commitContext,
   };
 }

@@ -12,6 +12,7 @@ import {
   computeRuntimeFingerprint,
   computeWorkspaceStateFingerprint,
   getPreCommitChecksCachePath,
+  persistPreCommitChecksRun,
   resolvePreCommitChecks,
   type CommandExecutionResult,
   type PreCommitChecksResult,
@@ -240,6 +241,38 @@ describe("pre-commit test cache helper", () => {
     expect(streamed).toEqual(["phase 1\n", "phase 2\n"]);
     expect(result.cacheHit).toBe(false);
   });
+
+  test("reuses a cache record written by a direct pre-commit command run", async () => {
+    const cwd = createGitRepo();
+    let runCount = 0;
+
+    persistPreCommitChecksRun(cwd, makeCommandResult({
+      exitCode: 0,
+      stdout: "external precommit ok\n",
+      summary: "Pre-commit checks passed.",
+      createdAt: "2026-04-10T00:00:00.000Z",
+    }), {
+      resolveRuntimeFingerprint: () => "runtime-a",
+    });
+
+    const result = await resolvePreCommitChecks({
+      cwd,
+      resolveRuntimeFingerprint: () => "runtime-a",
+      runValidationCommand: async () => {
+        runCount += 1;
+        return makeCommandResult({
+          exitCode: 0,
+          stdout: "unexpected rerun\n",
+          createdAt: "2026-04-10T00:00:01.000Z",
+        });
+      },
+    });
+
+    expect(result.cacheHit).toBe(true);
+    expect(result.runReason).toBe("cache_hit");
+    expect(result.combinedOutput).toBe("external precommit ok\n");
+    expect(runCount).toBe(0);
+  });
 });
 
 describe("nanoboss/pre-commit-checks procedure", () => {
@@ -265,7 +298,7 @@ describe("nanoboss/pre-commit-checks procedure", () => {
       },
     });
 
-    const result = await procedure.execute("", createMockContext({
+    const result = await procedure.execute("manual-approve", createMockContext({
       cwd: "/repo",
       print(text) {
         printed.push(text);
@@ -353,7 +386,79 @@ describe("nanoboss/pre-commit-checks procedure", () => {
     ]);
   });
 
-  test("pauses with a fix offer when checks fail", async () => {
+  test("auto-runs one automated fix pass by default when checks fail", async () => {
+    const calls: string[] = [];
+    let refreshes: boolean[] = [];
+    const procedure = createPreCommitChecksProcedure({
+      async resolveChecks({ refresh }) {
+        refreshes = [...refreshes, refresh === true];
+        if (refresh) {
+          return {
+            command: PRE_COMMIT_CHECKS_COMMAND,
+            cacheHit: false,
+            runReason: "refresh",
+            exitCode: 0,
+            passed: true,
+            workspaceStateFingerprint: "workspace",
+            runtimeFingerprint: "runtime",
+            createdAt: "2026-04-09T00:00:01.000Z",
+            stdout: "all clean\n",
+            stderr: "",
+            combinedOutput: "all clean\n",
+            summary: "passed",
+            durationMs: 5,
+          };
+        }
+
+        return {
+          command: PRE_COMMIT_CHECKS_COMMAND,
+          cacheHit: false,
+          runReason: "cold_cache",
+          exitCode: 2,
+          passed: false,
+          workspaceStateFingerprint: "workspace",
+          runtimeFingerprint: "runtime",
+          createdAt: "2026-04-09T00:00:00.000Z",
+          stdout: "",
+          stderr: "typecheck failed\n",
+          combinedOutput: [
+            '[[nanoboss-precommit]] {"type":"run_result","phases":[{"phase":"lint","status":"passed","exitCode":0},{"phase":"typecheck","status":"failed","exitCode":2},{"phase":"test","status":"not_run"}]}',
+            "procedures/example.ts(12,3): error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'string'.",
+          ].join("\n"),
+          summary: "failed",
+          durationMs: 5,
+        };
+      },
+    });
+
+    const result = await procedure.execute("", createMockContext({
+      cwd: "/repo",
+      async callAgent(prompt) {
+        calls.push(prompt);
+        return {
+          cell: { sessionId: "session", cellId: "agent" },
+          data: "Applied focused fixes.\n",
+          dataRef: makeValueRef("agent"),
+        } satisfies RunResult<string>;
+      },
+    }));
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toContain("The user reply was: auto-approved by default");
+    expect(refreshes).toEqual([false, true]);
+    expect(result).toMatchObject({
+      data: {
+        passed: true,
+        exitCode: 0,
+      },
+    });
+    if (!result || typeof result === "string") {
+      throw new Error("Expected procedure result object");
+    }
+    expect(result.pause).toBeUndefined();
+  });
+
+  test("manual-approve pauses with a fix offer when checks fail", async () => {
     const procedure = createPreCommitChecksProcedure({
       async resolveChecks() {
         return {
@@ -377,7 +482,7 @@ describe("nanoboss/pre-commit-checks procedure", () => {
       },
     });
 
-    const result = await procedure.execute("", createMockContext({ cwd: "/repo" }));
+    const result = await procedure.execute("manual-approve", createMockContext({ cwd: "/repo" }));
 
     expect(result).toMatchObject({
       data: {
@@ -440,7 +545,7 @@ describe("nanoboss/pre-commit-checks procedure", () => {
       },
     });
 
-    const initial = await procedure.execute("", createMockContext({ cwd: "/repo" }));
+    const initial = await procedure.execute("manual-approve", createMockContext({ cwd: "/repo" }));
     if (typeof initial === "string" || !initial?.pause) {
       throw new Error("Expected paused procedure result");
     }
@@ -499,7 +604,7 @@ describe("nanoboss/pre-commit-checks procedure", () => {
       },
     });
 
-    const initial = await procedure.execute("", createMockContext({ cwd: "/repo" }));
+    const initial = await procedure.execute("manual-approve", createMockContext({ cwd: "/repo" }));
     if (typeof initial === "string" || !initial?.pause) {
       throw new Error("Expected paused procedure result");
     }
@@ -629,6 +734,36 @@ describe("nanoboss/commit procedure", () => {
     );
 
     expect(calls[0]).toBe("procedure:nanoboss/pre-commit-checks:--refresh");
+    expect(calls[1]).toContain("User-provided commit intent: tighten message.");
+  });
+
+  test("passes manual-approve through to pre-commit checks", async () => {
+    const calls: string[] = [];
+    const procedure = createNanobossCommitProcedure();
+
+    await procedure.execute(
+      "manual-approve tighten message",
+      createMockContext({
+        cwd: "/repo",
+        async callProcedure(name, prompt) {
+          calls.push(`procedure:${name}:${prompt}`);
+          return {
+            cell: { sessionId: "session", cellId: "checks" },
+            data: passingChecks({ cacheHit: true }),
+          } satisfies RunResult<PreCommitChecksResult>;
+        },
+        async callAgent(prompt) {
+          calls.push(`agent:${prompt}`);
+          return {
+            cell: { sessionId: "session", cellId: "agent" },
+            data: "committed\n",
+            dataRef: makeValueRef("agent"),
+          } satisfies RunResult<string>;
+        },
+      }),
+    );
+
+    expect(calls[0]).toBe("procedure:nanoboss/pre-commit-checks:manual-approve");
     expect(calls[1]).toContain("User-provided commit intent: tighten message.");
   });
 

@@ -5,6 +5,11 @@ import {
   type PreCommitPhaseResult as PhaseResult,
   type PreCommitPhaseStatus as PhaseStatus,
 } from "../procedures/nanoboss/pre-commit-checks-protocol.ts";
+import {
+  PRE_COMMIT_SKIP_CACHE_WRITE_ENV,
+  persistPreCommitChecksRun,
+  type CommandExecutionResult,
+} from "../procedures/nanoboss/test-cache-lib.ts";
 
 const phases: Array<{
   phase: PhaseName;
@@ -25,6 +30,10 @@ const phases: Array<{
 ];
 
 const results: PhaseResult[] = [];
+const startedAt = Date.now();
+let overallExitCode = 0;
+let overallStdout = "";
+let overallStderr = "";
 
 for (let index = 0; index < phases.length; index += 1) {
   const current = phases[index];
@@ -56,13 +65,13 @@ for (let index = 0; index < phases.length; index += 1) {
   child.stdout.on("data", (chunk: string) => {
     stdout += chunk;
     if (streamLive) {
-      process.stdout.write(chunk);
+      writeStdout(chunk);
     }
   });
   child.stderr.on("data", (chunk: string) => {
     stderr += chunk;
     if (streamLive) {
-      process.stderr.write(chunk);
+      writeStderr(chunk);
     }
   });
 
@@ -73,6 +82,7 @@ for (let index = 0; index < phases.length; index += 1) {
     });
   });
   const status: PhaseStatus = exitCode === 0 ? "passed" : "failed";
+  overallExitCode = exitCode;
 
   results.push({
     phase: current.phase,
@@ -87,10 +97,10 @@ for (let index = 0; index < phases.length; index += 1) {
   });
 
   if (!streamLive && stdout.length > 0) {
-    process.stdout.write(stdout);
+    writeStdout(stdout);
   }
   if (!streamLive && stderr.length > 0) {
-    process.stderr.write(stderr);
+    writeStderr(stderr);
   }
 
   if (status === "failed") {
@@ -122,6 +132,31 @@ for (let index = 0; index < phases.length; index += 1) {
   }
 }
 
+if (process.env[PRE_COMMIT_SKIP_CACHE_WRITE_ENV] !== "1") {
+  const result: CommandExecutionResult = {
+    exitCode: overallExitCode,
+    stdout: overallStdout,
+    stderr: overallStderr,
+    combinedOutput: `${overallStdout}${overallStderr}`,
+    summary: overallExitCode === 0
+      ? "Pre-commit checks passed."
+      : `Pre-commit checks failed with exit code ${overallExitCode}.`,
+    createdAt: new Date(startedAt).toISOString(),
+    durationMs: Date.now() - startedAt,
+  };
+  persistPreCommitChecksRun(process.cwd(), result);
+}
+
 function emitMarker(payload: object): void {
-  process.stdout.write(`${PRE_COMMIT_MARKER_PREFIX}${JSON.stringify(payload)}\n`);
+  writeStdout(`${PRE_COMMIT_MARKER_PREFIX}${JSON.stringify(payload)}\n`);
+}
+
+function writeStdout(text: string): void {
+  overallStdout += text;
+  process.stdout.write(text);
+}
+
+function writeStderr(text: string): void {
+  overallStderr += text;
+  process.stderr.write(text);
 }
