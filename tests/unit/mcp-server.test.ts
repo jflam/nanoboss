@@ -368,7 +368,7 @@ describe("nanoboss MCP API", () => {
     ]);
   });
 
-  test("lists and dispatches procedures through the async MCP surface", async () => {
+  test("keeps hidden procedures out of discovery but allows direct named lookup", async () => {
     const rootDir = mkdtempSync(join(process.cwd(), ".tmp-mcp-test-session-"));
     const cwd = mkdtempSync(join(process.cwd(), ".tmp-mcp-test-session-workspace-"));
     const procedureRoot = join(cwd, ".nanoboss", "procedures");
@@ -432,6 +432,49 @@ describe("nanoboss MCP API", () => {
       name: "review",
       description: "store a durable review result",
       inputHint: "subject to review",
+    });
+    expect(await callMcpTool(api, "procedure_get", { name: "default" })).toEqual({
+      name: "default",
+      description: "Pass prompt through to the downstream agent",
+      inputHint: undefined,
+    });
+  });
+
+  test("dispatches procedures through the async MCP surface", async () => {
+    const rootDir = mkdtempSync(join(process.cwd(), ".tmp-mcp-test-session-"));
+    const cwd = mkdtempSync(join(process.cwd(), ".tmp-mcp-test-session-workspace-"));
+    const procedureRoot = join(cwd, ".nanoboss", "procedures");
+    const reviewPackageDir = join(procedureRoot, "review");
+    mkdirSync(reviewPackageDir, { recursive: true });
+    tempDirs.push(rootDir, cwd);
+
+    const registry = new ProcedureRegistry(procedureRoot);
+    registry.loadBuiltins();
+    await Bun.write(join(reviewPackageDir, "index.ts"), [
+      "export default {",
+      '  name: "review",',
+      '  description: "store a durable review result",',
+      '  inputHint: "subject to review",',
+      '  async execute(prompt) {',
+      '    return {',
+      '      data: {',
+      '        subject: prompt,',
+      '        verdict: "mixed",',
+      '      },',
+      '      display: `reviewed: ${prompt}\\n`,',
+      '      summary: `review ${prompt}`,',
+      '      memory: `Reviewed ${prompt}.`,',
+      '    };',
+      '  },',
+      "};",
+    ].join("\n"));
+    await registry.loadFromDisk();
+
+    const api = createNanobossMcpApi({
+      sessionId: "mcp-test-session",
+      cwd,
+      rootDir,
+      registry,
     });
 
     const dispatchCorrelationId = crypto.randomUUID();

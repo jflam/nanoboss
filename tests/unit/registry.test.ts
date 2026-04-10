@@ -342,7 +342,7 @@ describe("ProcedureRegistry", () => {
     expect(registry.get("double")).toBeDefined();
   });
 
-  test("listMetadata is the canonical catalog and the shared ACP projection hides /default", () => {
+  test("listMetadata remains canonical while discovery projection hides /default", () => {
     const registry = new ProcedureRegistry(mkdtempSync(join(tmpdir(), "nab-procedures-")));
     registry.register({
       name: "default",
@@ -374,6 +374,12 @@ describe("ProcedureRegistry", () => {
         inputHint: "number",
       },
     ]);
+    expect(registry.listMetadata().find((procedure) => procedure.name === "default")).toEqual({
+      name: "default",
+      description: "default command",
+      executionMode: undefined,
+      inputHint: undefined,
+    });
     expect(projectProcedureMetadata(registry.listMetadata()).map(toAvailableCommand)).toEqual([
       {
         name: "double",

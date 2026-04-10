@@ -138,7 +138,7 @@ export class NanobossMcpApi {
 
   async procedureGet(args: { name: string; sessionId?: string }): Promise<ProcedureMetadata> {
     const registry = await this.getRegistry(args.sessionId);
-    const procedure = getProcedureMetadata(registry, args.name, true);
+    const procedure = registry.listMetadata().find((candidate) => candidate.name === args.name);
     if (!procedure) {
       throw new Error(`Unknown procedure: ${args.name}`);
     }
@@ -770,15 +770,6 @@ function getProcedureList(
 ): ProcedureMetadata[] {
   return projectProcedureMetadata(registry.listMetadata(), { includeHidden })
     .map(toPublicProcedureMetadata);
-}
-
-function getProcedureMetadata(
-  registry: ProcedureRegistryLike,
-  name: string,
-  includeHidden: boolean,
-): ProcedureMetadata | undefined {
-  return projectProcedureMetadata(registry.listMetadata(), { includeHidden })
-    .find((procedure) => procedure.name === name);
 }
 
 function toPublicProcedureMetadata(metadata: ProcedureMetadata): ProcedureMetadata {
