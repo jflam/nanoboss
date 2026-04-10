@@ -2,6 +2,7 @@ import { existsSync, readFileSync, readdirSync, rmSync, statSync } from "node:fs
 import { join } from "node:path";
 
 import { getNanobossHome } from "../core/config.ts";
+import { formatErrorMessage } from "../core/error-format.ts";
 import { readSessionMetadata } from "./index.ts";
 
 export type SessionCleanupReason =
@@ -132,7 +133,12 @@ function inspectSessionDirectory(rootDir: string): SessionCleanupCandidate | und
   const cellsDir = join(rootDir, "cells");
   const jobsDir = join(rootDir, "procedure-dispatch-jobs");
   const hasSessionJson = existsSync(sessionJsonPath);
-  const metadata = readSessionMetadata(sessionId, rootDir);
+  let metadata;
+  try {
+    metadata = readSessionMetadata(sessionId, rootDir);
+  } catch (error) {
+    console.warn(`Ignoring unreadable session metadata at ${sessionJsonPath}: ${formatErrorMessage(error)}`);
+  }
   const partialMetadata = metadata ?? readPartialSessionMetadata(sessionJsonPath);
   const cellCount = countJsonFiles(cellsDir);
   const jobCount = countJsonFiles(jobsDir);
@@ -264,6 +270,10 @@ function readPartialSessionMetadata(sessionJsonPath: string): {
   updatedAt?: string;
   createdAt?: string;
 } | undefined {
+  if (!existsSync(sessionJsonPath)) {
+    return undefined;
+  }
+
   try {
     const raw = JSON.parse(readFileSync(sessionJsonPath, "utf8")) as Record<string, unknown>;
     return {

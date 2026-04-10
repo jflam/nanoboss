@@ -96,6 +96,41 @@ describe("ProcedureDispatchJobManager", () => {
     expect(status.error).toContain("999999");
   });
 
+  test("does not mark queued jobs as dead when pid checks are denied", async () => {
+    const rootDir = mkdtempSync(join(tmpdir(), "nab-dispatch-jobs-eperm-"));
+    mkdirSync(join(rootDir, "procedure-dispatch-jobs"), { recursive: true });
+
+    const dispatchId = "dispatch-permission-denied";
+    writeFileSync(buildProcedureDispatchJobPath(rootDir, dispatchId), `${JSON.stringify({
+      dispatchId,
+      sessionId: "session-1",
+      procedure: "research",
+      prompt: "investigate",
+      status: "queued",
+      createdAt: "2026-04-03T00:00:00.000Z",
+      updatedAt: "2026-04-03T00:00:00.000Z",
+      dispatchCorrelationId: "corr-eperm",
+      workerPid: 123_456,
+    }, null, 2)}\n`);
+
+    const originalKill = process.kill;
+    process.kill = ((pid: number, signal?: number | NodeJS.Signals) => {
+      expect(pid).toBe(123_456);
+      expect(signal).toBe(0);
+      const error = new Error("permission denied") as NodeJS.ErrnoException;
+      error.code = "EPERM";
+      throw error;
+    }) as typeof process.kill;
+
+    try {
+      const status = await createManager(rootDir).status(dispatchId);
+      expect(status.status).toBe("queued");
+      expect(status.error).toBeUndefined();
+    } finally {
+      process.kill = originalKill;
+    }
+  });
+
   test("cancelByCorrelationId cancels an in-flight worker cooperatively", async () => {
     await withMockAgentEnv(async () => {
       const rootDir = mkdtempSync(join(tmpdir(), "nab-dispatch-jobs-cancel-"));

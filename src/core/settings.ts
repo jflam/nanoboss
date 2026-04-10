@@ -1,8 +1,9 @@
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
-import { parseDownstreamAgentSelection } from "./downstream-agent-selection.ts";
+import { parseRequiredDownstreamAgentSelection } from "./downstream-agent-selection.ts";
+import { formatErrorMessage } from "./error-format.ts";
 import type { DownstreamAgentSelection } from "./types.ts";
 
 export interface NanobossSettings {
@@ -15,15 +16,26 @@ export function getNanobossSettingsPath(): string {
 }
 
 export function readNanobossSettings(): NanobossSettings | undefined {
-  try {
-    const raw = JSON.parse(readFileSync(getNanobossSettingsPath(), "utf8")) as Record<string, unknown>;
-    return {
-      defaultAgentSelection: parseDownstreamAgentSelection(raw.defaultAgentSelection),
-      updatedAt: asNonEmptyString(raw.updatedAt),
-    };
-  } catch {
+  const path = getNanobossSettingsPath();
+  if (!existsSync(path)) {
     return undefined;
   }
+
+  let raw: Record<string, unknown>;
+  try {
+    raw = JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
+  } catch (error) {
+    throw new Error(`Failed to read nanoboss settings at ${path}: ${formatErrorMessage(error)}`, {
+      cause: error,
+    });
+  }
+
+  return {
+    defaultAgentSelection: raw.defaultAgentSelection === undefined
+      ? undefined
+      : parseRequiredDownstreamAgentSelection(raw.defaultAgentSelection),
+    updatedAt: asNonEmptyString(raw.updatedAt),
+  };
 }
 
 export function readPersistedDefaultAgentSelection(): DownstreamAgentSelection | undefined {

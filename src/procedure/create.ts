@@ -3,6 +3,7 @@ import { join } from "node:path";
 
 import typia from "typia";
 
+import { formatErrorMessage } from "../core/error-format.ts";
 import { expectData } from "../core/run-result.ts";
 import { jsonType } from "../core/types.ts";
 import { normalizeProcedureName, resolveProcedureImportPrefix } from "./names.ts";
@@ -135,8 +136,10 @@ function loadExamples(): string {
 function sanitizeProcedureName(value: string): string {
   try {
     return normalizeProcedureName(value);
-  } catch {
-    throw new Error("Generated procedure name was empty");
+  } catch (error) {
+    throw new Error(`Generated procedure name was invalid: ${formatErrorMessage(error)}`, {
+      cause: error,
+    });
   }
 }
 

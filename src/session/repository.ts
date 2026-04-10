@@ -8,6 +8,7 @@ import {
 import { join } from "node:path";
 
 import { getNanobossHome, getSessionDir } from "../core/config.ts";
+import { formatErrorMessage } from "../core/error-format.ts";
 import { parseDownstreamAgentSelection } from "../core/downstream-agent-selection.ts";
 import { resolveWorkspaceKey } from "../core/workspace-identity.ts";
 import type {
@@ -50,12 +51,26 @@ export function writeSessionMetadata(metadata: SessionMetadata): SessionMetadata
 }
 
 export function readSessionMetadata(sessionId: string, rootDir?: string): SessionMetadata | undefined {
-  try {
-    const raw = JSON.parse(readFileSync(getSessionMetadataPath(sessionId, rootDir), "utf8")) as Record<string, unknown>;
-    return parseSessionMetadata(raw);
-  } catch {
+  const path = getSessionMetadataPath(sessionId, rootDir);
+  if (!existsSync(path)) {
     return undefined;
   }
+
+  let raw: Record<string, unknown>;
+  try {
+    raw = JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
+  } catch (error) {
+    throw new Error(`Failed to parse session metadata at ${path}: ${formatErrorMessage(error)}`, {
+      cause: error,
+    });
+  }
+
+  const metadata = parseSessionMetadata(raw);
+  if (!metadata) {
+    throw new Error(`Session metadata at ${path} is missing required fields`);
+  }
+
+  return metadata;
 }
 
 export function listSessionSummaries(): SessionMetadata[] {

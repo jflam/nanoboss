@@ -6,6 +6,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 
 import {
   listSessionSummaries,
+  readSessionMetadata,
   writeSessionMetadata,
 } from "../../src/session/index.ts";
 
@@ -179,6 +180,27 @@ describe("session persistence", () => {
       }, null, 2)}\n`);
 
       expect(listSessionSummaries()).toEqual([]);
+    } finally {
+      if (originalHome === undefined) {
+        delete process.env.HOME;
+      } else {
+        process.env.HOME = originalHome;
+      }
+    }
+  });
+
+  test("throws when session.json contains malformed JSON", () => {
+    const originalHome = process.env.HOME;
+    tempHome = mkdtempSync(join(tmpdir(), "nanoboss-bad-session-metadata-"));
+    process.env.HOME = tempHome;
+
+    try {
+      const sessionRoot = join(tempHome, ".nanoboss", "sessions", "session-bad");
+      mkdirSync(sessionRoot, { recursive: true });
+      writeFileSync(join(sessionRoot, "session.json"), "{bad json\n", "utf8");
+
+      expect(() => readSessionMetadata("session-bad", sessionRoot)).toThrow("Failed to parse session metadata");
+      expect(() => listSessionSummaries()).toThrow("Failed to parse session metadata");
     } finally {
       if (originalHome === undefined) {
         delete process.env.HOME;
