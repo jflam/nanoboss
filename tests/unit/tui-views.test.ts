@@ -149,7 +149,7 @@ describe("NanobossAppView", () => {
     const plain = stripAnsi(view.render(200).join("\n"));
 
     expect(plain).toContain("simplify2 auto-approve on");
-    expect(plain).toContain("ctrl+y auto-approve");
+    expect(plain).toContain("ctrl+g auto-approve");
   });
 
   test("shows the active continuation and the /dismiss escape hatch in the status area", () => {

@@ -97,7 +97,7 @@ export class NanobossAppView implements Component {
       this.state.inputDisabled ? "enter steer" : "enter send",
       "shift+enter newline",
       "ctrl+o tools",
-      "ctrl+y auto-approve",
+      "ctrl+g auto-approve",
       this.state.expandedToolOutput ? "expanded" : "collapsed",
       "/new",
       "/model",

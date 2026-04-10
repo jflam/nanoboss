@@ -33,7 +33,7 @@ type TuiExitSignal = "SIGINT" | "SIGTERM";
 export interface RunTuiCliDeps {
   startPrivateHttpServer?: typeof startPrivateHttpServer;
   createApp?: (params: NanobossTuiAppParams) => TuiAppRunner;
-  suspendDiscardControlCharacter?: () => RestoreTerminalInput | Promise<RestoreTerminalInput | undefined> | undefined;
+  suspendReservedControlCharacters?: () => RestoreTerminalInput | Promise<RestoreTerminalInput | undefined> | undefined;
   addSignalListener?: (signal: TuiExitSignal, listener: () => void) => () => void;
   setExitCode?: (code: number) => void;
   writeStderr?: (text: string) => void;
@@ -48,7 +48,7 @@ export async function runTuiCli(params: RunTuiCliParams, deps: RunTuiCliDeps = {
   let app: TuiAppRunner | undefined;
   let exitSignal: TuiExitSignal | undefined;
   let lastSigintAt = Number.NEGATIVE_INFINITY;
-  const restoreTerminalInput = await (deps.suspendDiscardControlCharacter ?? suspendDiscardControlCharacter)();
+  const restoreTerminalInput = await (deps.suspendReservedControlCharacters ?? suspendReservedControlCharacters)();
   const addSignalListener = deps.addSignalListener ?? addProcessSignalListener;
   const removeSignalListeners = [
     addSignalListener("SIGINT", () => {
@@ -115,7 +115,12 @@ export async function runTuiCli(params: RunTuiCliParams, deps: RunTuiCliDeps = {
   }
 }
 
-async function suspendDiscardControlCharacter(): Promise<RestoreTerminalInput | undefined> {
+const RESERVED_TTY_CONTROL_CHARACTERS = [
+  "discard",
+  "dsusp",
+] as const;
+
+async function suspendReservedControlCharacters(): Promise<RestoreTerminalInput | undefined> {
   if (process.platform === "win32" || !process.stdin.isTTY || !process.stdout.isTTY) {
     return undefined;
   }
@@ -135,8 +140,15 @@ async function suspendDiscardControlCharacter(): Promise<RestoreTerminalInput | 
     return undefined;
   }
 
-  const disabledDiscard = runStty([...ttyArgs, "discard", "undef"]);
-  if (!disabledDiscard || disabledDiscard.exitCode !== 0) {
+  let changed = false;
+  for (const controlCharacter of RESERVED_TTY_CONTROL_CHARACTERS) {
+    const result = runStty([...ttyArgs, controlCharacter, "undef"]);
+    if (result && result.exitCode === 0) {
+      changed = true;
+    }
+  }
+
+  if (!changed) {
     return undefined;
   }
 

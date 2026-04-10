@@ -282,7 +282,7 @@ describe("NanobossTuiApp", () => {
     expect(toggles).toEqual(["toggle"]);
   });
 
-  test("pressing ctrl+y toggles simplify2 auto-approve", async () => {
+  test("pressing ctrl+g toggles simplify2 auto-approve", async () => {
     const editor = new FakeEditor();
     const toggles: string[] = [];
     const currentState: UiState = createInitialUiState({ cwd: "/repo", showToolCalls: true });
@@ -328,7 +328,7 @@ describe("NanobossTuiApp", () => {
       },
     );
 
-    const result = inputListener?.("\u0019");
+    const result = inputListener?.("\u0007");
     await Promise.resolve();
 
     expect(result).toEqual({ consume: true });

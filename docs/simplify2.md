@@ -70,7 +70,7 @@ In the TUI, paused simplify2 checkpoints also expose a focused continuation card
 - `4` something else
 
 The CLI and TUI also support a local `--simplify2-auto-approve` mode, plus a
-`ctrl+y` toggle, that auto-submits `approve it` for simplify2 checkpoints only.
+`ctrl+g` toggle, that auto-submits `approve it` for simplify2 checkpoints only.
 
 If you leave a paused simplify2 run and come back later, reopen the saved
 session with:

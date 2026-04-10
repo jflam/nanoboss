@@ -29,7 +29,7 @@ describe("runTuiCli", () => {
     ]);
   });
 
-  test("restores terminal discard handling when app construction fails", async () => {
+  test("restores terminal control-character handling when app construction fails", async () => {
     const events: string[] = [];
 
     await expect(runTuiCli({
@@ -37,7 +37,7 @@ describe("runTuiCli", () => {
       connectionMode: "private",
       showToolCalls: true,
     }, {
-      suspendDiscardControlCharacter: async () => {
+      suspendReservedControlCharacters: async () => {
         events.push("suspended");
         return async () => {
           events.push("restored");
@@ -75,7 +75,7 @@ describe("runTuiCli", () => {
       connectionMode: "private",
       showToolCalls: true,
     }, {
-      suspendDiscardControlCharacter: async () => {
+      suspendReservedControlCharacters: async () => {
         events.push("suspended");
         return async () => {
           events.push("restored");

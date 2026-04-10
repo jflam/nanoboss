@@ -234,7 +234,7 @@ export class NanobossTuiApp {
         return { consume: true };
       }
 
-      if (matchesKey(data, "ctrl+y")) {
+      if (matchesKey(data, "ctrl+g")) {
         this.controller.toggleSimplify2AutoApprove();
         return { consume: true };
       }

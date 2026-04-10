@@ -691,6 +691,55 @@ describe("NanobossTuiController", () => {
     await runPromise;
   });
 
+  test("toggling auto-approve on submits the current simplify2 continuation", async () => {
+    const sendCalls: string[] = [];
+    const streams: FakeStreamRecord[] = [];
+    const controller = new NanobossTuiController(
+      {
+        serverUrl: "http://localhost:3000",
+        showToolCalls: true,
+      },
+      {
+        ensureMatchingHttpServer: async () => {},
+        createHttpSession: async () => createSession("session-1"),
+        sendSessionPrompt: async (_baseUrl, _sessionId, prompt) => {
+          sendCalls.push(prompt);
+        },
+        startSessionEventStream: ({ sessionId, onEvent }) => createFakeStream(streams, sessionId, onEvent),
+      },
+    );
+
+    const runPromise = controller.run();
+    await waitFor(() => controller.getState().sessionId === "session-1");
+
+    streams[0]?.emit(eventEnvelope("continuation_updated", {
+      continuation: {
+        procedure: "simplify2",
+        question: "Approve this simplify2 slice?",
+        continuationUi: {
+          kind: "simplify2_checkpoint",
+          title: "Simplify2 checkpoint",
+          actions: [
+            { id: "approve", label: "Continue", reply: "approve it" },
+            { id: "other", label: "Something Else" },
+          ],
+        },
+      },
+    }));
+
+    await Bun.sleep(10);
+
+    controller.toggleSimplify2AutoApprove();
+    await waitFor(() => sendCalls.length === 1);
+
+    expect(sendCalls).toEqual(["approve it"]);
+    expect(controller.getState().simplify2AutoApprove).toBe(true);
+    expect(controller.getState().statusLine).toBe("[run] waiting for response");
+
+    controller.requestExit();
+    await runPromise;
+  });
+
   test("escape-triggered cancel latches a soft stop and debounces repeated requests", async () => {
     const cancelCalls: Array<{ sessionId: string; runId: string }> = [];
     const streams: FakeStreamRecord[] = [];
