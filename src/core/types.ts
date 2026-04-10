@@ -354,7 +354,7 @@ export interface ProcedureRegistryLike {
   register(procedure: Procedure): void;
   loadProcedureFromPath(path: string): Promise<Procedure>;
   persist(procedure: Procedure, source: string, cwd?: string): Promise<string>;
-  toAvailableCommands(): acp.AvailableCommand[];
+  listMetadata(): ProcedureMetadata[];
 }
 
 export type AgentSessionMode = "fresh" | "default";

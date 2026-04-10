@@ -43,7 +43,7 @@ import {
   TopLevelProcedureExecutionError,
   type ProcedureExecutionResult,
 } from "../procedure/runner.ts";
-import { ProcedureRegistry } from "../procedure/registry.ts";
+import { ProcedureRegistry, projectProcedureMetadata, toAvailableCommand } from "../procedure/registry.ts";
 import { formatAgentBanner } from "./runtime-banner.ts";
 import { shouldLoadDiskCommands } from "./runtime-mode.ts";
 import { appendTimingTraceEvent, createRunTimingTrace, type RunTimingTrace } from "./timing-trace.ts";
@@ -56,6 +56,7 @@ import type {
   PendingProcedureContinuation,
   PersistedFrontendEvent,
   Procedure,
+  ProcedureRegistryLike,
 } from "./types.ts";
 
 interface ActiveRunState {
@@ -1696,8 +1697,8 @@ function parseProcedureDispatchFailureCandidate(value: unknown): string | undefi
   return undefined;
 }
 
-function buildAvailableCommands(registry: ProcedureRegistry): acp.AvailableCommand[] {
-  const commands = registry.toAvailableCommands();
+function buildAvailableCommands(registry: ProcedureRegistryLike): acp.AvailableCommand[] {
+  const commands = projectProcedureMetadata(registry.listMetadata()).map(toAvailableCommand);
   return commands.some((command) => command.name === DISMISS_CONTINUATION_COMMAND_NAME)
     ? commands
     : [...commands, DISMISS_CONTINUATION_COMMAND];

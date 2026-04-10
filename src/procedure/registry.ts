@@ -1,4 +1,3 @@
-import type * as acp from "@agentclientprotocol/sdk";
 import { createHash } from "node:crypto";
 import { copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -37,6 +36,7 @@ import type {
   DeferredProcedureMetadata,
   Procedure,
   ProcedureExecutionMode,
+  ProcedureMetadata,
   ProcedureRegistryLike,
 } from "../core/types.ts";
 import { createTypiaBunPlugin } from "./typia-bun-plugin.ts";
@@ -156,6 +156,10 @@ export class ProcedureRegistry implements ProcedureRegistryLike {
     return [...this.procedures.values()];
   }
 
+  listMetadata(): ProcedureMetadata[] {
+    return this.list().map(describeProcedureMetadata);
+  }
+
   register(procedure: Procedure): void {
     this.assertProcedure(procedure);
     this.deferredProcedureEntries.delete(procedure.name);
@@ -246,20 +250,6 @@ export class ProcedureRegistry implements ProcedureRegistryLike {
     }
 
     return `${pathToFileURL(cacheModulePath).href}?v=${cacheKey}`;
-  }
-
-  toAvailableCommands(): acp.AvailableCommand[] {
-    return this.list()
-      .filter((procedure) => procedure.name !== "default")
-      .map((procedure) => ({
-        name: procedure.name,
-        description: procedure.description,
-        input: procedure.inputHint
-          ? {
-              hint: procedure.inputHint,
-            }
-          : undefined,
-      }));
   }
 
   private assertProcedure(procedure: unknown): asserts procedure is Procedure {
@@ -499,11 +489,40 @@ function looksLikeResumableProcedureModule(source: string): boolean {
 
 function describeDeferredProcedureMetadata(procedure: Procedure): DeferredProcedureMetadata {
   return {
+    ...describeProcedureMetadata(procedure),
+    supportsResume: typeof procedure.resume === "function",
+  };
+}
+
+function describeProcedureMetadata(procedure: Procedure): ProcedureMetadata {
+  return {
     name: procedure.name,
     description: procedure.description,
     inputHint: procedure.inputHint,
     executionMode: procedure.executionMode,
-    supportsResume: typeof procedure.resume === "function",
+  };
+}
+
+export function projectProcedureMetadata(
+  procedures: readonly ProcedureMetadata[],
+  options: { includeHidden?: boolean } = {},
+): ProcedureMetadata[] {
+  return options.includeHidden ? [...procedures] : procedures.filter((procedure) => procedure.name !== "default");
+}
+
+export function toAvailableCommand(metadata: ProcedureMetadata): {
+  name: string;
+  description: string;
+  input?: { hint: string };
+} {
+  return {
+    name: metadata.name,
+    description: metadata.description,
+    input: metadata.inputHint
+      ? {
+          hint: metadata.inputHint,
+        }
+      : undefined,
   };
 }
 

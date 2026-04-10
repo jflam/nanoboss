@@ -13,7 +13,7 @@ describe("create procedure", () => {
       async persist() {
         throw new Error("persist should not be called");
       },
-      toAvailableCommands: () => [],
+      listMetadata: () => [],
     });
 
     await expect(procedure.execute("make something", {

@@ -1079,6 +1079,7 @@ describe("NanobossService", () => {
     const service = new NanobossService(registry);
     const session = service.createSession({ cwd: process.cwd() });
 
+    expect(session.commands.some((command) => command.name === "default")).toBe(false);
     expect(session.commands.some((command) => command.name === "top_level_runs")).toBe(false);
     expect(session.commands.some((command) => command.name === "cell_get")).toBe(false);
     expect(session.commands.some((command) => command.name === "ref_read")).toBe(false);

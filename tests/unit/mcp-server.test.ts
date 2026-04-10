@@ -417,6 +417,16 @@ describe("nanoboss MCP API", () => {
       description: "store a durable review result",
       inputHint: "subject to review",
     });
+    expect(listed.procedures.some((procedure) => procedure.name === "default")).toBe(false);
+
+    const listedWithHidden = await callMcpTool(api, "procedure_list", { includeHidden: true }) as {
+      procedures: Array<{
+        name: string;
+        description: string;
+        inputHint?: string;
+      }>;
+    };
+    expect(listedWithHidden.procedures.some((procedure) => procedure.name === "default")).toBe(true);
 
     expect(await callMcpTool(api, "procedure_get", { name: "review" })).toEqual({
       name: "review",

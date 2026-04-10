@@ -10,7 +10,7 @@ import {
   type ProcedureDispatchStatusResult,
 } from "../procedure/dispatch-jobs.ts";
 import { type ProcedureExecutionResult } from "../procedure/runner.ts";
-import { ProcedureRegistry } from "../procedure/registry.ts";
+import { ProcedureRegistry, projectProcedureMetadata } from "../procedure/registry.ts";
 import { SessionStore, readCurrentSessionMetadata, readSessionMetadata } from "../session/index.ts";
 import { shouldLoadDiskCommands } from "../core/runtime-mode.ts";
 import type {
@@ -138,16 +138,12 @@ export class NanobossMcpApi {
 
   async procedureGet(args: { name: string; sessionId?: string }): Promise<ProcedureMetadata> {
     const registry = await this.getRegistry(args.sessionId);
-    const procedure = registry.get(args.name);
+    const procedure = getProcedureMetadata(registry, args.name, true);
     if (!procedure) {
       throw new Error(`Unknown procedure: ${args.name}`);
     }
 
-    return {
-      name: procedure.name,
-      description: procedure.description,
-      inputHint: procedure.inputHint,
-    };
+    return toPublicProcedureMetadata(procedure);
   }
 
   async procedureDispatchStart(args: {
@@ -308,18 +304,6 @@ function defineTool<Args>(definition: {
     },
   };
 }
-
-const MCP_DIRECT_TOOL_NAMES = new Set([
-  "top_level_runs",
-  "cell_descendants",
-  "cell_ancestors",
-  "cell_get",
-  "ref_read",
-  "session_recent",
-  "ref_stat",
-  "ref_write_to_file",
-  "get_schema",
-]);
 
 const MCP_TOOLS: McpToolDefinition[] = [
   defineTool({
@@ -784,31 +768,25 @@ function getProcedureList(
   registry: ProcedureRegistryLike,
   includeHidden: boolean,
 ): ProcedureMetadata[] {
-  const procedures = registry.toAvailableCommands()
-    .filter((procedure) => !MCP_DIRECT_TOOL_NAMES.has(procedure.name))
-    .map((procedure) => ({
-      name: procedure.name,
-      description: procedure.description,
-      inputHint: procedure.input?.hint,
-    }));
+  return projectProcedureMetadata(registry.listMetadata(), { includeHidden })
+    .map(toPublicProcedureMetadata);
+}
 
-  if (!includeHidden) {
-    return procedures;
-  }
+function getProcedureMetadata(
+  registry: ProcedureRegistryLike,
+  name: string,
+  includeHidden: boolean,
+): ProcedureMetadata | undefined {
+  return projectProcedureMetadata(registry.listMetadata(), { includeHidden })
+    .find((procedure) => procedure.name === name);
+}
 
-  const defaultProcedure = registry.get("default");
-  if (!defaultProcedure) {
-    return procedures;
-  }
-
-  return [
-    {
-      name: defaultProcedure.name,
-      description: defaultProcedure.description,
-      inputHint: defaultProcedure.inputHint,
-    },
-    ...procedures,
-  ];
+function toPublicProcedureMetadata(metadata: ProcedureMetadata): ProcedureMetadata {
+  return {
+    name: metadata.name,
+    description: metadata.description,
+    inputHint: metadata.inputHint,
+  };
 }
 
 function isProcedureListResult(value: unknown): value is ProcedureListResult {

@@ -23,7 +23,7 @@ function createManager(
     async persist() {
       throw new Error("Not implemented in test");
     },
-    toAvailableCommands: () => [],
+    listMetadata: () => [],
   }),
 ): ProcedureDispatchJobManager {
   return new ProcedureDispatchJobManager({
@@ -155,7 +155,7 @@ describe("ProcedureDispatchJobManager", () => {
         async persist() {
           throw new Error("Not implemented in test");
         },
-        toAvailableCommands: () => [],
+        listMetadata: () => [],
       }));
       writeFileSync(buildProcedureDispatchJobPath(rootDir, dispatchId), `${JSON.stringify({
         dispatchId,

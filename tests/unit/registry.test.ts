@@ -1,12 +1,11 @@
-import type * as acp from "@agentclientprotocol/sdk";
 import { describe, expect, test } from "bun:test";
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import type { DeferredProcedureMetadata, ProcedureMetadata } from "../../src/core/types.ts";
+import type { DeferredProcedureMetadata } from "../../src/core/types.ts";
 import { CREATE_PROCEDURE_METADATA } from "../../src/procedure/create.ts";
-import { ProcedureRegistry } from "../../src/procedure/registry.ts";
+import { ProcedureRegistry, projectProcedureMetadata, toAvailableCommand } from "../../src/procedure/registry.ts";
 
 function describeLazyMetadata(
   procedure: ReturnType<ProcedureRegistry["get"]>,
@@ -21,18 +20,6 @@ function describeLazyMetadata(
     inputHint: procedure.inputHint,
     executionMode: procedure.executionMode,
     supportsResume: typeof procedure.resume === "function",
-  };
-}
-
-function toAvailableCommand(metadata: ProcedureMetadata): acp.AvailableCommand {
-  return {
-    name: metadata.name,
-    description: metadata.description,
-    input: metadata.inputHint
-      ? {
-          hint: metadata.inputHint,
-        }
-      : undefined,
   };
 }
 
@@ -221,18 +208,23 @@ describe("ProcedureRegistry", () => {
       expect(describeLazyMetadata(registry.get(expected.name))).toEqual(expected);
     }
 
-    const expectedCommands: acp.AvailableCommand[] = expectedMetadata.map(({
+    const expectedCommands = expectedMetadata.map(({
       supportsResume: _supportsResume,
       ...metadata
     }) => toAvailableCommand(metadata));
-    const availableCommands = registry.toAvailableCommands();
+    const availableCommands = projectProcedureMetadata(registry.listMetadata()).map(toAvailableCommand);
     for (const expected of expectedCommands) {
       expect(availableCommands.find((command) => command.name === expected.name)).toEqual(expected);
     }
 
     await expect(registry.get("guided")?.execute("", {} as never)).resolves.toBe("guided");
     expect(describeLazyMetadata(registry.get("guided"))).toEqual(expectedMetadata[2]);
-    expect(registry.toAvailableCommands().find((command) => command.name === "guided")).toEqual(expectedCommands[2]);
+    expect(projectProcedureMetadata(registry.listMetadata()).find((procedure) => procedure.name === "guided")).toEqual({
+      name: "guided",
+      description: "guided command",
+      inputHint: "what to do",
+      executionMode: "defaultConversation",
+    });
   });
 
   test("loads typia-based procedures through the runtime build pipeline", async () => {
@@ -350,8 +342,15 @@ describe("ProcedureRegistry", () => {
     expect(registry.get("double")).toBeDefined();
   });
 
-  test("toAvailableCommands returns ACP formatted command descriptors", () => {
+  test("listMetadata is the canonical catalog and the shared ACP projection hides /default", () => {
     const registry = new ProcedureRegistry(mkdtempSync(join(tmpdir(), "nab-procedures-")));
+    registry.register({
+      name: "default",
+      description: "default command",
+      async execute(prompt) {
+        return prompt;
+      },
+    });
     registry.register({
       name: "double",
       description: "double a number",
@@ -361,7 +360,21 @@ describe("ProcedureRegistry", () => {
       },
     });
 
-    expect(registry.toAvailableCommands()).toEqual([
+    expect(registry.listMetadata()).toEqual([
+      {
+        name: "default",
+        description: "default command",
+        executionMode: undefined,
+        inputHint: undefined,
+      },
+      {
+        name: "double",
+        description: "double a number",
+        executionMode: undefined,
+        inputHint: "number",
+      },
+    ]);
+    expect(projectProcedureMetadata(registry.listMetadata()).map(toAvailableCommand)).toEqual([
       {
         name: "double",
         description: "double a number",
@@ -409,7 +422,10 @@ describe("ProcedureRegistry", () => {
     expect(registry.get("nanoboss/commit")).toBeDefined();
     expect(registry.get("commit")).toBeUndefined();
 
-    const commandsByName = new Map(registry.toAvailableCommands().map((command) => [command.name, command]));
+    const commandsByName = new Map(projectProcedureMetadata(registry.listMetadata()).map((command) => [
+      command.name,
+      toAvailableCommand(command),
+    ]));
     expect(commandsByName.has("default")).toBe(false);
     expect(commandsByName.get(CREATE_PROCEDURE_METADATA.name)).toEqual(toAvailableCommand(CREATE_PROCEDURE_METADATA));
     expect(commandsByName.get("simplify")).toEqual(toAvailableCommand(expectedMetadata[2]));
