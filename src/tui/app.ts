@@ -40,6 +40,7 @@ interface EditorLike {
   addToHistory(text: string): void;
   setText(text: string): void;
   getText(): string;
+  isShowingAutocomplete(): boolean;
   setAutocompleteProvider(provider: unknown): void;
 }
 
@@ -189,6 +190,10 @@ export class NanobossTuiApp {
       }
 
       if (matchesKey(data, "tab") && this.state.inputDisabled) {
+        if (this.editor.isShowingAutocomplete()) {
+          return undefined;
+        }
+
         const text = this.editor.getText();
         if (text.trim().length === 0) {
           return undefined;

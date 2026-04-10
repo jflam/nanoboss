@@ -11,6 +11,7 @@ class FakeEditor {
   onChange?: (text: string) => void;
   history: string[] = [];
   autocompleteProvider?: unknown;
+  showingAutocomplete = false;
 
   addToHistory(text: string): void {
     this.history.push(text);
@@ -23,6 +24,10 @@ class FakeEditor {
 
   getText(): string {
     return this.text;
+  }
+
+  isShowingAutocomplete(): boolean {
+    return this.showingAutocomplete;
   }
 
   setAutocompleteProvider(provider: unknown): void {
@@ -616,6 +621,63 @@ describe("NanobossTuiApp", () => {
 
     expect(result).toEqual({ consume: true });
     expect(queued).toEqual(["after this"]);
+  });
+
+  test("pressing tab while a run is active does not queue when autocomplete is showing", async () => {
+    const editor = new FakeEditor();
+    const queued: string[] = [];
+    const currentState: UiState = {
+      ...createInitialUiState({ cwd: "/repo", showToolCalls: true }),
+      inputDisabled: true,
+    };
+    let inputListener: ((data: string) => unknown) | undefined;
+
+    new NanobossTuiApp(
+      {
+        serverUrl: "http://localhost:3000",
+        showToolCalls: true,
+      },
+      {
+        createTerminal: () => ({
+          setTitle() {},
+          async drainInput() {},
+        }),
+        createTui: () => ({
+          addInputListener(listener) {
+            inputListener = listener;
+          },
+          addChild() {},
+          setFocus() {},
+          start() {},
+          requestRender() {},
+          stop() {},
+        }),
+        createEditor: () => editor,
+        createController: () => ({
+          getState: () => currentState,
+          async handleSubmit() {},
+          async queuePrompt(text: string) {
+            queued.push(text);
+          },
+          async cancelActiveRun() {},
+          toggleToolOutput() {},
+          requestExit() {},
+          async run() {
+            return undefined;
+          },
+          async stop() {},
+        }),
+        createView: () => createViewStub(),
+      },
+    );
+
+    editor.setText("/aut");
+    editor.showingAutocomplete = true;
+    const result = inputListener?.("\t");
+    await Promise.resolve();
+
+    expect(result).toBeUndefined();
+    expect(queued).toEqual([]);
   });
 
   test("refreshes the view while an active run is in progress so the timer can advance", async () => {
