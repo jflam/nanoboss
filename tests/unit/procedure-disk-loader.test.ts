@@ -13,6 +13,68 @@ describe("procedure disk loader", () => {
     expect(procedure.description).toContain("Codex");
   });
 
+  test("loads local helper imports when they use explicit .ts paths", async () => {
+    const workspaceRoot = mkdtempSync(join(tmpdir(), "nab-workspace-helpers-"));
+    const proceduresDir = join(workspaceRoot, "procedures");
+    mkdirSync(proceduresDir, { recursive: true });
+    writeFileSync(
+      join(proceduresDir, "helper.ts"),
+      "export function describeProcedure(): string { return \"helper-backed procedure\"; }\n",
+      "utf8",
+    );
+    writeFileSync(
+      join(proceduresDir, "helper-procedure.ts"),
+      [
+        "import { describeProcedure } from \"./helper.ts\";",
+        "",
+        "export default {",
+        "  name: \"helper-procedure\",",
+        "  description: describeProcedure(),",
+        "  async execute() {",
+        "    return {};",
+        "  },",
+        "};",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+
+    const procedure = await loadProcedureFromPath(join(proceduresDir, "helper-procedure.ts"));
+
+    expect(procedure.description).toBe("helper-backed procedure");
+  });
+
+  test("rejects local helper imports without an explicit .ts extension", async () => {
+    const workspaceRoot = mkdtempSync(join(tmpdir(), "nab-workspace-bad-helper-"));
+    const proceduresDir = join(workspaceRoot, "procedures");
+    mkdirSync(proceduresDir, { recursive: true });
+    writeFileSync(
+      join(proceduresDir, "helper.ts"),
+      "export function describeProcedure(): string { return \"helper-backed procedure\"; }\n",
+      "utf8",
+    );
+    writeFileSync(
+      join(proceduresDir, "bad-helper-procedure.ts"),
+      [
+        "import { describeProcedure } from \"./helper\";",
+        "",
+        "export default {",
+        "  name: \"bad-helper-procedure\",",
+        "  description: describeProcedure(),",
+        "  async execute() {",
+        "    return {};",
+        "  },",
+        "};",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+
+    await expect(loadProcedureFromPath(join(proceduresDir, "bad-helper-procedure.ts"))).rejects.toThrow(
+      "Procedure local imports must use explicit .ts paths: ./helper",
+    );
+  });
+
   test("loads typia-based procedures for a workspace without its own node_modules", async () => {
     const workspaceRoot = mkdtempSync(join(tmpdir(), "nab-workspace-no-modules-"));
     const proceduresDir = join(workspaceRoot, "procedures");

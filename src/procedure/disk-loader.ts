@@ -40,17 +40,6 @@ const LOCAL_IMPORT_PATTERNS = [
   /\b(?:import|export)\s+(?:type\s+)?(?:[^"'`]*?\s+from\s+)?["'`](\.[^"'`]+)["'`]/g,
   /\bimport\s*\(\s*["'`](\.[^"'`]+)["'`]\s*\)/g,
 ];
-const PROCEDURE_SOURCE_EXTENSIONS = [
-  ".ts",
-  ".tsx",
-  ".mts",
-  ".cts",
-  ".js",
-  ".jsx",
-  ".mjs",
-  ".cjs",
-  ".json",
-];
 
 export function discoverDiskProcedures(procedureRoot: string): DiskProcedureDefinition[] {
   if (!existsSync(procedureRoot)) {
@@ -208,7 +197,7 @@ function resolveProcedureSourceGraph(path: string): ProcedureSourceFile[] {
 
     for (const specifier of findLocalImportSpecifiers(contents)) {
       const resolvedImportPath = resolveLocalImportPath(dirname(currentPath), specifier);
-      if (resolvedImportPath && !visited.has(resolvedImportPath)) {
+      if (!visited.has(resolvedImportPath)) {
         pending.push(resolvedImportPath);
       }
     }
@@ -231,26 +220,22 @@ function findLocalImportSpecifiers(source: string): string[] {
   return [...matches];
 }
 
-function resolveLocalImportPath(baseDir: string, specifier: string): string | undefined {
+function resolveLocalImportPath(baseDir: string, specifier: string): string {
   const cleanSpecifier = specifier.split("?")[0]?.split("#")[0];
   if (!cleanSpecifier) {
-    return undefined;
+    throw new Error(`Procedure local import was empty: ${specifier}`);
   }
 
-  const absoluteBase = resolve(baseDir, cleanSpecifier);
-  const candidates = new Set<string>([
-    absoluteBase,
-    ...PROCEDURE_SOURCE_EXTENSIONS.map((extension) => `${absoluteBase}${extension}`),
-    ...PROCEDURE_SOURCE_EXTENSIONS.map((extension) => join(absoluteBase, `index${extension}`)),
-  ]);
-
-  for (const candidate of candidates) {
-    if (existsSync(candidate) && !lstatSync(candidate).isDirectory()) {
-      return resolve(candidate);
-    }
+  if (!cleanSpecifier.endsWith(".ts")) {
+    throw new Error(`Procedure local imports must use explicit .ts paths: ${specifier}`);
   }
 
-  return undefined;
+  const absolutePath = resolve(baseDir, cleanSpecifier);
+  if (!existsSync(absolutePath) || lstatSync(absolutePath).isDirectory()) {
+    throw new Error(`Procedure local import not found: ${specifier}`);
+  }
+
+  return absolutePath;
 }
 
 function listProcedureSourcePaths(rootDir: string): string[] {
