@@ -1,0 +1,767 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>nanoboss × pi-tui deep dive</title>
+  <style>
+    :root {
+      --bg: #07111f;
+      --bg2: #0d1830;
+      --panel: rgba(16, 28, 49, 0.82);
+      --panel-2: rgba(22, 38, 67, 0.9);
+      --text: #ecf2ff;
+      --muted: #a6b9df;
+      --soft: #7187b0;
+      --line: rgba(173, 196, 255, 0.18);
+      --accent: #7aa8ff;
+      --accent2: #7ef0cf;
+      --warn: #ffbf69;
+      --danger: #ff7b8f;
+      --ok: #79e88d;
+      --shadow: 0 24px 72px rgba(0, 0, 0, 0.34);
+      --radius: 22px;
+      --sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    }
+
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      height: 100%;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 18% 18%, rgba(122, 168, 255, 0.18), transparent 30%),
+        radial-gradient(circle at 86% 0%, rgba(126, 240, 207, 0.14), transparent 24%),
+        linear-gradient(135deg, var(--bg), #060b15 56%, var(--bg2));
+      color: var(--text);
+      font-family: var(--sans);
+      letter-spacing: 0.01em;
+    }
+
+    code, pre, .mono { font-family: var(--mono); }
+
+    .progress {
+      position: fixed;
+      inset: 0 0 auto 0;
+      height: 4px;
+      background: rgba(255,255,255,0.06);
+      z-index: 50;
+    }
+    .progress > div {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, var(--accent), var(--accent2));
+      box-shadow: 0 0 18px rgba(122,168,255,0.52);
+      transition: width 180ms ease;
+    }
+
+    .hud {
+      position: fixed;
+      top: 14px;
+      right: 18px;
+      z-index: 50;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      color: var(--muted);
+      font-size: 12px;
+      padding: 8px 12px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: rgba(6, 12, 24, 0.68);
+      backdrop-filter: blur(8px);
+    }
+
+    .deck {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+    }
+
+    .slide {
+      position: absolute;
+      inset: 0;
+      padding: 48px 56px 56px;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      gap: 20px;
+      opacity: 0;
+      transform: translateX(32px) scale(0.985);
+      pointer-events: none;
+      transition: opacity 220ms ease, transform 220ms ease;
+    }
+    .slide.active {
+      opacity: 1;
+      transform: translateX(0) scale(1);
+      pointer-events: auto;
+    }
+
+    .eyebrow {
+      color: var(--accent2);
+      text-transform: uppercase;
+      letter-spacing: 0.18em;
+      font-size: 12px;
+      font-weight: 700;
+      margin-bottom: 10px;
+    }
+    h1, h2, h3 { margin: 0; letter-spacing: -0.03em; }
+    h1 { font-size: 58px; line-height: 0.98; }
+    h2 { font-size: 40px; line-height: 1.02; }
+    h3 { font-size: 21px; line-height: 1.1; }
+
+    .subtitle {
+      color: var(--muted);
+      font-size: 20px;
+      line-height: 1.34;
+      max-width: 1020px;
+    }
+    .lead {
+      font-size: 24px;
+      line-height: 1.32;
+      color: #f4f8ff;
+      max-width: 1080px;
+    }
+
+    .content {
+      min-height: 0;
+      display: grid;
+      gap: 18px;
+      align-content: start;
+    }
+    .grid-2 { display: grid; grid-template-columns: 1.08fr 0.92fr; gap: 18px; }
+    .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+    .rows { display: grid; gap: 14px; }
+
+    .panel {
+      min-width: 0;
+      padding: 20px 22px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: linear-gradient(180deg, rgba(21, 34, 61, 0.75), rgba(10, 17, 31, 0.84));
+      box-shadow: var(--shadow);
+    }
+
+    .bullets {
+      margin: 0;
+      padding-left: 20px;
+    }
+    .bullets li {
+      margin: 8px 0;
+      font-size: 16px;
+      line-height: 1.42;
+    }
+    .bullets li::marker { color: var(--accent2); }
+
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .chip {
+      border: 1px solid var(--line);
+      background: rgba(20, 35, 61, 0.75);
+      color: #dce7ff;
+      border-radius: 999px;
+      padding: 6px 10px;
+      font-size: 13px;
+      white-space: nowrap;
+    }
+    .chip.ok { color: #cff8d6; border-color: rgba(121,232,141,0.38); }
+    .chip.warn { color: #ffe2b0; border-color: rgba(255,191,105,0.36); }
+    .chip.danger { color: #ffd1d7; border-color: rgba(255,123,143,0.34); }
+
+    .kpis {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 14px;
+    }
+    .kpi {
+      padding: 16px 18px;
+      border-radius: 18px;
+      border: 1px solid var(--line);
+      background: linear-gradient(180deg, rgba(20,33,57,0.94), rgba(12,20,35,0.88));
+    }
+    .kpi .n {
+      font-size: 32px;
+      font-weight: 800;
+      letter-spacing: -0.04em;
+      margin-bottom: 6px;
+    }
+    .kpi .l {
+      color: var(--muted);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.14em;
+    }
+
+    .stack {
+      display: grid;
+      gap: 10px;
+    }
+    .flow {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 14px 16px;
+      background: rgba(13, 22, 38, 0.72);
+      display: grid;
+      gap: 8px;
+    }
+    .flow .label {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.14em;
+      color: var(--accent2);
+    }
+    .flow .value {
+      font-size: 17px;
+      line-height: 1.36;
+    }
+    .arrow {
+      text-align: center;
+      color: var(--soft);
+      font-size: 22px;
+      line-height: 1;
+    }
+
+    .codeblock {
+      font-family: var(--mono);
+      font-size: 14px;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      border: 1px solid rgba(173,196,255,0.16);
+      background: rgba(8, 13, 24, 0.76);
+      border-radius: 18px;
+      padding: 16px 18px;
+      color: #e9f1ff;
+    }
+
+    .table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 15px;
+    }
+    .table th, .table td {
+      text-align: left;
+      vertical-align: top;
+      padding: 10px 12px;
+      border-bottom: 1px solid rgba(173,196,255,0.12);
+      line-height: 1.4;
+    }
+    .table th {
+      color: var(--accent2);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.14em;
+      font-weight: 700;
+    }
+
+    .callout {
+      padding: 14px 16px;
+      border-radius: 18px;
+      border: 1px solid rgba(126,240,207,0.24);
+      background: rgba(18, 38, 43, 0.28);
+      color: #e9fef8;
+      line-height: 1.42;
+      font-size: 16px;
+    }
+    .callout.warn {
+      border-color: rgba(255,191,105,0.3);
+      background: rgba(60, 41, 14, 0.28);
+      color: #fff1d6;
+    }
+
+    .footer {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: end;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .refs {
+      color: var(--soft);
+      font-size: 12px;
+      text-align: right;
+      max-width: 58%;
+    }
+
+    .nav {
+      position: fixed;
+      bottom: 18px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 50;
+      display: flex;
+      gap: 10px;
+      padding: 10px 14px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: rgba(6, 12, 24, 0.66);
+      backdrop-filter: blur(8px);
+    }
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      border: 0;
+      background: rgba(255,255,255,0.18);
+      cursor: pointer;
+    }
+    .dot.active {
+      background: linear-gradient(90deg, var(--accent), var(--accent2));
+      box-shadow: 0 0 16px rgba(122,168,255,0.5);
+    }
+
+    .big-quote {
+      font-size: 33px;
+      line-height: 1.2;
+      letter-spacing: -0.03em;
+      max-width: 1120px;
+      color: #f5f9ff;
+    }
+
+    @media print {
+      html, body { overflow: visible; background: #fff; color: #111; }
+      .progress, .hud, .nav { display: none !important; }
+      .deck { height: auto; }
+      .slide {
+        position: relative;
+        inset: auto;
+        opacity: 1 !important;
+        transform: none !important;
+        pointer-events: auto;
+        height: 100vh;
+        page-break-after: always;
+        background: #fff;
+        color: #111;
+      }
+      .panel, .flow, .codeblock, .kpi, .callout {
+        background: #fff;
+        color: #111;
+        border-color: #ddd;
+        box-shadow: none;
+      }
+      .subtitle, .footer, .refs, .chip, .kpi .l { color: #444; }
+    }
+  </style>
+</head>
+<body>
+  <div class="progress"><div id="progress-bar"></div></div>
+  <div class="hud">
+    <span>nanoboss × pi-tui</span>
+    <span id="slide-counter">1 / 8</span>
+  </div>
+
+  <main class="deck">
+    <section class="slide active" data-title="Cover">
+      <header>
+        <div class="eyebrow">Deep dive · single-page slide deck</div>
+        <h1>How nanoboss uses <code>@mariozechner/pi-tui</code> — and what matters upstream in <code>~/src/pi-mono/packages/tui</code></h1>
+        <p class="subtitle">A source-level map of the integration seam, app/runtime split, rendering pipeline, editor/input stack, and the upstream files most likely to explain nanoboss TUI behavior.</p>
+      </header>
+      <div class="content rows">
+        <div class="kpis">
+          <div class="kpi"><div class="n">0.65.2</div><div class="l">nanoboss pinned pi-tui version</div></div>
+          <div class="kpi"><div class="n">0.66.1</div><div class="l">current monorepo package version</div></div>
+          <div class="kpi"><div class="n">15</div><div class="l">pi-tui symbols used by nanoboss</div></div>
+          <div class="kpi"><div class="n">1</div><div class="l">important path correction: <code>packages/tui</code></div></div>
+        </div>
+        <div class="panel rows">
+          <h3>Bottom line</h3>
+          <div class="big-quote">pi-tui is the terminal runtime. nanoboss is the app. The integration is clean: nanoboss owns state, transcript semantics, and tool cards; pi-tui owns terminal IO, editor mechanics, layout primitives, and differential rendering.</div>
+          <div class="chips">
+            <span class="chip ok">local re-export seam</span>
+            <span class="chip ok">controller/view split</span>
+            <span class="chip ok">append-friendly transcript</span>
+            <span class="chip warn">version drift to watch</span>
+          </div>
+        </div>
+      </div>
+      <footer class="footer">
+        <div>Deck prepared from direct repository inspection in nanoboss and pi-mono.</div>
+        <div class="refs">Key files: <code>src/tui/app.ts</code> · <code>src/tui/views.ts</code> · <code>src/tui/pi-tui.ts</code> · <code>~/src/pi-mono/packages/tui/src/*.ts</code></div>
+      </footer>
+    </section>
+
+    <section class="slide" data-title="What nanoboss imports">
+      <header>
+        <div class="eyebrow">1 · integration seam</div>
+        <h2>Nanoboss deliberately treats pi-tui as a toolkit, not as an app framework</h2>
+      </header>
+      <div class="content grid-2">
+        <div class="panel rows">
+          <h3>The seam</h3>
+          <div class="codeblock">src/tui/pi-tui.ts
+
+export {
+  TUI,
+  ProcessTerminal,
+  Editor,
+  Container,
+  Text,
+  TruncatedText,
+  Markdown,
+  Box,
+  SelectList,
+  Spacer,
+  CombinedAutocompleteProvider,
+  matchesKey,
+  isKeyRelease,
+  ...
+} from "@mariozechner/pi-tui";</div>
+          <ul class="bullets">
+            <li>Nanoboss has a <strong>single local adapter file</strong> for all pi-tui imports.</li>
+            <li>That keeps upstream churn isolated and makes local migration/version pinning easier.</li>
+            <li>It also makes clear that nanoboss is consuming <strong>public pi-tui APIs only</strong>.</li>
+          </ul>
+        </div>
+        <div class="panel rows">
+          <h3>What nanoboss actually uses</h3>
+          <table class="table">
+            <thead><tr><th>Category</th><th>pi-tui APIs used</th></tr></thead>
+            <tbody>
+              <tr><td>Runtime</td><td><code>TUI</code>, <code>ProcessTerminal</code></td></tr>
+              <tr><td>Input</td><td><code>Editor</code>, <code>CombinedAutocompleteProvider</code>, <code>matchesKey</code>, <code>isKeyRelease</code></td></tr>
+              <tr><td>Layout</td><td><code>Container</code>, <code>Spacer</code>, <code>Box</code></td></tr>
+              <tr><td>Rendering</td><td><code>Text</code>, <code>TruncatedText</code>, <code>Markdown</code>, <code>SelectList</code></td></tr>
+            </tbody>
+          </table>
+          <div class="callout warn">Notably absent from the main app path: <code>Input</code>, <code>Loader</code>, <code>SettingsList</code>, <code>Image</code>, and pi-tui’s real floating overlay stack.</div>
+        </div>
+      </div>
+      <footer class="footer">
+        <div>The seam is thin by design.</div>
+        <div class="refs">Evidence: <code>src/tui/pi-tui.ts</code> + import scan across <code>src/tui/**</code></div>
+      </footer>
+    </section>
+
+    <section class="slide" data-title="App construction">
+      <header>
+        <div class="eyebrow">2 · construction path</div>
+        <h2>The main app is built as controller + view on top of pi-tui primitives</h2>
+      </header>
+      <div class="content grid-2">
+        <div class="panel rows">
+          <h3>Instantiation flow in <code>src/tui/app.ts</code></h3>
+          <div class="stack">
+            <div class="flow"><div class="label">step 1</div><div class="value"><code>new ProcessTerminal()</code></div></div>
+            <div class="arrow">↓</div>
+            <div class="flow"><div class="label">step 2</div><div class="value"><code>new TUI(terminal, false)</code></div></div>
+            <div class="arrow">↓</div>
+            <div class="flow"><div class="label">step 3</div><div class="value"><code>new Editor(tui, theme.editor, { paddingX: 1, autocompleteMaxVisible: 8 })</code></div></div>
+            <div class="arrow">↓</div>
+            <div class="flow"><div class="label">step 4</div><div class="value"><code>new NanobossTuiController(...)</code></div></div>
+            <div class="arrow">↓</div>
+            <div class="flow"><div class="label">step 5</div><div class="value"><code>new NanobossAppView(editor, theme, state)</code></div></div>
+          </div>
+        </div>
+        <div class="panel rows">
+          <h3>Responsibility split</h3>
+          <ul class="bullets">
+            <li><strong>Controller</strong> owns HTTP/SSE session lifecycle, event handling, prompt forwarding, cancellation, and pending prompts.</li>
+            <li><strong>View</strong> owns header/footer/transcript/composer composition.</li>
+            <li><strong>pi-tui</strong> owns terminal lifecycle, focus, editor mechanics, text rendering, and repaint behavior.</li>
+          </ul>
+          <div class="callout">This is a classic “app state on top of a rendering runtime” architecture. Nanoboss is not trying to fork or shadow pi-tui internals.</div>
+        </div>
+      </div>
+      <footer class="footer">
+        <div>Nanoboss uses pi-tui as a substrate, not as a source of business logic.</div>
+        <div class="refs">Evidence: <code>src/tui/app.ts</code> · <code>src/tui/controller.ts</code> · <code>src/tui/run.ts</code></div>
+      </footer>
+    </section>
+
+    <section class="slide" data-title="UI topology">
+      <header>
+        <div class="eyebrow">3 · UI topology</div>
+        <h2>The root view is an append-friendly vertical document</h2>
+      </header>
+      <div class="content grid-2">
+        <div class="panel rows">
+          <h3>Root layout in <code>src/tui/views.ts</code></h3>
+          <div class="codeblock">Container
+├─ header (TruncatedText)
+├─ session line (TruncatedText)
+├─ status line (TruncatedText)
+├─ Spacer
+├─ transcript (custom component)
+├─ composer container
+│  └─ Editor or inline selector/continuation component
+├─ Spacer
+├─ activity bar (TruncatedText)
+└─ footer/help line (TruncatedText)</div>
+          <ul class="bullets">
+            <li>This layout is very native to pi-tui’s model: each piece renders to lines.</li>
+            <li><code>TruncatedText</code> is used for single-line bars; <code>Markdown</code>/<code>Text</code> are used for body content.</li>
+          </ul>
+        </div>
+        <div class="panel rows">
+          <h3>Transcript strategy</h3>
+          <ul class="bullets">
+            <li><code>TranscriptComponent</code> keeps <strong>stable component instances</strong> for turns and tool calls.</li>
+            <li>It rebuilds structure only when ordering changes; otherwise it mutates existing components.</li>
+            <li>That aligns well with pi-tui’s line-diff renderer, which performs best when updates are append-mostly and localized.</li>
+          </ul>
+          <div class="chips">
+            <span class="chip ok">stable identity maps</span>
+            <span class="chip ok">incremental updates</span>
+            <span class="chip ok">cheap footer/header bars</span>
+            <span class="chip warn">edits above viewport are expensive</span>
+          </div>
+        </div>
+      </div>
+      <footer class="footer">
+        <div>Nanoboss’s persistent transcript model is cooperating with pi-tui, not fighting it.</div>
+        <div class="refs">Evidence: <code>src/tui/views.ts</code></div>
+      </footer>
+    </section>
+
+    <section class="slide" data-title="Cards and pseudo-overlays">
+      <header>
+        <div class="eyebrow">4 · local UI patterns</div>
+        <h2>Nanoboss builds its own cards, and its “overlays” are mostly composer swaps</h2>
+      </header>
+      <div class="content grid-2">
+        <div class="panel rows">
+          <h3>Cards are local components</h3>
+          <ul class="bullets">
+            <li><code>MessageCardComponent</code> and <code>ToolCardComponent</code> are nanoboss code.</li>
+            <li>They are composed from <code>Box</code> + <code>Text</code> + <code>Container</code>.</li>
+            <li>So <strong>visual semantics</strong> live in nanoboss, while spacing/background/wrapping mechanics come from pi-tui.</li>
+          </ul>
+          <div class="codeblock">message-card.ts / tool-card.ts
+→ Box(1, 1, backgroundFn)
+→ Text(lines.join("\n"))</div>
+        </div>
+        <div class="panel rows">
+          <h3>“Overlay” nuance</h3>
+          <ul class="bullets">
+            <li>Files under <code>src/tui/overlays/</code> use pi-tui components like <code>SelectList</code>.</li>
+            <li>But the main app does <strong>not</strong> use <code>TUI.showOverlay()</code> for them.</li>
+            <li>Instead, nanoboss swaps the composer area with <code>view.showComposer(component)</code> and focuses that component.</li>
+          </ul>
+          <div class="callout warn">This means the simplify/model pickers are inline modal-ish composer replacements, not true composited floating overlays from upstream pi-tui.</div>
+        </div>
+      </div>
+      <footer class="footer">
+        <div>Good to remember when comparing nanoboss UX to upstream pi apps.</div>
+        <div class="refs">Evidence: <code>src/tui/components/*.ts</code> · <code>src/tui/overlays/*.ts</code> · <code>src/tui/app.ts</code></div>
+      </footer>
+    </section>
+
+    <section class="slide" data-title="pi-tui runtime model">
+      <header>
+        <div class="eyebrow">5 · upstream runtime</div>
+        <h2>pi-tui is fundamentally a diffing line renderer over a terminal component tree</h2>
+      </header>
+      <div class="content grid-2">
+        <div class="panel rows">
+          <h3>Core model in <code>~/src/pi-mono/packages/tui/src/tui.ts</code></h3>
+          <div class="codeblock">Component {
+  render(width): string[]
+  handleInput?(data)
+  wantsKeyRelease?
+  invalidate()
+}
+
+TUI extends Container
+→ render full tree to newLines
+→ compare with previousLines
+→ patch changed region if possible
+→ full redraw when necessary</div>
+          <ul class="bullets">
+            <li>pi-tui is not virtual DOM and not React-style reconciliation.</li>
+            <li>Its unit of truth is <strong>rendered terminal lines</strong>.</li>
+            <li>It uses synchronized output to reduce flicker during writes.</li>
+          </ul>
+        </div>
+        <div class="panel rows">
+          <h3>Why redraws happen</h3>
+          <ul class="bullets">
+            <li><strong>Always full redraw:</strong> first render, width change.</li>
+            <li><strong>Usually full redraw:</strong> height change, content change above viewport, shrink-cleanup cases.</li>
+            <li><strong>Cheap path:</strong> localized changes at or below visible viewport, especially append-mostly updates.</li>
+          </ul>
+          <div class="callout">This is the key reason transcript architecture matters. If nanoboss mutates lines above the viewport, pi-tui may need to repaint far more aggressively.</div>
+        </div>
+      </div>
+      <footer class="footer">
+        <div>Many observed scroll/jump/perf behaviors ultimately reduce to this file.</div>
+        <div class="refs">Evidence: <code>~/src/pi-mono/packages/tui/src/tui.ts</code></div>
+      </footer>
+    </section>
+
+    <section class="slide" data-title="Input and editor stack">
+      <header>
+        <div class="eyebrow">6 · input path</div>
+        <h2>Nanoboss inherits a surprisingly deep terminal/input/editor stack from pi-tui</h2>
+      </header>
+      <div class="content grid-3">
+        <div class="panel rows">
+          <h3>Terminal layer</h3>
+          <ul class="bullets">
+            <li><code>ProcessTerminal</code> enables raw mode, bracketed paste, resize handling, title updates.</li>
+            <li>Queries Kitty keyboard protocol and falls back to xterm <code>modifyOtherKeys</code>.</li>
+            <li>Drains stdin on shutdown to avoid leaked key-release events.</li>
+          </ul>
+        </div>
+        <div class="panel rows">
+          <h3>Key normalization</h3>
+          <ul class="bullets">
+            <li><code>keys.ts</code> normalizes legacy escapes, Kitty CSI-u, non-Latin layouts, repeats/releases.</li>
+            <li><code>stdin-buffer.ts</code> protects against partial/batched escape sequences.</li>
+            <li><code>keybindings.ts</code> centralizes named actions.</li>
+          </ul>
+        </div>
+        <div class="panel rows">
+          <h3>Editor layer</h3>
+          <ul class="bullets">
+            <li>Multiline wrap + vertical scroll</li>
+            <li>history + undo + kill ring</li>
+            <li>jump-to-char + word motions</li>
+            <li>paste markers + async autocomplete</li>
+            <li>IME hardware cursor support</li>
+          </ul>
+        </div>
+      </div>
+      <div class="content">
+        <div class="panel rows">
+          <h3>What nanoboss adds on top</h3>
+          <ul class="bullets">
+            <li>Global input interception via <code>tui.addInputListener(...)</code> for busy-state behavior: steer on Enter, queue on Tab, stop on Esc, toggle tool output on Ctrl+O, toggle simplify auto-approve on Ctrl+G.</li>
+            <li>A subclassed autocomplete provider to preserve leading slash behavior for namespaced commands like <code>/autoresearch/clear</code>.</li>
+          </ul>
+        </div>
+      </div>
+      <footer class="footer">
+        <div>If keyboard behavior feels weird, upstream is usually the first suspect.</div>
+        <div class="refs">Evidence: <code>terminal.ts</code> · <code>keys.ts</code> · <code>stdin-buffer.ts</code> · <code>components/editor.ts</code> · <code>src/tui/app.ts</code></div>
+      </footer>
+    </section>
+
+    <section class="slide" data-title="Important upstream files">
+      <header>
+        <div class="eyebrow">7 · source map</div>
+        <h2>The fastest way to debug nanoboss pi-tui behavior is to know where to look upstream</h2>
+      </header>
+      <div class="content">
+        <table class="table panel">
+          <thead>
+            <tr><th>Question</th><th>Best upstream file</th><th>Why</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Why did the screen fully redraw?</td><td><code>src/tui.ts</code></td><td>Diff strategy, viewport logic, full redraw triggers, overlay compositing.</td></tr>
+            <tr><td>Why is Enter/Shift+Enter/Ctrl+Backspace behaving oddly?</td><td><code>src/terminal.ts</code> + <code>src/keys.ts</code></td><td>Terminal protocol negotiation and key decoding live there.</td></tr>
+            <tr><td>Why is editor wrapping / paste / autocomplete odd?</td><td><code>src/components/editor.ts</code></td><td>The Editor is much richer than a simple text box.</td></tr>
+            <tr><td>Why is markdown or ANSI width drifting?</td><td><code>src/components/markdown.ts</code> + <code>src/utils.ts</code></td><td>Rendering, wrapping, grapheme width, ANSI stripping.</td></tr>
+            <tr><td>Why do selector rows truncate the way they do?</td><td><code>src/components/select-list.ts</code></td><td>Primary/description column logic is there.</td></tr>
+            <tr><td>Why did long sessions regress?</td><td><code>CHANGELOG.md</code> + <code>src/tui.ts</code></td><td>Recent fixes map closely to nanoboss’s pain points.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <footer class="footer">
+        <div>For nanoboss-local behavior, start with <code>src/tui/app.ts</code>, <code>views.ts</code>, and the card components.</div>
+        <div class="refs">Evidence: upstream package file inventory + source reads</div>
+      </footer>
+    </section>
+
+    <section class="slide" data-title="Version drift and verdict">
+      <header>
+        <div class="eyebrow">8 · verdict</div>
+        <h2>The integration is good; the main strategic risk is version drift around exactly the behaviors nanoboss cares about</h2>
+      </header>
+      <div class="content grid-2">
+        <div class="panel rows">
+          <h3>Version note</h3>
+          <ul class="bullets">
+            <li>Nanoboss depends on <strong><code>@mariozechner/pi-tui 0.65.2</code></strong>.</li>
+            <li>The monorepo source currently reports <strong><code>0.66.1</code></strong>.</li>
+            <li>The changelog between those versions includes fixes for heavy streaming render scheduling, long-session container behavior, overlay correctness, and autocomplete debounce.</li>
+          </ul>
+          <div class="callout warn">That means the nanoboss/pi-mono comparison should always be done with version awareness. The source tree you inspect may be slightly ahead of what nanoboss is actually running.</div>
+        </div>
+        <div class="panel rows">
+          <h3>Final assessment</h3>
+          <div class="big-quote" style="font-size:30px">Nanoboss uses pi-tui in the right way: small public seam, app-owned semantics, toolkit-owned runtime. Most future gains will come from staying aligned with upstream rendering/input/editor improvements rather than forking the stack.</div>
+          <div class="chips">
+            <span class="chip ok">clean dependency boundary</span>
+            <span class="chip ok">good separation of concerns</span>
+            <span class="chip ok">upstream reuse where it matters</span>
+            <span class="chip warn">watch release drift</span>
+          </div>
+        </div>
+      </div>
+      <footer class="footer">
+        <div>Prepared as a self-contained HTML slide deck.</div>
+        <div class="refs">File: <code>docs/pi-tui-deepdive.html</code></div>
+      </footer>
+    </section>
+  </main>
+
+  <div class="nav" id="nav"></div>
+
+  <script>
+    const slides = Array.from(document.querySelectorAll('.slide'));
+    const nav = document.getElementById('nav');
+    const counter = document.getElementById('slide-counter');
+    const progress = document.getElementById('progress-bar');
+    let index = 0;
+
+    function clamp(n) {
+      return Math.max(0, Math.min(slides.length - 1, n));
+    }
+
+    function buildNav() {
+      slides.forEach((slide, i) => {
+        const btn = document.createElement('button');
+        btn.className = 'dot';
+        btn.title = `${i + 1}. ${slide.dataset.title || 'Slide'}`;
+        btn.addEventListener('click', () => go(i));
+        nav.appendChild(btn);
+      });
+    }
+
+    function go(next, push = true) {
+      index = clamp(next);
+      slides.forEach((slide, i) => slide.classList.toggle('active', i === index));
+      [...nav.children].forEach((dot, i) => dot.classList.toggle('active', i === index));
+      counter.textContent = `${index + 1} / ${slides.length}`;
+      progress.style.width = `${((index + 1) / slides.length) * 100}%`;
+      if (push) {
+        const hash = `#${index + 1}`;
+        if (location.hash !== hash) history.replaceState(null, '', hash);
+      }
+    }
+
+    function fromHash() {
+      const n = Number(location.hash.replace('#', ''));
+      if (Number.isFinite(n) && n >= 1 && n <= slides.length) {
+        go(n - 1, false);
+      } else {
+        go(0, false);
+      }
+    }
+
+    document.addEventListener('keydown', (e) => {
+      if (['ArrowRight', 'PageDown', ' '].includes(e.key)) {
+        e.preventDefault();
+        go(index + 1);
+      } else if (['ArrowLeft', 'PageUp', 'Backspace'].includes(e.key)) {
+        e.preventDefault();
+        go(index - 1);
+      } else if (e.key === 'Home') {
+        e.preventDefault();
+        go(0);
+      } else if (e.key === 'End') {
+        e.preventDefault();
+        go(slides.length - 1);
+      }
+    });
+
+    window.addEventListener('hashchange', fromHash);
+    buildNav();
+    fromHash();
+  </script>
+</body>
+</html>
