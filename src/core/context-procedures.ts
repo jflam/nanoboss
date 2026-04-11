@@ -9,7 +9,9 @@ import type {
   CommandContext,
   CommandCallProcedureOptions,
   KernelValue,
+  ProcedureInvocationApi,
   ProcedureRegistryLike,
+  RunResult,
 } from "./types.ts";
 
 type ActiveCell = ReturnType<SessionStore["startCell"]>;
@@ -37,14 +39,14 @@ interface ProcedureInvocationApiImplParams {
   createChildContext: (params: ChildContextBindingParams) => CommandContext;
 }
 
-export class ProcedureInvocationApiImpl {
+export class ProcedureInvocationApiImpl implements ProcedureInvocationApi {
   constructor(private readonly params: ProcedureInvocationApiImplParams) {}
 
-  async callProcedure<T extends KernelValue = KernelValue>(
+  async run<T extends KernelValue = KernelValue>(
     name: string,
     prompt: string,
     options?: CommandCallProcedureOptions,
-  ) {
+  ): Promise<RunResult<T>> {
     const procedure = this.params.registry.get(name);
     if (!procedure) {
       throw new Error(`Unknown procedure: ${name}`);
@@ -90,7 +92,7 @@ export class ProcedureInvocationApiImpl {
         raw: result.display,
       });
 
-      return finalized as { data?: T };
+      return finalized as RunResult<T>;
     } catch (error) {
       this.params.logger.write({
         spanId: childSpanId,
@@ -102,5 +104,13 @@ export class ProcedureInvocationApiImpl {
       });
       throw error;
     }
+  }
+
+  async callProcedure<T extends KernelValue = KernelValue>(
+    name: string,
+    prompt: string,
+    options?: CommandCallProcedureOptions,
+  ): Promise<RunResult<T>> {
+    return await this.run<T>(name, prompt, options);
   }
 }

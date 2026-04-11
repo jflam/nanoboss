@@ -1195,47 +1195,132 @@ function createMockContext(
     args: [],
     cwd,
   };
+  const callAgent = (async (prompt: string) => {
+    prompts.push(prompt);
+    callCount += 1;
+    const next = agentResults.shift();
+    if (next === undefined) {
+      throw new Error(`Unexpected callAgent #${callCount}`);
+    }
+    return {
+      cell: {
+        sessionId: "test-session",
+        cellId: `agent-${callCount}`,
+      },
+      data: next,
+    } as RunResult;
+  }) as CommandContext["callAgent"];
+  const callProcedure = (async (name: string, prompt: string) => {
+    options.procedureCalls?.push({ name, prompt });
+    const next = options.procedureResults?.shift();
+    if (typeof next === "object" && next !== null && "cell" in next) {
+      return next as RunResult;
+    }
+
+    if (next !== undefined) {
+      procedureCallCount += 1;
+      return {
+        cell: {
+          sessionId: "test-session",
+          cellId: `procedure-${procedureCallCount}`,
+        },
+        data: next,
+      } as RunResult;
+    }
+
+    if (name === "nanoboss/commit") {
+      procedureCallCount += 1;
+      return {
+        cell: {
+          sessionId: "test-session",
+          cellId: `procedure-${procedureCallCount}`,
+        },
+        data: {
+          checks: {
+            passed: true,
+          },
+          commit: {
+            cell: {
+              sessionId: "test-session",
+              cellId: `commit-${procedureCallCount}`,
+            },
+            path: "output.data",
+          },
+        },
+        display: "commit sha=abc123 message=\"simplify2 slice\" clean=true",
+        summary: "simplify2 slice commit",
+      } as RunResult;
+    }
+
+    throw new Error(`Unexpected callProcedure ${name}`);
+  }) as CommandContext["callProcedure"];
+  const refs: CommandContext["refs"] = {
+    async read() {
+      throw new Error("Not implemented in test");
+    },
+    async stat() {
+      throw new Error("Not implemented in test");
+    },
+    async writeToFile() {
+      throw new Error("Not implemented in test");
+    },
+  };
+  const session: CommandContext["session"] = {
+    async recent() {
+      return [];
+    },
+    async latest() {
+      return undefined;
+    },
+    async topLevelRuns() {
+      return [];
+    },
+    async get() {
+      throw new Error("Not implemented in test");
+    },
+    async parent() {
+      return undefined;
+    },
+    async children() {
+      return [];
+    },
+    async ancestors() {
+      return [];
+    },
+    async descendants() {
+      return [];
+    },
+  };
+  const agent: CommandContext["agent"] = {
+    run: callAgent as CommandContext["agent"]["run"],
+    session() {
+      return {
+        run: callAgent as CommandContext["agent"]["run"],
+      };
+    },
+  };
 
   return {
     cwd,
     sessionId: "test-session",
-    refs: {
-      async read() {
-        throw new Error("Not implemented in test");
-      },
-      async stat() {
-        throw new Error("Not implemented in test");
-      },
-      async writeToFile() {
-        throw new Error("Not implemented in test");
-      },
+    agent,
+    state: {
+      runs: session,
+      refs,
     },
-    session: {
-      async recent() {
-        return [];
-      },
-      async latest() {
-        return undefined;
-      },
-      async topLevelRuns() {
-        return [];
-      },
-      async get() {
-        throw new Error("Not implemented in test");
-      },
-      async parent() {
-        return undefined;
-      },
-      async children() {
-        return [];
-      },
-      async ancestors() {
-        return [];
-      },
-      async descendants() {
-        return [];
-      },
+    ui: {
+      text() {},
+      info() {},
+      warning() {},
+      error() {},
+      status() {},
+      card() {},
     },
+    procedures: {
+      run: callProcedure as CommandContext["procedures"]["run"],
+    },
+    refs,
+    session,
     assertNotCancelled() {},
     getDefaultAgentConfig() {
       return defaultAgentConfig;
@@ -1249,65 +1334,8 @@ function createMockContext(
     async getDefaultAgentTokenUsage() {
       return undefined;
     },
-    callAgent: (async (prompt: string) => {
-      prompts.push(prompt);
-      callCount += 1;
-      const next = agentResults.shift();
-      if (next === undefined) {
-        throw new Error(`Unexpected callAgent #${callCount}`);
-      }
-      return {
-        cell: {
-          sessionId: "test-session",
-          cellId: `agent-${callCount}`,
-        },
-        data: next,
-      } as RunResult;
-    }) as CommandContext["callAgent"],
-    callProcedure: (async (name: string, prompt: string) => {
-      options.procedureCalls?.push({ name, prompt });
-      const next = options.procedureResults?.shift();
-      if (typeof next === "object" && next !== null && "cell" in next) {
-        return next as RunResult;
-      }
-
-      if (next !== undefined) {
-        procedureCallCount += 1;
-        return {
-          cell: {
-            sessionId: "test-session",
-            cellId: `procedure-${procedureCallCount}`,
-          },
-          data: next,
-        } as RunResult;
-      }
-
-      if (name === "nanoboss/commit") {
-        procedureCallCount += 1;
-        return {
-          cell: {
-            sessionId: "test-session",
-            cellId: `procedure-${procedureCallCount}`,
-          },
-          data: {
-            checks: {
-              passed: true,
-            },
-            commit: {
-              cell: {
-                sessionId: "test-session",
-                cellId: `commit-${procedureCallCount}`,
-              },
-              path: "output.data",
-            },
-          },
-          display: "commit sha=abc123 message=\"simplify2 slice\" clean=true",
-          summary: "simplify2 slice commit",
-        } as RunResult;
-      }
-
-      throw new Error(`Unexpected callProcedure ${name}`);
-    }) as CommandContext["callProcedure"],
+    callAgent,
+    callProcedure,
     print() {},
   };
 }

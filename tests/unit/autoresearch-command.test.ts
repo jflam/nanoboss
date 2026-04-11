@@ -669,47 +669,93 @@ function createMockContext(
   };
   let callCount = 0;
   let cancellationCheckCount = 0;
+  const callAgent = (async (prompt: string) => {
+    callCount += 1;
+    return {
+      cell: {
+        sessionId: options.sessionId ?? "test-session",
+        cellId: `agent-${callCount}`,
+      },
+      data: await handler(prompt, callCount),
+    } as RunResult;
+  }) as CommandContext["callAgent"];
+  const refs: CommandContext["refs"] = {
+    async read() {
+      throw new Error("Not implemented in test");
+    },
+    async stat() {
+      throw new Error("Not implemented in test");
+    },
+    async writeToFile() {
+      throw new Error("Not implemented in test");
+    },
+  };
+  const session: CommandContext["session"] = {
+    async recent() {
+      return [];
+    },
+    async latest() {
+      return undefined;
+    },
+    async topLevelRuns() {
+      return [];
+    },
+    async get() {
+      throw new Error("Not implemented in test");
+    },
+    async parent() {
+      return undefined;
+    },
+    async children() {
+      return [];
+    },
+    async ancestors() {
+      return [];
+    },
+    async descendants() {
+      return [];
+    },
+  };
+  const agent: CommandContext["agent"] = {
+    run: callAgent as CommandContext["agent"]["run"],
+    session() {
+      return {
+        run: callAgent as CommandContext["agent"]["run"],
+      };
+    },
+  };
 
   return {
     cwd,
     sessionId: options.sessionId ?? "test-session",
-    refs: {
-      async read() {
-        throw new Error("Not implemented in test");
+    agent,
+    state: {
+      runs: session,
+      refs,
+    },
+    ui: {
+      text(text: string) {
+        printed.push(text);
       },
-      async stat() {
-        throw new Error("Not implemented in test");
+      info(text: string) {
+        printed.push(text);
       },
-      async writeToFile() {
+      warning(text: string) {
+        printed.push(text);
+      },
+      error(text: string) {
+        printed.push(text);
+      },
+      status() {},
+      card() {},
+    },
+    procedures: {
+      async run() {
         throw new Error("Not implemented in test");
       },
     },
-    session: {
-      async recent() {
-        return [];
-      },
-      async latest() {
-        return undefined;
-      },
-      async topLevelRuns() {
-        return [];
-      },
-      async get() {
-        throw new Error("Not implemented in test");
-      },
-      async parent() {
-        return undefined;
-      },
-      async children() {
-        return [];
-      },
-      async ancestors() {
-        return [];
-      },
-      async descendants() {
-        return [];
-      },
-    },
+    refs,
+    session,
     assertNotCancelled() {
       cancellationCheckCount += 1;
       options.assertNotCancelled?.(cancellationCheckCount);
@@ -726,16 +772,7 @@ function createMockContext(
     async getDefaultAgentTokenUsage() {
       return undefined;
     },
-    callAgent: (async (prompt: string) => {
-      callCount += 1;
-      return {
-        cell: {
-          sessionId: options.sessionId ?? "test-session",
-          cellId: `agent-${callCount}`,
-        },
-        data: await handler(prompt, callCount),
-      } as RunResult;
-    }) as CommandContext["callAgent"],
+    callAgent,
     async callProcedure() {
       throw new Error("Not implemented in test");
     },

@@ -332,6 +332,19 @@ function reduceFrontendEvent(state: UiState, event: FrontendEventEnvelope): UiSt
         return state;
       }
       return appendAssistantNoticeCard(state, event.data.text, event.data.tone);
+    case "procedure_status":
+      if (shouldIgnoreMismatchedRunEvent(state, event.data.runId)) {
+        return state;
+      }
+      return {
+        ...state,
+        statusLine: formatProcedureStatusLine(event.data),
+      };
+    case "procedure_card":
+      if (shouldIgnoreMismatchedRunEvent(state, event.data.runId)) {
+        return state;
+      }
+      return appendProcedureCard(state, event.data);
     case "text_delta":
       if (shouldIgnoreMismatchedRunEvent(state, event.data.runId)) {
         return state;
@@ -780,6 +793,81 @@ function appendRuntimeLines(state: UiState, lines: string[]): UiState {
     ...state,
     runtimeNotes: [...state.runtimeNotes, ...lines].slice(-MAX_RUNTIME_NOTES),
   };
+}
+
+function appendProcedureCard(
+  state: UiState,
+  card: Extract<FrontendEventEnvelope, { type: "procedure_card" }>['data'],
+): UiState {
+  const turns = state.activeAssistantTurnId
+    ? state.turns.map((turn) => turn.id === state.activeAssistantTurnId && turn.status === "streaming"
+      ? { ...turn, status: "complete" as const }
+      : turn)
+    : state.turns;
+  const turn = createTurn({
+    id: nextTurnId("assistant", turns.length),
+    role: "assistant",
+    markdown: renderProcedureCardMarkdown(card),
+    status: "complete",
+    runId: card.runId,
+    displayStyle: "card",
+    cardTone: procedureCardTone(card.kind),
+    meta: buildAssistantTurnMeta({
+      procedure: card.procedure,
+    }),
+  });
+
+  return {
+    ...state,
+    turns: [...turns, turn],
+    transcriptItems: appendTranscriptItem(state.transcriptItems, { type: "turn", id: turn.id }),
+    activeAssistantTurnId: undefined,
+    assistantParagraphBreakPending: false,
+  };
+}
+
+function renderProcedureCardMarkdown(card: Extract<FrontendEventEnvelope, { type: "procedure_card" }>['data']): string {
+  return [
+    `[${card.kind}] ${card.title}`,
+    "",
+    card.markdown.trim(),
+  ].filter((line, index, lines) => line.length > 0 || index < lines.length - 1).join("\n");
+}
+
+function procedureCardTone(kind: Extract<FrontendEventEnvelope, { type: "procedure_card" }>['data']['kind']): NonNullable<UiTurn["cardTone"]> {
+  switch (kind) {
+    case "summary":
+      return "success";
+    case "checkpoint":
+      return "warning";
+    default:
+      return "info";
+  }
+}
+
+function formatProcedureStatusLine(status: Extract<FrontendEventEnvelope, { type: "procedure_status" }>['data']): string {
+  const parts = [`[status] /${status.procedure}`];
+
+  if (status.phase) {
+    parts.push(status.phase);
+  }
+
+  if (status.iteration) {
+    parts.push(status.iteration);
+  }
+
+  parts.push(`- ${status.message}`);
+
+  const flags = [
+    status.autoApprove ? "auto-approve" : undefined,
+    status.waiting ? "waiting" : undefined,
+  ].filter(Boolean);
+
+  if (flags.length > 0) {
+    parts.push(`(${flags.join(", ")})`);
+  }
+
+  return parts.join(" ");
 }
 
 function buildAssistantTurnMeta(params: {

@@ -843,11 +843,52 @@ function createMockContext(
     print?: (text: string) => void;
   },
 ): CommandContext {
+  const callAgent = async (prompt: string, options?: unknown) => {
+    if (!overrides.callAgent) {
+      throw new Error(`Unexpected callAgent: ${prompt} ${String(options)}`);
+    }
+    return await overrides.callAgent(prompt, options);
+  };
+  const callProcedure = async (name: string, prompt: string) => {
+    if (!overrides.callProcedure) {
+      throw new Error(`Unexpected callProcedure: ${name} ${prompt}`);
+    }
+    return await overrides.callProcedure(name, prompt);
+  };
+  const print = (text: string) => {
+    overrides.print?.(text);
+  };
+  const refs = {} as CommandContext["refs"];
+  const session = {} as CommandContext["session"];
+
   return {
     cwd: overrides.cwd,
     sessionId: "session",
-    refs: {} as CommandContext["refs"],
-    session: {} as CommandContext["session"],
+    agent: {
+      run: callAgent as CommandContext["agent"]["run"],
+      session() {
+        return {
+          run: callAgent as CommandContext["agent"]["run"],
+        };
+      },
+    },
+    state: {
+      runs: session,
+      refs,
+    },
+    ui: {
+      text: print,
+      info: print,
+      warning: print,
+      error: print,
+      status() {},
+      card() {},
+    },
+    procedures: {
+      run: callProcedure as CommandContext["procedures"]["run"],
+    },
+    refs,
+    session,
     getDefaultAgentConfig() {
       throw new Error("not used");
     },
@@ -861,22 +902,10 @@ function createMockContext(
       return undefined;
     },
     assertNotCancelled() {},
-    async callAgent(prompt: string, options?: unknown) {
-      if (!overrides.callAgent) {
-        throw new Error(`Unexpected callAgent: ${prompt} ${String(options)}`);
-      }
-      return await overrides.callAgent(prompt, options);
-    },
-    async callProcedure(name: string, prompt: string) {
-      if (!overrides.callProcedure) {
-        throw new Error(`Unexpected callProcedure: ${name} ${prompt}`);
-      }
-      return await overrides.callProcedure(name, prompt);
-    },
-    print(text: string) {
-      overrides.print?.(text);
-    },
-  } as CommandContext;
+    callAgent: callAgent as CommandContext["callAgent"],
+    callProcedure: callProcedure as CommandContext["callProcedure"],
+    print,
+  };
 }
 
 function passingChecks(

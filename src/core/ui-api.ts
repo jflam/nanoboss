@@ -1,3 +1,6 @@
-export interface UiApi {
-  text(text: string): void;
-}
+export type {
+  UiApi,
+  UiCardKind,
+  UiCardParams,
+  UiStatusParams,
+} from "./types.ts";

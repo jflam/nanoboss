@@ -5,6 +5,7 @@ import { getBuildLabel } from "./build-info.ts";
 import { RunCancelledError, defaultCancellationMessage, normalizeRunCancelledError } from "./cancellation.ts";
 import { resolveDownstreamAgentConfig, toDownstreamAgentSelection } from "./config.ts";
 import { type SessionUpdateEmitter } from "./context.ts";
+import type { ProcedureUiEvent } from "./context-shared.ts";
 import { formatErrorMessage } from "./error-format.ts";
 import { DefaultConversationSession } from "../agent/default-session.ts";
 import { normalizeAgentTokenUsage } from "../agent/token-usage.ts";
@@ -142,6 +143,35 @@ class CompositeSessionUpdateEmitter implements SessionUpdateEmitter {
     }
 
     this.delegate?.emit(update);
+  }
+
+  emitUiEvent(event: ProcedureUiEvent): void {
+    this.onActivity();
+
+    switch (event.type) {
+      case "status":
+        this.eventLog.publish(this.sessionId, {
+          type: "procedure_status",
+          runId: this.runId,
+          procedure: event.procedure,
+          phase: event.phase,
+          message: event.message,
+          iteration: event.iteration,
+          autoApprove: event.autoApprove,
+          waiting: event.waiting,
+        });
+        return;
+      case "card":
+        this.eventLog.publish(this.sessionId, {
+          type: "procedure_card",
+          runId: this.runId,
+          procedure: event.procedure,
+          kind: event.kind,
+          title: event.title,
+          markdown: event.markdown,
+        });
+        return;
+    }
   }
 
   get currentTokenUsage(): AgentTokenUsage | undefined {
@@ -1307,6 +1337,26 @@ function toPersistedReplayEvent(
         runId: event.data.runId,
         text: event.data.text,
         tone: event.data.tone,
+      };
+    case "procedure_status":
+      return {
+        type: "procedure_status",
+        runId: event.data.runId,
+        procedure: event.data.procedure,
+        phase: event.data.phase,
+        message: event.data.message,
+        iteration: event.data.iteration,
+        autoApprove: event.data.autoApprove,
+        waiting: event.data.waiting,
+      };
+    case "procedure_card":
+      return {
+        type: "procedure_card",
+        runId: event.data.runId,
+        procedure: event.data.procedure,
+        kind: event.data.kind,
+        title: event.data.title,
+        markdown: event.data.markdown,
       };
     case "tool_started":
       return {

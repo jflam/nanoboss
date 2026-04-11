@@ -544,6 +544,10 @@ function styleStatusLine(theme: NanobossTuiTheme, line: string): string {
     return theme.accent(line);
   }
 
+  if (line.startsWith("[status]")) {
+    return theme.warning(line);
+  }
+
   if (line.startsWith("[build]")) {
     return theme.warning(line);
   }

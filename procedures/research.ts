@@ -48,10 +48,10 @@ export default {
       };
     }
 
-    ctx.print("Starting research...\n");
-    ctx.print("Preparing a research brief from the current conversation...\n");
+    ctx.ui.text("Starting research...\n");
+    ctx.ui.text("Preparing a research brief from the current conversation...\n");
 
-    const briefResult = await ctx.callAgent(
+    const briefResult = await ctx.agent.run(
       buildResearchBriefPrompt(trimmed),
       ResearchBriefType,
       {
@@ -66,9 +66,9 @@ export default {
       throw new Error("Research brief question was empty");
     }
 
-    ctx.print("Dispatching an isolated research agent...\n");
+    ctx.ui.text("Dispatching an isolated research agent...\n");
 
-    const result = await ctx.callAgent(
+    const result = await ctx.agent.run(
       buildResearchExecutionPrompt(trimmed),
       ResearchResultType,
       {
@@ -90,9 +90,9 @@ export default {
 
     const descriptionWords = normalizeDescriptionWords(research.descriptionWords);
     const reportPath = await writeReportToPlans(ctx, research.report, descriptionWords);
-    ctx.print(`Wrote detailed report to ${reportPath}.\n`);
+    ctx.ui.text(`Wrote detailed report to ${reportPath}.\n`);
 
-    ctx.print("Completed research.\n");
+    ctx.ui.text("Completed research.\n");
 
     return {
       data: {

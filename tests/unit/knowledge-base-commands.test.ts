@@ -392,6 +392,181 @@ describe("knowledge-base procedures", () => {
     expect(harness.prints).toContain("Knowledge base refresh complete.\n");
   });
 
+  test("/kb/refresh can use ctx.procedures and ctx.ui without legacy shims", async () => {
+    const cwd = createWorkspace();
+    const prints: string[] = [];
+    const procedureCalls: Array<{ name: string; prompt: string }> = [];
+    const defaultAgentConfig: DownstreamAgentConfig = {
+      provider: "copilot",
+      command: "bun",
+      args: [],
+      cwd,
+    };
+    const refs: CommandContext["refs"] = {
+      async read() {
+        throw new Error("Not implemented in test");
+      },
+      async stat() {
+        throw new Error("Not implemented in test");
+      },
+      async writeToFile() {
+        throw new Error("Not implemented in test");
+      },
+    };
+    const session: CommandContext["session"] = {
+      async recent() {
+        return [];
+      },
+      async latest() {
+        return undefined;
+      },
+      async topLevelRuns() {
+        return [];
+      },
+      async get() {
+        throw new Error("Not implemented in test");
+      },
+      async parent() {
+        return undefined;
+      },
+      async children() {
+        return [];
+      },
+      async ancestors() {
+        return [];
+      },
+      async descendants() {
+        return [];
+      },
+    };
+
+    const context: CommandContext = {
+      cwd,
+      sessionId: "test-session",
+      agent: {
+        async run() {
+          throw new Error("Not implemented in test");
+        },
+        session() {
+          return {
+            async run() {
+              throw new Error("Not implemented in test");
+            },
+          };
+        },
+      },
+      state: {
+        runs: session,
+        refs,
+      },
+      ui: {
+        text(text) {
+          prints.push(text);
+        },
+        info(text) {
+          prints.push(text);
+        },
+        warning(text) {
+          prints.push(text);
+        },
+        error(text) {
+          prints.push(text);
+        },
+        status() {
+          throw new Error("Not implemented in test");
+        },
+        card() {
+          throw new Error("Not implemented in test");
+        },
+      },
+      procedures: {
+        run: (async (name, prompt) => {
+          procedureCalls.push({ name, prompt });
+          switch (name) {
+            case "kb/ingest":
+              return {
+                cell: { sessionId: "test-session", cellId: "proc-1" },
+                data: {
+                  sourceCount: 1,
+                  changedSourceIds: ["paper-1234"],
+                  allSourceIds: ["paper-1234"],
+                },
+              } as RunResult;
+            case "kb/compile-source":
+              return {
+                cell: { sessionId: "test-session", cellId: "proc-2" },
+                data: {
+                  status: "compiled",
+                  sourceId: "paper-1234",
+                },
+              } as RunResult;
+            case "kb/compile-concepts":
+              return {
+                cell: { sessionId: "test-session", cellId: "proc-3" },
+                data: {
+                  conceptCount: 1,
+                  touchedConceptIds: ["transformers"],
+                },
+              } as RunResult;
+            case "kb/link":
+              return {
+                cell: { sessionId: "test-session", cellId: "proc-4" },
+                data: {
+                  indexPath: "wiki/index.md",
+                  conceptIndexPath: "wiki/indexes/concepts.md",
+                  backlinksPath: "wiki/indexes/backlinks.md",
+                  maintenancePath: "wiki/indexes/maintenance.md",
+                },
+              } as RunResult;
+            default:
+              throw new Error(`Unexpected nested procedure: ${name}`);
+          }
+        }) as CommandContext["procedures"]["run"],
+      },
+      refs,
+      session,
+      assertNotCancelled() {},
+      getDefaultAgentConfig() {
+        return defaultAgentConfig;
+      },
+      setDefaultAgentSelection() {
+        return defaultAgentConfig;
+      },
+      async getDefaultAgentTokenSnapshot() {
+        return undefined;
+      },
+      async getDefaultAgentTokenUsage() {
+        return undefined;
+      },
+      async callAgent() {
+        throw new Error("Legacy ctx.callAgent shim should not be used in this test");
+      },
+      async callProcedure() {
+        throw new Error("Legacy ctx.callProcedure shim should not be used in this test");
+      },
+      print() {
+        throw new Error("Legacy ctx.print shim should not be used in this test");
+      },
+    };
+
+    const result = await kbRefreshProcedure.execute("", context);
+    if (typeof result === "string") {
+      throw new Error("Expected refresh ProcedureResult");
+    }
+
+    expect(procedureCalls.map((call) => call.name)).toEqual([
+      "kb/ingest",
+      "kb/compile-source",
+      "kb/compile-concepts",
+      "kb/link",
+    ]);
+    expect(prints).toEqual([
+      "Refreshing knowledge base...\n",
+      "Knowledge base refresh complete.\n",
+    ]);
+    expect(result.summary).toBe("kb/refresh: 1 compiled");
+  });
+
   test("/kb/answer writes a durable answer page and updates answer manifests", async () => {
     const cwd = createWorkspace();
     writeFileSync(join(cwd, "raw", "article.md"), "# Article\n\nContext for answering.\n", "utf8");
@@ -711,47 +886,85 @@ function createMockContext(params: {
       data: params.getNextAgentResult(),
     } as RunResult;
   };
+  const refs: CommandContext["refs"] = {
+    async read() {
+      throw new Error("Not implemented in test");
+    },
+    async stat() {
+      throw new Error("Not implemented in test");
+    },
+    async writeToFile() {
+      throw new Error("Not implemented in test");
+    },
+  };
+  const session: CommandContext["session"] = {
+    async recent() {
+      return [];
+    },
+    async latest() {
+      return undefined;
+    },
+    async topLevelRuns() {
+      return [];
+    },
+    async get() {
+      throw new Error("Not implemented in test");
+    },
+    async parent() {
+      return undefined;
+    },
+    async children() {
+      return [];
+    },
+    async ancestors() {
+      return [];
+    },
+    async descendants() {
+      return [];
+    },
+  };
+  const agent: CommandContext["agent"] = {
+    run: callAgent as CommandContext["agent"]["run"],
+    session() {
+      return {
+        run: callAgent as CommandContext["agent"]["run"],
+      };
+    },
+  };
+  const procedures: CommandContext["procedures"] = {
+    run: params.callProcedure as CommandContext["procedures"]["run"],
+  };
+  const ui: CommandContext["ui"] = {
+    text: params.print,
+    info(text) {
+      params.print(text);
+    },
+    warning(text) {
+      params.print(text);
+    },
+    error(text) {
+      params.print(text);
+    },
+    status() {
+      throw new Error("Not implemented in test");
+    },
+    card() {
+      throw new Error("Not implemented in test");
+    },
+  };
 
   return {
     cwd: params.cwd,
     sessionId: "test-session",
-    refs: {
-      async read() {
-        throw new Error("Not implemented in test");
-      },
-      async stat() {
-        throw new Error("Not implemented in test");
-      },
-      async writeToFile() {
-        throw new Error("Not implemented in test");
-      },
+    agent,
+    state: {
+      runs: session,
+      refs,
     },
-    session: {
-      async recent() {
-        return [];
-      },
-      async latest() {
-        return undefined;
-      },
-      async topLevelRuns() {
-        return [];
-      },
-      async get() {
-        throw new Error("Not implemented in test");
-      },
-      async parent() {
-        return undefined;
-      },
-      async children() {
-        return [];
-      },
-      async ancestors() {
-        return [];
-      },
-      async descendants() {
-        return [];
-      },
-    },
+    ui,
+    procedures,
+    refs,
+    session,
     assertNotCancelled() {},
     getDefaultAgentConfig() {
       return params.defaultAgentConfig;

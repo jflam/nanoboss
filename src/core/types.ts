@@ -153,7 +153,7 @@ export interface RefsApi {
   writeToFile(valueRef: ValueRef, path: string): Promise<void>;
 }
 
-export interface SessionApi {
+export interface StateRunsApi {
   recent(options?: SessionRecentOptions): Promise<CellSummary[]>;
   latest(options?: SessionRecentOptions): Promise<CellSummary | undefined>;
   topLevelRuns(options?: TopLevelRunsOptions): Promise<CellSummary[]>;
@@ -162,6 +162,18 @@ export interface SessionApi {
   children(cellRef: CellRef, options?: Omit<CellDescendantsOptions, "maxDepth">): Promise<CellSummary[]>;
   ancestors(cellRef: CellRef, options?: CellAncestorsOptions): Promise<CellSummary[]>;
   descendants(cellRef: CellRef, options?: CellDescendantsOptions): Promise<CellSummary[]>;
+}
+
+/**
+ * Backward-compatible history/query surface exposed at `ctx.session`.
+ *
+ * Note: this still represents durable run history in this migration pass.
+ */
+export interface SessionApi extends StateRunsApi {}
+
+export interface StateApi {
+  readonly runs: StateRunsApi;
+  readonly refs: RefsApi;
 }
 
 export interface DownstreamAgentConfig {
@@ -229,6 +241,24 @@ export type PersistedFrontendEvent =
       runId: string;
       text: string;
       tone: "info" | "warning" | "error";
+    }
+  | {
+      type: "procedure_status";
+      runId: string;
+      procedure: string;
+      phase?: string;
+      message: string;
+      iteration?: string;
+      autoApprove?: boolean;
+      waiting?: boolean;
+    }
+  | {
+      type: "procedure_card";
+      runId: string;
+      procedure: string;
+      kind: UiCardKind;
+      title: string;
+      markdown: string;
     }
   | {
       type: "tool_started";
@@ -420,9 +450,66 @@ export interface CommandCallProcedureOptions {
   session?: ProcedureSessionMode;
 }
 
+export type UiCardKind = "proposal" | "summary" | "checkpoint" | "report" | "notification";
+
+export interface UiStatusParams {
+  procedure?: string;
+  phase?: string;
+  message: string;
+  iteration?: string;
+  autoApprove?: boolean;
+  waiting?: boolean;
+}
+
+export interface UiCardParams {
+  kind: UiCardKind;
+  title: string;
+  markdown: string;
+}
+
+export interface UiApi {
+  text(text: string): void;
+  info(text: string): void;
+  warning(text: string): void;
+  error(text: string): void;
+  status(params: UiStatusParams): void;
+  card(params: UiCardParams): void;
+}
+
+export interface BoundAgentInvocationApi {
+  run(prompt: string, options?: Omit<CommandCallAgentOptions, "session">): Promise<RunResult<string>>;
+  run<T extends KernelValue>(
+    prompt: string,
+    descriptor: TypeDescriptor<T>,
+    options?: Omit<CommandCallAgentOptions, "session">,
+  ): Promise<RunResult<T>>;
+}
+
+export interface AgentInvocationApi {
+  run(prompt: string, options?: CommandCallAgentOptions): Promise<RunResult<string>>;
+  run<T extends KernelValue>(
+    prompt: string,
+    descriptor: TypeDescriptor<T>,
+    options?: CommandCallAgentOptions,
+  ): Promise<RunResult<T>>;
+  session(mode: AgentSessionMode): BoundAgentInvocationApi;
+}
+
+export interface ProcedureInvocationApi {
+  run<T extends KernelValue = KernelValue>(
+    name: string,
+    prompt: string,
+    options?: CommandCallProcedureOptions,
+  ): Promise<RunResult<T>>;
+}
+
 export interface CommandContext {
   readonly cwd: string;
   readonly sessionId: string;
+  readonly agent: AgentInvocationApi;
+  readonly state: StateApi;
+  readonly ui: UiApi;
+  readonly procedures: ProcedureInvocationApi;
   readonly refs: RefsApi;
   readonly session: SessionApi;
   getDefaultAgentConfig(): DownstreamAgentConfig;

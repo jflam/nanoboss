@@ -48,10 +48,10 @@ describe("/research", () => {
       "summarize the pi-tui update",
       createMockContext({
         cwd,
-        print: (text) => {
+        uiText: (text) => {
           prints.push(text);
         },
-        callAgent: (async (prompt, descriptorOrOptions, maybeOptions) => {
+        agentRun: async (prompt: string, descriptorOrOptions?: unknown, maybeOptions?: unknown) => {
           const descriptor = isDescriptor(descriptorOrOptions) ? descriptorOrOptions : undefined;
           const options = (descriptor ? maybeOptions : descriptorOrOptions) as
             | Record<string, unknown>
@@ -103,7 +103,7 @@ describe("/research", () => {
               path: "data",
             },
           } satisfies RunResult;
-        }) as CommandContext["callAgent"],
+        },
       }),
     );
 
@@ -161,8 +161,8 @@ describe("/research", () => {
 
 function createMockContext(params: {
   cwd: string;
-  print(text: string): void;
-  callAgent: CommandContext["callAgent"];
+  uiText(text: string): void;
+  agentRun(prompt: string, descriptorOrOptions?: unknown, maybeOptions?: unknown): Promise<RunResult>;
 }): CommandContext {
   const defaultAgentConfig: DownstreamAgentConfig = {
     provider: "copilot",
@@ -170,47 +170,86 @@ function createMockContext(params: {
     args: [],
     cwd: params.cwd,
   };
+  const refs: CommandContext["refs"] = {
+    async read() {
+      throw new Error("Not implemented in test");
+    },
+    async stat() {
+      throw new Error("Not implemented in test");
+    },
+    async writeToFile() {
+      throw new Error("Not implemented in test");
+    },
+  };
+  const session: CommandContext["session"] = {
+    async recent() {
+      return [];
+    },
+    async latest() {
+      return undefined;
+    },
+    async topLevelRuns() {
+      return [];
+    },
+    async get() {
+      throw new Error("Not implemented in test");
+    },
+    async parent() {
+      return undefined;
+    },
+    async children() {
+      return [];
+    },
+    async ancestors() {
+      return [];
+    },
+    async descendants() {
+      return [];
+    },
+  };
+  const agent: CommandContext["agent"] = {
+    run: params.agentRun as CommandContext["agent"]["run"],
+    session() {
+      return {
+        run: params.agentRun as CommandContext["agent"]["run"],
+      };
+    },
+  };
+  const ui: CommandContext["ui"] = {
+    text: params.uiText,
+    info(text) {
+      params.uiText(`INFO:${text}`);
+    },
+    warning(text) {
+      params.uiText(`WARNING:${text}`);
+    },
+    error(text) {
+      params.uiText(`ERROR:${text}`);
+    },
+    status() {
+      throw new Error("Not implemented in test");
+    },
+    card() {
+      throw new Error("Not implemented in test");
+    },
+  };
 
   return {
     cwd: params.cwd,
     sessionId: "test-session",
-    refs: {
-      async read() {
-        throw new Error("Not implemented in test");
-      },
-      async stat() {
-        throw new Error("Not implemented in test");
-      },
-      async writeToFile() {
+    agent,
+    state: {
+      runs: session,
+      refs,
+    },
+    ui,
+    procedures: {
+      async run() {
         throw new Error("Not implemented in test");
       },
     },
-    session: {
-      async recent() {
-        return [];
-      },
-      async latest() {
-        return undefined;
-      },
-      async topLevelRuns() {
-        return [];
-      },
-      async get() {
-        throw new Error("Not implemented in test");
-      },
-      async parent() {
-        return undefined;
-      },
-      async children() {
-        return [];
-      },
-      async ancestors() {
-        return [];
-      },
-      async descendants() {
-        return [];
-      },
-    },
+    refs,
+    session,
     assertNotCancelled() {},
     getDefaultAgentConfig() {
       return defaultAgentConfig;
@@ -224,11 +263,15 @@ function createMockContext(params: {
     async getDefaultAgentTokenUsage() {
       return undefined;
     },
-    callAgent: params.callAgent,
+    async callAgent() {
+      throw new Error("Legacy ctx.callAgent shim should not be used in this test");
+    },
     async callProcedure() {
       throw new Error("Not implemented in test");
     },
-    print: params.print,
+    print() {
+      throw new Error("Legacy ctx.print shim should not be used in this test");
+    },
   };
 }
 

@@ -7,22 +7,25 @@ import { AgentInvocationApiImpl, AgentRunRecorder } from "./context-agent.ts";
 import { type PreparedDefaultPrompt, type SessionUpdateEmitter } from "./context-shared.ts";
 import { ProcedureInvocationApiImpl, type ChildContextBindingParams } from "./context-procedures.ts";
 import { ContextSessionApiImpl } from "./context-session.ts";
-import { CommandRefs, CommandSession } from "./context-state.ts";
+import { CommandState } from "./context-state.ts";
 import { type UiApi } from "./ui-api.ts";
 import { UiApiImpl } from "./ui-emitter.ts";
 import type { RunLogger } from "./logger.ts";
 import type { RunTimingTrace } from "./timing-trace.ts";
 import type {
+  AgentInvocationApi,
   CommandCallAgentOptions,
   CommandCallProcedureOptions,
   CommandContext,
   DownstreamAgentConfig,
   DownstreamAgentSelection,
   KernelValue,
+  ProcedureInvocationApi,
   ProcedureRegistryLike,
   RefsApi,
   RunResult,
   SessionApi,
+  StateApi,
   TypeDescriptor,
 } from "./types.ts";
 
@@ -58,6 +61,10 @@ interface CommandContextParams {
 export class CommandContextImpl implements CommandContext {
   readonly cwd: string;
   readonly sessionId: string;
+  readonly agent: AgentInvocationApi;
+  readonly state: StateApi;
+  readonly ui: UiApi;
+  readonly procedures: ProcedureInvocationApi;
   readonly refs: RefsApi;
   readonly session: SessionApi;
 
@@ -85,7 +92,6 @@ export class CommandContextImpl implements CommandContext {
   private readonly contextSessionApi: ContextSessionApiImpl;
   private readonly agentInvocationApi: AgentInvocationApiImpl;
   private readonly procedureInvocationApi: ProcedureInvocationApiImpl;
-  private readonly ui: UiApi;
 
   constructor(params: CommandContextParams) {
     this.cwd = params.cwd;
@@ -112,8 +118,9 @@ export class CommandContextImpl implements CommandContext {
     this.assertCanStartBoundaryValue = params.assertCanStartBoundary;
     this.timingTrace = params.timingTrace;
     this.agentRuntimeCapabilityMode = params.agentRuntimeCapabilityMode ?? "mcp";
-    this.refs = new CommandRefs(this.store, this.cwd);
-    this.session = new CommandSession(this.store, this.cell.cell.cellId);
+    this.state = new CommandState(this.store, this.cwd, this.cell.cell.cellId);
+    this.refs = this.state.refs;
+    this.session = this.state.runs;
 
     this.contextSessionApi = new ContextSessionApiImpl({
       cwd: this.cwd,
@@ -149,6 +156,8 @@ export class CommandContextImpl implements CommandContext {
       recorder,
       timingTrace: this.timingTrace,
     });
+    this.agent = this.agentInvocationApi;
+
     this.procedureInvocationApi = new ProcedureInvocationApiImpl({
       cwd: this.cwd,
       sessionId: this.sessionId,
@@ -165,6 +174,7 @@ export class CommandContextImpl implements CommandContext {
       cell: this.cell,
       createChildContext: (binding) => this.createChildContext(binding),
     });
+    this.procedures = this.procedureInvocationApi;
     this.ui = new UiApiImpl(
       this.store,
       this.cell,
@@ -209,11 +219,14 @@ export class CommandContextImpl implements CommandContext {
     descriptorOrOptions?: TypeDescriptor<T> | CommandCallAgentOptions,
     maybeOptions?: CommandCallAgentOptions,
   ): Promise<RunResult<T> | RunResult<string>> {
-    return await this.agentInvocationApi.callAgent(
-      prompt,
-      descriptorOrOptions as TypeDescriptor<KernelValue> | CommandCallAgentOptions | undefined,
-      maybeOptions,
-    ) as RunResult<T> | RunResult<string>;
+    const descriptor = isTypeDescriptor(descriptorOrOptions)
+      ? descriptorOrOptions
+      : undefined;
+    const options = (descriptor ? maybeOptions : descriptorOrOptions) as CommandCallAgentOptions | undefined;
+
+    return descriptor
+      ? await this.agent.run(prompt, descriptor, options) as RunResult<T>
+      : await this.agent.run(prompt, options) as RunResult<string>;
   }
 
   async callProcedure<T extends KernelValue = KernelValue>(
@@ -221,7 +234,7 @@ export class CommandContextImpl implements CommandContext {
     prompt: string,
     options?: CommandCallProcedureOptions,
   ): Promise<RunResult<T>> {
-    return await this.procedureInvocationApi.callProcedure<T>(name, prompt, options) as RunResult<T>;
+    return await this.procedures.run<T>(name, prompt, options) as RunResult<T>;
   }
 
   print(text: string): void {
@@ -266,4 +279,14 @@ export class CommandContextImpl implements CommandContext {
       throw new RunCancelledError(defaultCancellationMessage("abort"), "abort");
     }
   }
+}
+
+function isTypeDescriptor<T>(value: unknown): value is TypeDescriptor<T> {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "schema" in value &&
+    "validate" in value &&
+    typeof (value as { validate: unknown }).validate === "function"
+  );
 }

@@ -13,6 +13,7 @@ import type {
   CellRef,
   FrontendPendingProcedureContinuation,
   ProcedureContinuationUi,
+  UiCardKind,
 } from "../core/types.ts";
 
 export interface FrontendCommand {
@@ -68,6 +69,24 @@ export type FrontendEvent =
       runId: string;
       text: string;
       tone: "info" | "warning" | "error";
+    }
+  | {
+      type: "procedure_status";
+      runId: string;
+      procedure: string;
+      phase?: string;
+      message: string;
+      iteration?: string;
+      autoApprove?: boolean;
+      waiting?: boolean;
+    }
+  | {
+      type: "procedure_card";
+      runId: string;
+      procedure: string;
+      kind: UiCardKind;
+      title: string;
+      markdown: string;
     }
   | {
       type: "token_usage";

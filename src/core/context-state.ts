@@ -5,6 +5,8 @@ import type {
   RefsApi,
   SessionApi,
   SessionRecentOptions,
+  StateApi,
+  StateRunsApi,
   TopLevelRunsOptions,
   ValueRef,
 } from "./types.ts";
@@ -29,7 +31,7 @@ export class CommandRefs implements RefsApi {
   }
 }
 
-export class CommandSession implements SessionApi {
+export class CommandSession implements StateRunsApi {
   constructor(
     private readonly store: SessionStore,
     private readonly currentCellId: string,
@@ -71,5 +73,15 @@ export class CommandSession implements SessionApi {
 
   async descendants(cellRef: CellRef, options?: CellDescendantsOptions) {
     return this.store.descendants(cellRef, options);
+  }
+}
+
+export class CommandState implements StateApi {
+  readonly refs: RefsApi;
+  readonly runs: SessionApi;
+
+  constructor(store: SessionStore, cwd: string, currentCellId: string) {
+    this.refs = new CommandRefs(store, cwd);
+    this.runs = new CommandSession(store, currentCellId);
   }
 }

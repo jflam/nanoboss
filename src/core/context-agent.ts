@@ -13,9 +13,13 @@ import type { ContextSessionApiImpl } from "./context-session.ts";
 import type { SessionUpdateEmitter } from "./context-shared.ts";
 import { summarizeText } from "../util/text.ts";
 import type {
+  AgentInvocationApi,
+  AgentSessionMode,
+  BoundAgentInvocationApi,
   CommandCallAgentOptions,
   DownstreamAgentSelection,
   KernelValue,
+  RunResult,
   TypeDescriptor,
 } from "./types.ts";
 
@@ -206,12 +210,25 @@ interface AgentInvocationApiImplParams {
   timingTrace?: RunTimingTrace;
 }
 
-export class AgentInvocationApiImpl {
+export class AgentInvocationApiImpl implements AgentInvocationApi {
   constructor(private readonly params: AgentInvocationApiImplParams) {}
 
-  async callAgent(
+  session(mode: AgentSessionMode): BoundAgentInvocationApi {
+    return new BoundAgentInvocationApiImpl(this, mode);
+  }
+
+  async run(
     prompt: string,
-    descriptorOrOptions?: TypeDescriptor<KernelValue> | CommandCallAgentOptions,
+    options?: CommandCallAgentOptions,
+  ): Promise<RunResult<string>>;
+  async run<T extends KernelValue>(
+    prompt: string,
+    descriptor: TypeDescriptor<T>,
+    options?: CommandCallAgentOptions,
+  ): Promise<RunResult<T>>;
+  async run<T extends KernelValue>(
+    prompt: string,
+    descriptorOrOptions?: TypeDescriptor<T> | CommandCallAgentOptions,
     maybeOptions?: CommandCallAgentOptions,
   ) {
     const descriptor = isTypeDescriptor(descriptorOrOptions)
@@ -286,6 +303,58 @@ export class AgentInvocationApiImpl {
     } catch (error) {
       return this.params.recorder.fail(started, error, options?.agent);
     }
+  }
+
+  async callAgent(
+    prompt: string,
+    descriptorOrOptions?: TypeDescriptor<KernelValue> | CommandCallAgentOptions,
+    maybeOptions?: CommandCallAgentOptions,
+  ) {
+    const descriptor = isTypeDescriptor(descriptorOrOptions)
+      ? descriptorOrOptions
+      : undefined;
+    const options = (descriptor ? maybeOptions : descriptorOrOptions) as CommandCallAgentOptions | undefined;
+
+    return descriptor
+      ? await this.run(prompt, descriptor, options)
+      : await this.run(prompt, options);
+  }
+}
+
+class BoundAgentInvocationApiImpl implements BoundAgentInvocationApi {
+  constructor(
+    private readonly agent: AgentInvocationApiImpl,
+    private readonly sessionMode: AgentSessionMode,
+  ) {}
+
+  async run(
+    prompt: string,
+    options?: Omit<CommandCallAgentOptions, "session">,
+  ): Promise<RunResult<string>>;
+  async run<T extends KernelValue>(
+    prompt: string,
+    descriptor: TypeDescriptor<T>,
+    options?: Omit<CommandCallAgentOptions, "session">,
+  ): Promise<RunResult<T>>;
+  async run<T extends KernelValue>(
+    prompt: string,
+    descriptorOrOptions?: TypeDescriptor<T> | Omit<CommandCallAgentOptions, "session">,
+    maybeOptions?: Omit<CommandCallAgentOptions, "session">,
+  ) {
+    const descriptor = isTypeDescriptor(descriptorOrOptions)
+      ? descriptorOrOptions
+      : undefined;
+    const options = (descriptor ? maybeOptions : descriptorOrOptions) as Omit<CommandCallAgentOptions, "session"> | undefined;
+    const boundOptions: CommandCallAgentOptions = {
+      ...(options ?? {}),
+      session: this.sessionMode,
+    };
+
+    if (descriptor) {
+      return await this.agent.run(prompt, descriptor, boundOptions);
+    }
+
+    return await this.agent.run(prompt, boundOptions);
   }
 }
 

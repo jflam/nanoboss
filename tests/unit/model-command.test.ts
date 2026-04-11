@@ -24,47 +24,81 @@ function createMockContext(): CommandContext {
     model: "gpt-5.2-codex",
     reasoningEffort: "xhigh",
   };
+  const refs: CommandContext["refs"] = {
+    async read() {
+      throw new Error("Not implemented in test");
+    },
+    async stat() {
+      throw new Error("Not implemented in test");
+    },
+    async writeToFile() {
+      throw new Error("Not implemented in test");
+    },
+  };
+  const session: CommandContext["session"] = {
+    async recent() {
+      return [];
+    },
+    async latest() {
+      return undefined;
+    },
+    async topLevelRuns() {
+      return [];
+    },
+    async get() {
+      throw new Error("Not implemented in test");
+    },
+    async parent() {
+      return undefined;
+    },
+    async children() {
+      return [];
+    },
+    async ancestors() {
+      return [];
+    },
+    async descendants() {
+      return [];
+    },
+  };
+  const agent: CommandContext["agent"] = {
+    run: (async () => {
+      throw new Error("Not implemented in test");
+    }) as CommandContext["agent"]["run"],
+    session() {
+      return {
+        run: (async () => {
+          throw new Error("Not implemented in test");
+        }) as CommandContext["agent"]["run"],
+      };
+    },
+  };
+  const procedures: CommandContext["procedures"] = {
+    async run() {
+      throw new Error("Not implemented in test");
+    },
+  };
+  const ui: CommandContext["ui"] = {
+    text() {},
+    info() {},
+    warning() {},
+    error() {},
+    status() {},
+    card() {},
+  };
 
   return {
     cwd: process.cwd(),
     sessionId: "test-session",
-    refs: {
-      async read() {
-        throw new Error("Not implemented in test");
-      },
-      async stat() {
-        throw new Error("Not implemented in test");
-      },
-      async writeToFile() {
-        throw new Error("Not implemented in test");
-      },
+    agent,
+    state: {
+      runs: session,
+      refs,
     },
-    session: {
-      async recent() {
-        return [];
-      },
-      async latest() {
-        return undefined;
-      },
-      async topLevelRuns() {
-        return [];
-      },
-      async get() {
-        throw new Error("Not implemented in test");
-      },
-      async parent() {
-        return undefined;
-      },
-      async children() {
-        return [];
-      },
-      async ancestors() {
-        return [];
-      },
-      async descendants() {
-        return [];
-      },
-    },
+    ui,
+    procedures,
+    refs,
+    session,
     assertNotCancelled() {},
     getDefaultAgentConfig() {
       return defaultAgentConfig;
@@ -82,9 +116,7 @@ function createMockContext(): CommandContext {
         maxContextTokens: 258400,
       };
     },
-    callAgent: (async () => {
-      throw new Error("Not implemented in test");
-    }) as CommandContext["callAgent"],
+    callAgent: agent.run as CommandContext["callAgent"],
     async callProcedure() {
       throw new Error("Not implemented in test");
     },

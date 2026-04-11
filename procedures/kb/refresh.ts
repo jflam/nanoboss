@@ -26,8 +26,8 @@ export default {
   async execute(prompt, ctx) {
     const options = parseRefreshOptions(prompt);
 
-    ctx.print("Refreshing knowledge base...\n");
-    const ingestResult = await ctx.callProcedure<KnowledgeBaseIngestData>(
+    ctx.ui.text("Refreshing knowledge base...\n");
+    const ingestResult = await ctx.procedures.run<KnowledgeBaseIngestData>(
       "kb/ingest",
       JSON.stringify({
         ...(options.path ? { path: options.path } : {}),
@@ -44,7 +44,7 @@ export default {
     const compiledSourceIds: string[] = [];
 
     for (const sourceId of targetSourceIds) {
-      const compileResult = await ctx.callProcedure<KnowledgeBaseCompileData>(
+      const compileResult = await ctx.procedures.run<KnowledgeBaseCompileData>(
         "kb/compile-source",
         JSON.stringify({
           sourceId,
@@ -59,7 +59,7 @@ export default {
       }
     }
 
-    const conceptResult = await ctx.callProcedure<KnowledgeBaseCompileConceptsData>(
+    const conceptResult = await ctx.procedures.run<KnowledgeBaseCompileConceptsData>(
       "kb/compile-concepts",
       JSON.stringify({
         force: options.force,
@@ -72,7 +72,7 @@ export default {
       throw new Error("kb/compile-concepts returned no data");
     }
 
-    const linkResult = await ctx.callProcedure<KnowledgeBaseLinkData>(
+    const linkResult = await ctx.procedures.run<KnowledgeBaseLinkData>(
       "kb/link",
       JSON.stringify({
         suppressLog: true,
@@ -85,7 +85,7 @@ export default {
 
     let healthIssueCount: number | undefined;
     if (options.health) {
-      const healthResult = await ctx.callProcedure<KnowledgeBaseHealthData>("kb/health", "");
+      const healthResult = await ctx.procedures.run<KnowledgeBaseHealthData>("kb/health", "");
       const healthData = healthResult.data;
       if (!healthData) {
         throw new Error("kb/health returned no data");
@@ -112,7 +112,7 @@ export default {
       ],
     );
 
-    ctx.print("Knowledge base refresh complete.\n");
+    ctx.ui.text("Knowledge base refresh complete.\n");
 
     const data: KnowledgeBaseRefreshData = {
       sourceCount: ingestData.sourceCount,
