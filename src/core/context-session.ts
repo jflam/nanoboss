@@ -1,6 +1,5 @@
 import { DefaultConversationSession } from "../agent/default-session.ts";
 import { normalizeAgentTokenUsage } from "../agent/token-usage.ts";
-import type { AgentRuntimeCapabilityMode } from "../agent/runtime-capability.ts";
 import { resolveDownstreamAgentConfig } from "./config.ts";
 import type { PreparedDefaultPrompt } from "./context-shared.ts";
 import type {
@@ -13,45 +12,39 @@ import type {
 } from "./types.ts";
 import type { RunTimingTrace } from "./timing-trace.ts";
 
-export interface ProcedureInvocationBinding {
+interface SessionBindingSource {
   defaultConversation?: DefaultConversationSession;
   getDefaultAgentConfig: () => DownstreamAgentConfig;
   setDefaultAgentSelection: (selection: DownstreamAgentSelection) => DownstreamAgentConfig;
   prepareDefaultPrompt?: (prompt: string) => PreparedDefaultPrompt;
-  runtimeCapabilityMode: AgentRuntimeCapabilityMode;
 }
+
+export interface ProcedureInvocationBinding extends SessionBindingSource {}
 
 interface ContextSessionApiImplParams {
   cwd: string;
-  defaultConversation: () => DefaultConversationSession | undefined;
-  getDefaultAgentConfig: () => () => DownstreamAgentConfig;
-  setDefaultAgentSelection: () => (selection: DownstreamAgentSelection) => DownstreamAgentConfig;
-  prepareDefaultPrompt: () => ((prompt: string) => PreparedDefaultPrompt) | undefined;
-  rootDefaultConversation: () => DefaultConversationSession | undefined;
-  rootGetDefaultAgentConfig: () => () => DownstreamAgentConfig;
-  rootSetDefaultAgentSelection: () => (selection: DownstreamAgentSelection) => DownstreamAgentConfig;
-  rootPrepareDefaultPrompt: () => ((prompt: string) => PreparedDefaultPrompt) | undefined;
-  runtimeCapabilityMode: () => AgentRuntimeCapabilityMode;
+  current: SessionBindingSource;
+  root: SessionBindingSource;
 }
 
 export class ContextSessionApiImpl implements SessionApi {
   constructor(private readonly params: ContextSessionApiImplParams) {}
 
   getDefaultAgentConfig(): DownstreamAgentConfig {
-    return this.params.getDefaultAgentConfig()();
+    return this.params.current.getDefaultAgentConfig();
   }
 
   setDefaultAgentSelection(selection: DownstreamAgentSelection): DownstreamAgentConfig {
-    return this.params.setDefaultAgentSelection()(selection);
+    return this.params.current.setDefaultAgentSelection(selection);
   }
 
   async getDefaultAgentTokenSnapshot() {
-    return await this.params.defaultConversation()?.getCurrentTokenSnapshot();
+    return await this.params.current.defaultConversation?.getCurrentTokenSnapshot();
   }
 
   async getDefaultAgentTokenUsage() {
     return normalizeAgentTokenUsage(
-      await this.params.defaultConversation()?.getCurrentTokenSnapshot(),
+      await this.params.current.defaultConversation?.getCurrentTokenSnapshot(),
       this.getDefaultAgentConfig(),
     );
   }
@@ -60,14 +53,14 @@ export class ContextSessionApiImpl implements SessionApi {
     sessionMode: AgentSessionMode,
     timingTrace?: RunTimingTrace,
   ): CallAgentTransport | undefined {
-    const defaultConversation = this.params.defaultConversation();
+    const defaultConversation = this.params.current.defaultConversation;
     if (sessionMode !== "default" || !defaultConversation) {
       return undefined;
     }
 
     return {
       invoke: async (prompt, options) => {
-        const preparedPrompt = this.params.prepareDefaultPrompt()?.(prompt) ?? { prompt };
+        const preparedPrompt = this.params.current.prepareDefaultPrompt?.(prompt) ?? { prompt };
 
         const result = await defaultConversation.prompt(preparedPrompt.prompt, {
           signal: options.signal,
@@ -84,20 +77,13 @@ export class ContextSessionApiImpl implements SessionApi {
 
   resolveProcedureInvocationBinding(sessionMode: ProcedureSessionMode): ProcedureInvocationBinding {
     if (sessionMode === "default") {
-      return {
-        defaultConversation: this.params.rootDefaultConversation(),
-        getDefaultAgentConfig: this.params.rootGetDefaultAgentConfig(),
-        setDefaultAgentSelection: this.params.rootSetDefaultAgentSelection(),
-        prepareDefaultPrompt: this.params.rootPrepareDefaultPrompt(),
-        runtimeCapabilityMode: this.params.runtimeCapabilityMode(),
-      };
+      return toProcedureInvocationBinding(this.params.root);
     }
 
     if (sessionMode === "fresh") {
       let defaultAgentConfig = cloneDownstreamAgentConfig(this.getDefaultAgentConfig());
       const defaultConversation = new DefaultConversationSession({
         config: defaultAgentConfig,
-        runtimeCapabilityMode: this.params.runtimeCapabilityMode(),
       });
 
       return {
@@ -109,31 +95,29 @@ export class ContextSessionApiImpl implements SessionApi {
           defaultConversation.updateConfig(nextConfig);
           return nextConfig;
         },
-        prepareDefaultPrompt: this.params.prepareDefaultPrompt(),
-        runtimeCapabilityMode: this.params.runtimeCapabilityMode(),
+        prepareDefaultPrompt: this.params.current.prepareDefaultPrompt,
       };
     }
 
-    return {
-      defaultConversation: this.params.defaultConversation(),
-      getDefaultAgentConfig: this.params.getDefaultAgentConfig(),
-      setDefaultAgentSelection: this.params.setDefaultAgentSelection(),
-      prepareDefaultPrompt: this.params.prepareDefaultPrompt(),
-      runtimeCapabilityMode: this.params.runtimeCapabilityMode(),
-    };
+    return toProcedureInvocationBinding(this.params.current);
   }
 
   getDefaultConversationSessionId(): string | undefined {
-    return this.params.defaultConversation()?.currentSessionId;
+    return this.params.current.defaultConversation?.currentSessionId;
   }
 
   hasDefaultConversation(): boolean {
-    return this.params.defaultConversation() !== undefined;
+    return this.params.current.defaultConversation !== undefined;
   }
+}
 
-  getRuntimeCapabilityMode(): AgentRuntimeCapabilityMode {
-    return this.params.runtimeCapabilityMode();
-  }
+function toProcedureInvocationBinding(binding: SessionBindingSource): ProcedureInvocationBinding {
+  return {
+    defaultConversation: binding.defaultConversation,
+    getDefaultAgentConfig: binding.getDefaultAgentConfig,
+    setDefaultAgentSelection: binding.setDefaultAgentSelection,
+    prepareDefaultPrompt: binding.prepareDefaultPrompt,
+  };
 }
 
 function cloneDownstreamAgentConfig(config: DownstreamAgentConfig): DownstreamAgentConfig {

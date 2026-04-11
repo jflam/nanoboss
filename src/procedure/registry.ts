@@ -166,13 +166,12 @@ export class ProcedureRegistry implements ProcedureRegistryLike {
     return await loadDiskProcedureFromPath(path, workspaceRoot);
   }
 
-  async persist(procedure: Procedure, source: string, cwd?: string): Promise<string> {
+  async persist(procedure: Procedure, source: string, cwd: string): Promise<string> {
     return await persistProcedureSource({
       procedureName: procedure.name,
       source,
       cwd,
       profileProcedureRoot: this.profileProcedureRoot,
-      fallbackProcedureRoot: this.localProcedureRoot,
     });
   }
 

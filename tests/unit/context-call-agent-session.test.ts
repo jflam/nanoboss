@@ -35,9 +35,16 @@ afterEach(() => {
 
 describe("CommandContext named session APIs", () => {
   test("typed default-session calls reuse the default transport and keep parse retries", async () => {
-    const { conversation, ctx, emittedUpdates } = createContext();
-    const prompts: string[] = [];
     let submittedCount = 0;
+    const { conversation, ctx, emittedUpdates } = createContext({
+      prepareDefaultPrompt: (prompt: string) => ({
+        prompt: `Prepared default prompt\n\nUser message:\n${prompt}`,
+        markSubmitted: () => {
+          submittedCount += 1;
+        },
+      }),
+    });
+    const prompts: string[] = [];
 
     Reflect.set(conversation as object, "persistedSessionId", "default-session-1");
     Reflect.set(
@@ -63,17 +70,6 @@ describe("CommandContext named session APIs", () => {
         };
       },
     );
-    Reflect.set(
-      ctx as object,
-      "prepareDefaultPromptValue",
-      (prompt: string) => ({
-        prompt: `Prepared default prompt\n\nUser message:\n${prompt}`,
-        markSubmitted: () => {
-          submittedCount += 1;
-        },
-      }),
-    );
-
     const result = await ctx.agent.run("Compute 4 + 3.", MathResultType, {
       session: "default",
       stream: false,
@@ -91,9 +87,16 @@ describe("CommandContext named session APIs", () => {
   });
 
   test("untyped default-session calls use the same unified ctx.agent.run path", async () => {
-    const { conversation, ctx, emittedUpdates } = createContext();
-    const prompts: string[] = [];
     let submittedCount = 0;
+    const { conversation, ctx, emittedUpdates } = createContext({
+      prepareDefaultPrompt: (prompt: string) => ({
+        prompt: `Prepared default prompt\n\nUser message:\n${prompt}`,
+        markSubmitted: () => {
+          submittedCount += 1;
+        },
+      }),
+    });
+    const prompts: string[] = [];
 
     Reflect.set(conversation as object, "persistedSessionId", "default-session-2");
     Reflect.set(
@@ -108,17 +111,6 @@ describe("CommandContext named session APIs", () => {
         };
       },
     );
-    Reflect.set(
-      ctx as object,
-      "prepareDefaultPromptValue",
-      (prompt: string) => ({
-        prompt: `Prepared default prompt\n\nUser message:\n${prompt}`,
-        markSubmitted: () => {
-          submittedCount += 1;
-        },
-      }),
-    );
-
     const result = await ctx.agent.run("What is 2 + 2?", { session: "default" });
 
     expect(result.data).toBe("4");
@@ -285,7 +277,9 @@ describe("CommandContext named session APIs", () => {
   });
 });
 
-function createContext(): {
+function createContext(options: {
+  prepareDefaultPrompt?: (prompt: string) => { prompt: string; markSubmitted?: () => void };
+} = {}): {
   conversation: DefaultConversationSession;
   ctx: CommandContextImpl;
   emittedUpdates: acp.SessionUpdate[];
@@ -333,6 +327,7 @@ function createContext(): {
       conversation.updateConfig(nextConfig);
       return nextConfig;
     },
+    prepareDefaultPrompt: options.prepareDefaultPrompt,
   });
 
   return {

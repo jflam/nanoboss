@@ -94,7 +94,6 @@ describe("procedure disk loader", () => {
   });
 
   test("persists generated procedures into the profile procedure root outside the repo", async () => {
-    const repoProcedureRoot = mkdtempSync(join(tmpdir(), "nab-repo-procedures-"));
     const profileProcedureRoot = mkdtempSync(join(tmpdir(), "nab-profile-procedures-"));
     const workspaceDir = mkdtempSync(join(tmpdir(), "nab-workspace-"));
 
@@ -102,7 +101,6 @@ describe("procedure disk loader", () => {
       procedureName: "generated-profile",
       source: "export default { name: \"generated-profile\", description: \"generated\", async execute() { return {}; } };",
       cwd: workspaceDir,
-      fallbackProcedureRoot: repoProcedureRoot,
       profileProcedureRoot,
     });
 
@@ -123,7 +121,6 @@ describe("procedure disk loader", () => {
       procedureName: "generated-repo",
       source: "export default { name: \"generated-repo\", description: \"generated\", async execute() { return {}; } };",
       cwd: repoRoot,
-      fallbackProcedureRoot: repoProcedureRoot,
       profileProcedureRoot,
     });
 
@@ -132,7 +129,6 @@ describe("procedure disk loader", () => {
   });
 
   test("persists scoped generated procedures into package directories", async () => {
-    const repoProcedureRoot = mkdtempSync(join(tmpdir(), "nab-repo-procedures-"));
     const profileProcedureRoot = mkdtempSync(join(tmpdir(), "nab-profile-procedures-"));
     const workspaceDir = mkdtempSync(join(tmpdir(), "nab-workspace-"));
 
@@ -140,7 +136,6 @@ describe("procedure disk loader", () => {
       procedureName: "kb/answer",
       source: "export default { name: \"kb/answer\", description: \"generated\", async execute() { return {}; } };",
       cwd: workspaceDir,
-      fallbackProcedureRoot: repoProcedureRoot,
       profileProcedureRoot,
     });
 

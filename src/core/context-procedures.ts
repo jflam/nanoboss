@@ -3,8 +3,6 @@ import type { SessionStore } from "../session/index.ts";
 import { formatErrorMessage } from "./error-format.ts";
 import type { RunLogger } from "./logger.ts";
 import type { ContextSessionApiImpl, ProcedureInvocationBinding } from "./context-session.ts";
-import type { SessionUpdateEmitter } from "./context-shared.ts";
-import type { RunTimingTrace } from "./timing-trace.ts";
 import type {
   CommandContext,
   CommandCallProcedureOptions,
@@ -23,17 +21,11 @@ export interface ChildContextBindingParams extends ProcedureInvocationBinding {
 }
 
 interface ProcedureInvocationApiImplParams {
-  cwd: string;
-  sessionId: string;
   logger: RunLogger;
   registry: ProcedureRegistryLike;
-  emitter: SessionUpdateEmitter;
   store: SessionStore;
-  signal?: AbortSignal;
-  softStopSignal?: AbortSignal;
   sessionManager: ContextSessionApiImpl;
   assertCanStartBoundary: () => void;
-  timingTrace?: RunTimingTrace;
   spanId: string;
   cell: ActiveCell;
   createChildContext: (params: ChildContextBindingParams) => CommandContext;
@@ -78,7 +70,7 @@ export class ProcedureInvocationApiImpl implements ProcedureInvocationApi {
         cell: childCell,
         ...binding,
       });
-      const rawResult = await procedure.execute(prompt, childContext as never);
+      const rawResult = await procedure.execute(prompt, childContext);
       const result = normalizeProcedureResult(rawResult);
       const finalized = this.params.store.finalizeCell(childCell, result);
 

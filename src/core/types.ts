@@ -409,7 +409,7 @@ export interface ProcedureRegistryLike {
   get(name: string): Procedure | undefined;
   register(procedure: Procedure): void;
   loadProcedureFromPath(path: string): Promise<Procedure>;
-  persist(procedure: Procedure, source: string, cwd?: string): Promise<string>;
+  persist(procedure: Procedure, source: string, cwd: string): Promise<string>;
   listMetadata(): ProcedureMetadata[];
 }
 
@@ -537,7 +537,6 @@ export interface CallAgentOptions {
   onUpdate?: (update: acp.SessionUpdate) => Promise<void> | void;
   signal?: AbortSignal;
   softStopSignal?: AbortSignal;
-  runtimeCapabilityMode?: import("../agent/runtime-capability.ts").AgentRuntimeCapabilityMode;
 }
 
 export interface CallAgentTransport {

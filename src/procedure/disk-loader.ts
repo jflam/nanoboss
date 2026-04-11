@@ -66,8 +66,7 @@ export async function loadProcedureFromPath(path: string, workspaceRoot?: string
 export async function persistProcedureSource(params: {
   procedureName: string;
   source: string;
-  cwd?: string;
-  fallbackProcedureRoot?: string;
+  cwd: string;
   profileProcedureRoot: string;
 }): Promise<string> {
   const procedureRoot = resolvePersistProcedureRoot(params);
@@ -438,14 +437,9 @@ function resolveDiskProcedureWorkspaceRoot(procedureRoot: string): string {
 }
 
 function resolvePersistProcedureRoot(params: {
-  cwd?: string;
-  fallbackProcedureRoot?: string;
+  cwd: string;
   profileProcedureRoot: string;
 }): string {
-  const workingDir = params.cwd ? resolve(params.cwd) : undefined;
-  const repoProcedureRoot = workingDir ? resolveRepoProcedureRoot(workingDir) : undefined;
-  const procedureRoot = repoProcedureRoot
-    ?? (workingDir ? params.profileProcedureRoot : params.fallbackProcedureRoot ?? params.profileProcedureRoot);
-
-  return resolve(procedureRoot);
+  const workingDir = resolve(params.cwd);
+  return resolve(resolveRepoProcedureRoot(workingDir) ?? params.profileProcedureRoot);
 }

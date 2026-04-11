@@ -1,4 +1,4 @@
-import { CommandContextImpl, type SessionUpdateEmitter } from "../core/context.ts";
+import { CommandContextImpl, type PreparedDefaultPrompt, type SessionUpdateEmitter } from "../core/context.ts";
 import {
   RunCancelledError,
   type RunCancellationReason,
@@ -29,11 +29,6 @@ import type {
   ProcedureRegistryLike,
   ValueRef,
 } from "../core/types.ts";
-
-interface PreparedDefaultPrompt {
-  prompt: string;
-  markSubmitted?: () => void;
-}
 
 export interface ProcedureExecutionResult {
   procedure: string;

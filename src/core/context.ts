@@ -1,5 +1,4 @@
 import { DefaultConversationSession } from "../agent/default-session.ts";
-import type { AgentRuntimeCapabilityMode } from "../agent/runtime-capability.ts";
 import type { SessionStore } from "../session/index.ts";
 import { RunCancelledError, defaultCancellationMessage } from "./cancellation.ts";
 import { resolveDownstreamAgentConfig } from "./config.ts";
@@ -49,7 +48,6 @@ interface CommandContextParams {
   rootPrepareDefaultPrompt?: (prompt: string) => PreparedDefaultPrompt;
   assertCanStartBoundary?: () => void;
   timingTrace?: RunTimingTrace;
-  agentRuntimeCapabilityMode?: AgentRuntimeCapabilityMode;
 }
 
 export class CommandContextImpl implements CommandContext {
@@ -63,63 +61,56 @@ export class CommandContextImpl implements CommandContext {
 
   private readonly logger: RunLogger;
   private readonly registry: ProcedureRegistryLike;
-  private readonly procedureName: string;
-  private readonly spanId: string;
   private readonly emitter: SessionUpdateEmitter;
   private readonly signal?: AbortSignal;
   private readonly softStopSignal?: AbortSignal;
   private readonly store: SessionStore;
   private readonly cell: ActiveCell;
-  private readonly defaultConversation?: DefaultConversationSession;
-  private readonly getDefaultAgentConfigValue: () => DownstreamAgentConfig;
-  private readonly setDefaultAgentSelectionValue: (selection: DownstreamAgentSelection) => DownstreamAgentConfig;
-  private readonly prepareDefaultPromptValue?: (prompt: string) => PreparedDefaultPrompt;
   private readonly rootDefaultConversation?: DefaultConversationSession;
   private readonly rootGetDefaultAgentConfigValue: () => DownstreamAgentConfig;
   private readonly rootSetDefaultAgentSelectionValue: (selection: DownstreamAgentSelection) => DownstreamAgentConfig;
   private readonly rootPrepareDefaultPromptValue?: (prompt: string) => PreparedDefaultPrompt;
   private readonly assertCanStartBoundaryValue?: () => void;
   private readonly timingTrace?: RunTimingTrace;
-  private readonly agentRuntimeCapabilityMode: AgentRuntimeCapabilityMode;
 
   constructor(params: CommandContextParams) {
     this.cwd = params.cwd;
     this.sessionId = params.sessionId ?? params.store.sessionId;
     this.logger = params.logger;
     this.registry = params.registry;
-    this.procedureName = params.procedureName;
-    this.spanId = params.spanId;
     this.emitter = params.emitter;
     this.signal = params.signal;
     this.softStopSignal = params.softStopSignal;
     this.store = params.store;
     this.cell = params.cell;
-    this.defaultConversation = params.defaultConversation;
-    this.getDefaultAgentConfigValue = params.getDefaultAgentConfig
+    const defaultConversation = params.defaultConversation;
+    const getDefaultAgentConfig = params.getDefaultAgentConfig
       ?? (() => resolveDownstreamAgentConfig(this.cwd));
-    this.setDefaultAgentSelectionValue = params.setDefaultAgentSelection
+    const setDefaultAgentSelection = params.setDefaultAgentSelection
       ?? ((selection) => resolveDownstreamAgentConfig(this.cwd, selection));
-    this.prepareDefaultPromptValue = params.prepareDefaultPrompt;
-    this.rootDefaultConversation = params.rootDefaultConversation ?? this.defaultConversation;
-    this.rootGetDefaultAgentConfigValue = params.rootGetDefaultAgentConfig ?? this.getDefaultAgentConfigValue;
-    this.rootSetDefaultAgentSelectionValue = params.rootSetDefaultAgentSelection ?? this.setDefaultAgentSelectionValue;
-    this.rootPrepareDefaultPromptValue = params.rootPrepareDefaultPrompt ?? this.prepareDefaultPromptValue;
+    const prepareDefaultPrompt = params.prepareDefaultPrompt;
+    this.rootDefaultConversation = params.rootDefaultConversation ?? defaultConversation;
+    this.rootGetDefaultAgentConfigValue = params.rootGetDefaultAgentConfig ?? getDefaultAgentConfig;
+    this.rootSetDefaultAgentSelectionValue = params.rootSetDefaultAgentSelection ?? setDefaultAgentSelection;
+    this.rootPrepareDefaultPromptValue = params.rootPrepareDefaultPrompt ?? prepareDefaultPrompt;
     this.assertCanStartBoundaryValue = params.assertCanStartBoundary;
     this.timingTrace = params.timingTrace;
-    this.agentRuntimeCapabilityMode = params.agentRuntimeCapabilityMode ?? "mcp";
     this.state = new CommandState(this.store, this.cwd, this.cell.cell.cellId);
 
     const contextSessionApi = new ContextSessionApiImpl({
       cwd: this.cwd,
-      defaultConversation: () => this.defaultConversation,
-      getDefaultAgentConfig: () => this.getDefaultAgentConfigValue,
-      setDefaultAgentSelection: () => this.setDefaultAgentSelectionValue,
-      prepareDefaultPrompt: () => this.prepareDefaultPromptValue,
-      rootDefaultConversation: () => this.rootDefaultConversation,
-      rootGetDefaultAgentConfig: () => this.rootGetDefaultAgentConfigValue,
-      rootSetDefaultAgentSelection: () => this.rootSetDefaultAgentSelectionValue,
-      rootPrepareDefaultPrompt: () => this.rootPrepareDefaultPromptValue,
-      runtimeCapabilityMode: () => this.agentRuntimeCapabilityMode,
+      current: {
+        defaultConversation,
+        getDefaultAgentConfig,
+        setDefaultAgentSelection,
+        prepareDefaultPrompt,
+      },
+      root: {
+        defaultConversation: this.rootDefaultConversation,
+        getDefaultAgentConfig: this.rootGetDefaultAgentConfigValue,
+        setDefaultAgentSelection: this.rootSetDefaultAgentSelectionValue,
+        prepareDefaultPrompt: this.rootPrepareDefaultPromptValue,
+      },
     });
     this.session = contextSessionApi;
 
@@ -127,8 +118,8 @@ export class CommandContextImpl implements CommandContext {
       logger: this.logger,
       store: this.store,
       emitter: this.emitter,
-      procedureName: this.procedureName,
-      spanId: this.spanId,
+      procedureName: params.procedureName,
+      spanId: params.spanId,
       cell: this.cell,
       softStopSignal: this.softStopSignal,
       timingTrace: this.timingTrace,
@@ -146,18 +137,12 @@ export class CommandContextImpl implements CommandContext {
     });
 
     this.procedures = new ProcedureInvocationApiImpl({
-      cwd: this.cwd,
-      sessionId: this.sessionId,
       logger: this.logger,
       registry: this.registry,
-      emitter: this.emitter,
       store: this.store,
-      signal: this.signal,
-      softStopSignal: this.softStopSignal,
       sessionManager: contextSessionApi,
       assertCanStartBoundary: () => this.assertCanStartBoundary(),
-      timingTrace: this.timingTrace,
-      spanId: this.spanId,
+      spanId: params.spanId,
       cell: this.cell,
       createChildContext: (binding) => this.createChildContext(binding),
     });
@@ -165,8 +150,8 @@ export class CommandContextImpl implements CommandContext {
       this.store,
       this.cell,
       this.logger,
-      this.spanId,
-      this.procedureName,
+      params.spanId,
+      params.procedureName,
       this.emitter,
     );
   }
@@ -198,7 +183,6 @@ export class CommandContextImpl implements CommandContext {
       rootPrepareDefaultPrompt: this.rootPrepareDefaultPromptValue,
       assertCanStartBoundary: this.assertCanStartBoundaryValue,
       timingTrace: this.timingTrace,
-      agentRuntimeCapabilityMode: binding.runtimeCapabilityMode,
     });
   }
 

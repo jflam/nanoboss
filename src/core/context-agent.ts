@@ -267,7 +267,6 @@ export class AgentInvocationApiImpl implements AgentInvocationApi {
         namedRefs,
         signal: this.params.signal,
         softStopSignal: this.params.softStopSignal,
-        runtimeCapabilityMode: this.params.sessionManager.getRuntimeCapabilityMode(),
         onUpdate: async (update) => {
           if (shouldForwardNestedAgentUpdate(update, options?.stream !== false)) {
             this.params.emitter.emit(update);

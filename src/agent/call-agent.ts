@@ -7,7 +7,7 @@ import {
   closeAcpConnection,
   openAcpConnection,
 } from "./acp-runtime.ts";
-import { createAgentRuntimeCapabilityAdapter } from "./runtime-capability.ts";
+import { buildAgentRuntimeSessionRuntime } from "./runtime-capability.ts";
 import { RunCancelledError, defaultCancellationMessage } from "../core/cancellation.ts";
 import { resolveDownstreamAgentConfig } from "../core/config.ts";
 import { SessionStore } from "../session/index.ts";
@@ -335,7 +335,6 @@ async function runAcpPrompt(
   }
 
   const config = options.config ?? resolveDownstreamAgentConfig();
-  const runtimeAdapter = createAgentRuntimeCapabilityAdapter(options.runtimeCapabilityMode);
   const state = await openAcpConnection(config);
   const updates: acp.SessionUpdate[] = [];
   let lastTokenSnapshot: AgentTokenSnapshot | undefined;
@@ -386,7 +385,7 @@ async function runAcpPrompt(
   try {
     const session = await state.connection.newSession({
       cwd: state.cwd,
-      ...runtimeAdapter.buildSessionRuntime(),
+      ...buildAgentRuntimeSessionRuntime(),
     });
     sessionId = session.sessionId;
 
