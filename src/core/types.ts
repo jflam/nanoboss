@@ -165,6 +165,11 @@ export interface StateRunsApi {
 }
 
 export interface SessionApi {
+  /**
+   * Live default-agent session control for the current procedure binding.
+   *
+   * Durable run/cell history lives under `ctx.state`, not `ctx.session`.
+   */
   getDefaultAgentConfig(): DownstreamAgentConfig;
   setDefaultAgentSelection(selection: DownstreamAgentSelection): DownstreamAgentConfig;
   getDefaultAgentTokenSnapshot(): Promise<AgentTokenSnapshot | undefined>;
@@ -172,6 +177,11 @@ export interface SessionApi {
 }
 
 export interface StateApi {
+  /**
+   * Durable session data and structural traversal over stored run cells.
+   *
+   * Live default-agent controls live under `ctx.session`, not `ctx.state`.
+   */
   readonly runs: StateRunsApi;
   readonly refs: RefsApi;
 }
@@ -507,9 +517,15 @@ export interface CommandContext {
   readonly cwd: string;
   readonly sessionId: string;
   readonly agent: AgentInvocationApi;
+  /**
+   * Durable run state: stored cells, traversal, and refs.
+   */
   readonly state: StateApi;
   readonly ui: UiApi;
   readonly procedures: ProcedureInvocationApi;
+  /**
+   * Live default-agent session control for the current binding.
+   */
   readonly session: SessionApi;
   assertNotCancelled(): void;
 }

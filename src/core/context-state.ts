@@ -30,7 +30,7 @@ export class CommandRefs implements RefsApi {
   }
 }
 
-export class CommandSession implements StateRunsApi {
+export class CommandRuns implements StateRunsApi {
   constructor(
     private readonly store: SessionStore,
     private readonly currentCellId: string,
@@ -81,6 +81,6 @@ export class CommandState implements StateApi {
 
   constructor(store: SessionStore, cwd: string, currentCellId: string) {
     this.refs = new CommandRefs(store, cwd);
-    this.runs = new CommandSession(store, currentCellId);
+    this.runs = new CommandRuns(store, currentCellId);
   }
 }

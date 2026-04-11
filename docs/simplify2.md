@@ -195,37 +195,37 @@ flowchart TD
   Load --> Analyze["analyzeCurrentFocus"]
   Analyze --> Reuse{"analysis cache state"}
 
-  Reuse -- "full refresh" --> Refresh["ctx.callAgent: architecture refresh<br/>context = fresh, new child ACP session"]
-  Refresh --> Observe["ctx.callAgent: observation collection<br/>context = fresh, new child ACP session"]
+  Reuse -- "full refresh" --> Refresh["ctx.agent.run: architecture refresh<br/>context = fresh, new child ACP session"]
+  Refresh --> Observe["ctx.agent.run: observation collection<br/>context = fresh, new child ACP session"]
 
-  Reuse -- "stale subset" --> ObserveScoped["ctx.callAgent: observation collection for touched files<br/>context = fresh, new child ACP session"]
+  Reuse -- "stale subset" --> ObserveScoped["ctx.agent.run: observation collection for touched files<br/>context = fresh, new child ACP session"]
   Reuse -- "reusable" --> SkipRefresh["reuse cached observations"]
 
   Observe --> HypGen
   ObserveScoped --> HypGen
   SkipRefresh --> HypGen
 
-  HypGen["ctx.callAgent: hypothesis generation<br/>context = fresh, new child ACP session"] --> Rank["ctx.callAgent: hypothesis ranking<br/>context = fresh, new child ACP session"]
+  HypGen["ctx.agent.run: hypothesis generation<br/>context = fresh, new child ACP session"] --> Rank["ctx.agent.run: hypothesis ranking<br/>context = fresh, new child ACP session"]
   Rank --> Decide{"best next action"}
 
   Decide -- "no worthwhile slice" --> Finish["build finished result"]
   Decide -- "risky, design update, or checkpoint" --> Pause["pause for human checkpoint"]
-  Decide -- "safe low-risk slice" --> Apply["ctx.callAgent: apply slice<br/>context = fresh, new child ACP session"]
+  Decide -- "safe low-risk slice" --> Apply["ctx.agent.run: apply slice<br/>context = fresh, new child ACP session"]
 
   Pause --> ResumeTurn["resume with human reply"]
-  ResumeTurn --> HumanDecision["ctx.callAgent: human reply interpretation<br/>context = fresh, new child ACP session"]
+  ResumeTurn --> HumanDecision["ctx.agent.run: human reply interpretation<br/>context = fresh, new child ACP session"]
   HumanDecision --> HumanRoute{"decision"}
   HumanRoute -- "stop" --> Finish
   HumanRoute -- "reject, redirect, or design update" --> Reset["reset notebook for fresh analysis"]
   HumanRoute -- "approve" --> Apply
 
   Apply --> Validate["runSelectedValidation<br/>local bun test slice"]
-  Validate --> Reconcile["ctx.callAgent: reconciliation<br/>context = fresh, new child ACP session"]
+  Validate --> Reconcile["ctx.agent.run: reconciliation<br/>context = fresh, new child ACP session"]
   Reconcile --> ValidationOK{"validation passed?"}
 
   ValidationOK -- "no" --> Finish
-  ValidationOK -- "yes" --> CommitProc["ctx.callProcedure: nanoboss/commit<br/>procedure context = inherit parent or default binding"]
-  CommitProc --> CommitAgent["nanoboss/commit -> ctx.callAgent: commit authoring<br/>context = fresh, new child ACP session"]
+  ValidationOK -- "yes" --> CommitProc["ctx.procedures.run: nanoboss/commit<br/>procedure context = inherit parent or default binding"]
+  CommitProc --> CommitAgent["nanoboss/commit -> ctx.agent.run: commit authoring<br/>context = fresh, new child ACP session"]
   CommitAgent --> StopLoop{"commit failed or iteration budget reached?"}
 
   StopLoop -- "yes" --> Finish

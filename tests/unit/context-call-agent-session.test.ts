@@ -275,6 +275,31 @@ describe("CommandContext named session APIs", () => {
       Reflect.set(DefaultConversationSession.prototype as object, "prompt", originalPrompt);
     }
   });
+
+  test("ctx.state owns durable run traversal while ctx.session owns live default-agent control", async () => {
+    const { ctx, store } = createContext();
+    const otherTopLevel = store.finalizeCell(
+      store.startCell({
+        procedure: "other-procedure",
+        input: "other input",
+        kind: "top_level",
+      }),
+      {
+        summary: "other summary",
+      },
+    );
+
+    expect("recent" in ctx.session).toBe(false);
+    expect("topLevelRuns" in ctx.session).toBe(false);
+    expect("getDefaultAgentConfig" in ctx.state).toBe(false);
+
+    const latest = await ctx.state.runs.latest();
+    const topLevelRuns = await ctx.state.runs.topLevelRuns();
+
+    expect(ctx.session.getDefaultAgentConfig()).toEqual(createMockConfig(ctx.cwd));
+    expect(latest?.cell).toEqual(otherTopLevel.cell);
+    expect(topLevelRuns.map((run) => run.cell)).toContainEqual(otherTopLevel.cell);
+  });
 });
 
 function createContext(options: {
@@ -284,6 +309,7 @@ function createContext(options: {
   ctx: CommandContextImpl;
   emittedUpdates: acp.SessionUpdate[];
   registry: ProcedureRegistry;
+  store: SessionStore;
 } {
   const cwd = mkdtempSync(join(tmpdir(), "nab-call-agent-session-"));
   tempDirs.push(cwd);
@@ -335,6 +361,7 @@ function createContext(options: {
     ctx,
     emittedUpdates,
     registry,
+    store,
   };
 }
 

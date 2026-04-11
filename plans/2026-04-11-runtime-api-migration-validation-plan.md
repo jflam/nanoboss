@@ -7,7 +7,6 @@ This plan defines how to judge whether the current runtime/procedure API migrati
 This tranche intentionally added very little new end-user functionality. Its main goals were:
 
 - expose the new named procedure-facing API on `ctx`
-- preserve compatibility for existing procedures
 - add the first structured UI surface
 - prove the new surface is usable by both humans and downstream agents
 
@@ -27,8 +26,7 @@ This validation plan assumes the implementation goals and constraints from:
 In particular, validation must confirm that this pass:
 
 - adds `ctx.agent`, `ctx.state`, `ctx.ui`, and `ctx.procedures`
-- keeps `ctx.callAgent(...)`, `ctx.callProcedure(...)`, `ctx.print(...)`, `ctx.refs`, and current history/query access working
-- does **not** flip the meaning of `ctx.session`
+- reserves `ctx.state` for durable runs/refs and `ctx.session` for live default-agent control
 - does **not** add the CLI runtime adapter
 - does **not** introduce the full Agent Runtime API yet
 
@@ -36,11 +34,7 @@ In particular, validation must confirm that this pass:
 
 The migration is successful if all of the following are true:
 
-### 1. Compatibility success
-
-Existing built-in procedures and prior authoring patterns still work without behavior regressions.
-
-### 2. Named-surface success
+### 1. Named-surface success
 
 New procedures can be written naturally against:
 
@@ -52,7 +46,7 @@ New procedures can be written naturally against:
 
 without needing to fall back to compatibility shims.
 
-### 3. UI semantics success
+### 2. UI semantics success
 
 Structured UI emissions for:
 
@@ -70,11 +64,11 @@ survive the full stack:
 - TUI rendering
 - ACP/CLI-compatible streaming path
 
-### 4. Agent-usability success
+### 3. Agent-usability success
 
 A coding agent can be asked to author or migrate a procedure using the new API and succeeds with little or no manual correction.
 
-### 5. Extensibility success
+### 4. Extensibility success
 
 A realistic next-step workflow can be described and at least partially implemented cleanly with the new API, and any remaining gaps are clearly due to missing surface area rather than confusing naming or hidden wiring.
 
@@ -121,7 +115,7 @@ bun test \
 What these cover:
 
 - named API presence on `ctx`
-- compatibility shim delegation
+- explicit state-vs-session contract
 - new UI method emission behavior
 - migrated procedure behavior
 - structured UI event mapping and replay filtering
@@ -143,8 +137,8 @@ bun test \
 Why:
 
 - `service.test.ts` covers replay, session events, and runtime behavior
-- `default-history.test.ts` validates existing history semantics stay intact
-- `linter.test.ts` and `second-opinion` validate built-ins that still depend on old compatibility paths or mixed runtime behavior
+- `default-history.test.ts` validates default-session continuity while durable history stays under `ctx.state`
+- `linter.test.ts` and `second-opinion` validate built-ins that depend on the surviving named runtime surface
 
 ### A4. End-to-end regression sweep
 
@@ -169,36 +163,34 @@ Pass criteria:
 - no regression in replay/recovery paths
 - no regression in frontend event delivery
 
-## Track B: explicit compatibility invariants
+## Track B: explicit namespace invariants
 
-This track validates the non-negotiable migration constraints directly.
+This track validates the non-negotiable runtime contract directly.
 
-### B1. `ctx.session` meaning is unchanged
+### B1. `ctx.state` owns durable data
 
-Manual validation:
+Validation:
 
-- inspect one existing procedure or test that uses `ctx.session.recent(...)`
-- confirm behavior still refers to durable history/query access
-- confirm no new code assumes `ctx.session` is live default-agent control
+- inspect one existing procedure or direct unit test that uses `ctx.state.runs.*`
+- confirm durable history/query access and refs are only reached through `ctx.state`
 
 Acceptance:
 
-- `ctx.session` continues to mean history/query access in this pass
-- new grouped surface is `ctx.state`
+- durable cells, traversal, and refs are grouped under `ctx.state`
+- no runtime code or docs describe durable history as `ctx.session`
 
-### B2. Old entrypoints still work
+### B2. `ctx.session` owns live control
 
 Validate these all still function:
 
-- `ctx.callAgent(...)`
-- `ctx.callProcedure(...)`
-- `ctx.print(...)`
-- `ctx.refs.*`
-- `ctx.session.*`
+- `ctx.session.getDefaultAgentConfig()`
+- `ctx.session.setDefaultAgentSelection(...)`
+- `ctx.session.getDefaultAgentTokenUsage()`
 
 Acceptance:
 
-- existing procedures that use old entrypoints still pass tests without source migration
+- `ctx.session` refers only to live default-agent selection and usage for the current binding
+- no traversal/history helpers are exposed on `ctx.session`
 
 ### B3. Durable session format remains compatible
 
@@ -247,7 +239,7 @@ Acceptance:
 - first draft typechecks, or needs only trivial fixes
 - generated code primarily uses the named surface
 - generated code does not incorrectly reach for hidden/internal APIs
-- generated code does not confuse `ctx.session` with live session control
+- generated code treats `ctx.state` as durable data access and `ctx.session` as live control
 
 Suggested metric:
 
