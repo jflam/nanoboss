@@ -467,6 +467,7 @@ export interface CallAgentOptions {
   onUpdate?: (update: acp.SessionUpdate) => Promise<void> | void;
   signal?: AbortSignal;
   softStopSignal?: AbortSignal;
+  runtimeCapabilityMode?: import("../agent/runtime-capability.ts").AgentRuntimeCapabilityMode;
 }
 
 export interface CallAgentTransport {

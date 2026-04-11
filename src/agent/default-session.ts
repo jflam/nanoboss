@@ -6,7 +6,10 @@ import {
   openAcpConnection,
   type OpenAcpConnection,
 } from "./acp-runtime.ts";
-import { buildGlobalMcpStdioServer } from "../mcp/registration.ts";
+import {
+  createAgentRuntimeCapabilityAdapter,
+  type AgentRuntimeCapabilityMode,
+} from "./runtime-capability.ts";
 import { RunCancelledError, defaultCancellationMessage } from "../core/cancellation.ts";
 import { appendTimingTraceEvent, type RunTimingTrace } from "../core/timing-trace.ts";
 import { collectTokenSnapshot, enrichToolCallUpdateWithTokenUsage } from "./token-metrics.ts";
@@ -39,6 +42,7 @@ interface PromptCollector {
 interface DefaultConversationSessionParams {
   config: DownstreamAgentConfig;
   persistedSessionId?: acp.SessionId;
+  runtimeCapabilityMode?: AgentRuntimeCapabilityMode;
 }
 
 export class DefaultConversationSession {
@@ -48,10 +52,12 @@ export class DefaultConversationSession {
   private lastTokenSnapshot?: AgentTokenSnapshot;
   private sessionPromise?: Promise<PersistentAcpSession>;
   private sessionGeneration = 0;
+  private readonly runtimeCapabilityMode: AgentRuntimeCapabilityMode;
 
   constructor(params: DefaultConversationSessionParams) {
     this.config = params.config;
     this.persistedSessionId = params.persistedSessionId;
+    this.runtimeCapabilityMode = params.runtimeCapabilityMode ?? "mcp";
   }
 
   get currentSessionId(): string | undefined {
@@ -179,7 +185,12 @@ export class DefaultConversationSession {
       appendTimingTraceEvent(timingTrace, "default_session", "load_session_attempt_started", {
         sessionId: this.persistedSessionId,
       });
-      session = await PersistentAcpSession.load(this.config, this.persistedSessionId, timingTrace);
+      session = await PersistentAcpSession.load(
+        this.config,
+        this.persistedSessionId,
+        this.runtimeCapabilityMode,
+        timingTrace,
+      );
       appendTimingTraceEvent(timingTrace, "default_session", "load_session_attempt_completed", {
         sessionId: this.persistedSessionId,
         loaded: session !== undefined,
@@ -188,7 +199,7 @@ export class DefaultConversationSession {
 
     if (!session) {
       appendTimingTraceEvent(timingTrace, "default_session", "create_fresh_session_started");
-      session = await PersistentAcpSession.createFresh(this.config, timingTrace);
+      session = await PersistentAcpSession.createFresh(this.config, this.runtimeCapabilityMode, timingTrace);
       appendTimingTraceEvent(timingTrace, "default_session", "create_fresh_session_completed", {
         sessionId: session.sessionId,
       });
@@ -224,6 +235,7 @@ class PersistentAcpSession {
 
   static async createFresh(
     config: DownstreamAgentConfig,
+    runtimeCapabilityMode: AgentRuntimeCapabilityMode,
     timingTrace?: RunTimingTrace,
   ): Promise<PersistentAcpSession> {
     appendTimingTraceEvent(timingTrace, "default_session", "acp_connection_open_started");
@@ -234,10 +246,11 @@ class PersistentAcpSession {
     });
 
     try {
+      const runtimeAdapter = createAgentRuntimeCapabilityAdapter(runtimeCapabilityMode);
       appendTimingTraceEvent(timingTrace, "default_session", "new_session_rpc_started");
       const session = await state.connection.newSession({
         cwd: state.cwd,
-        mcpServers: [buildGlobalMcpStdioServer()],
+        ...runtimeAdapter.buildSessionRuntime(),
       });
       appendTimingTraceEvent(timingTrace, "default_session", "new_session_rpc_completed", {
         sessionId: session.sessionId,
@@ -254,6 +267,7 @@ class PersistentAcpSession {
   static async load(
     config: DownstreamAgentConfig,
     sessionId: acp.SessionId,
+    runtimeCapabilityMode: AgentRuntimeCapabilityMode,
     timingTrace?: RunTimingTrace,
   ): Promise<PersistentAcpSession | undefined> {
     appendTimingTraceEvent(timingTrace, "default_session", "acp_connection_open_started");
@@ -264,6 +278,7 @@ class PersistentAcpSession {
     });
 
     try {
+      const runtimeAdapter = createAgentRuntimeCapabilityAdapter(runtimeCapabilityMode);
       if (!state.capabilities?.loadSession) {
         closeAcpConnection(state);
         return undefined;
@@ -274,7 +289,7 @@ class PersistentAcpSession {
       });
       await state.connection.loadSession({
         cwd: state.cwd,
-        mcpServers: [buildGlobalMcpStdioServer()],
+        ...runtimeAdapter.buildSessionRuntime(),
         sessionId,
       });
       appendTimingTraceEvent(timingTrace, "default_session", "load_session_rpc_completed", {
