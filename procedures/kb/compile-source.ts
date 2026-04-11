@@ -76,8 +76,8 @@ export default {
       };
     }
 
-    ctx.print(`Compiling ${target.sourceId} from ${target.rawPath}...\n`);
-    const result = await ctx.callAgent(
+    ctx.ui.text(`Compiling ${target.sourceId} from ${target.rawPath}...\n`);
+    const result = await ctx.agent.run(
       buildCompilationPrompt(target),
       CompiledSourceResultType,
       { stream: false },
@@ -135,7 +135,7 @@ export default {
       );
     }
 
-    ctx.print(`Wrote ${summaryPath}.\n`);
+    ctx.ui.text(`Wrote ${summaryPath}.\n`);
 
     const data: KnowledgeBaseCompileData = {
       sourceId: updatedEntry.sourceId,

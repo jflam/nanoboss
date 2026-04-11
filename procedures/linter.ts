@@ -276,7 +276,7 @@ async function discoverLinter(
   ctx: CommandContext,
   prompt: string,
 ): Promise<LinterDiscoveryResult> {
-  const result = await ctx.callAgent(
+  const result = await ctx.agent.run(
     buildDiscoveryPrompt(ctx.cwd, prompt),
     LinterDiscoveryResultType,
     { stream: false },
@@ -585,11 +585,11 @@ export default {
   async execute(prompt, ctx) {
     let fixedErrors = 0;
 
-    ctx.print("Starting linter workflow...\n");
+    ctx.ui.text("Starting linter workflow...\n");
     const discovery = await discoverLinter(ctx, prompt);
 
     if (discovery.status === "missing_linter" || !discovery.plan) {
-      ctx.print("No runnable linter found.\n");
+      ctx.ui.text("No runnable linter found.\n");
       return buildMissingLinterResult(
         {
           status: discovery.status,
@@ -611,12 +611,12 @@ export default {
     };
 
     const initialGroups = groupErrorsByFile(ctx.cwd, linter.errors);
-    ctx.print(
+    ctx.ui.text(
       `Using \`${linter.command}\`. Found ${pluralize(linter.errors.length, "error")} across ${pluralize(initialGroups.length, "file")}.\n`,
     );
 
     if (linter.errors.length === 0) {
-      ctx.print("Repo is already lint-clean.\n");
+      ctx.ui.text("Repo is already lint-clean.\n");
       return {
         data: buildSummaryData(linter, fixedErrors),
         display: `Linter command \`${linter.command}\` ran cleanly. ${linter.summary}\n`,
@@ -628,13 +628,13 @@ export default {
       const allGroups = groupErrorsByFile(ctx.cwd, linter.errors);
       const wave = selectFixWave(allGroups, MAX_FILES_PER_ROUND);
 
-      ctx.print(
+      ctx.ui.text(
         `Round ${round + 1}/${MAX_ROUNDS}: ${pluralize(linter.errors.length, "error")} across ${pluralize(allGroups.length, "file")}.\n`,
       );
 
       for (const fileGroup of wave) {
-        ctx.print(`Fixing ${pluralize(fileGroup.errors.length, "error")} in \`${fileGroup.displayFile}\`...\n`);
-        await ctx.callAgent(buildFixPrompt(fileGroup), { stream: false });
+        ctx.ui.text(`Fixing ${pluralize(fileGroup.errors.length, "error")} in \`${fileGroup.displayFile}\`...\n`);
+        await ctx.agent.run(buildFixPrompt(fileGroup), { stream: false });
       }
 
       const rerun = runPlannedLinter(discovery.plan);
@@ -651,42 +651,42 @@ export default {
         const resolvedCount = Math.max(0, fileGroup.errors.length - afterCount);
 
         if (resolvedCount === 0) {
-          ctx.print(`No progress in \`${fileGroup.displayFile}\`.\n`);
+          ctx.ui.text(`No progress in \`${fileGroup.displayFile}\`.\n`);
           continue;
         }
 
         resolvedInTargetedFiles += resolvedCount;
-        ctx.print(
+        ctx.ui.text(
           `Resolved ${pluralize(resolvedCount, "error")} in \`${fileGroup.displayFile}\`; ${pluralize(rerun.errors.length, "error")} remain.\n`,
         );
       }
 
       if (resolvedThisRound === 0) {
-        ctx.print("No further progress this round; stopping.\n");
+        ctx.ui.text("No further progress this round; stopping.\n");
         linter = rerun;
         break;
       }
 
       if (resolvedThisRound > resolvedInTargetedFiles) {
         const spillover = resolvedThisRound - resolvedInTargetedFiles;
-        ctx.print(`Resolved ${pluralize(spillover, "additional error")} outside the targeted files.\n`);
+        ctx.ui.text(`Resolved ${pluralize(spillover, "additional error")} outside the targeted files.\n`);
       }
 
       if (roundDelta.surfacedCount > 0) {
-        ctx.print(
+        ctx.ui.text(
           `Lint rerun surfaced ${pluralize(roundDelta.surfacedCount, "additional error")} outside the previously reported set.\n`,
         );
       }
 
       fixedErrors += resolvedThisRound;
       linter = rerun;
-      ctx.print(
+      ctx.ui.text(
         `Round ${round + 1} resolved ${pluralize(resolvedThisRound, "error")}; ${pluralize(linter.errors.length, "error")} remain.\n`,
       );
-      await ctx.callProcedure("nanoboss/commit", `linter round ${round + 1}`);
+      await ctx.procedures.run("nanoboss/commit", `linter round ${round + 1}`);
     }
 
-    ctx.print(
+    ctx.ui.text(
       `Completed linter workflow: fixed ${pluralize(fixedErrors, "error")}; ${pluralize(linter.errors.length, "error")} remain.\n`,
     );
 

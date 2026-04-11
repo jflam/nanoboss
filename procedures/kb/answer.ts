@@ -54,8 +54,8 @@ export default {
       };
     }
 
-    ctx.print("Answering from the compiled knowledge base...\n");
-    const answerResult = await ctx.callAgent(
+    ctx.ui.text("Answering from the compiled knowledge base...\n");
+    const answerResult = await ctx.agent.run(
       buildAnswerPrompt(question),
       KnowledgeAnswerResultType,
       { stream: false },
@@ -109,7 +109,7 @@ export default {
       ],
     );
 
-    ctx.print(`Wrote ${answerPath}.\n`);
+    ctx.ui.text(`Wrote ${answerPath}.\n`);
 
     const data: KnowledgeBaseAnswerData = {
       answerId: entry.answerId,

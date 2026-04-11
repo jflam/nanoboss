@@ -55,8 +55,8 @@ export default {
       }
     }
 
-    ctx.print(`Rendering ${options.kind} from ${options.sourcePages.length} page(s)...\n`);
-    const result = await ctx.callAgent(
+    ctx.ui.text(`Rendering ${options.kind} from ${options.sourcePages.length} page(s)...\n`);
+    const result = await ctx.agent.run(
       buildRenderPrompt(options),
       RenderResultType,
       { stream: false },
@@ -107,7 +107,7 @@ export default {
       ],
     );
 
-    ctx.print(`Wrote ${outputPath}.\n`);
+    ctx.ui.text(`Wrote ${outputPath}.\n`);
 
     const data: KnowledgeBaseRenderData = {
       renderId: entry.renderId,

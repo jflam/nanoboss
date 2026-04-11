@@ -25,7 +25,7 @@ export default {
       readRendersManifest(ctx.cwd),
     ]);
 
-    ctx.print("Checking knowledge-base health...\n");
+    ctx.ui.text("Checking knowledge-base health...\n");
     const issues = await collectIssues(ctx.cwd, sources, concepts, answers, renders);
     const errorCount = issues.filter((issue) => issue.severity === "error").length;
     const warningCount = issues.length - errorCount;
@@ -50,7 +50,7 @@ export default {
       ],
     );
 
-    ctx.print(`Wrote ${reportPath}.\n`);
+    ctx.ui.text(`Wrote ${reportPath}.\n`);
 
     const data: KnowledgeBaseHealthData = {
       issueCount: issues.length,

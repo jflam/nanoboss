@@ -111,8 +111,8 @@ export default {
         continue;
       }
 
-      ctx.print(`Compiling concept ${target.conceptId}...\n`);
-      const result = await ctx.callAgent(
+      ctx.ui.text(`Compiling concept ${target.conceptId}...\n`);
+      const result = await ctx.agent.run(
         buildConceptPrompt(target),
         CompiledConceptResultType,
         { stream: false },
@@ -130,7 +130,7 @@ export default {
       }
 
       await Bun.write(join(ctx.cwd, pagePath), ensureTrailingNewline(compiled.pageMarkdown));
-      ctx.print(`Wrote ${pagePath}.\n`);
+      ctx.ui.text(`Wrote ${pagePath}.\n`);
 
       nextEntries.push({
         conceptId: target.conceptId,

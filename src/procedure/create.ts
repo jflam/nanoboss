@@ -34,7 +34,7 @@ export function createCreateProcedure(registry: ProcedureRegistryLike): Procedur
     ...CREATE_PROCEDURE_METADATA,
     async execute(prompt, ctx) {
       const examples = loadExamples();
-      const generated = await ctx.callAgent(
+      const generated = await ctx.agent.run(
         [
           "You are generating a nanoboss procedure.",
           "",
@@ -56,7 +56,7 @@ export function createCreateProcedure(registry: ProcedureRegistryLike): Procedur
           "- `ctx.state.runs.recent(...)` only for true global recency scans across the whole session",
           "- `ctx.state.refs.read(...)` and `ctx.state.refs.writeToFile(...)` for durable references",
           "- `ctx.ui.text(text)` to stream progress back to the CLI and `ctx.ui.info|warning|error|status|card` for structured procedure output",
-          "- compatibility shims still exist as `ctx.callAgent(...)`, `ctx.callProcedure(...)`, `ctx.print(...)`, `ctx.refs`, and `ctx.session`",
+          "- use the named sub-apis above in new code; legacy aliases such as `ctx.callAgent(...)`, `ctx.callProcedure(...)`, and `ctx.print(...)` still exist only as compatibility shims",
           "- `ctx.getDefaultAgentConfig()` and `ctx.setDefaultAgentSelection(...)` to inspect or change the session's default downstream agent",
           "- `ctx.assertNotCancelled()` to cooperatively stop long-running work at safe checkpoints",
           `- \`ctx.cwd\` for the current working directory (${ctx.cwd})`,
@@ -69,7 +69,7 @@ export function createCreateProcedure(registry: ProcedureRegistryLike): Procedur
           "Session-selection guidance:",
           "- prefer the default fresh mode for isolated sub-tasks, validation passes, and deterministic structured work",
           "- use `session: \"default\"` only when conversational continuity with the current thread is the point",
-          "- when you need typed JSON while reusing conversation state, still use typed `ctx.callAgent(...)` instead of ad hoc parsing",
+          "- when you need typed JSON while reusing conversation state, use typed `ctx.agent.run(...)` instead of ad hoc parsing",
           "",
            "ProcedureResult should usually:",
             "- keep `data` small and ref-heavy",
@@ -126,7 +126,7 @@ export function createCreateProcedure(registry: ProcedureRegistryLike): Procedur
 
 function loadExamples(): string {
   const cwd = process.cwd();
-  const examples = ["nanoboss/commit.ts", "linter.ts"]
+  const examples = ["research.ts", "kb/refresh.ts"]
     .map((file) => {
       try {
         return `// ${file}\n${readFileSync(join(cwd, "procedures", file), "utf8")}`;

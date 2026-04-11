@@ -26,7 +26,7 @@ export default {
   async execute(prompt, ctx) {
     const options = parseIngestOptions(prompt);
 
-    ctx.print("Scanning raw sources...\n");
+    ctx.ui.text("Scanning raw sources...\n");
     const previousEntries = await readSourcesManifest(ctx.cwd);
     const previousById = new Map(previousEntries.map((entry) => [entry.sourceId, entry]));
     const discovered = await scanRawSources(ctx.cwd, options.path);
@@ -64,7 +64,7 @@ export default {
       removedSourceIds: removed.map((entry) => entry.sourceId),
     };
 
-    ctx.print(`Indexed ${nextEntries.length} source(s); ${changed.length} need compilation.\n`);
+    ctx.ui.text(`Indexed ${nextEntries.length} source(s); ${changed.length} need compilation.\n`);
 
     return {
       data,

@@ -654,7 +654,7 @@ export default {
       return blocked;
     }
 
-    ctx.print("Loading simplify2 artifacts...\n");
+    ctx.ui.text("Loading simplify2 artifacts...\n");
     state = loadArtifacts(state, ctx);
     state = await analyzeCurrentFocus(state, ctx);
 
@@ -666,7 +666,7 @@ export default {
       return await resumeFocusPicker(prompt, state, ctx);
     }
 
-    ctx.print(`Interpreting simplify2 guidance for ${formatIterationProgress(state.iteration, state.maxIterations)}...\n`);
+    ctx.ui.text(`Interpreting simplify2 guidance for ${formatIterationProgress(state.iteration, state.maxIterations)}...\n`);
     const decision = await interpretHumanReply(prompt, state, ctx);
 
     if (decision.kind !== "stop") {
@@ -687,7 +687,7 @@ export default {
 
     if (decision.kind === "approve_hypothesis") {
       const hypothesis = findHypothesis(state, decision.hypothesisId);
-      ctx.print(`Applying ${hypothesis.title}...\n`);
+      ctx.ui.text(`Applying ${hypothesis.title}...\n`);
       state = await applySimplificationSlice(state, hypothesis, ctx);
       state = await validateAndReconcile(state, ctx);
       const completion = maybeFinishAfterApply(state);
@@ -780,7 +780,7 @@ async function resumeFocusPicker(
     return blocked;
   }
 
-  ctx.print("Loading simplify2 artifacts...\n");
+  ctx.ui.text("Loading simplify2 artifacts...\n");
   let loaded = loadArtifacts(nextState, ctx);
   loaded = await analyzeCurrentFocus(loaded, ctx);
   return continueFromAnalysis(loaded, ctx);
@@ -1119,7 +1119,7 @@ async function refreshArchitectureMemory(
   ctx: CommandContext,
 ): Promise<Simplify2State> {
   state.mode = "explore";
-  const proposalResult = await ctx.callAgent(
+  const proposalResult = await ctx.agent.run(
     buildArchitectureRefreshPrompt(state),
     ArchitectureRefreshProposalType,
     { stream: false },
@@ -1164,7 +1164,7 @@ async function collectObservations(
   scopedPaths: string[] = [],
   reuseCachedObservations = false,
 ): Promise<Simplify2State> {
-  const result = await ctx.callAgent(
+  const result = await ctx.agent.run(
     buildObservationPrompt(state, scopedPaths, reuseCachedObservations),
     ObservationBatchType,
     { stream: false },
@@ -1183,13 +1183,13 @@ async function generateAndRankHypotheses(
   state: Simplify2State,
   ctx: CommandContext,
 ): Promise<Simplify2State> {
-  const hypothesisResult = await ctx.callAgent(
+  const hypothesisResult = await ctx.agent.run(
     buildHypothesisPrompt(state),
     HypothesisBatchType,
     { stream: false },
   );
   const hypothesisBatch = expectData(hypothesisResult, "Missing hypotheses");
-  const rankingResult = await ctx.callAgent(
+  const rankingResult = await ctx.agent.run(
     buildHypothesisRankingPrompt(state, hypothesisBatch),
     HypothesisRankingBatchType,
     { stream: false },
@@ -1265,7 +1265,7 @@ async function continueFromAnalysis(
       return buildPausedResult(current, next.question);
     }
 
-    ctx.print(`Applying ${next.hypothesis.title}...\n`);
+    ctx.ui.text(`Applying ${next.hypothesis.title}...\n`);
     current = await applySimplificationSlice(current, next.hypothesis, ctx);
     current = await validateAndReconcile(current, ctx);
 
@@ -1280,7 +1280,7 @@ async function continueFromAnalysis(
     }
 
     current = resetNotebookForFreshAnalysis(current);
-    ctx.print(`Continuing simplify2 analysis for ${formatIterationProgress(current.iteration, current.maxIterations)}...\n`);
+    ctx.ui.text(`Continuing simplify2 analysis for ${formatIterationProgress(current.iteration, current.maxIterations)}...\n`);
     current = await analyzeCurrentFocus(current, ctx);
   }
 }
@@ -1292,7 +1292,7 @@ async function applySimplificationSlice(
 ): Promise<Simplify2State> {
   state.mode = "apply";
   const selectedSlice = selectMinimalTrustedTestSlice(state, hypothesis);
-  const applyResult = await ctx.callAgent(
+  const applyResult = await ctx.agent.run(
     buildApplyPrompt(state, hypothesis, selectedSlice),
     SimplifyApplyResultType,
     { stream: false },
@@ -1337,7 +1337,7 @@ async function validateAndReconcile(
 ): Promise<Simplify2State> {
   state.mode = "reconcile";
   const validation = runSelectedValidation(state);
-  const reconciliationResult = await ctx.callAgent(
+  const reconciliationResult = await ctx.agent.run(
     buildReconciliationPrompt(state, validation),
     ReconciliationResultType,
     { stream: false },
@@ -1361,7 +1361,7 @@ async function commitAppliedSlice(
 
   const commitContext = buildCommitContext(state, hypothesis);
   try {
-    const result = await ctx.callProcedure<NanobossCommitProcedureResult>("nanoboss/commit", commitContext);
+    const result = await ctx.procedures.run<NanobossCommitProcedureResult>("nanoboss/commit", commitContext);
     const commitResult = expectData(result, "Missing simplify2 commit result");
     const commit = createCommitStatus({
       succeeded: commitResult.checks.passed && commitResult.commit !== undefined,
@@ -1432,7 +1432,7 @@ async function interpretHumanReply(
   state: Simplify2State,
   ctx: CommandContext,
 ): Promise<SimplifyHumanDecision> {
-  const result = await ctx.callAgent(
+  const result = await ctx.agent.run(
     buildHumanDecisionPrompt(prompt, state),
     SimplifyHumanDecisionType,
     { stream: false },
@@ -2457,7 +2457,7 @@ async function analyzeCurrentFocus(
     staleObservationIds: reusePlan.staleEntries.map((entry) => entry.observation.id),
   };
   if (reusePlan.reusableEntries.length > 0) {
-    ctx.print(`Reusing ${reusePlan.reusableEntries.length} cached simplify2 observations...\n`);
+    ctx.ui.text(`Reusing ${reusePlan.reusableEntries.length} cached simplify2 observations...\n`);
     state = {
       ...state,
       notebook: {
@@ -2468,13 +2468,13 @@ async function analyzeCurrentFocus(
   }
 
   if (reusePlan.shouldRunFullRefresh) {
-    ctx.print("Refreshing architecture memory for the current focus...\n");
+    ctx.ui.text("Refreshing architecture memory for the current focus...\n");
     state = await refreshArchitectureMemory(state, ctx);
 
-    ctx.print("Collecting conceptual simplification observations...\n");
+    ctx.ui.text("Collecting conceptual simplification observations...\n");
     state = await collectObservations(state, ctx);
   } else if (reusePlan.staleEntries.length > 0) {
-    ctx.print("Refreshing conceptual observations for touched files...\n");
+    ctx.ui.text("Refreshing conceptual observations for touched files...\n");
     state = await collectObservations(
       state,
       ctx,
@@ -2482,10 +2482,10 @@ async function analyzeCurrentFocus(
       reusePlan.reusableEntries.length > 0,
     );
   } else {
-    ctx.print("Skipping full simplify2 research refresh because cached observations are still valid.\n");
+    ctx.ui.text("Skipping full simplify2 research refresh because cached observations are still valid.\n");
   }
 
-  ctx.print("Generating and ranking simplification hypotheses...\n");
+  ctx.ui.text("Generating and ranking simplification hypotheses...\n");
   state = await generateAndRankHypotheses(state, ctx);
   return persistAnalysisArtifacts(state, reusePlan.analysisFingerprint);
 }

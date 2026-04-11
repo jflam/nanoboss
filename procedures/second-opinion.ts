@@ -36,10 +36,10 @@ export default {
     const firstPassAgent = ctx.getDefaultAgentConfig();
     const firstPassAgentLabel = formatAgentBanner(firstPassAgent);
 
-    ctx.print("Starting second-opinion workflow...\n");
-    ctx.print(`Asking the current default model (${firstPassAgentLabel}) for the first answer...\n`);
+    ctx.ui.text("Starting second-opinion workflow...\n");
+    ctx.ui.text(`Asking the current default model (${firstPassAgentLabel}) for the first answer...\n`);
 
-    const firstPass = await ctx.callAgent(
+    const firstPass = await ctx.agent.run(
       buildFirstPassPrompt(trimmed),
       {
         stream: false,
@@ -48,9 +48,9 @@ export default {
     const firstPassDataRef = expectDataRef(firstPass, "Missing first-pass data ref");
     const firstPassText = firstPass.data ?? "";
 
-    ctx.print("Asking Codex to critique the answer...\n");
+    ctx.ui.text("Asking Codex to critique the answer...\n");
 
-    const critique = await ctx.callAgent(
+    const critique = await ctx.agent.run(
       [
         "Critique the referenced answer `answer` and return a critique object.",
         "Use the original user request below as the task being answered.",
@@ -75,7 +75,7 @@ export default {
     const critiqueData: CritiqueResult = expectData(critique, "Missing critique data");
     const critiqueDataRef = expectDataRef(critique, "Missing critique data ref");
 
-    ctx.print(`Completed second-opinion workflow with verdict: ${critiqueData.verdict}.\n`);
+    ctx.ui.text(`Completed second-opinion workflow with verdict: ${critiqueData.verdict}.\n`);
 
     return {
       data: {

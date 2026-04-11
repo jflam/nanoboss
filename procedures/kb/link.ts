@@ -41,7 +41,7 @@ export default {
     const answers = await readAnswersManifest(ctx.cwd);
     const renders = await readRendersManifest(ctx.cwd);
 
-    ctx.print("Rebuilding knowledge-base links...\n");
+    ctx.ui.text("Rebuilding knowledge-base links...\n");
     const indexPath = await rebuildKnowledgeBaseIndex(ctx.cwd);
 
     const pageRefs = collectPageRefs(sources, concepts, answers, renders);
@@ -111,7 +111,7 @@ export default {
       duplicateConcepts,
     };
 
-    ctx.print("Knowledge-base linking complete.\n");
+    ctx.ui.text("Knowledge-base linking complete.\n");
 
     return {
       data,

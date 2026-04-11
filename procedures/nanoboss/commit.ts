@@ -18,7 +18,7 @@ export function createNanobossCommitProcedure(
     async execute(prompt, ctx) {
       const { refresh, manualApprove, commitContext } = parseCommitPrompt(prompt);
       const checks = expectData(
-        await ctx.callProcedure<PreCommitChecksResult>(
+        await ctx.procedures.run<PreCommitChecksResult>(
           preCommitChecksProcedureName,
           [refresh ? "--refresh" : undefined, manualApprove ? "manual-approve" : undefined]
             .filter((value): value is string => Boolean(value))
@@ -37,7 +37,7 @@ export function createNanobossCommitProcedure(
         };
       }
 
-      const result = await ctx.callAgent(buildCommitPrompt(ctx.cwd, commitContext), { stream: false });
+      const result = await ctx.agent.run(buildCommitPrompt(ctx.cwd, commitContext), { stream: false });
       if (!result.dataRef) {
         throw new Error("Missing commit data ref");
       }

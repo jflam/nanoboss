@@ -18,6 +18,36 @@ describe("create procedure", () => {
 
     await expect(procedure.execute("make something", {
       cwd: process.cwd(),
+      agent: {
+        async run() {
+          return {
+            data: {
+              name: "review///...",
+              source: "export default { name: \"review\", description: \"\", async execute() { return {}; } };",
+            },
+          };
+        },
+        session() {
+          throw new Error("agent.session should not be called");
+        },
+      },
+      procedures: {
+        run() {
+          throw new Error("procedures.run should not be called");
+        },
+      },
+      ui: {
+        text() {},
+        info() {},
+        warning() {},
+        error() {},
+        status() {},
+        card() {},
+      },
+      state: {
+        runs: {} as never,
+        refs: {} as never,
+      },
       print() {},
       getDefaultAgentConfig() {
         throw new Error("getDefaultAgentConfig should not be called");
@@ -32,12 +62,7 @@ describe("create procedure", () => {
       session: {} as never,
       refs: {} as never,
       async callAgent() {
-        return {
-          data: {
-            name: "review///...",
-            source: "export default { name: \"review\", description: \"\", async execute() { return {}; } };",
-          },
-        };
+        throw new Error("callAgent should not be called");
       },
     } as never)).rejects.toThrow("Generated procedure name was invalid: Procedure name segment was invalid");
   });

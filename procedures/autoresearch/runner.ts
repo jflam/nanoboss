@@ -614,7 +614,7 @@ function cancelActiveAutoresearchDispatches(ctx: CommandContext): number {
 }
 
 async function buildInitializationPlan(prompt: string, ctx: CommandContext): Promise<AutoresearchInitPlan> {
-  const result = await ctx.callAgent(
+  const result = await ctx.agent.run(
     [
       "You are configuring a deterministic autoresearch optimization session for NanoBoss.",
       "Inspect the repository and the user's goal, then return a JSON object matching this schema exactly.",
@@ -641,7 +641,7 @@ async function proposeExperiment(
   const recentRecords = records
     .slice(-5)
     .map((record) => `- ${record.id}: ${record.decision.status}; reason=${record.decision.reason}`);
-  const result = await ctx.callAgent(
+  const result = await ctx.agent.run(
     [
       "You are choosing the next experiment for a deterministic autoresearch loop.",
       "Return a JSON object only.",
@@ -673,7 +673,7 @@ async function applyExperiment(
     .filter((record) => record.decision.status === "rejected" || record.decision.status === "failed")
     .slice(-3)
     .map((record) => `- ${record.idea}: ${record.decision.reason}`);
-  const result = await ctx.callAgent(
+  const result = await ctx.agent.run(
     [
       "Apply the following autoresearch experiment directly in the repository.",
       "Edit the code; do not run git commands and do not commit anything.",
@@ -1017,7 +1017,7 @@ function prepareAutoresearchBranch(
 }
 
 function printAutoresearchProgress(ctx: CommandContext, message: string): void {
-  ctx.print(`${message}\n`);
+  ctx.ui.text(`${message}\n`);
 }
 
 async function runAutoresearchWithCancellationRecovery(

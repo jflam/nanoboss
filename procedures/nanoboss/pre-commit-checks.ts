@@ -45,7 +45,7 @@ export function createPreCommitChecksProcedure(
         return buildPausedFailurePreCommitResult(result, 0);
       }
 
-      ctx.print("Pre-commit checks failed; auto-approving one automated fix pass...\n");
+      ctx.ui.text("Pre-commit checks failed; auto-approving one automated fix pass...\n");
       return await runAutomatedFixPass({
         resolveChecks,
         ctx,
@@ -88,23 +88,23 @@ async function runChecksAndPrintOutput(params: {
     cwd: params.ctx.cwd,
     refresh: params.refresh,
     onFreshRun(event) {
-      params.ctx.print(renderPreCommitFreshRunHeader(event.reason, event.command));
+      params.ctx.ui.text(renderPreCommitFreshRunHeader(event.reason, event.command));
     },
     onOutputChunk(chunk) {
       const printable = outputStreamer.consume(chunk);
       if (printable.length > 0) {
-        params.ctx.print(printable);
+        params.ctx.ui.text(printable);
       }
     },
   });
 
   const trailingOutput = outputStreamer.flush();
   if (trailingOutput.length > 0) {
-    params.ctx.print(trailingOutput);
+    params.ctx.ui.text(trailingOutput);
   }
 
   printPreCommitRunOutput((text) => {
-    params.ctx.print(text);
+    params.ctx.ui.text(text);
   }, result, {
     refresh: params.refresh,
     verbose: params.verbose,
@@ -140,16 +140,16 @@ async function runAutomatedFixPass(params: {
   attemptCount: number;
   manualApprove: boolean;
 }) {
-  params.ctx.print("Attempting one automated fix pass...\n");
-  const fixResult = await params.ctx.callAgent(
+  params.ctx.ui.text("Attempting one automated fix pass...\n");
+  const fixResult = await params.ctx.agent.run(
     buildPreCommitFixPrompt(params.ctx.cwd, params.latestResult, params.userReply),
     { stream: false },
   );
   if (typeof fixResult.data === "string" && fixResult.data.trim().length > 0) {
-    params.ctx.print(ensureTrailingNewline(fixResult.data));
+    params.ctx.ui.text(ensureTrailingNewline(fixResult.data));
   }
 
-  params.ctx.print("Re-running pre-commit checks...\n");
+  params.ctx.ui.text("Re-running pre-commit checks...\n");
   const rerun = await runChecksAndPrintOutput({
     resolveChecks: params.resolveChecks,
     ctx: params.ctx,
