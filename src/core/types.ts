@@ -155,8 +155,11 @@ export interface RefsApi {
 
 export interface SessionApi {
   recent(options?: SessionRecentOptions): Promise<CellSummary[]>;
+  latest(options?: SessionRecentOptions): Promise<CellSummary | undefined>;
   topLevelRuns(options?: TopLevelRunsOptions): Promise<CellSummary[]>;
   get(cellRef: CellRef): Promise<CellRecord>;
+  parent(cellRef: CellRef): Promise<CellSummary | undefined>;
+  children(cellRef: CellRef, options?: Omit<CellDescendantsOptions, "maxDepth">): Promise<CellSummary[]>;
   ancestors(cellRef: CellRef, options?: CellAncestorsOptions): Promise<CellSummary[]>;
   descendants(cellRef: CellRef, options?: CellDescendantsOptions): Promise<CellSummary[]>;
 }

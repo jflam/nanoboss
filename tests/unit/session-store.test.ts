@@ -207,6 +207,15 @@ describe("SessionStore", () => {
     expect(reloaded.descendants(review.cell, { kind: "agent", maxDepth: 1 }).map((item) => item.cell.cellId)).toEqual([
       siblingAgent.cell.cellId,
     ]);
+    expect(reloaded.latest({ procedure: "callAgent" })?.cell.cellId).toBe(siblingAgent.cell.cellId);
+    expect(reloaded.parent(nestedAgent.cell)?.cell.cellId).toBe(childProcedure.cell.cellId);
+    expect(reloaded.children(review.cell).map((item) => item.cell.cellId)).toEqual([
+      childProcedure.cell.cellId,
+      siblingAgent.cell.cellId,
+    ]);
+    expect(reloaded.children(review.cell, { kind: "agent" }).map((item) => item.cell.cellId)).toEqual([
+      siblingAgent.cell.cellId,
+    ]);
     expect(reloaded.topLevelRuns().map((item) => item.procedure)).toEqual([
       "linter",
       "second-opinion",

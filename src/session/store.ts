@@ -253,6 +253,27 @@ export class SessionStore {
     });
   }
 
+  latest(options: RecentOptions = {}): CellSummary | undefined {
+    return this.recent({
+      ...options,
+      limit: 1,
+    })[0];
+  }
+
+  parent(cellRef: CellRef): CellSummary | undefined {
+    this.loadExistingCells();
+    this.readCell(cellRef);
+    const parentCellId = this.parentByCellId.get(cellRef.cellId);
+    return parentCellId ? this.toSummaryByCellId(parentCellId) : undefined;
+  }
+
+  children(cellRef: CellRef, options: Omit<CellDescendantsOptions, "maxDepth"> = {}): CellSummary[] {
+    return this.descendants(cellRef, {
+      ...options,
+      maxDepth: 1,
+    });
+  }
+
   ancestors(cellRef: CellRef, options: CellAncestorsOptions = {}): CellSummary[] {
     this.loadExistingCells();
     const cell = this.readCell(cellRef);
@@ -419,6 +440,7 @@ export class SessionStore {
     this.cells.set(record.cellId, record);
     this.cellFilePaths.set(record.cellId, filePath);
     this.order.push(record.cellId);
+    this.sortCellIdsByCreationOrder(this.order);
     this.indexCell(record);
   }
 
@@ -440,15 +462,31 @@ export class SessionStore {
   }
 
   private sortCellIdsByCreationOrder(cellIds: string[]): void {
-    cellIds.sort((leftId, rightId) => {
-      const left = this.cells.get(leftId);
-      const right = this.cells.get(rightId);
-      if (!left || !right) {
-        return 0;
-      }
+    cellIds.sort((leftId, rightId) => this.compareCellOrder(leftId, rightId));
+  }
 
-      return left.meta.createdAt.localeCompare(right.meta.createdAt);
-    });
+  private compareCellOrder(leftId: string, rightId: string): number {
+    const left = this.cells.get(leftId);
+    const right = this.cells.get(rightId);
+    if (!left || !right) {
+      return 0;
+    }
+
+    const createdAtCompare = left.meta.createdAt.localeCompare(right.meta.createdAt);
+    if (createdAtCompare !== 0) {
+      return createdAtCompare;
+    }
+
+    const leftPath = this.cellFilePaths.get(leftId);
+    const rightPath = this.cellFilePaths.get(rightId);
+    if (leftPath && rightPath) {
+      const pathCompare = leftPath.localeCompare(rightPath);
+      if (pathCompare !== 0) {
+        return pathCompare;
+      }
+    }
+
+    return leftId.localeCompare(rightId);
   }
 
   private loadExistingCells(): void {

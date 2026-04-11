@@ -43,11 +43,20 @@ function createMockContext(): CommandContext {
       async recent() {
         return [];
       },
+      async latest() {
+        return undefined;
+      },
       async topLevelRuns() {
         return [];
       },
       async get() {
         throw new Error("Not implemented in test");
+      },
+      async parent() {
+        return undefined;
+      },
+      async children() {
+        return [];
       },
       async ancestors() {
         return [];
