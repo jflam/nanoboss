@@ -88,7 +88,8 @@ describe("simplify2 procedure", () => {
       notebook: { currentCheckpoint?: { hypothesisId: string } };
     };
     expect(pausedState.mode).toBe("checkpoint");
-    expect(pausedState.notebook.currentCheckpoint?.hypothesisId).toBe("hyp-boundary-checkpoint");
+    expect(pausedState.notebook.currentCheckpoint?.hypothesisId).toMatch(/^hyp-[0-9a-f]{12}$/);
+    expect(pausedState.notebook.currentCheckpoint?.hypothesisId).not.toBe("hyp-boundary-checkpoint");
     expect(normalized.pause?.continuationUi).toMatchObject({
       kind: "simplify2_checkpoint",
       actions: [
@@ -1055,6 +1056,126 @@ describe("simplify2 procedure", () => {
     const normalized = normalizeProcedureResult(result);
     expect(normalized.pause).toBeUndefined();
     expect(normalized.display).toContain("No worthwhile simplification hypothesis stood out after the current review cycle.");
+  });
+
+  test("does not suppress a new core hypothesis just because a later iteration reused the same batch-local id", async () => {
+    const cwd = createFixtureWorkspace({
+      sourceFiles: ["src/session/repository.ts", "src/tui/controller.ts"],
+      tests: [
+        {
+          path: "tests/unit/current-session.test.ts",
+          contents: [
+            'import { expect, test } from "bun:test";',
+            'test("current session slice", () => {',
+            "  expect(true).toBe(true);",
+            "});",
+          ].join("\n"),
+        },
+      ],
+    });
+
+    const result = await simplify2Procedure.execute(
+      "max 2 iterations focus on continuation persistence",
+      createMockContext(cwd, [
+        emptyRefreshProposal(),
+        observationBatch([
+          {
+            id: "obs-repo",
+            kind: "duplication",
+            summary: "Continuation parsing is duplicated in the repository path.",
+            evidence: [{ kind: "file", ref: "src/session/repository.ts" }],
+            confidence: "high",
+          },
+        ]),
+        hypothesisBatch([
+          {
+            id: "H1",
+            title: "Canonicalize continuation parsing",
+            kind: "canonicalize_representation",
+            summary: "Use one representation for continuation parsing across the session flow.",
+            rationale: "This removes duplicate parsing logic and sharpens the invariant.",
+            evidence: [{ kind: "file", ref: "src/session/repository.ts" }],
+            expectedDelta: {
+              duplicateRepresentationsReduced: 1,
+            },
+            risk: "low",
+            needsHumanCheckpoint: false,
+            implementationScope: ["src/session/repository.ts"],
+            testImplications: ["keep a narrow invariant test for current session parsing"],
+          },
+        ]),
+        rankingBatch([
+          {
+            hypothesisId: "H1",
+            score: 8,
+            reason: "Small, coherent, and high-value cleanup.",
+            needsHumanCheckpoint: false,
+          },
+        ]),
+        {
+          summary: "Canonicalized the continuation parsing path around a single representation.",
+          touchedFiles: ["src/session/repository.ts"],
+          conceptualChanges: ["one representation now owns continuation parsing"],
+          testChanges: ["kept the current session invariant test narrow"],
+          validationNotes: ["expected unit test slice should pass"],
+        },
+        {
+          journalSummary: "Recorded the parsing canonicalization as the new baseline.",
+          memorySummary: "Continuation parsing now has one canonical representation.",
+          memoryUpdates: {
+            concepts: ["continuation parsing"],
+            invariants: ["one canonical continuation representation"],
+            boundaries: ["session persistence"],
+            exceptions: [],
+            staleItems: [],
+          },
+          nextQuestions: [],
+          resolvedHypothesisIds: ["H1"],
+          followupRecommendations: [],
+        },
+        emptyRefreshProposal(),
+        observationBatch([
+          {
+            id: "obs-transport",
+            kind: "boundary_candidate",
+            summary: "Transport liveness is modeled separately from retained run lifecycle.",
+            evidence: [{ kind: "file", ref: "src/tui/controller.ts" }],
+            confidence: "medium",
+          },
+        ]),
+        hypothesisBatch([
+          {
+            id: "H1",
+            title: "Unify transport liveness with retained run lifecycle",
+            kind: "centralize_invariant",
+            summary: "Represent disconnect and reconnect state inside one retained lifecycle model.",
+            rationale: "This removes the fake boundary between transport health and run lifecycle.",
+            evidence: [{ kind: "file", ref: "src/tui/controller.ts" }],
+            expectedDelta: {
+              conceptsReduced: 1,
+              boundariesReduced: 1,
+            },
+            risk: "medium",
+            needsHumanCheckpoint: true,
+            checkpointReason: "The lifecycle contract should be reviewed before changing transport state semantics.",
+            implementationScope: ["src/tui/controller.ts"],
+            testImplications: ["add one lifecycle-focused test after clarifying the contract"],
+          },
+        ]),
+        rankingBatch([
+          {
+            hypothesisId: "H1",
+            score: 9,
+            reason: "High-value lifecycle cleanup that still needs a checkpoint.",
+            needsHumanCheckpoint: true,
+          },
+        ]),
+      ]),
+    );
+
+    const normalized = normalizeProcedureResult(result);
+    expect(normalized.pause?.question).toContain("Unify transport liveness with retained run lifecycle");
+    expect(normalized.display).toContain("Applied: Canonicalize continuation parsing.");
   });
 
   test("bare simplify2 opens a focus picker when no saved focuses exist", async () => {

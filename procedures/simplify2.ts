@@ -97,6 +97,8 @@ interface SimplifyHypothesisDraft {
 interface SimplifyHypothesis extends SimplifyHypothesisDraft {
   score: number;
   rankingReason?: string;
+  canonicalId?: string;
+  sourceHypothesisId?: string;
 }
 
 interface SimplifyCheckpoint {
@@ -167,6 +169,7 @@ interface SimplifyApplyResult {
 interface SimplifyAppliedSlice {
   hypothesisId: string;
   title: string;
+  sourceHypothesisId?: string;
   result: SimplifyApplyResult;
   commit?: SimplifyCommitStatus;
 }
@@ -1291,9 +1294,10 @@ async function applySimplificationSlice(
   ctx: ProcedureApi,
 ): Promise<Simplify2State> {
   state.mode = "apply";
+  const selectedHypothesis = withStableHypothesisIdentity(hypothesis);
   const selectedSlice = selectMinimalTrustedTestSlice(state, hypothesis);
   const applyResult = await ctx.agent.run(
-    buildApplyPrompt(state, hypothesis, selectedSlice),
+    buildApplyPrompt(state, selectedHypothesis, selectedSlice),
     SimplifyApplyResultType,
     { stream: false },
   );
@@ -1303,8 +1307,9 @@ async function applySimplificationSlice(
     notebook: {
       ...state.notebook,
       latestApply: {
-        hypothesisId: hypothesis.id,
-        title: hypothesis.title,
+        hypothesisId: selectedHypothesis.canonicalId ?? selectedHypothesis.id,
+        sourceHypothesisId: selectedHypothesis.sourceHypothesisId ?? selectedHypothesis.id,
+        title: selectedHypothesis.title,
         result: {
           ...applied,
           touchedFiles: normalizePaths(applied.touchedFiles),
@@ -1314,21 +1319,25 @@ async function applySimplificationSlice(
         },
       },
       currentCheckpoint: undefined,
-      candidateHypotheses: state.notebook.candidateHypotheses.filter((candidate) => candidate.id !== hypothesis.id),
+      candidateHypotheses: state.notebook.candidateHypotheses.filter((candidate) =>
+        getHypothesisCanonicalId(candidate) !== getHypothesisCanonicalId(selectedHypothesis)),
       openQuestions: [],
       status: "active",
     },
     history: {
       ...state.history,
-      appliedHypothesisIds: uniqueStrings([...state.history.appliedHypothesisIds, hypothesis.id]),
+      appliedHypothesisIds: uniqueStrings([
+        ...state.history.appliedHypothesisIds,
+        getHypothesisCanonicalId(selectedHypothesis),
+      ]),
     },
     testContext: {
       ...state.testContext,
       selectedSlice,
-      changedSubsystems: inferRelevantSubsystems(hypothesis),
+      changedSubsystems: inferRelevantSubsystems(selectedHypothesis),
     },
   };
-  return recordAppliedHypothesis(nextState, hypothesis);
+  return recordAppliedHypothesis(nextState, selectedHypothesis);
 }
 
 async function validateAndReconcile(
@@ -1455,6 +1464,7 @@ function applyHumanDecision(
   state: Simplify2State,
   decision: SimplifyHumanDecision,
 ): Simplify2State {
+  const resolvedHypothesisId = resolveCanonicalHypothesisId(state, decision.hypothesisId);
   const next: Simplify2State = {
     ...state,
     notebook: {
@@ -1466,8 +1476,8 @@ function applyHumanDecision(
     history: {
       ...state.history,
       decisions: uniqueStrings([...state.history.decisions, `${decision.kind}: ${decision.reason}`]),
-      rejectedHypothesisIds: decision.kind === "reject_hypothesis" && decision.hypothesisId
-        ? uniqueStrings([...state.history.rejectedHypothesisIds, decision.hypothesisId])
+      rejectedHypothesisIds: decision.kind === "reject_hypothesis" && resolvedHypothesisId
+        ? uniqueStrings([...state.history.rejectedHypothesisIds, resolvedHypothesisId])
         : state.history.rejectedHypothesisIds,
     },
   };
@@ -1592,7 +1602,7 @@ function applyReconciliationResult(
       ...state.history,
       resolvedHypothesisIds: uniqueStrings([
         ...state.history.resolvedHypothesisIds,
-        ...normalizeStrings(reconciliation.resolvedHypothesisIds),
+        ...normalizeResolvedHypothesisIds(state, reconciliation.resolvedHypothesisIds),
       ]),
     },
   };
@@ -1849,7 +1859,9 @@ function markFinished(state: Simplify2State): Simplify2State {
 
 function findHypothesis(state: Simplify2State, hypothesisId?: string): SimplifyHypothesis {
   const resolvedId = hypothesisId ?? state.notebook.currentCheckpoint?.hypothesisId;
-  const hypothesis = state.notebook.candidateHypotheses.find((candidate) => candidate.id === resolvedId);
+  const hypothesis = state.notebook.candidateHypotheses
+    .map((candidate) => withStableHypothesisIdentity(candidate))
+    .find((candidate) => hypothesisMatchesIdentifier(candidate, resolvedId));
   if (!hypothesis) {
     throw new Error(`Could not find simplify2 hypothesis "${resolvedId ?? "unknown"}".`);
   }
@@ -2409,15 +2421,19 @@ function reconcileRankedHypotheses(
   const rankingById = new Map(rankings.rankings.map((ranking) => [ranking.hypothesisId, ranking]));
   const overlapSuppression = readCurrentAnalysisCache(state).overlapSuppression;
   return hypotheses.hypotheses
-    .filter((hypothesis) =>
-      !state.history.appliedHypothesisIds.includes(hypothesis.id)
-      && !state.history.rejectedHypothesisIds.includes(hypothesis.id)
-      && !state.history.resolvedHypothesisIds.includes(hypothesis.id))
-    .map((hypothesis) => {
-      const ranking = rankingById.get(hypothesis.id);
-      const overlap = findHighestHypothesisOverlap(hypothesis, overlapSuppression);
+    .map((hypothesis) => ({
+      draft: hypothesis,
+      canonicalId: computeCanonicalHypothesisId(hypothesis),
+    }))
+    .filter(({ canonicalId }) =>
+      !state.history.appliedHypothesisIds.includes(canonicalId)
+      && !state.history.rejectedHypothesisIds.includes(canonicalId)
+      && !state.history.resolvedHypothesisIds.includes(canonicalId))
+    .reduce<SimplifyHypothesis[]>((result, { draft, canonicalId }) => {
+      const ranking = rankingById.get(draft.id);
+      const overlap = findHighestHypothesisOverlap(draft, overlapSuppression);
       if (overlap && overlap.score >= 0.85 && overlap.hasNoDistinctScope) {
-        return undefined;
+        return result;
       }
 
       const score = ranking?.score;
@@ -2428,16 +2444,21 @@ function reconcileRankedHypotheses(
           ? `Overlaps with applied hypothesis ${overlap.entry.hypothesisId} (${Math.round(overlap.score * 100)}%).`
           : "",
       ].filter(Boolean).join(" ");
-      return {
-        ...hypothesis,
+      const candidate: SimplifyHypothesis = {
+        ...draft,
+        canonicalId,
+        sourceHypothesisId: draft.id,
         score: Math.max(0, (typeof score === "number" && Number.isFinite(score) ? score : 0) - overlapPenalty),
-        needsHumanCheckpoint: overlap && overlap.score >= 0.75 && hypothesis.risk !== "low"
+        needsHumanCheckpoint: overlap && overlap.score >= 0.75 && draft.risk !== "low"
           ? true
-          : (ranking?.needsHumanCheckpoint ?? hypothesis.needsHumanCheckpoint),
+          : (ranking?.needsHumanCheckpoint ?? draft.needsHumanCheckpoint),
         ...(rankingReason ? { rankingReason } : {}),
       };
-    })
-    .filter((hypothesis): hypothesis is SimplifyHypothesis => Boolean(hypothesis) && SimplifyHypothesisType.validate(hypothesis))
+      if (SimplifyHypothesisType.validate(candidate)) {
+        result.push(candidate);
+      }
+      return result;
+    }, [])
     .sort((left, right) =>
       right.score - left.score
       || compareRisk(left.risk, right.risk)
@@ -2598,11 +2619,12 @@ function maybeCreateCheckpoint(hypotheses: SimplifyHypothesis[]): SimplifyCheckp
 }
 
 function buildCheckpoint(hypothesis: SimplifyHypothesis): SimplifyCheckpoint {
+  const normalizedHypothesis = withStableHypothesisIdentity(hypothesis);
   return {
-    hypothesisId: hypothesis.id,
-    kind: checkpointKindForHypothesis(hypothesis),
-    question: buildCheckpointQuestion(hypothesis),
-    options: checkpointOptionsForHypothesis(hypothesis),
+    hypothesisId: normalizedHypothesis.canonicalId ?? normalizedHypothesis.id,
+    kind: checkpointKindForHypothesis(normalizedHypothesis),
+    question: buildCheckpointQuestion(normalizedHypothesis),
+    options: checkpointOptionsForHypothesis(normalizedHypothesis),
   };
 }
 
@@ -3094,7 +3116,9 @@ function renderSelectedHypothesisSummary(hypothesis: SimplifyHypothesis | undefi
 function getSelectedCheckpointHypothesis(state: Simplify2State): SimplifyHypothesis | undefined {
   const checkpointHypothesisId = state.notebook.currentCheckpoint?.hypothesisId;
   if (checkpointHypothesisId) {
-    return state.notebook.candidateHypotheses.find((hypothesis) => hypothesis.id === checkpointHypothesisId)
+    return state.notebook.candidateHypotheses
+      .map((hypothesis) => withStableHypothesisIdentity(hypothesis))
+      .find((hypothesis) => hypothesisMatchesIdentifier(hypothesis, checkpointHypothesisId))
       ?? state.notebook.candidateHypotheses[0];
   }
 
@@ -3224,25 +3248,27 @@ function recordAppliedHypothesis(
   state: Simplify2State,
   hypothesis: SimplifyHypothesis,
 ): Simplify2State {
+  const normalizedHypothesis = withStableHypothesisIdentity(hypothesis);
   const analysisCache = readCurrentAnalysisCache(state);
-  const touchedFiles = normalizePaths(state.notebook.latestApply?.result.touchedFiles ?? hypothesis.implementationScope);
+  const touchedFiles = normalizePaths(state.notebook.latestApply?.result.touchedFiles ?? normalizedHypothesis.implementationScope);
   const entry: Simplify2OverlapSuppressionEntry = {
-    hypothesisId: hypothesis.id,
-    titleTokens: extractTokens(hypothesis.title),
-    summaryTokens: extractTokens(hypothesis.summary),
-    normalizedScopeTokens: uniqueStrings(hypothesis.implementationScope.flatMap((path) => extractTokens(path))),
+    hypothesisId: normalizedHypothesis.canonicalId ?? normalizedHypothesis.id,
+    titleTokens: extractTokens(normalizedHypothesis.title),
+    summaryTokens: extractTokens(normalizedHypothesis.summary),
+    normalizedScopeTokens: uniqueStrings(normalizedHypothesis.implementationScope.flatMap((path) => extractTokens(path))),
     touchedFiles,
-    evidenceRefs: uniqueStrings(hypothesis.evidence.map((evidence) => normalizePath(evidence.ref))),
+    evidenceRefs: uniqueStrings(normalizedHypothesis.evidence.map((evidence) => normalizePath(evidence.ref))),
   };
   const nextAnalysisCache: Simplify2AnalysisCache = {
     ...analysisCache,
     updatedAt: nowIso(),
     focusHash: computeFocusHash(state),
     analysisFingerprint: state.analysisCache.analysisFingerprint ?? analysisCache.analysisFingerprint,
-    lastAppliedHypothesisId: hypothesis.id,
+    lastAppliedHypothesisId: normalizedHypothesis.canonicalId ?? normalizedHypothesis.id,
     lastTouchedFiles: touchedFiles,
     overlapSuppression: [
-      ...analysisCache.overlapSuppression.filter((candidate) => candidate.hypothesisId !== hypothesis.id),
+      ...analysisCache.overlapSuppression.filter((candidate) =>
+        candidate.hypothesisId !== (normalizedHypothesis.canonicalId ?? normalizedHypothesis.id)),
       entry,
     ].slice(-25),
   };
@@ -3352,6 +3378,81 @@ function computeFocusHash(state: Simplify2State): string {
     constraints: state.focus.constraints,
     guidance: state.focus.guidance,
   });
+}
+
+function computeCanonicalHypothesisId(hypothesis: SimplifyHypothesisDraft): string {
+  const scopePaths = normalizePaths(hypothesis.implementationScope);
+  const payload = {
+    kind: hypothesis.kind,
+    titleTokens: extractTokens(hypothesis.title),
+    summaryTokens: extractTokens(hypothesis.summary),
+    rationaleTokens: extractTokens(hypothesis.rationale),
+    scopePaths,
+    scopeTokens: uniqueStrings(scopePaths.flatMap((path) => extractTokens(path))),
+    evidenceRefs: uniqueStrings(hypothesis.evidence.map((evidence) => `${evidence.kind}:${normalizePath(evidence.ref)}`)),
+  };
+  return `hyp-${createHash("sha256").update(JSON.stringify(payload)).digest("hex").slice(0, 12)}`;
+}
+
+function getHypothesisSourceId(hypothesis: SimplifyHypothesis | SimplifyHypothesisDraft): string {
+  return "sourceHypothesisId" in hypothesis && typeof hypothesis.sourceHypothesisId === "string" && hypothesis.sourceHypothesisId.trim().length > 0
+    ? hypothesis.sourceHypothesisId
+    : hypothesis.id;
+}
+
+function getHypothesisCanonicalId(hypothesis: SimplifyHypothesis | SimplifyHypothesisDraft): string {
+  return "canonicalId" in hypothesis && typeof hypothesis.canonicalId === "string" && hypothesis.canonicalId.trim().length > 0
+    ? hypothesis.canonicalId
+    : computeCanonicalHypothesisId({
+      ...hypothesis,
+      id: getHypothesisSourceId(hypothesis),
+    });
+}
+
+function withStableHypothesisIdentity(hypothesis: SimplifyHypothesis): SimplifyHypothesis {
+  return {
+    ...hypothesis,
+    sourceHypothesisId: getHypothesisSourceId(hypothesis),
+    canonicalId: getHypothesisCanonicalId(hypothesis),
+  };
+}
+
+function hypothesisMatchesIdentifier(hypothesis: SimplifyHypothesis, hypothesisId: string | undefined): boolean {
+  if (!hypothesisId) {
+    return false;
+  }
+  return hypothesis.id === hypothesisId
+    || getHypothesisSourceId(hypothesis) === hypothesisId
+    || getHypothesisCanonicalId(hypothesis) === hypothesisId;
+}
+
+function resolveCanonicalHypothesisId(state: Simplify2State, hypothesisId?: string): string | undefined {
+  if (!hypothesisId) {
+    return undefined;
+  }
+  const checkpointId = state.notebook.currentCheckpoint?.hypothesisId;
+  if (checkpointId === hypothesisId) {
+    return checkpointId;
+  }
+  const candidate = state.notebook.candidateHypotheses
+    .map((entry) => withStableHypothesisIdentity(entry))
+    .find((entry) => hypothesisMatchesIdentifier(entry, hypothesisId));
+  if (candidate) {
+    return candidate.canonicalId ?? candidate.id;
+  }
+  const latestApply = state.notebook.latestApply;
+  if (latestApply) {
+    if (latestApply.hypothesisId === hypothesisId || latestApply.sourceHypothesisId === hypothesisId) {
+      return latestApply.hypothesisId;
+    }
+  }
+  return hypothesisId;
+}
+
+function normalizeResolvedHypothesisIds(state: Simplify2State, hypothesisIds: string[]): string[] {
+  return hypothesisIds
+    .map((hypothesisId) => resolveCanonicalHypothesisId(state, hypothesisId))
+    .filter((hypothesisId): hypothesisId is string => typeof hypothesisId === "string" && hypothesisId.length > 0);
 }
 
 function hashFocusPayload(payload: {
