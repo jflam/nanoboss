@@ -210,6 +210,19 @@ describe("nanoboss MCP server", () => {
     })).rejects.toThrow("Expected defaultAgentSelection.provider to be one of claude, gemini, codex, copilot");
   });
 
+  test("rejects non-string procedure dispatch prompts at the MCP boundary", async () => {
+    const fakeApi = {
+      async procedureDispatchStart(args: unknown) {
+        return args;
+      },
+    } as unknown as Parameters<typeof callMcpTool>[0];
+
+    await expect(callMcpTool(fakeApi, "procedure_dispatch_start", {
+      name: "review",
+      prompt: 7,
+    })).rejects.toThrow("Expected prompt to be a non-empty string");
+  });
+
   test("maps structural MCP tools onto the runtime service", async () => {
     const rootDir = mkdtempSync(join(process.cwd(), ".tmp-mcp-test-session-"));
     tempDirs.push(rootDir);

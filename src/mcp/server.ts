@@ -150,7 +150,7 @@ const MCP_TOOLS: McpToolDefinition[] = [
       return {
         sessionId: asOptionalString(args.sessionId),
         name: asString(args.name, "name"),
-        prompt: typeof args.prompt === "string" ? args.prompt : "",
+        prompt: asString(args.prompt, "prompt"),
         defaultAgentSelection: args.defaultAgentSelection === undefined
           ? undefined
           : parseRequiredDownstreamAgentSelection(args.defaultAgentSelection),
