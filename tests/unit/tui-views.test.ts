@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
 import { summarizeToolCallStart, summarizeToolCallUpdate } from "../../src/core/tool-call-preview.ts";
+import type { FrontendEventEnvelope } from "../../src/http/frontend-events.ts";
+import { reduceUiState } from "../../src/tui/reducer.ts";
 import { createInitialUiState } from "../../src/tui/state.ts";
 import { createNanobossTuiTheme } from "../../src/tui/theme.ts";
 import { NanobossAppView } from "../../src/tui/views.ts";
@@ -184,45 +186,83 @@ describe("NanobossAppView", () => {
     expect(plain).toContain("/dismiss");
   });
 
-  test("renders tool cards inline in transcript order without a separate activity panel", () => {
-    const state = {
-      ...createInitialUiState({ cwd: "/repo", showToolCalls: true }),
+  test("renders the reducer-produced visible transcript contract and resets cleanly on session_ready", () => {
+    let state = createInitialUiState({ cwd: "/repo", buildLabel: "nanoboss-test", showToolCalls: true });
+
+    state = reduceUiState(state, {
+      type: "session_ready",
       sessionId: "session-1",
-      turns: [
-        {
-          id: "user-1",
-          role: "user" as const,
-          markdown: "review the repo",
-          status: "complete" as const,
+      cwd: "/repo",
+      buildLabel: "nanoboss-test",
+      agentLabel: "copilot/default",
+      commands: [{ name: "tokens", description: "show tokens" }],
+    });
+    state = reduceUiState(state, {
+      type: "local_user_submitted",
+      text: "review the repo",
+    });
+    state = reduceUiState(state, {
+      type: "frontend_event",
+      event: eventEnvelope("run_started", {
+        runId: "run-1",
+        procedure: "default",
+        prompt: "review the repo",
+        startedAt: new Date(0).toISOString(),
+      }),
+    });
+    state = reduceUiState(state, {
+      type: "frontend_event",
+      event: eventEnvelope("tool_started", {
+        runId: "run-1",
+        toolCallId: "tool-1",
+        title: "Mock read README.md",
+        kind: "read",
+        callPreview: { header: "read README.md" },
+      }),
+    });
+    state = reduceUiState(state, {
+      type: "frontend_event",
+      event: eventEnvelope("tool_updated", {
+        runId: "run-1",
+        toolCallId: "tool-1",
+        status: "completed",
+        resultPreview: { bodyLines: ["Project instructions"] },
+      }),
+    });
+    state = reduceUiState(state, {
+      type: "frontend_event",
+      event: eventEnvelope("memory_cards", {
+        runId: "run-1",
+        cards: [{
+          cell: { sessionId: "session-1", cellId: "cell-1" },
+          procedure: "default",
+          input: "review the repo",
+          summary: "stored summary",
+          createdAt: "2026-04-11T00:00:00.000Z",
+        }],
+      }),
+    });
+    state = reduceUiState(state, {
+      type: "frontend_event",
+      event: eventEnvelope("memory_card_stored", {
+        runId: "run-1",
+        card: {
+          cell: { sessionId: "session-1", cellId: "cell-1" },
+          procedure: "default",
+          input: "review the repo",
+          memory: "stored memory",
+          createdAt: "2026-04-11T00:00:00.000Z",
         },
-        {
-          id: "assistant-2",
-          role: "assistant" as const,
-          markdown: "I checked the code.",
-          status: "complete" as const,
-        },
-      ],
-      toolCalls: [
-        {
-          id: "tool-1",
-          runId: "run-1",
-          title: "Mock read README.md",
-          kind: "read",
-          status: "completed",
-          depth: 0,
-          isWrapper: false,
-          callPreview: { header: "read README.md" },
-          resultPreview: { bodyLines: ["Project instructions"] },
-          errorPreview: undefined,
-          durationMs: 12,
-        },
-      ],
-      transcriptItems: [
-        { type: "turn" as const, id: "user-1" },
-        { type: "tool_call" as const, id: "tool-1" },
-        { type: "turn" as const, id: "assistant-2" },
-      ],
-    };
+      }),
+    });
+    state = reduceUiState(state, {
+      type: "frontend_event",
+      event: eventEnvelope("text_delta", {
+        runId: "run-1",
+        text: "I checked the code.",
+        stream: "agent",
+      }),
+    });
 
     const view = new NanobossAppView(
       {
@@ -235,15 +275,31 @@ describe("NanobossAppView", () => {
 
     const plainLines = view.render(120).map(stripAnsi);
     const joined = plainLines.join("\n");
-    const userIndex = plainLines.findIndex((line) => line.trim() === "you");
+    const promptIndex = plainLines.findIndex((line) => line.includes("review the repo"));
     const toolIndex = plainLines.findIndex((line) => line.includes("read README.md"));
     const assistantIndex = plainLines.findIndex((line) => line.includes("I checked the code."));
 
-    expect(toolIndex).toBeGreaterThan(userIndex);
+    expect(toolIndex).toBeGreaterThan(promptIndex);
     expect(assistantIndex).toBeGreaterThan(toolIndex);
     expect(joined).toContain("Project instructions");
-    expect(joined).not.toContain("activity");
-    expect(joined).not.toContain("[tool]");
+    expect(joined).not.toContain("stored summary");
+    expect(joined).not.toContain("stored memory");
+
+    state = reduceUiState(state, {
+      type: "session_ready",
+      sessionId: "session-2",
+      cwd: "/repo",
+      buildLabel: "nanoboss-test",
+      agentLabel: "copilot/default",
+      commands: [{ name: "tokens", description: "show tokens" }],
+    });
+    view.setState(state);
+
+    const resetPlain = stripAnsi(view.render(120).join("\n"));
+
+    expect(resetPlain).toContain("No turns yet. Send a prompt to start.");
+    expect(resetPlain).not.toContain("review the repo");
+    expect(resetPlain).not.toContain("read README.md");
   });
 
   test("renders tool cards with a neutral dark background and marks failures with a red dot", () => {
@@ -1050,124 +1106,16 @@ describe("NanobossAppView", () => {
     expect(labelLine).toContain("\u001b[31m");
   });
 
-  test("reuses transcript item components while assistant text and tool cards stream", () => {
-    const baseState = {
-      ...createInitialUiState({ cwd: "/repo", showToolCalls: true }),
-      sessionId: "session-1",
-      turns: [
-        {
-          id: "assistant-1",
-          role: "assistant" as const,
-          markdown: "Partial response",
-          status: "streaming" as const,
-        },
-      ],
-      toolCalls: [
-        {
-          id: "tool-1",
-          runId: "run-1",
-          title: "read",
-          kind: "read",
-          status: "pending",
-          depth: 0,
-          isWrapper: false,
-          callPreview: { header: "read README.md" },
-        },
-      ],
-      transcriptItems: [
-        { type: "turn" as const, id: "assistant-1" },
-        { type: "tool_call" as const, id: "tool-1" },
-      ],
-    };
-
-    const view = new NanobossAppView(
-      {
-        render: () => [""],
-        invalidate() {},
-      } as never,
-      createNanobossTuiTheme(),
-      baseState,
-    );
-
-    const transcript = (view as unknown as {
-      transcript: {
-        turnComponents: Map<string, unknown>;
-        toolComponents: Map<string, unknown>;
-      };
-    }).transcript;
-    const initialTurnComponent = transcript.turnComponents.get("assistant-1");
-    const initialToolComponent = transcript.toolComponents.get("tool-1");
-    const baseTurn = baseState.turns[0];
-    const baseToolCall = baseState.toolCalls[0];
-    if (!baseTurn || !baseToolCall) {
-      throw new Error("Expected initial transcript items");
-    }
-
-    view.setState({
-      ...baseState,
-      turns: [
-        {
-          ...baseTurn,
-          markdown: "Partial response plus more",
-        },
-      ],
-      toolCalls: [
-        {
-          ...baseToolCall,
-          status: "completed",
-          resultPreview: { bodyLines: ["done"] },
-        },
-      ],
-    });
-
-    expect(transcript.turnComponents.get("assistant-1")).toBe(initialTurnComponent);
-    expect(transcript.toolComponents.get("tool-1")).toBe(initialToolComponent);
-
-    const rendered = stripAnsi(view.render(120).join("\n"));
-    expect(rendered).toContain("Partial response plus more");
-    expect(rendered).toContain("done");
-  });
-
-  test("clears persistent transcript components when the session transcript resets", () => {
-    const populatedState = {
-      ...createInitialUiState({ cwd: "/repo", showToolCalls: true }),
-      sessionId: "session-1",
-      turns: [
-        {
-          id: "user-1",
-          role: "user" as const,
-          markdown: "hello",
-          status: "complete" as const,
-        },
-      ],
-      transcriptItems: [{ type: "turn" as const, id: "user-1" }],
-    };
-
-    const view = new NanobossAppView(
-      {
-        render: () => [""],
-        invalidate() {},
-      } as never,
-      createNanobossTuiTheme(),
-      populatedState,
-    );
-
-    view.setState({
-      ...createInitialUiState({ cwd: "/repo", showToolCalls: true }),
-      sessionId: "session-2",
-    });
-
-    const transcript = (view as unknown as {
-      transcript: {
-        turnComponents: Map<string, unknown>;
-        toolComponents: Map<string, unknown>;
-      };
-    }).transcript;
-    const rendered = stripAnsi(view.render(120).join("\n"));
-
-    expect(transcript.turnComponents.size).toBe(0);
-    expect(transcript.toolComponents.size).toBe(0);
-    expect(rendered).toContain("No turns yet. Send a prompt to start.");
-    expect(rendered).not.toContain("hello");
-  });
 });
+
+function eventEnvelope<EventType extends FrontendEventEnvelope["type"]>(
+  type: EventType,
+  data: Extract<FrontendEventEnvelope, { type: EventType }>["data"],
+): FrontendEventEnvelope {
+  return {
+    sessionId: "session-1",
+    seq: 1,
+    type,
+    data,
+  } as FrontendEventEnvelope;
+}
