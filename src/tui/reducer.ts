@@ -120,7 +120,6 @@ export function reduceUiState(state: UiState, action: UiAction): UiState {
         ...state,
         turns: [...state.turns, nextTurn],
         transcriptItems: appendTranscriptItem(state.transcriptItems, { type: "turn", id: nextTurn.id }),
-        hiddenToolCallIds: [],
         activeRunId: undefined,
         activeProcedure: undefined,
         activeAssistantTurnId: undefined,
@@ -153,7 +152,6 @@ export function reduceUiState(state: UiState, action: UiAction): UiState {
         activeAssistantTurnId: undefined,
         assistantParagraphBreakPending: undefined,
         runStartedAtMs: undefined,
-        hiddenToolCallIds: [],
         activeRunAttemptedToolCallIds: [],
         activeRunSucceededToolCallIds: [],
         pendingStopRequest: false,
@@ -301,7 +299,6 @@ function reduceFrontendEvent(state: UiState, event: RenderedFrontendEventEnvelop
         : state.runStartedAtMs ?? Date.now();
       return {
         ...state,
-        hiddenToolCallIds: [],
         activeRunId: event.data.runId,
         activeProcedure: event.data.procedure,
         activeAssistantTurnId: undefined,
@@ -374,19 +371,15 @@ function reduceFrontendEvent(state: UiState, event: RenderedFrontendEventEnvelop
       const existing = state.toolCalls.find((toolCall) => toolCall.id === event.data.toolCallId);
       const parentToolCallId = event.data.parentToolCallId ?? existing?.parentToolCallId;
       const isWrapper = isWrapperToolTitle(event.data.title);
-      const suppressed = shouldSuppressToolTraceTitle(event.data.title);
+      const isStructuralOnly = shouldSuppressToolTraceTitle(event.data.title);
       const activeRunAttemptedToolCallIds = state.activeRunId === event.data.runId
         ? appendUniqueString(state.activeRunAttemptedToolCallIds, event.data.toolCallId)
         : state.activeRunAttemptedToolCallIds;
-      const hiddenToolCallIds = suppressed && !state.hiddenToolCallIds.includes(event.data.toolCallId)
-        ? [...state.hiddenToolCallIds, event.data.toolCallId]
-        : state.hiddenToolCallIds;
 
       if (!state.showToolCalls) {
         return {
           ...state,
           activeRunAttemptedToolCallIds,
-          hiddenToolCallIds,
         };
       }
 
@@ -410,34 +403,27 @@ function reduceFrontendEvent(state: UiState, event: RenderedFrontendEventEnvelop
       const nextState = {
         ...state,
         toolCalls: recomputeToolCallDepths(upsertToolCall(state.toolCalls, nextToolCall)),
-        transcriptItems: suppressed
+        transcriptItems: isStructuralOnly
           ? state.transcriptItems
           : appendTranscriptItem(state.transcriptItems, { type: "tool_call", id: nextToolCall.id }),
         activeRunAttemptedToolCallIds,
-        hiddenToolCallIds,
       };
-      return existing || suppressed ? nextState : markAssistantTextBoundary(nextState);
+      return existing || isStructuralOnly ? nextState : markAssistantTextBoundary(nextState);
     }
     case "tool_updated": {
       const existing = state.toolCalls.find((toolCall) => toolCall.id === event.data.toolCallId);
       const title = event.data.title ?? existing?.title ?? event.data.toolCallId;
       const parentToolCallId = event.data.parentToolCallId ?? existing?.parentToolCallId;
       const isWrapper = existing?.isWrapper ?? (existing?.kind === "wrapper" || isWrapperToolTitle(title));
-      const suppressed = state.hiddenToolCallIds.includes(event.data.toolCallId) || shouldSuppressToolTraceTitle(title);
+      const isStructuralOnly = shouldSuppressToolTraceTitle(title);
       const activeRunSucceededToolCallIds = state.activeRunId === event.data.runId && event.data.status === "completed"
         ? appendUniqueString(state.activeRunSucceededToolCallIds, event.data.toolCallId)
         : state.activeRunSucceededToolCallIds;
-      const hiddenToolCallIds = suppressed && isTerminalToolStatus(event.data.status)
-        ? state.hiddenToolCallIds.filter((toolCallId) => toolCallId !== event.data.toolCallId)
-        : suppressed && !state.hiddenToolCallIds.includes(event.data.toolCallId)
-          ? [...state.hiddenToolCallIds, event.data.toolCallId]
-          : state.hiddenToolCallIds;
 
       if (!state.showToolCalls) {
         return {
           ...state,
           activeRunSucceededToolCallIds,
-          hiddenToolCallIds,
         };
       }
 
@@ -460,17 +446,17 @@ function reduceFrontendEvent(state: UiState, event: RenderedFrontendEventEnvelop
 
       let toolCalls = state.toolCalls;
       let transcriptItems = state.transcriptItems;
-      const shouldDropWrapperCard = isWrapper
-        && event.data.status === "completed"
-        && shouldRemoveCompletedWrapperCard(title);
-      const shouldDiscardHiddenWrapper = suppressed && isWrapper && isTerminalToolStatus(event.data.status);
+      const shouldRemoveTerminalWrapper = isWrapper
+        && isTerminalToolStatus(event.data.status)
+        && (isStructuralOnly
+          || shouldRemoveCompletedWrapperCard(title));
 
-      if (shouldDropWrapperCard || shouldDiscardHiddenWrapper) {
+      if (shouldRemoveTerminalWrapper) {
         toolCalls = removeToolCallAndReparent(toolCalls, event.data.toolCallId);
         transcriptItems = removeTranscriptItem(transcriptItems, "tool_call", event.data.toolCallId);
       } else {
         toolCalls = recomputeToolCallDepths(upsertToolCall(toolCalls, nextToolCall));
-        transcriptItems = suppressed
+        transcriptItems = isStructuralOnly
           ? transcriptItems
           : appendTranscriptItem(transcriptItems, { type: "tool_call", id: nextToolCall.id });
       }
@@ -480,9 +466,8 @@ function reduceFrontendEvent(state: UiState, event: RenderedFrontendEventEnvelop
         toolCalls,
         transcriptItems,
         activeRunSucceededToolCallIds,
-        hiddenToolCallIds,
       };
-      return existing || suppressed || shouldDropWrapperCard || shouldDiscardHiddenWrapper
+      return existing || isStructuralOnly || shouldRemoveTerminalWrapper
         ? nextState
         : markAssistantTextBoundary(nextState);
     }
@@ -684,7 +669,6 @@ function finishRun(
     activeAssistantTurnId: undefined,
     assistantParagraphBreakPending: undefined,
     runStartedAtMs: undefined,
-    hiddenToolCallIds: [],
     activeRunAttemptedToolCallIds: [],
     activeRunSucceededToolCallIds: [],
     pendingStopRequest: false,

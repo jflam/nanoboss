@@ -61,7 +61,6 @@ export interface UiState {
   toolCalls: UiToolCall[];
   pendingPrompts: UiPendingPrompt[];
   transcriptItems: UiTranscriptItem[];
-  hiddenToolCallIds: string[];
   activeRunId?: string;
   activeProcedure?: string;
   activeAssistantTurnId?: string;
@@ -100,7 +99,6 @@ export function createInitialUiState(params: {
     toolCalls: [],
     pendingPrompts: [],
     transcriptItems: [],
-    hiddenToolCallIds: [],
     activeRunAttemptedToolCallIds: [],
     activeRunSucceededToolCallIds: [],
     pendingStopRequest: false,

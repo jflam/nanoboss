@@ -794,63 +794,6 @@ describe("tui reducer", () => {
     ]);
   });
 
-  test("suppresses async dispatch wait traces while preserving nested activity depth", () => {
-    let state = createInitialUiState({ cwd: "/repo", showToolCalls: true });
-
-    state = reduceUiState(state, {
-      type: "frontend_event",
-      event: eventEnvelope("run_started", {
-        runId: "run-1",
-        procedure: "probe",
-        prompt: "",
-        startedAt: new Date(0).toISOString(),
-      }),
-    });
-    state = reduceUiState(state, {
-      type: "frontend_event",
-      event: eventEnvelope("tool_started", {
-        runId: "run-1",
-        toolCallId: "dispatch-wait",
-        title: "nanoboss-procedure_dispatch_wait",
-        kind: "other",
-      }),
-    });
-    state = reduceUiState(state, {
-      type: "frontend_event",
-      event: eventEnvelope("tool_started", {
-        runId: "run-1",
-        toolCallId: "nested-child",
-        parentToolCallId: "dispatch-wait",
-        title: "Mock read README.md",
-        kind: "read",
-      }),
-    });
-
-    expect(state.transcriptItems).not.toContainEqual({ type: "tool_call", id: "dispatch-wait" });
-    expect(state.toolCalls.find((toolCall) => toolCall.id === "nested-child")).toMatchObject({
-      id: "nested-child",
-      parentToolCallId: "dispatch-wait",
-      depth: 1,
-    });
-    expect(state.hiddenToolCallIds).toEqual(["dispatch-wait"]);
-
-    state = reduceUiState(state, {
-      type: "frontend_event",
-      event: eventEnvelope("tool_updated", {
-        runId: "run-1",
-        toolCallId: "dispatch-wait",
-        status: "completed",
-      }),
-    });
-
-    expect(state.hiddenToolCallIds).toEqual([]);
-    expect(state.toolCalls.find((toolCall) => toolCall.id === "nested-child")).toMatchObject({
-      id: "nested-child",
-      depth: 0,
-    });
-    expect(state.toolCalls.find((toolCall) => toolCall.id === "nested-child")?.parentToolCallId).toBeUndefined();
-  });
-
   test("tracks invoked procedures in status state instead of requiring a default wrapper card", () => {
     let state = createInitialUiState({ cwd: "/repo", showToolCalls: true });
 
@@ -869,25 +812,50 @@ describe("tui reducer", () => {
     expect(state.transcriptItems).toEqual([]);
   });
 
-  test("removes completed visible wrapper cards while retaining and reparents descendants", () => {
-    let state = createInitialUiState({ cwd: "/repo", showToolCalls: true });
-
-    state = reduceUiState(state, {
-      type: "frontend_event",
-      event: eventEnvelope("run_started", {
+  test.each([
+    {
+      name: "suppressed async dispatch wait wrappers",
+      runStarted: {
+        runId: "run-1",
+        procedure: "probe",
+        prompt: "",
+        startedAt: new Date(0).toISOString(),
+      },
+      wrapperTitle: "nanoboss-procedure_dispatch_wait",
+      wrapperKind: "other",
+      expectVisibleWhileActive: false,
+    },
+    {
+      name: "visible default-session wrappers",
+      runStarted: {
         runId: "run-1",
         procedure: "default",
         prompt: "hello",
         startedAt: new Date(0).toISOString(),
-      }),
+      },
+      wrapperTitle: "defaultSession: hello",
+      wrapperKind: "wrapper",
+      expectVisibleWhileActive: true,
+    },
+  ])("reparents descendants when terminal structural wrappers are removed: $name", ({
+    runStarted,
+    wrapperTitle,
+    wrapperKind,
+    expectVisibleWhileActive,
+  }) => {
+    let state = createInitialUiState({ cwd: "/repo", showToolCalls: true });
+
+    state = reduceUiState(state, {
+      type: "frontend_event",
+      event: eventEnvelope("run_started", runStarted),
     });
     state = reduceUiState(state, {
       type: "frontend_event",
       event: eventEnvelope("tool_started", {
         runId: "run-1",
         toolCallId: "wrapper",
-        title: "defaultSession: hello",
-        kind: "wrapper",
+        title: wrapperTitle,
+        kind: wrapperKind,
       }),
     });
     state = reduceUiState(state, {
@@ -900,6 +868,15 @@ describe("tui reducer", () => {
         kind: "read",
       }),
     });
+
+    expect(state.toolCalls.find((toolCall) => toolCall.id === "leaf")).toMatchObject({
+      id: "leaf",
+      parentToolCallId: "wrapper",
+      depth: 1,
+    });
+    expect(state.transcriptItems).toContainEqual({ type: "tool_call", id: "leaf" });
+    expect(state.transcriptItems.some((item) => item.type === "tool_call" && item.id === "wrapper")).toBe(expectVisibleWhileActive);
+
     state = reduceUiState(state, {
       type: "frontend_event",
       event: eventEnvelope("tool_updated", {
