@@ -104,9 +104,35 @@ describe("CommandContextImpl UI", () => {
       },
     ] satisfies ProcedureUiEvent[]);
   });
+
+  test("status falls back to the shared display text when structured ui events are unavailable", () => {
+    const { ctx, cell, updates, logger } = createContext({ emitUiEvent: false });
+
+    ctx.ui.status({
+      phase: "research",
+      message: "Gathering sources",
+      iteration: "2/3",
+      autoApprove: true,
+      waiting: true,
+    });
+
+    expect(cell.streamChunks).toEqual(["[status] /default research 2/3 - Gathering sources (auto-approve, waiting)\n"]);
+    expect(updates).toEqual([
+      {
+        sessionUpdate: "agent_message_chunk",
+        content: {
+          type: "text",
+          text: "[status] /default research 2/3 - Gathering sources (auto-approve, waiting)\n",
+        },
+      },
+    ]);
+
+    const logText = readFileSync(logger.filePath, "utf8");
+    expect(logText).toContain('"raw":"[status] /default research 2/3 - Gathering sources (auto-approve, waiting)"');
+  });
 });
 
-function createContext(): {
+function createContext(options?: { emitUiEvent?: boolean }): {
   ctx: CommandContextImpl;
   cell: ReturnType<SessionStore["startCell"]>;
   updates: unknown[];
@@ -139,9 +165,13 @@ function createContext(): {
       emit(update) {
         updates.push(update);
       },
-      emitUiEvent(event) {
-        uiEvents.push(event);
-      },
+      ...(options?.emitUiEvent === false
+        ? {}
+        : {
+            emitUiEvent(event: ProcedureUiEvent) {
+              uiEvents.push(event);
+            },
+          }),
       async flush() {},
     },
     store,

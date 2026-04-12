@@ -509,6 +509,34 @@ describe("tui reducer", () => {
     });
   });
 
+  test("renders procedure status lines from the shared formatter", () => {
+    let state = createInitialUiState({ cwd: "/repo", showToolCalls: true });
+
+    state = reduceUiState(state, {
+      type: "frontend_event",
+      event: eventEnvelope("run_started", {
+        runId: "run-1",
+        procedure: "research",
+        prompt: "hello",
+        startedAt: new Date(0).toISOString(),
+      }),
+    });
+    state = reduceUiState(state, {
+      type: "frontend_event",
+      event: eventEnvelope("procedure_status", {
+        runId: "run-1",
+        procedure: "research",
+        phase: "collect",
+        message: "Gathering sources",
+        iteration: "2/3",
+        autoApprove: true,
+        waiting: true,
+      }),
+    });
+
+    expect(state.statusLine).toBe("[status] /research collect 2/3 - Gathering sources (auto-approve, waiting)");
+  });
+
   test("ignores stale run events after a newer run has started", () => {
     let state = createInitialUiState({ cwd: "/repo", showToolCalls: true });
 

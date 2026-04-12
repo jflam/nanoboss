@@ -2,6 +2,7 @@ import type * as acp from "@agentclientprotocol/sdk";
 
 import type { RunLogger } from "./logger.ts";
 import type { SessionUpdateEmitter } from "./context-shared.ts";
+import { formatProcedureStatusText } from "./ui-cli.ts";
 import type { UiApi, UiCardParams, UiStatusParams } from "./ui-api.ts";
 import type { SessionStore } from "../session/index.ts";
 
@@ -59,15 +60,16 @@ export class UiApiImpl implements UiApi {
       autoApprove: params.autoApprove,
       waiting: params.waiting,
     };
+    const display = formatProcedureStatusText(event);
 
-    this.log(renderStatusLogText(event));
+    this.log(display);
 
     if (this.emitter.emitUiEvent) {
       this.emitter.emitUiEvent(event);
       return;
     }
 
-    this.text(`${renderStatusFallbackText(event)}\n`);
+    this.text(`${display}\n`);
   }
 
   card(params: UiCardParams): void {
@@ -113,49 +115,6 @@ export class UiApiImpl implements UiApi {
 
 function normalizeNoticeText(text: string): string {
   return text.replace(/\s+/g, " ").trim();
-}
-
-function renderStatusLogText(params: {
-  procedure: string;
-  phase?: string;
-  message: string;
-  iteration?: string;
-  autoApprove?: boolean;
-  waiting?: boolean;
-}): string {
-  return renderStatusFallbackText(params);
-}
-
-function renderStatusFallbackText(params: {
-  procedure: string;
-  phase?: string;
-  message: string;
-  iteration?: string;
-  autoApprove?: boolean;
-  waiting?: boolean;
-}): string {
-  const parts = [`[status] /${params.procedure}`];
-
-  if (params.phase) {
-    parts.push(params.phase);
-  }
-
-  if (params.iteration) {
-    parts.push(params.iteration);
-  }
-
-  parts.push(`- ${params.message}`);
-
-  const flags = [
-    params.autoApprove ? "auto-approve" : undefined,
-    params.waiting ? "waiting" : undefined,
-  ].filter(Boolean);
-
-  if (flags.length > 0) {
-    parts.push(`(${flags.join(", ")})`);
-  }
-
-  return parts.join(" ");
 }
 
 function renderCardLogText(params: {

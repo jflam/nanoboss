@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { formatProcedureStatusText } from "../../src/core/ui-cli.ts";
 import {
   mapSessionUpdateToFrontendEvents,
   SessionEventLog,
@@ -254,6 +255,24 @@ describe("frontend-events", () => {
         markdown: "- cited source",
       },
     ]);
+  });
+
+  test("formats procedure status text from one shared status matrix", () => {
+    expect(formatProcedureStatusText({
+      type: "status",
+      procedure: "research",
+      message: "Gathering sources",
+    })).toBe("[status] /research - Gathering sources");
+
+    expect(formatProcedureStatusText({
+      type: "status",
+      procedure: "research",
+      phase: "collect",
+      message: "Gathering sources",
+      iteration: "2/3",
+      autoApprove: true,
+      waiting: true,
+    })).toBe("[status] /research collect 2/3 - Gathering sources (auto-approve, waiting)");
   });
 
   test("normalizes provider-specific read payloads into consistent previews", () => {

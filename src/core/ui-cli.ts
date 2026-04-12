@@ -50,6 +50,31 @@ export function createProcedureUiMarkerStream(
   });
 }
 
+export function formatProcedureStatusText(event: Extract<ProcedureUiEvent, { type: "status" }>): string {
+  const parts = [`[status] /${event.procedure}`];
+
+  if (event.phase) {
+    parts.push(event.phase);
+  }
+
+  if (event.iteration) {
+    parts.push(event.iteration);
+  }
+
+  parts.push(`- ${event.message}`);
+
+  const flags = [
+    event.autoApprove ? "auto-approve" : undefined,
+    event.waiting ? "waiting" : undefined,
+  ].filter(Boolean);
+
+  if (flags.length > 0) {
+    parts.push(`(${flags.join(", ")})`);
+  }
+
+  return parts.join(" ");
+}
+
 function isProcedureUiEvent(value: unknown): value is ProcedureUiEvent {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return false;

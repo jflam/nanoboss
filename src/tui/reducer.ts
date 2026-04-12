@@ -1,5 +1,6 @@
 import type { FrontendCommand, FrontendEventEnvelope } from "../http/frontend-events.ts";
 import type { DownstreamAgentSelection } from "../core/types.ts";
+import { formatProcedureStatusText } from "../core/ui-cli.ts";
 import type { ToolCardThemeMode } from "./state.ts";
 
 import {
@@ -338,7 +339,15 @@ function reduceFrontendEvent(state: UiState, event: FrontendEventEnvelope): UiSt
       }
       return {
         ...state,
-        statusLine: formatProcedureStatusLine(event.data),
+        statusLine: formatProcedureStatusText({
+          type: "status",
+          procedure: event.data.procedure,
+          phase: event.data.phase,
+          message: event.data.message,
+          iteration: event.data.iteration,
+          autoApprove: event.data.autoApprove,
+          waiting: event.data.waiting,
+        }),
       };
     case "procedure_card":
       if (shouldIgnoreMismatchedRunEvent(state, event.data.runId)) {
@@ -845,31 +854,6 @@ function procedureCardTone(kind: Extract<FrontendEventEnvelope, { type: "procedu
     default:
       return "info";
   }
-}
-
-function formatProcedureStatusLine(status: Extract<FrontendEventEnvelope, { type: "procedure_status" }>['data']): string {
-  const parts = [`[status] /${status.procedure}`];
-
-  if (status.phase) {
-    parts.push(status.phase);
-  }
-
-  if (status.iteration) {
-    parts.push(status.iteration);
-  }
-
-  parts.push(`- ${status.message}`);
-
-  const flags = [
-    status.autoApprove ? "auto-approve" : undefined,
-    status.waiting ? "waiting" : undefined,
-  ].filter(Boolean);
-
-  if (flags.length > 0) {
-    parts.push(`(${flags.join(", ")})`);
-  }
-
-  return parts.join(" ");
 }
 
 function buildAssistantTurnMeta(params: {
