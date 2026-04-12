@@ -261,6 +261,20 @@ export function isTextDeltaEvent(event: FrontendEventEnvelope): event is TextDel
   return event.type === "text_delta";
 }
 
+function getNanobossToolKindMeta(update: Extract<acp.SessionUpdate, { sessionUpdate: "tool_call" }>): string | undefined {
+  const meta = update._meta;
+  if (!meta || typeof meta !== "object") {
+    return undefined;
+  }
+
+  const nanoboss = "nanoboss" in meta ? meta.nanoboss : undefined;
+  if (!nanoboss || typeof nanoboss !== "object") {
+    return undefined;
+  }
+
+  return "toolKind" in nanoboss && typeof nanoboss.toolKind === "string" ? nanoboss.toolKind : undefined;
+}
+
 export function isToolStartedEvent(event: FrontendEventEnvelope): event is ToolStartedEventEnvelope {
   return event.type === "tool_started";
 }
@@ -354,9 +368,10 @@ export function mapSessionUpdateToFrontendEvents(
       ];
     }
     case "tool_call": {
+      const toolKind = getNanobossToolKindMeta(update) ?? String(update.kind);
       const preview = summarizeToolCallStart({
         title: update.title,
-        kind: String(update.kind),
+        kind: toolKind,
       }, update.rawInput);
 
       return [
@@ -365,7 +380,7 @@ export function mapSessionUpdateToFrontendEvents(
           runId,
           toolCallId: update.toolCallId,
           title: update.title,
-          kind: String(update.kind),
+          kind: toolKind,
           status: update.status ?? undefined,
           callPreview: preview.callPreview,
           rawInput: update.rawInput,

@@ -830,7 +830,7 @@ describe("tui reducer", () => {
         runId: "run-1",
         toolCallId: "wrapper",
         title: "nanoboss-procedure_dispatch_wait",
-        kind: "other",
+        kind: "wrapper",
       }),
     });
     state = reduceUiState(state, {
@@ -851,6 +851,47 @@ describe("tui reducer", () => {
     });
     expect(state.transcriptItems).toContainEqual({ type: "tool_call", id: "leaf" });
     expect(state.transcriptItems).not.toContainEqual({ type: "tool_call", id: "wrapper" });
+  });
+
+  test("treats wrapper semantics as producer-owned metadata instead of title inference", () => {
+    let state = createInitialUiState({ cwd: "/repo", showToolCalls: true });
+
+    state = reduceUiState(state, {
+      type: "frontend_event",
+      event: eventEnvelope("tool_started", {
+        runId: "run-1",
+        toolCallId: "tool-1",
+        title: "callAgent: summarize the diff",
+        kind: "other",
+      }),
+    });
+    state = reduceUiState(state, {
+      type: "frontend_event",
+      event: eventEnvelope("tool_updated", {
+        runId: "run-1",
+        toolCallId: "tool-1",
+        status: "completed",
+      }),
+    });
+
+    expect(state.toolCalls).toEqual([
+      {
+        id: "tool-1",
+        runId: "run-1",
+        title: "callAgent: summarize the diff",
+        kind: "other",
+        status: "completed",
+        depth: 0,
+        isWrapper: false,
+        callPreview: undefined,
+        resultPreview: undefined,
+        errorPreview: undefined,
+        rawInput: undefined,
+        rawOutput: undefined,
+        durationMs: undefined,
+      },
+    ]);
+    expect(state.transcriptItems).toContainEqual({ type: "tool_call", id: "tool-1" });
   });
 
   test("removes terminal wrappers and reparents descendants through explicit parentToolCallId links", () => {

@@ -100,6 +100,11 @@ export class AgentRunRecorder {
         toolCallId: started.toolCallId,
         title: params.title,
         kind: "other",
+        _meta: {
+          nanoboss: {
+            toolKind: "wrapper",
+          },
+        },
         status: "pending",
         rawInput: params.rawInput,
       });

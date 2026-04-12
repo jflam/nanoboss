@@ -1,6 +1,5 @@
 import type { ProcedureUiEvent } from "../core/context-shared.ts";
 import {
-  isWrapperToolTitle,
   type FrontendCommand,
   type RenderedFrontendEventEnvelope,
 } from "../http/frontend-events.ts";
@@ -370,7 +369,6 @@ function reduceFrontendEvent(state: UiState, event: RenderedFrontendEventEnvelop
       }
       const existing = state.toolCalls.find((toolCall) => toolCall.id === event.data.toolCallId);
       const parentToolCallId = event.data.parentToolCallId ?? existing?.parentToolCallId;
-      const isWrapper = isWrapperToolTitle(event.data.title);
       const isStructuralOnly = shouldSuppressToolTraceTitle(event.data.title);
       const activeRunAttemptedToolCallIds = state.activeRunId === event.data.runId
         ? appendUniqueString(state.activeRunAttemptedToolCallIds, event.data.toolCallId)
@@ -391,7 +389,7 @@ function reduceFrontendEvent(state: UiState, event: RenderedFrontendEventEnvelop
         kind: event.data.kind,
         status: event.data.status ?? existing?.status ?? "pending",
         depth: existing?.depth ?? 0,
-        isWrapper: existing?.isWrapper ?? isWrapper,
+        isWrapper: existing?.isWrapper ?? event.data.kind === "wrapper",
         callPreview: mergeToolPreview(existing?.callPreview, event.data.callPreview),
         resultPreview: existing?.resultPreview,
         errorPreview: existing?.errorPreview,
@@ -414,7 +412,7 @@ function reduceFrontendEvent(state: UiState, event: RenderedFrontendEventEnvelop
       const existing = state.toolCalls.find((toolCall) => toolCall.id === event.data.toolCallId);
       const title = event.data.title ?? existing?.title ?? event.data.toolCallId;
       const parentToolCallId = event.data.parentToolCallId ?? existing?.parentToolCallId;
-      const isWrapper = existing?.isWrapper ?? (existing?.kind === "wrapper" || isWrapperToolTitle(title));
+      const isWrapper = existing?.isWrapper ?? existing?.kind === "wrapper";
       const isStructuralOnly = shouldSuppressToolTraceTitle(title);
       const activeRunSucceededToolCallIds = state.activeRunId === event.data.runId && event.data.status === "completed"
         ? appendUniqueString(state.activeRunSucceededToolCallIds, event.data.toolCallId)

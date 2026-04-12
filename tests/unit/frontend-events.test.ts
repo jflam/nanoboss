@@ -378,6 +378,34 @@ describe("frontend-events", () => {
     });
   });
 
+  test("preserves producer-owned wrapper kind without title heuristics", () => {
+    expect(
+      mapSessionUpdateToFrontendEvents("run-1", {
+        sessionUpdate: "tool_call",
+        toolCallId: "tool-wrapper",
+        title: "callAgent: summarize the diff",
+        kind: "other",
+        _meta: {
+          nanoboss: {
+            toolKind: "wrapper",
+          },
+        },
+        status: "pending",
+      }),
+    ).toEqual([
+      {
+        type: "tool_started",
+        runId: "run-1",
+        toolCallId: "tool-wrapper",
+        title: "callAgent: summarize the diff",
+        kind: "wrapper",
+        status: "pending",
+        callPreview: undefined,
+        rawInput: undefined,
+      },
+    ]);
+  });
+
   test("stores replayable session events with increasing sequence numbers", () => {
     const log = new SessionEventLog(2);
     const first = log.publish("session-1", {

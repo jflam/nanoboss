@@ -488,9 +488,11 @@ describe("NanobossService", () => {
       expect(toolTitles).not.toContain("procedure_dispatch_wait");
       expect(toolTitles).toContain("Mock read README.md");
       expect(agentWrapper?.data.toolCallId).toBeTruthy();
+      expect(agentWrapper?.data.kind).toBe("wrapper");
       expect(nestedRead?.data.parentToolCallId).toBe(agentWrapper?.data.toolCallId);
       expect(replayedNestedRead?.type).toBe("tool_started");
       if (replayedNestedRead?.type === "tool_started") {
+        expect(replayedNestedRead.kind).toBe("read");
         expect(replayedNestedRead.parentToolCallId).toBe(agentWrapper?.data.toolCallId);
       }
       expect(textEvents).toContain("done");

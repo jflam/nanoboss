@@ -15,7 +15,6 @@ import {
   renderProcedureMemoryCardsSection,
 } from "./memory-cards.ts";
 import {
-  isWrapperToolTitle,
   mapProcedureUiEventToFrontendEvent,
   mapSessionUpdateToFrontendEvents,
   SessionEventLog,
@@ -181,7 +180,7 @@ class CompositeSessionUpdateEmitter implements SessionUpdateEmitter {
       case "tool_started": {
         const parentToolCallId = this.activeWrapperToolCallIds.at(-1);
         this.toolCallParentIds.set(event.toolCallId, parentToolCallId);
-        if (isWrapperToolTitle(event.title)) {
+        if (event.kind === "wrapper") {
           this.activeWrapperToolCallIds.push(event.toolCallId);
         }
 
@@ -195,9 +194,7 @@ class CompositeSessionUpdateEmitter implements SessionUpdateEmitter {
           this.toolCallParentIds.set(event.toolCallId, parentToolCallId);
         }
 
-        const isWrapper = event.title
-          ? isWrapperToolTitle(event.title)
-          : this.activeWrapperToolCallIds.includes(event.toolCallId);
+        const isWrapper = this.activeWrapperToolCallIds.includes(event.toolCallId);
         if (isWrapper && isTerminalToolStatus(event.status)) {
           const index = this.activeWrapperToolCallIds.lastIndexOf(event.toolCallId);
           if (index >= 0) {
