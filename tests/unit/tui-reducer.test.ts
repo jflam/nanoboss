@@ -791,6 +791,53 @@ describe("tui reducer", () => {
     ]);
   });
 
+  test("ignores memory card events because transcript items are the only rendered surface", () => {
+    let state = createInitialUiState({ cwd: "/repo", showToolCalls: true });
+
+    state = reduceUiState(state, {
+      type: "local_user_submitted",
+      text: "hello",
+    });
+    state = reduceUiState(state, {
+      type: "frontend_event",
+      event: eventEnvelope("memory_cards", {
+        runId: "run-1",
+        cards: [{
+          cell: { sessionId: "session-1", cellId: "cell-1" },
+          procedure: "default",
+          input: "hello",
+          summary: "stored summary",
+          createdAt: "2026-04-11T00:00:00.000Z",
+        }],
+      }),
+    });
+    state = reduceUiState(state, {
+      type: "frontend_event",
+      event: eventEnvelope("memory_card_stored", {
+        runId: "run-1",
+        card: {
+          cell: { sessionId: "session-1", cellId: "cell-1" },
+          procedure: "default",
+          input: "hello",
+          memory: "stored memory",
+          createdAt: "2026-04-11T00:00:00.000Z",
+        },
+      }),
+    });
+
+    expect(state.turns).toEqual([
+      {
+        id: "user-1",
+        role: "user",
+        markdown: "hello",
+        status: "complete",
+      },
+    ]);
+    expect(state.transcriptItems).toEqual([{ type: "turn", id: "user-1" }]);
+    expect(state.toolCalls).toEqual([]);
+    expect(state.statusLine).toBe("[run] waiting for response");
+  });
+
   test("suppresses async dispatch wait traces while preserving nested activity depth", () => {
     let state = createInitialUiState({ cwd: "/repo", showToolCalls: true });
 

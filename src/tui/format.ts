@@ -1,6 +1,5 @@
 import { getAgentTokenUsagePercent } from "../agent/token-usage.ts";
-import type { AgentTokenUsage, ValueRef } from "../core/types.ts";
-import { summarizeText } from "../util/text.ts";
+import type { AgentTokenUsage } from "../core/types.ts";
 
 export function isWrapperToolTitle(title: string): boolean {
   return (
@@ -21,69 +20,6 @@ export function shouldSuppressToolTraceTitle(title: string): boolean {
 
 export function formatToolTraceLine(depth: number, text: string): string {
   return `${"│ ".repeat(depth)}${text}`;
-}
-
-export function formatMemoryCardsLines(cards: Array<{
-  procedure: string;
-  input: string;
-  summary?: string;
-  memory?: string;
-  dataRef?: ValueRef;
-  displayRef?: ValueRef;
-  dataPreview?: string;
-  dataShape?: unknown;
-  createdAt: string;
-}>): string[] {
-  const lines = [`[memory] injecting ${cards.length} card${cards.length === 1 ? "" : "s"}`];
-
-  for (const card of cards) {
-    lines.push(`│ /${card.procedure} @ ${card.createdAt}`);
-    lines.push(`│   input: ${summarizeText(card.input, 140)}`);
-
-    if (card.summary) {
-      lines.push(`│   summary: ${summarizeText(card.summary, 220)}`);
-    }
-
-    if (card.memory) {
-      lines.push(`│   memory: ${summarizeText(card.memory, 280)}`);
-    }
-
-    if (card.dataRef) {
-      lines.push(`│   result_ref: ${formatValueRefInline(card.dataRef)}`);
-    }
-
-    if (card.displayRef) {
-      lines.push(`│   display_ref: ${formatValueRefInline(card.displayRef)}`);
-    }
-
-    if (card.dataPreview) {
-      lines.push(`│   data_preview: ${summarizeText(card.dataPreview, 220)}`);
-    }
-
-    if (card.dataShape !== undefined) {
-      lines.push(`│   data_shape: ${summarizeText(JSON.stringify(card.dataShape), 220)}`);
-    }
-  }
-
-  return lines;
-}
-
-export function formatStoredMemoryCardLines(
-  card: {
-    procedure: string;
-    input: string;
-    summary?: string;
-    memory?: string;
-    dataRef?: ValueRef;
-    displayRef?: ValueRef;
-    dataPreview?: string;
-    dataShape?: unknown;
-    createdAt: string;
-  },
-): string[] {
-  const lines = [`[memory] stored /${card.procedure} @ ${card.createdAt}`];
-  lines.push(...formatMemoryCardsLines([card]).slice(1));
-  return lines;
 }
 
 export function formatTokenUsageLine(usage: AgentTokenUsage): string {
@@ -109,10 +45,6 @@ export function formatElapsedRunTimer(durationMs: number): string {
   }
 
   return `[time] ${minutes}:${String(seconds).padStart(2, "0")}`;
-}
-
-function formatValueRefInline(valueRef: ValueRef): string {
-  return `session=${valueRef.cell.sessionId} cell=${valueRef.cell.cellId} path=${valueRef.path}`;
 }
 
 function formatInt(value: number): string {

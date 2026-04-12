@@ -222,7 +222,6 @@ describe("NanobossAppView", () => {
         { type: "tool_call" as const, id: "tool-1" },
         { type: "turn" as const, id: "assistant-2" },
       ],
-      runtimeNotes: ["[memory] injected 1 card"],
     };
 
     const view = new NanobossAppView(
@@ -244,7 +243,6 @@ describe("NanobossAppView", () => {
     expect(assistantIndex).toBeGreaterThan(toolIndex);
     expect(joined).toContain("Project instructions");
     expect(joined).not.toContain("activity");
-    expect(joined).not.toContain("[memory] injected 1 card");
     expect(joined).not.toContain("[tool]");
   });
 

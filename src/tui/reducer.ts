@@ -4,8 +4,6 @@ import { formatProcedureStatusText } from "../core/ui-cli.ts";
 import type { ToolCardThemeMode } from "./state.ts";
 
 import {
-  formatMemoryCardsLines,
-  formatStoredMemoryCardLines,
   formatTokenUsageLine,
   isWrapperToolTitle,
   shouldRemoveCompletedWrapperCard,
@@ -21,7 +19,6 @@ import {
   type UiTurn,
 } from "./state.ts";
 
-const MAX_RUNTIME_NOTES = 8;
 const STOP_REQUESTED_STATUS = "[run] ESC received - stopping at next tool boundary...";
 
 export type UiAction =
@@ -119,7 +116,6 @@ export function reduceUiState(state: UiState, action: UiAction): UiState {
         ...state,
         turns: [...state.turns, nextTurn],
         transcriptItems: appendTranscriptItem(state.transcriptItems, { type: "turn", id: nextTurn.id }),
-        runtimeNotes: [],
         activeWrapperToolCallIds: [],
         hiddenToolCallIds: [],
         activeRunId: undefined,
@@ -305,7 +301,6 @@ function reduceFrontendEvent(state: UiState, event: FrontendEventEnvelope): UiSt
         ...state,
         activeWrapperToolCallIds: [],
         hiddenToolCallIds: [],
-        runtimeNotes: [],
         activeRunId: event.data.runId,
         activeProcedure: event.data.procedure,
         activeAssistantTurnId: undefined,
@@ -325,9 +320,8 @@ function reduceFrontendEvent(state: UiState, event: FrontendEventEnvelope): UiSt
         pendingProcedureContinuation: event.data.continuation,
       };
     case "memory_cards":
-      return appendRuntimeLines(state, formatMemoryCardsLines(event.data.cards));
     case "memory_card_stored":
-      return appendRuntimeLines(state, formatStoredMemoryCardLines(event.data.card));
+      return state;
     case "assistant_notice":
       if (shouldIgnoreMismatchedRunEvent(state, event.data.runId)) {
         return state;
@@ -786,13 +780,6 @@ function finalizeAssistantTurn(
         }),
       };
     }),
-  };
-}
-
-function appendRuntimeLines(state: UiState, lines: string[]): UiState {
-  return {
-    ...state,
-    runtimeNotes: [...state.runtimeNotes, ...lines].slice(-MAX_RUNTIME_NOTES),
   };
 }
 

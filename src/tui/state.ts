@@ -62,7 +62,6 @@ export interface UiState {
   transcriptItems: UiTranscriptItem[];
   activeWrapperToolCallIds: string[];
   hiddenToolCallIds: string[];
-  runtimeNotes: string[];
   activeRunId?: string;
   activeProcedure?: string;
   activeAssistantTurnId?: string;
@@ -103,7 +102,6 @@ export function createInitialUiState(params: {
     transcriptItems: [],
     activeWrapperToolCallIds: [],
     hiddenToolCallIds: [],
-    runtimeNotes: [],
     activeRunAttemptedToolCallIds: [],
     activeRunSucceededToolCallIds: [],
     pendingStopRequest: false,
