@@ -8,7 +8,7 @@ import typia from "typia";
 import { expectData } from "../src/core/run-result.ts";
 import {
   jsonType,
-  type CommandContext,
+  type ProcedureApi,
   type KernelValue,
   type Procedure,
   type ProcedureResult,
@@ -739,7 +739,7 @@ function prepareSimplify2Execution(prompt: string, cwd: string): Simplify2State 
 async function resumeFocusPicker(
   prompt: string,
   state: Simplify2State,
-  ctx: CommandContext,
+  ctx: ProcedureApi,
 ): Promise<ProcedureResult | string | void> {
   const root = requireSimplify2StorageRoot(state);
   const reply = prompt.trim();
@@ -1061,7 +1061,7 @@ function formatIterationProgress(iteration: number, maxIterations: number): stri
   return `Iteration ${iteration}/${maxIterations}`;
 }
 
-function loadArtifacts(state: Simplify2State, ctx: CommandContext): Simplify2State {
+function loadArtifacts(state: Simplify2State, ctx: ProcedureApi): Simplify2State {
   const focusId = state.focusRef.id;
   if (!focusId) {
     throw new Error("Simplify2 focus state is missing a focus id.");
@@ -1116,7 +1116,7 @@ function loadArtifacts(state: Simplify2State, ctx: CommandContext): Simplify2Sta
 
 async function refreshArchitectureMemory(
   state: Simplify2State,
-  ctx: CommandContext,
+  ctx: ProcedureApi,
 ): Promise<Simplify2State> {
   state.mode = "explore";
   const proposalResult = await ctx.agent.run(
@@ -1160,7 +1160,7 @@ async function refreshArchitectureMemory(
 
 async function collectObservations(
   state: Simplify2State,
-  ctx: CommandContext,
+  ctx: ProcedureApi,
   scopedPaths: string[] = [],
   reuseCachedObservations = false,
 ): Promise<Simplify2State> {
@@ -1181,7 +1181,7 @@ async function collectObservations(
 
 async function generateAndRankHypotheses(
   state: Simplify2State,
-  ctx: CommandContext,
+  ctx: ProcedureApi,
 ): Promise<Simplify2State> {
   const hypothesisResult = await ctx.agent.run(
     buildHypothesisPrompt(state),
@@ -1246,7 +1246,7 @@ function decideNextAction(state: Simplify2State): Simplify2Action {
 
 async function continueFromAnalysis(
   state: Simplify2State,
-  ctx: CommandContext,
+  ctx: ProcedureApi,
 ): Promise<ProcedureResult | string | void> {
   let current = state;
 
@@ -1288,7 +1288,7 @@ async function continueFromAnalysis(
 async function applySimplificationSlice(
   state: Simplify2State,
   hypothesis: SimplifyHypothesis,
-  ctx: CommandContext,
+  ctx: ProcedureApi,
 ): Promise<Simplify2State> {
   state.mode = "apply";
   const selectedSlice = selectMinimalTrustedTestSlice(state, hypothesis);
@@ -1333,7 +1333,7 @@ async function applySimplificationSlice(
 
 async function validateAndReconcile(
   state: Simplify2State,
-  ctx: CommandContext,
+  ctx: ProcedureApi,
 ): Promise<Simplify2State> {
   state.mode = "reconcile";
   const validation = runSelectedValidation(state);
@@ -1352,7 +1352,7 @@ async function validateAndReconcile(
 async function commitAppliedSlice(
   state: Simplify2State,
   hypothesis: SimplifyHypothesis,
-  ctx: CommandContext,
+  ctx: ProcedureApi,
 ): Promise<Simplify2State> {
   const latestApply = state.notebook.latestApply;
   if (!latestApply) {
@@ -1430,7 +1430,7 @@ function maybeFinishAfterCommit(state: Simplify2State): ProcedureResult | undefi
 async function interpretHumanReply(
   prompt: string,
   state: Simplify2State,
-  ctx: CommandContext,
+  ctx: ProcedureApi,
 ): Promise<SimplifyHumanDecision> {
   const result = await ctx.agent.run(
     buildHumanDecisionPrompt(prompt, state),
@@ -2446,7 +2446,7 @@ function reconcileRankedHypotheses(
 
 async function analyzeCurrentFocus(
   state: Simplify2State,
-  ctx: CommandContext,
+  ctx: ProcedureApi,
 ): Promise<Simplify2State> {
   const reusePlan = planAnalysisReuse(state);
   state.analysisCache = {

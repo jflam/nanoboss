@@ -411,8 +411,8 @@ export interface DeferredProcedureMetadata extends ProcedureMetadata {
 }
 
 export interface Procedure extends ProcedureMetadata {
-  execute(prompt: string, ctx: CommandContext): Promise<ProcedureResult | string | void>;
-  resume?(prompt: string, state: KernelValue, ctx: CommandContext): Promise<ProcedureResult | string | void>;
+  execute(prompt: string, ctx: ProcedureApi): Promise<ProcedureResult | string | void>;
+  resume?(prompt: string, state: KernelValue, ctx: ProcedureApi): Promise<ProcedureResult | string | void>;
 }
 
 export interface ProcedureRegistryLike {
@@ -513,7 +513,7 @@ export interface ProcedureInvocationApi {
   ): Promise<RunResult<T>>;
 }
 
-export interface CommandContext {
+export interface ProcedureApi {
   readonly cwd: string;
   readonly sessionId: string;
   readonly agent: AgentInvocationApi;

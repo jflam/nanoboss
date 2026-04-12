@@ -6,7 +6,7 @@ import typia from "typia";
 import { expectData, expectDataRef } from "../src/core/run-result.ts";
 import {
   jsonType,
-  type CommandContext,
+  type ProcedureApi,
   type Procedure,
 } from "../src/core/types.ts";
 
@@ -143,7 +143,7 @@ function buildResearchExecutionPrompt(prompt: string): string {
 }
 
 async function writeReportToPlans(
-  ctx: CommandContext,
+  ctx: ProcedureApi,
   report: string,
   descriptionWords: string[],
 ): Promise<string> {

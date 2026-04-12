@@ -5,7 +5,7 @@ import typia from "typia";
 import { expectData } from "../src/core/run-result.ts";
 import { jsonType } from "../src/core/types.ts";
 import type {
-  CommandContext,
+  ProcedureApi,
   Procedure,
 } from "../src/core/types.ts";
 
@@ -273,7 +273,7 @@ function findErrorGroup(
 }
 
 async function discoverLinter(
-  ctx: CommandContext,
+  ctx: ProcedureApi,
   prompt: string,
 ): Promise<LinterDiscoveryResult> {
   const result = await ctx.agent.run(

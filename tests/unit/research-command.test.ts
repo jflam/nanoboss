@@ -5,7 +5,7 @@ import { join } from "node:path";
 
 import researchProcedure from "../../procedures/research.ts";
 import type {
-  CommandContext,
+  ProcedureApi,
   DownstreamAgentConfig,
   RunResult,
 } from "../../src/core/types.ts";
@@ -163,14 +163,14 @@ function createMockContext(params: {
   cwd: string;
   uiText(text: string): void;
   agentRun(prompt: string, descriptorOrOptions?: unknown, maybeOptions?: unknown): Promise<RunResult>;
-}): CommandContext {
+}): ProcedureApi {
   const defaultAgentConfig: DownstreamAgentConfig = {
     provider: "copilot",
     command: "bun",
     args: [],
     cwd: params.cwd,
   };
-  const refs: CommandContext["state"]["refs"] = {
+  const refs: ProcedureApi["state"]["refs"] = {
     async read() {
       throw new Error("Not implemented in test");
     },
@@ -181,7 +181,7 @@ function createMockContext(params: {
       throw new Error("Not implemented in test");
     },
   };
-  const runs: CommandContext["state"]["runs"] = {
+  const runs: ProcedureApi["state"]["runs"] = {
     async recent() {
       return [];
     },
@@ -207,15 +207,15 @@ function createMockContext(params: {
       return [];
     },
   };
-  const agent: CommandContext["agent"] = {
-    run: params.agentRun as CommandContext["agent"]["run"],
+  const agent: ProcedureApi["agent"] = {
+    run: params.agentRun as ProcedureApi["agent"]["run"],
     session() {
       return {
-        run: params.agentRun as CommandContext["agent"]["run"],
+        run: params.agentRun as ProcedureApi["agent"]["run"],
       };
     },
   };
-  const ui: CommandContext["ui"] = {
+  const ui: ProcedureApi["ui"] = {
     text: params.uiText,
     info(text) {
       params.uiText(`INFO:${text}`);

@@ -7,7 +7,7 @@ import { ProcedureDispatchJobManager } from "../../src/procedure/dispatch-jobs.t
 import { expectData } from "../../src/core/run-result.ts";
 import {
   jsonType,
-  type CommandContext,
+  type ProcedureApi,
   type ProcedureResult,
 } from "../../src/core/types.ts";
 import { summarizeText } from "../../src/util/text.ts";
@@ -80,7 +80,7 @@ type AutoresearchIterationResult =
 
 export async function executeAutoresearchCommand(
   prompt: string,
-  _ctx: CommandContext,
+  _ctx: ProcedureApi,
 ): Promise<ProcedureResult> {
   const trimmed = prompt.trim();
   const lines = [
@@ -104,7 +104,7 @@ export async function executeAutoresearchCommand(
 
 export async function executeAutoresearchStartCommand(
   prompt: string,
-  ctx: CommandContext,
+  ctx: ProcedureApi,
 ): Promise<ProcedureResult> {
   const goal = prompt.trim();
   if (!goal) {
@@ -138,7 +138,7 @@ export async function executeAutoresearchStartCommand(
 
 export async function executeAutoresearchContinueCommand(
   prompt: string,
-  ctx: CommandContext,
+  ctx: ProcedureApi,
 ): Promise<ProcedureResult> {
   const note = prompt.trim() || undefined;
   const paths = resolveAutoresearchPaths(ctx.cwd);
@@ -206,7 +206,7 @@ export async function executeAutoresearchContinueCommand(
 
 export async function executeAutoresearchStatusCommand(
   prompt: string,
-  ctx: CommandContext,
+  ctx: ProcedureApi,
 ): Promise<ProcedureResult> {
   void prompt;
   const paths = resolveAutoresearchPaths(ctx.cwd);
@@ -215,7 +215,7 @@ export async function executeAutoresearchStatusCommand(
 
 export async function executeAutoresearchClearCommand(
   prompt: string,
-  ctx: CommandContext,
+  ctx: ProcedureApi,
 ): Promise<ProcedureResult> {
   void prompt;
   const paths = resolveAutoresearchPaths(ctx.cwd);
@@ -250,7 +250,7 @@ export async function executeAutoresearchClearCommand(
 
 export async function executeAutoresearchFinalizeCommand(
   prompt: string,
-  ctx: CommandContext,
+  ctx: ProcedureApi,
 ): Promise<ProcedureResult> {
   void prompt;
   const paths = resolveAutoresearchPaths(ctx.cwd);
@@ -328,7 +328,7 @@ function isKeptAutoresearchRecord(
 async function initializeAutoresearch(
   paths: AutoresearchPaths,
   goal: string,
-  ctx: CommandContext,
+  ctx: ProcedureApi,
 ): Promise<ProcedureResult> {
   ensureCleanWorktree(paths.repoRoot, "start autoresearch");
   printAutoresearchProgress(ctx, "Configuring autoresearch session...");
@@ -428,7 +428,7 @@ async function runForegroundAutoresearchLoop(params: {
   paths: AutoresearchPaths;
   state: AutoresearchState;
   records: AutoresearchExperimentRecord[];
-  ctx: CommandContext;
+  ctx: ProcedureApi;
 }): Promise<ProcedureResult> {
   let state = params.state;
   let records = params.records;
@@ -504,7 +504,7 @@ async function runAutoresearchIteration(params: {
   paths: AutoresearchPaths;
   state: AutoresearchState;
   records: AutoresearchExperimentRecord[];
-  ctx: CommandContext;
+  ctx: ProcedureApi;
 }): Promise<AutoresearchIterationResult> {
   const experiment = await proposeExperiment(params.ctx, params.state, params.records);
   if (experiment.stop) {
@@ -594,11 +594,11 @@ function buildForegroundCompletionResult(
   };
 }
 
-function assertAutoresearchNotCancelled(ctx: Pick<CommandContext, "assertNotCancelled">): void {
+function assertAutoresearchNotCancelled(ctx: Pick<ProcedureApi, "assertNotCancelled">): void {
   ctx.assertNotCancelled();
 }
 
-function cancelActiveAutoresearchDispatches(ctx: CommandContext): number {
+function cancelActiveAutoresearchDispatches(ctx: ProcedureApi): number {
   const manager = new ProcedureDispatchJobManager({
     cwd: ctx.cwd,
     sessionId: ctx.sessionId,
@@ -613,7 +613,7 @@ function cancelActiveAutoresearchDispatches(ctx: CommandContext): number {
   ]);
 }
 
-async function buildInitializationPlan(prompt: string, ctx: CommandContext): Promise<AutoresearchInitPlan> {
+async function buildInitializationPlan(prompt: string, ctx: ProcedureApi): Promise<AutoresearchInitPlan> {
   const result = await ctx.agent.run(
     [
       "You are configuring a deterministic autoresearch optimization session for NanoBoss.",
@@ -634,7 +634,7 @@ async function buildInitializationPlan(prompt: string, ctx: CommandContext): Pro
 }
 
 async function proposeExperiment(
-  ctx: CommandContext,
+  ctx: ProcedureApi,
   state: AutoresearchState,
   records: AutoresearchExperimentRecord[],
 ): Promise<AutoresearchExperimentSpec> {
@@ -664,7 +664,7 @@ async function proposeExperiment(
 }
 
 async function applyExperiment(
-  ctx: CommandContext,
+  ctx: ProcedureApi,
   state: AutoresearchState,
   experiment: AutoresearchExperimentSpec,
   records: AutoresearchExperimentRecord[],
@@ -702,7 +702,7 @@ async function executeExperimentRun(params: {
   priorRecords: AutoresearchExperimentRecord[];
   experiment: AutoresearchExperimentSpec;
   applied: AutoresearchApplyResult;
-  ctx: CommandContext;
+  ctx: ProcedureApi;
 }): Promise<AutoresearchExperimentRecord> {
   const promptContext = params.state.pendingContextNotes;
   const changedBeforeEvaluation = getChangedFiles(params.paths.repoRoot);
@@ -1016,7 +1016,7 @@ function prepareAutoresearchBranch(
   }
 }
 
-function printAutoresearchProgress(ctx: CommandContext, message: string): void {
+function printAutoresearchProgress(ctx: ProcedureApi, message: string): void {
   ctx.ui.text(`${message}\n`);
 }
 

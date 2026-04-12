@@ -30,7 +30,7 @@ import type {
   AutoresearchExperimentSpec,
   AutoresearchInitPlan,
 } from "../../procedures/autoresearch/types.ts";
-import type { CommandContext, DownstreamAgentConfig, RunResult } from "../../src/core/types.ts";
+import type { ProcedureApi, DownstreamAgentConfig, RunResult } from "../../src/core/types.ts";
 
 const tempDirs: string[] = [];
 
@@ -660,7 +660,7 @@ function createMockContext(
     sessionId?: string;
     assertNotCancelled?: (checkCount: number) => void;
   } = {},
-): CommandContext {
+): ProcedureApi {
   const defaultAgentConfig: DownstreamAgentConfig = {
     provider: "copilot",
     command: "copilot",
@@ -678,8 +678,8 @@ function createMockContext(
       },
       data: await handler(prompt, callCount),
     } as RunResult;
-  }) as CommandContext["agent"]["run"];
-  const refs: CommandContext["state"]["refs"] = {
+  }) as ProcedureApi["agent"]["run"];
+  const refs: ProcedureApi["state"]["refs"] = {
     async read() {
       throw new Error("Not implemented in test");
     },
@@ -690,7 +690,7 @@ function createMockContext(
       throw new Error("Not implemented in test");
     },
   };
-  const runs: CommandContext["state"]["runs"] = {
+  const runs: ProcedureApi["state"]["runs"] = {
     async recent() {
       return [];
     },
@@ -716,7 +716,7 @@ function createMockContext(
       return [];
     },
   };
-  const agent: CommandContext["agent"] = {
+  const agent: ProcedureApi["agent"] = {
     run: callAgent,
     session() {
       return {

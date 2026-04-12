@@ -18,7 +18,7 @@ import {
   type PreCommitChecksResult,
   type PreCommitChecksFreshRunReason,
 } from "../../procedures/nanoboss/test-cache-lib.ts";
-import type { CommandContext, RunResult, ValueRef } from "../../src/core/types.ts";
+import type { ProcedureApi, RunResult, ValueRef } from "../../src/core/types.ts";
 
 describe("pre-commit test cache helper", () => {
   test("returns the same fingerprint for the same workspace state", () => {
@@ -300,7 +300,7 @@ describe("nanoboss/pre-commit-checks procedure", () => {
 
     const result = await procedure.execute("manual-approve", createMockContext({
       cwd: "/repo",
-      print(text) {
+      emitText(text) {
         printed.push(text);
       },
     }));
@@ -374,7 +374,7 @@ describe("nanoboss/pre-commit-checks procedure", () => {
 
     await procedure.execute("--verbose", createMockContext({
       cwd: "/repo",
-      print(text) {
+      emitText(text) {
         printed.push(text);
       },
     }));
@@ -433,7 +433,7 @@ describe("nanoboss/pre-commit-checks procedure", () => {
 
     const result = await procedure.execute("", createMockContext({
       cwd: "/repo",
-      async callAgent(prompt) {
+      async runAgent(prompt) {
         calls.push(prompt);
         return {
           cell: { sessionId: "session", cellId: "agent" },
@@ -555,7 +555,7 @@ describe("nanoboss/pre-commit-checks procedure", () => {
       initial.pause.state,
       createMockContext({
         cwd: "/repo",
-        async callAgent(prompt) {
+        async runAgent(prompt) {
           calls.push(prompt);
           return {
             cell: { sessionId: "session", cellId: "agent" },
@@ -639,14 +639,14 @@ describe("nanoboss/commit procedure", () => {
       "message context",
       createMockContext({
         cwd: "/repo",
-        async callProcedure(name, prompt) {
+        async runProcedure(name, prompt) {
           calls.push(`procedure:${name}:${prompt}`);
           return {
             cell: { sessionId: "session", cellId: "checks" },
             data: passingChecks({ cacheHit: false }),
           } satisfies RunResult<PreCommitChecksResult>;
         },
-        async callAgent(prompt) {
+        async runAgent(prompt) {
           calls.push(`agent:${prompt}`);
           return {
             cell: { sessionId: "session", cellId: "agent" },
@@ -678,13 +678,13 @@ describe("nanoboss/commit procedure", () => {
       "",
       createMockContext({
         cwd: "/repo",
-        async callProcedure() {
+        async runProcedure() {
           return {
             cell: { sessionId: "session", cellId: "checks" },
             data: passingChecks({ passed: false, exitCode: 2 }),
           } satisfies RunResult<PreCommitChecksResult>;
         },
-        async callAgent() {
+        async runAgent() {
           agentCalled = true;
           return {
             cell: { sessionId: "session", cellId: "agent" },
@@ -715,14 +715,14 @@ describe("nanoboss/commit procedure", () => {
       "--refresh tighten message",
       createMockContext({
         cwd: "/repo",
-        async callProcedure(name, prompt) {
+        async runProcedure(name, prompt) {
           calls.push(`procedure:${name}:${prompt}`);
           return {
             cell: { sessionId: "session", cellId: "checks" },
             data: passingChecks({ cacheHit: true }),
           } satisfies RunResult<PreCommitChecksResult>;
         },
-        async callAgent(prompt) {
+        async runAgent(prompt) {
           calls.push(`agent:${prompt}`);
           return {
             cell: { sessionId: "session", cellId: "agent" },
@@ -745,14 +745,14 @@ describe("nanoboss/commit procedure", () => {
       "manual-approve tighten message",
       createMockContext({
         cwd: "/repo",
-        async callProcedure(name, prompt) {
+        async runProcedure(name, prompt) {
           calls.push(`procedure:${name}:${prompt}`);
           return {
             cell: { sessionId: "session", cellId: "checks" },
             data: passingChecks({ cacheHit: true }),
           } satisfies RunResult<PreCommitChecksResult>;
         },
-        async callAgent(prompt) {
+        async runAgent(prompt) {
           calls.push(`agent:${prompt}`);
           return {
             cell: { sessionId: "session", cellId: "agent" },
@@ -775,13 +775,13 @@ describe("nanoboss/commit procedure", () => {
       "commit this work described in plans/2026-04-09-pre-commit-checks-and-commit-fingerprint-plan.md",
       createMockContext({
         cwd: "/repo",
-        async callProcedure() {
+        async runProcedure() {
           return {
             cell: { sessionId: "session", cellId: "checks" },
             data: passingChecks({ cacheHit: true }),
           } satisfies RunResult<PreCommitChecksResult>;
         },
-        async callAgent(prompt) {
+        async runAgent(prompt) {
           calls.push(prompt);
           return {
             cell: { sessionId: "session", cellId: "agent" },
@@ -838,37 +838,37 @@ function makeCommandResult(
 function createMockContext(
   overrides: {
     cwd: string;
-    callAgent?: (prompt: string, options?: unknown) => Promise<RunResult<string>>;
-    callProcedure?: (name: string, prompt: string) => Promise<RunResult>;
-    print?: (text: string) => void;
+    runAgent?: (prompt: string, options?: unknown) => Promise<RunResult<string>>;
+    runProcedure?: (name: string, prompt: string) => Promise<RunResult>;
+    emitText?: (text: string) => void;
   },
-): CommandContext {
-  const callAgent = async (prompt: string, options?: unknown) => {
-    if (!overrides.callAgent) {
-      throw new Error(`Unexpected callAgent: ${prompt} ${String(options)}`);
+): ProcedureApi {
+  const runAgent = async (prompt: string, options?: unknown) => {
+    if (!overrides.runAgent) {
+      throw new Error(`Unexpected ctx.agent.run: ${prompt} ${String(options)}`);
     }
-    return await overrides.callAgent(prompt, options);
+    return await overrides.runAgent(prompt, options);
   };
-  const callProcedure = async (name: string, prompt: string) => {
-    if (!overrides.callProcedure) {
-      throw new Error(`Unexpected callProcedure: ${name} ${prompt}`);
+  const runProcedure = async (name: string, prompt: string) => {
+    if (!overrides.runProcedure) {
+      throw new Error(`Unexpected ctx.procedures.run: ${name} ${prompt}`);
     }
-    return await overrides.callProcedure(name, prompt);
+    return await overrides.runProcedure(name, prompt);
   };
-  const print = (text: string) => {
-    overrides.print?.(text);
+  const emitText = (text: string) => {
+    overrides.emitText?.(text);
   };
-  const refs = {} as CommandContext["state"]["refs"];
-  const runs = {} as CommandContext["state"]["runs"];
+  const refs = {} as ProcedureApi["state"]["refs"];
+  const runs = {} as ProcedureApi["state"]["runs"];
 
   return {
     cwd: overrides.cwd,
     sessionId: "session",
     agent: {
-      run: callAgent as CommandContext["agent"]["run"],
+      run: runAgent as ProcedureApi["agent"]["run"],
       session() {
         return {
-          run: callAgent as CommandContext["agent"]["run"],
+          run: runAgent as ProcedureApi["agent"]["run"],
         };
       },
     },
@@ -877,15 +877,15 @@ function createMockContext(
       refs,
     },
     ui: {
-      text: print,
-      info: print,
-      warning: print,
-      error: print,
+      text: emitText,
+      info: emitText,
+      warning: emitText,
+      error: emitText,
       status() {},
       card() {},
     },
     procedures: {
-      run: callProcedure as CommandContext["procedures"]["run"],
+      run: runProcedure as ProcedureApi["procedures"]["run"],
     },
     session: {
       getDefaultAgentConfig() {

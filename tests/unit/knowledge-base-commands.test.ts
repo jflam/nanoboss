@@ -12,7 +12,7 @@ import kbLinkProcedure from "../../procedures/kb/link.ts";
 import kbRenderProcedure from "../../procedures/kb/render.ts";
 import kbRefreshProcedure from "../../procedures/kb/refresh.ts";
 import type {
-  CommandContext,
+  ProcedureApi,
   DownstreamAgentConfig,
   Procedure,
   ProcedureResult,
@@ -402,7 +402,7 @@ describe("knowledge-base procedures", () => {
       args: [],
       cwd,
     };
-    const refs: CommandContext["state"]["refs"] = {
+    const refs: ProcedureApi["state"]["refs"] = {
       async read() {
         throw new Error("Not implemented in test");
       },
@@ -413,7 +413,7 @@ describe("knowledge-base procedures", () => {
         throw new Error("Not implemented in test");
       },
     };
-    const runs: CommandContext["state"]["runs"] = {
+    const runs: ProcedureApi["state"]["runs"] = {
       async recent() {
         return [];
       },
@@ -440,7 +440,7 @@ describe("knowledge-base procedures", () => {
       },
     };
 
-    const context: CommandContext = {
+    const context: ProcedureApi = {
       cwd,
       sessionId: "test-session",
       agent: {
@@ -521,7 +521,7 @@ describe("knowledge-base procedures", () => {
             default:
               throw new Error(`Unexpected nested procedure: ${name}`);
           }
-        }) as CommandContext["procedures"]["run"],
+        }) as ProcedureApi["procedures"]["run"],
       },
       session: {
         getDefaultAgentConfig() {
@@ -822,17 +822,17 @@ function createHarness(params: {
 
     const context = createMockContext({
       cwd: params.cwd,
-      print: (text) => {
+      emitText: (text) => {
         prints.push(text);
       },
       getNextAgentResult: () => {
         const next = params.agentResults.shift();
         if (next === undefined) {
-          throw new Error("Unexpected callAgent in test harness");
+          throw new Error("Unexpected ctx.agent.run in test harness");
         }
         return next;
       },
-      callProcedure: async (procedureName, procedurePrompt) => {
+      runProcedure: async (procedureName, procedurePrompt) => {
         const nested = await invoke(procedureName, procedurePrompt);
         const normalized = normalizeProcedureOutput(nested);
         cellCounter += 1;
@@ -860,14 +860,14 @@ function createHarness(params: {
 
 function createMockContext(params: {
   cwd: string;
-  print(text: string): void;
+  emitText(text: string): void;
   getNextAgentResult(): unknown;
-  callProcedure(name: string, prompt: string): Promise<RunResult>;
+  runProcedure(name: string, prompt: string): Promise<RunResult>;
   defaultAgentConfig: DownstreamAgentConfig;
-}): CommandContext {
+}): ProcedureApi {
   let agentCounter = 0;
 
-  const callAgent = async () => {
+  const runAgent = async () => {
     agentCounter += 1;
     return {
       cell: {
@@ -877,7 +877,7 @@ function createMockContext(params: {
       data: params.getNextAgentResult(),
     } as RunResult;
   };
-  const refs: CommandContext["state"]["refs"] = {
+  const refs: ProcedureApi["state"]["refs"] = {
     async read() {
       throw new Error("Not implemented in test");
     },
@@ -888,7 +888,7 @@ function createMockContext(params: {
       throw new Error("Not implemented in test");
     },
   };
-  const runs: CommandContext["state"]["runs"] = {
+  const runs: ProcedureApi["state"]["runs"] = {
     async recent() {
       return [];
     },
@@ -914,27 +914,27 @@ function createMockContext(params: {
       return [];
     },
   };
-  const agent: CommandContext["agent"] = {
-    run: callAgent as CommandContext["agent"]["run"],
+  const agent: ProcedureApi["agent"] = {
+    run: runAgent as ProcedureApi["agent"]["run"],
     session() {
       return {
-        run: callAgent as CommandContext["agent"]["run"],
+        run: runAgent as ProcedureApi["agent"]["run"],
       };
     },
   };
-  const procedures: CommandContext["procedures"] = {
-    run: params.callProcedure as CommandContext["procedures"]["run"],
+  const procedures: ProcedureApi["procedures"] = {
+    run: params.runProcedure as ProcedureApi["procedures"]["run"],
   };
-  const ui: CommandContext["ui"] = {
-    text: params.print,
+  const ui: ProcedureApi["ui"] = {
+    text: params.emitText,
     info(text) {
-      params.print(text);
+      params.emitText(text);
     },
     warning(text) {
-      params.print(text);
+      params.emitText(text);
     },
     error(text) {
-      params.print(text);
+      params.emitText(text);
     },
     status() {
       throw new Error("Not implemented in test");

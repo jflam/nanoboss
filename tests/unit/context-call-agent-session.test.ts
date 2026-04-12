@@ -9,7 +9,7 @@ import { DefaultConversationSession } from "../../src/agent/default-session.ts";
 import { CommandContextImpl } from "../../src/core/context.ts";
 import { resolveDownstreamAgentConfig } from "../../src/core/config.ts";
 import { RunLogger } from "../../src/core/logger.ts";
-import { jsonType, type DownstreamAgentConfig } from "../../src/core/types.ts";
+import { jsonType, type DownstreamAgentConfig, type ProcedureApi } from "../../src/core/types.ts";
 import { ProcedureRegistry } from "../../src/procedure/registry.ts";
 import { SessionStore } from "../../src/session/index.ts";
 
@@ -33,7 +33,7 @@ afterEach(() => {
   }
 });
 
-describe("CommandContext named session APIs", () => {
+describe("procedure API session namespaces", () => {
   test("typed default-session calls reuse the default transport and keep parse retries", async () => {
     let submittedCount = 0;
     const { conversation, ctx, emittedUpdates } = createContext({
@@ -306,7 +306,7 @@ function createContext(options: {
   prepareDefaultPrompt?: (prompt: string) => { prompt: string; markSubmitted?: () => void };
 } = {}): {
   conversation: DefaultConversationSession;
-  ctx: CommandContextImpl;
+  ctx: ProcedureApi;
   emittedUpdates: acp.SessionUpdate[];
   registry: ProcedureRegistry;
   store: SessionStore;

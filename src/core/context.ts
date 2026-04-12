@@ -13,7 +13,7 @@ import type { RunLogger } from "./logger.ts";
 import type { RunTimingTrace } from "./timing-trace.ts";
 import type {
   AgentInvocationApi,
-  CommandContext,
+  ProcedureApi,
   DownstreamAgentConfig,
   DownstreamAgentSelection,
   ProcedureInvocationApi,
@@ -50,7 +50,7 @@ interface CommandContextParams {
   timingTrace?: RunTimingTrace;
 }
 
-export class CommandContextImpl implements CommandContext {
+export class CommandContextImpl implements ProcedureApi {
   readonly cwd: string;
   readonly sessionId: string;
   readonly agent: AgentInvocationApi;

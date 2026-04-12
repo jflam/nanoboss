@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import simplifyProcedure from "../../procedures/simplify.ts";
 import type {
-  CommandContext,
+  ProcedureApi,
   DownstreamAgentConfig,
   ProcedureResult,
   RunResult,
@@ -127,7 +127,7 @@ describe("simplify procedure", () => {
   });
 });
 
-function createMockContext(agentResults: unknown[], prompts: string[] = []): CommandContext {
+function createMockContext(agentResults: unknown[], prompts: string[] = []): ProcedureApi {
   let callCount = 0;
   const defaultAgentConfig: DownstreamAgentConfig = {
     provider: "copilot",
@@ -149,8 +149,8 @@ function createMockContext(agentResults: unknown[], prompts: string[] = []): Com
       },
       data: next,
     } as RunResult;
-  }) as CommandContext["agent"]["run"];
-  const refs: CommandContext["state"]["refs"] = {
+  }) as ProcedureApi["agent"]["run"];
+  const refs: ProcedureApi["state"]["refs"] = {
     async read() {
       throw new Error("Not implemented in test");
     },
@@ -161,7 +161,7 @@ function createMockContext(agentResults: unknown[], prompts: string[] = []): Com
       throw new Error("Not implemented in test");
     },
   };
-  const runs: CommandContext["state"]["runs"] = {
+  const runs: ProcedureApi["state"]["runs"] = {
     async recent() {
       return [];
     },
@@ -187,7 +187,7 @@ function createMockContext(agentResults: unknown[], prompts: string[] = []): Com
       return [];
     },
   };
-  const agent: CommandContext["agent"] = {
+  const agent: ProcedureApi["agent"] = {
     run: callAgent,
     session() {
       return {

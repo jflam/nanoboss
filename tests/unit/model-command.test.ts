@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import modelProcedure from "../../procedures/model.ts";
-import type { CommandContext, DownstreamAgentConfig } from "../../src/core/types.ts";
+import type { ProcedureApi, DownstreamAgentConfig } from "../../src/core/types.ts";
 
 describe("/model command", () => {
   test("shows the last observed default-session context window when available", async () => {
@@ -16,7 +16,7 @@ describe("/model command", () => {
   });
 });
 
-function createMockContext(): CommandContext {
+function createMockContext(): ProcedureApi {
   const defaultAgentConfig: DownstreamAgentConfig = {
     provider: "codex",
     command: "codex-acp",
@@ -24,7 +24,7 @@ function createMockContext(): CommandContext {
     model: "gpt-5.2-codex",
     reasoningEffort: "xhigh",
   };
-  const refs: CommandContext["state"]["refs"] = {
+  const refs: ProcedureApi["state"]["refs"] = {
     async read() {
       throw new Error("Not implemented in test");
     },
@@ -35,7 +35,7 @@ function createMockContext(): CommandContext {
       throw new Error("Not implemented in test");
     },
   };
-  const runs: CommandContext["state"]["runs"] = {
+  const runs: ProcedureApi["state"]["runs"] = {
     async recent() {
       return [];
     },
@@ -61,24 +61,24 @@ function createMockContext(): CommandContext {
       return [];
     },
   };
-  const agent: CommandContext["agent"] = {
+  const agent: ProcedureApi["agent"] = {
     run: (async () => {
       throw new Error("Not implemented in test");
-    }) as CommandContext["agent"]["run"],
+    }) as ProcedureApi["agent"]["run"],
     session() {
       return {
         run: (async () => {
           throw new Error("Not implemented in test");
-        }) as CommandContext["agent"]["run"],
+        }) as ProcedureApi["agent"]["run"],
       };
     },
   };
-  const procedures: CommandContext["procedures"] = {
+  const procedures: ProcedureApi["procedures"] = {
     async run() {
       throw new Error("Not implemented in test");
     },
   };
-  const ui: CommandContext["ui"] = {
+  const ui: ProcedureApi["ui"] = {
     text() {},
     info() {},
     warning() {},

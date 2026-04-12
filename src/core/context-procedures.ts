@@ -4,7 +4,7 @@ import { formatErrorMessage } from "./error-format.ts";
 import type { RunLogger } from "./logger.ts";
 import type { ContextSessionApiImpl, ProcedureInvocationBinding } from "./context-session.ts";
 import type {
-  CommandContext,
+  ProcedureApi,
   CommandCallProcedureOptions,
   KernelValue,
   ProcedureInvocationApi,
@@ -28,7 +28,7 @@ interface ProcedureInvocationApiImplParams {
   assertCanStartBoundary: () => void;
   spanId: string;
   cell: ActiveCell;
-  createChildContext: (params: ChildContextBindingParams) => CommandContext;
+  createChildContext: (params: ChildContextBindingParams) => ProcedureApi;
 }
 
 export class ProcedureInvocationApiImpl implements ProcedureInvocationApi {

@@ -7,7 +7,7 @@ import { CommandContextImpl } from "../../src/core/context.ts";
 import { RunLogger } from "../../src/core/logger.ts";
 import { ProcedureRegistry } from "../../src/procedure/registry.ts";
 import { SessionStore } from "../../src/session/index.ts";
-import type { DownstreamAgentConfig, DownstreamAgentSelection } from "../../src/core/types.ts";
+import type { DownstreamAgentConfig, DownstreamAgentSelection, ProcedureApi } from "../../src/core/types.ts";
 
 const tempDirs: string[] = [];
 
@@ -20,7 +20,7 @@ afterEach(() => {
   }
 });
 
-describe("CommandContextImpl named procedure API", () => {
+describe("procedure API surface", () => {
   test("exposes agent, state, ui, procedures, and session surfaces", () => {
     const expectedConfig: DownstreamAgentConfig = {
       provider: "codex",
@@ -29,7 +29,7 @@ describe("CommandContextImpl named procedure API", () => {
       model: "gpt-5.4/high",
     };
     let currentConfig = expectedConfig;
-    const ctx = createContext({
+    const ctx: ProcedureApi = createContext({
       getDefaultAgentConfig: () => currentConfig,
       setDefaultAgentSelection: (selection) => {
         currentConfig = {
@@ -60,7 +60,7 @@ describe("CommandContextImpl named procedure API", () => {
   });
 
   test("ctx.agent.session(mode).run binds the session mode for convenience", async () => {
-    const ctx = createContext();
+    const ctx: ProcedureApi = createContext();
     const captured: unknown[] = [];
 
     Reflect.set(ctx.agent as object, "run", async (...args: unknown[]) => {

@@ -1,68 +1,151 @@
 import { describe, expect, test } from "bun:test";
 
 import { createCreateProcedure } from "../../src/procedure/create.ts";
+import type { ProcedureApi, ProcedureRegistryLike } from "../../src/core/types.ts";
 
 describe("create procedure", () => {
   test("reports invalid generated procedure names without obscuring the cause", async () => {
-    const procedure = createCreateProcedure({
-      get: () => undefined,
-      register() {},
+    const procedure = createCreateProcedure(createRegistry({
       async loadProcedureFromPath() {
         throw new Error("loadProcedureFromPath should not be called");
       },
       async persist() {
         throw new Error("persist should not be called");
       },
-      listMetadata: () => [],
-    });
+    }));
 
-    await expect(procedure.execute("make something", {
-      cwd: process.cwd(),
-      agent: {
-        async run() {
-          return {
-            data: {
-              name: "review///...",
-              source: "export default { name: \"review\", description: \"\", async execute() { return {}; } };",
-            },
-          };
+    await expect(procedure.execute("make something", createProcedureApi(async () => {
+      return {
+        data: {
+          name: "review///...",
+          source: "export default { name: \"review\", description: \"\", async execute() { return {}; } };",
         },
-        session() {
-          throw new Error("agent.session should not be called");
-        },
+      };
+    }))).rejects.toThrow("Generated procedure name was invalid: Procedure name segment was invalid");
+  });
+
+  test("teaches generated procedures the ProcedureApi surface", async () => {
+    let generatedPrompt = "";
+    const procedure = createCreateProcedure(createRegistry({
+      async loadProcedureFromPath() {
+        return {
+          name: "review",
+          description: "review",
+          async execute() {
+            return {};
+          },
+        };
       },
-      procedures: {
-        run() {
-          throw new Error("procedures.run should not be called");
-        },
+      async persist() {
+        return "/tmp/review.ts";
       },
-      ui: {
-        text() {},
-        info() {},
-        warning() {},
-        error() {},
-        status() {},
-        card() {},
-      },
-      state: {
-        runs: {} as never,
-        refs: {} as never,
-      },
-      session: {
-        getDefaultAgentConfig() {
-          throw new Error("session.getDefaultAgentConfig should not be called");
+    }));
+
+    await procedure.execute("make something", createProcedureApi(async (...args: unknown[]) => {
+      generatedPrompt = args[0] as string;
+      return {
+        data: {
+          name: "review",
+          source: [
+            "import type { ProcedureApi } from \"../src/core/types.ts\";",
+            "",
+            "export default {",
+            "  name: \"review\",",
+            "  description: \"review\",",
+            "  async execute(prompt: string, ctx: ProcedureApi) {",
+            "    return { summary: prompt + ctx.cwd };",
+            "  },",
+            "};",
+          ].join("\n"),
         },
-        setDefaultAgentSelection() {
-          throw new Error("session.setDefaultAgentSelection should not be called");
-        },
-        async getDefaultAgentTokenSnapshot() {
-          return undefined;
-        },
-        async getDefaultAgentTokenUsage() {
-          return undefined;
-        },
-      },
-      assertNotCancelled() {},
-    } as never)).rejects.toThrow("Generated procedure name was invalid: Procedure name segment was invalid");
+      };
+    }));
+
+    expect(generatedPrompt).toContain("ctx: ProcedureApi");
+    expect(generatedPrompt).toContain("The procedure API provides:");
+    expect(generatedPrompt).not.toContain("CommandContext");
   });
 });
+
+function createRegistry(
+  overrides: Partial<ProcedureRegistryLike> = {},
+): ProcedureRegistryLike {
+  return {
+    get: () => undefined,
+    register() {},
+    async loadProcedureFromPath() {
+      throw new Error("loadProcedureFromPath should not be called");
+    },
+    async persist() {
+      throw new Error("persist should not be called");
+    },
+    listMetadata: () => [],
+    ...overrides,
+  };
+}
+
+function createProcedureApi(
+  agentRun: (
+    prompt: string,
+    descriptorOrOptions?: unknown,
+    options?: unknown,
+  ) => Promise<{ data?: unknown }>,
+): ProcedureApi {
+  const run = (async (
+    prompt: string,
+    descriptorOrOptions?: unknown,
+    options?: unknown,
+  ) => {
+    const result = await agentRun(prompt, descriptorOrOptions, options);
+    return {
+      cell: {
+        sessionId: "session",
+        cellId: "agent-run",
+      },
+      ...result,
+    };
+  }) as ProcedureApi["agent"]["run"];
+
+  return {
+    cwd: process.cwd(),
+    sessionId: "session",
+    agent: {
+      run,
+      session() {
+        throw new Error("agent.session should not be called");
+      },
+    },
+    procedures: {
+      run() {
+        throw new Error("procedures.run should not be called");
+      },
+    },
+    ui: {
+      text() {},
+      info() {},
+      warning() {},
+      error() {},
+      status() {},
+      card() {},
+    },
+    state: {
+      runs: {} as never,
+      refs: {} as never,
+    },
+    session: {
+      getDefaultAgentConfig() {
+        throw new Error("session.getDefaultAgentConfig should not be called");
+      },
+      setDefaultAgentSelection() {
+        throw new Error("session.setDefaultAgentSelection should not be called");
+      },
+      async getDefaultAgentTokenSnapshot() {
+        return undefined;
+      },
+      async getDefaultAgentTokenUsage() {
+        return undefined;
+      },
+    },
+    assertNotCancelled() {},
+  };
+}

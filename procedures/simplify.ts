@@ -3,7 +3,7 @@ import typia from "typia";
 import { expectData } from "../src/core/run-result.ts";
 import {
   jsonType,
-  type CommandContext,
+  type ProcedureApi,
   type KernelValue,
   type Procedure,
   type ProcedureResult,
@@ -205,7 +205,7 @@ async function findNextOpportunity(params: {
   focus: string;
   notes: string[];
   history: SimplifyHistoryEntry[];
-  ctx: CommandContext;
+  ctx: ProcedureApi;
 }): Promise<SimplifyOpportunity> {
   const historyLines = params.history.length > 0
     ? params.history.map((entry) => `- ${entry.title}: ${entry.outcome}${entry.note ? ` (${entry.note})` : ""}`)
@@ -236,7 +236,7 @@ async function findNextOpportunity(params: {
 async function interpretDecision(params: {
   reply: string;
   state: SimplifyState;
-  ctx: CommandContext;
+  ctx: ProcedureApi;
 }): Promise<SimplifyDecision> {
   const result = await params.ctx.agent.run(
     [
@@ -267,7 +267,7 @@ async function applyOpportunity(params: {
   opportunity: SimplifyOpportunity;
   guidance?: string;
   focus: string;
-  ctx: CommandContext;
+  ctx: ProcedureApi;
 }): Promise<SimplifyApplyResult> {
   const result = await params.ctx.agent.run(
     [
