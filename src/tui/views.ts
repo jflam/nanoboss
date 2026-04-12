@@ -34,9 +34,8 @@ export class NanobossAppView implements Component {
   }
 
   setState(state: UiState): void {
-    const forceTranscriptRefresh = this.state.toolCardThemeMode !== state.toolCardThemeMode;
     this.state = state;
-    this.transcript.setState(this.state, forceTranscriptRefresh);
+    this.transcript.setState(this.state);
   }
 
   render(width: number): string[] {
@@ -44,7 +43,7 @@ export class NanobossAppView implements Component {
   }
 
   invalidate(): void {
-    this.transcript.setState(this.state, true);
+    this.transcript.setState(this.state);
     this.container.invalidate();
   }
 
@@ -136,67 +135,32 @@ class ComputedTruncatedText implements Component {
 
 class TranscriptComponent implements Component {
   private readonly container = new Container();
-  private readonly turnComponents = new Map<string, TurnTranscriptComponent>();
-  private readonly toolComponents = new Map<string, ToolTranscriptEntryComponent>();
   private readonly emptyState: EmptyTranscriptComponent;
-  private keys: string[] = [];
 
   constructor(
     private readonly theme: NanobossTuiTheme,
     initialState: UiState,
   ) {
     this.emptyState = new EmptyTranscriptComponent(this.theme);
-    this.setState(initialState, true);
+    this.setState(initialState);
   }
 
-  setState(state: UiState, forceRefresh = false): void {
-    const nextKeys = state.transcriptItems.map(getTranscriptItemKey);
-    if (nextKeys.length === 0) {
-      this.keys = [];
-      this.turnComponents.clear();
-      this.toolComponents.clear();
-      this.container.clear();
+  setState(state: UiState): void {
+    this.container.clear();
+
+    if (state.transcriptItems.length === 0) {
       this.container.addChild(this.emptyState);
       return;
     }
 
     const turnById = new Map(state.turns.map((turn): [string, UiTurn] => [turn.id, turn]));
     const toolById = new Map(state.toolCalls.map((toolCall): [string, UiToolCall] => [toolCall.id, toolCall]));
-
-    if (forceRefresh || this.requiresStructureRebuild(nextKeys)) {
-      this.rebuildStructure(state, turnById, toolById, state.expandedToolOutput);
-    } else {
-      for (const item of state.transcriptItems.slice(this.keys.length)) {
-        const component = this.getOrCreateComponent(item, turnById, toolById, state.expandedToolOutput);
-        if (component) {
-          this.container.addChild(component);
-        }
-      }
-    }
-
     for (const item of state.transcriptItems) {
-      if (item.type === "turn") {
-        const turn = turnById.get(item.id);
-        if (!turn) {
-          continue;
-        }
-
-        const component = this.turnComponents.get(item.id);
-        component?.setTurn(turn, forceRefresh);
-        continue;
+      const component = createTranscriptEntryComponent(this.theme, item, turnById, toolById, state.expandedToolOutput);
+      if (component) {
+        this.container.addChild(component);
       }
-
-      const toolCall = toolById.get(item.id);
-      if (!toolCall) {
-        continue;
-      }
-
-      const component = this.toolComponents.get(item.id);
-      component?.setToolCall(toolCall, state.expandedToolOutput, forceRefresh);
     }
-
-    this.pruneMissingComponents(state.transcriptItems);
-    this.keys = nextKeys;
   }
 
   render(width: number): string[] {
@@ -205,96 +169,6 @@ class TranscriptComponent implements Component {
 
   invalidate(): void {
     this.container.invalidate();
-  }
-
-  private requiresStructureRebuild(nextKeys: string[]): boolean {
-    if (this.container.children.length === 1 && this.container.children[0] === this.emptyState) {
-      return true;
-    }
-
-    if (nextKeys.length < this.keys.length) {
-      return true;
-    }
-
-    for (let index = 0; index < this.keys.length; index += 1) {
-      if (this.keys[index] !== nextKeys[index]) {
-        return true;
-      }
-    }
-
-    return false;
-  }
-
-  private rebuildStructure(
-    state: UiState,
-    turnById: Map<string, UiTurn>,
-    toolById: Map<string, UiToolCall>,
-    expandedToolOutput: boolean,
-  ): void {
-    this.container.clear();
-
-    for (const item of state.transcriptItems) {
-      const component = this.getOrCreateComponent(item, turnById, toolById, expandedToolOutput);
-      if (!component) {
-        continue;
-      }
-
-      this.container.addChild(component);
-    }
-  }
-
-  private getOrCreateComponent(
-    item: UiTranscriptItem,
-    turnById: Map<string, UiTurn>,
-    toolById: Map<string, UiToolCall>,
-    expandedToolOutput: boolean,
-  ): Component | undefined {
-    if (item.type === "turn") {
-      const turn = turnById.get(item.id);
-      if (!turn) {
-        return undefined;
-      }
-
-      const existing = this.turnComponents.get(item.id);
-      if (existing) {
-        return existing;
-      }
-
-      const component = new TurnTranscriptComponent(this.theme, turn);
-      this.turnComponents.set(item.id, component);
-      return component;
-    }
-
-    const toolCall = toolById.get(item.id);
-    if (!toolCall) {
-      return undefined;
-    }
-
-    const existing = this.toolComponents.get(item.id);
-    if (existing) {
-      return existing;
-    }
-
-    const component = new ToolTranscriptEntryComponent(this.theme, toolCall, expandedToolOutput);
-    this.toolComponents.set(item.id, component);
-    return component;
-  }
-
-  private pruneMissingComponents(items: UiTranscriptItem[]): void {
-    const turnIds = new Set(items.filter((item) => item.type === "turn").map((item) => item.id));
-    const toolIds = new Set(items.filter((item) => item.type === "tool_call").map((item) => item.id));
-
-    for (const turnId of this.turnComponents.keys()) {
-      if (!turnIds.has(turnId)) {
-        this.turnComponents.delete(turnId);
-      }
-    }
-
-    for (const toolId of this.toolComponents.keys()) {
-      if (!toolIds.has(toolId)) {
-        this.toolComponents.delete(toolId);
-      }
-    }
   }
 }
 
@@ -388,8 +262,20 @@ class ToolTranscriptEntryComponent implements Component {
   }
 }
 
-function getTranscriptItemKey(item: UiTranscriptItem): string {
-  return `${item.type}:${item.id}`;
+function createTranscriptEntryComponent(
+  theme: NanobossTuiTheme,
+  item: UiTranscriptItem,
+  turnById: Map<string, UiTurn>,
+  toolById: Map<string, UiToolCall>,
+  expandedToolOutput: boolean,
+): Component | undefined {
+  if (item.type === "turn") {
+    const turn = turnById.get(item.id);
+    return turn ? new TurnTranscriptComponent(theme, turn) : undefined;
+  }
+
+  const toolCall = toolById.get(item.id);
+  return toolCall ? new ToolTranscriptEntryComponent(theme, toolCall, expandedToolOutput) : undefined;
 }
 
 function buildActivityBarParts(theme: NanobossTuiTheme, state: UiState): string[] {

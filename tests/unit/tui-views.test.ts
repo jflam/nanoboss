@@ -187,82 +187,7 @@ describe("NanobossAppView", () => {
   });
 
   test("renders the reducer-produced visible transcript contract and resets cleanly on session_ready", () => {
-    let state = createInitialUiState({ cwd: "/repo", buildLabel: "nanoboss-test", showToolCalls: true });
-
-    state = reduceUiState(state, {
-      type: "session_ready",
-      sessionId: "session-1",
-      cwd: "/repo",
-      buildLabel: "nanoboss-test",
-      agentLabel: "copilot/default",
-      commands: [{ name: "tokens", description: "show tokens" }],
-    });
-    state = reduceUiState(state, {
-      type: "local_user_submitted",
-      text: "review the repo",
-    });
-    state = reduceUiState(state, {
-      type: "frontend_event",
-      event: eventEnvelope("run_started", {
-        runId: "run-1",
-        procedure: "default",
-        prompt: "review the repo",
-        startedAt: new Date(0).toISOString(),
-      }),
-    });
-    state = reduceUiState(state, {
-      type: "frontend_event",
-      event: eventEnvelope("tool_started", {
-        runId: "run-1",
-        toolCallId: "tool-1",
-        title: "Mock read README.md",
-        kind: "read",
-        callPreview: { header: "read README.md" },
-      }),
-    });
-    state = reduceUiState(state, {
-      type: "frontend_event",
-      event: eventEnvelope("tool_updated", {
-        runId: "run-1",
-        toolCallId: "tool-1",
-        status: "completed",
-        resultPreview: { bodyLines: ["Project instructions"] },
-      }),
-    });
-    state = reduceUiState(state, {
-      type: "frontend_event",
-      event: eventEnvelope("memory_cards", {
-        runId: "run-1",
-        cards: [{
-          cell: { sessionId: "session-1", cellId: "cell-1" },
-          procedure: "default",
-          input: "review the repo",
-          summary: "stored summary",
-          createdAt: "2026-04-11T00:00:00.000Z",
-        }],
-      }),
-    });
-    state = reduceUiState(state, {
-      type: "frontend_event",
-      event: eventEnvelope("memory_card_stored", {
-        runId: "run-1",
-        card: {
-          cell: { sessionId: "session-1", cellId: "cell-1" },
-          procedure: "default",
-          input: "review the repo",
-          memory: "stored memory",
-          createdAt: "2026-04-11T00:00:00.000Z",
-        },
-      }),
-    });
-    state = reduceUiState(state, {
-      type: "frontend_event",
-      event: eventEnvelope("text_delta", {
-        runId: "run-1",
-        text: "I checked the code.",
-        stream: "agent",
-      }),
-    });
+    let state = createTranscriptContractState("live");
 
     const view = new NanobossAppView(
       {
@@ -300,6 +225,27 @@ describe("NanobossAppView", () => {
     expect(resetPlain).toContain("No turns yet. Send a prompt to start.");
     expect(resetPlain).not.toContain("review the repo");
     expect(resetPlain).not.toContain("read README.md");
+  });
+
+  test("renders restored replay history with the same visible transcript output as a live run", () => {
+    const liveView = new NanobossAppView(
+      {
+        render: () => [""],
+        invalidate() {},
+      } as never,
+      createNanobossTuiTheme(),
+      createTranscriptContractState("live"),
+    );
+    const restoredView = new NanobossAppView(
+      {
+        render: () => [""],
+        invalidate() {},
+      } as never,
+      createNanobossTuiTheme(),
+      createTranscriptContractState("restored"),
+    );
+
+    expect(stripAnsi(restoredView.render(120).join("\n"))).toBe(stripAnsi(liveView.render(120).join("\n")));
   });
 
   test("renders tool cards with a neutral dark background and marks failures with a red dot", () => {
@@ -1118,4 +1064,100 @@ function eventEnvelope<EventType extends FrontendEventEnvelope["type"]>(
     type,
     data,
   } as FrontendEventEnvelope;
+}
+
+function createTranscriptContractState(mode: "live" | "restored") {
+  let state = createInitialUiState({ cwd: "/repo", buildLabel: "nanoboss-test", showToolCalls: true });
+
+  state = reduceUiState(state, {
+    type: "session_ready",
+    sessionId: "session-1",
+    cwd: "/repo",
+    buildLabel: "nanoboss-test",
+    agentLabel: "copilot/default",
+    commands: [{ name: "tokens", description: "show tokens" }],
+  });
+
+  if (mode === "live") {
+    state = reduceUiState(state, {
+      type: "local_user_submitted",
+      text: "review the repo",
+    });
+  } else {
+    state = reduceUiState(state, {
+      type: "frontend_event",
+      event: eventEnvelope("run_restored", {
+        runId: "run-1",
+        procedure: "default",
+        prompt: "review the repo",
+        completedAt: new Date(1_000).toISOString(),
+        cell: { sessionId: "session-1", cellId: "cell-1" },
+        status: "complete",
+      }),
+    });
+  }
+
+  for (const event of createTranscriptContractReplayEvents()) {
+    state = reduceUiState(state, {
+      type: "frontend_event",
+      event,
+    });
+  }
+
+  return state;
+}
+
+function createTranscriptContractReplayEvents(): FrontendEventEnvelope[] {
+  return [
+    eventEnvelope("run_started", {
+      runId: "run-1",
+      procedure: "default",
+      prompt: "review the repo",
+      startedAt: new Date(0).toISOString(),
+    }),
+    eventEnvelope("tool_started", {
+      runId: "run-1",
+      toolCallId: "tool-1",
+      title: "Mock read README.md",
+      kind: "read",
+      callPreview: { header: "read README.md" },
+    }),
+    eventEnvelope("tool_updated", {
+      runId: "run-1",
+      toolCallId: "tool-1",
+      status: "completed",
+      resultPreview: { bodyLines: ["Project instructions"] },
+    }),
+    eventEnvelope("memory_cards", {
+      runId: "run-1",
+      cards: [{
+        cell: { sessionId: "session-1", cellId: "cell-1" },
+        procedure: "default",
+        input: "review the repo",
+        summary: "stored summary",
+        createdAt: "2026-04-11T00:00:00.000Z",
+      }],
+    }),
+    eventEnvelope("memory_card_stored", {
+      runId: "run-1",
+      card: {
+        cell: { sessionId: "session-1", cellId: "cell-1" },
+        procedure: "default",
+        input: "review the repo",
+        memory: "stored memory",
+        createdAt: "2026-04-11T00:00:00.000Z",
+      },
+    }),
+    eventEnvelope("text_delta", {
+      runId: "run-1",
+      text: "I checked the code.",
+      stream: "agent",
+    }),
+    eventEnvelope("run_completed", {
+      runId: "run-1",
+      procedure: "default",
+      completedAt: new Date(1_000).toISOString(),
+      cell: { sessionId: "session-1", cellId: "cell-1" },
+    }),
+  ];
 }
