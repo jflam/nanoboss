@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import type { ProcedureUiEvent } from "../../src/core/context-shared.ts";
 import { formatProcedureStatusText } from "../../src/core/ui-cli.ts";
 import {
   mapSessionUpdateToFrontendEvents,
@@ -8,6 +9,15 @@ import {
 } from "../../src/http/frontend-events.ts";
 
 describe("frontend-events", () => {
+  const statusEvent = {
+    type: "status",
+    procedure: "research",
+    phase: "collect",
+    message: "Gathering sources",
+    iteration: "2/3",
+    waiting: true,
+  } satisfies Extract<ProcedureUiEvent, { type: "status" }>;
+
   test("maps commands, chunks, token snapshots, and compact tool previews into render events", () => {
     const commands = toFrontendCommands([
       {
@@ -228,12 +238,7 @@ describe("frontend-events", () => {
       {
         type: "procedure_status",
         runId: "run-1",
-        procedure: "research",
-        phase: "collect",
-        message: "Gathering sources",
-        iteration: "2/3",
-        autoApprove: undefined,
-        waiting: true,
+        status: statusEvent,
       },
     ]);
 
@@ -273,6 +278,25 @@ describe("frontend-events", () => {
       autoApprove: true,
       waiting: true,
     })).toBe("[status] /research collect 2/3 - Gathering sources (auto-approve, waiting)");
+  });
+
+  test("preserves the shared procedure status payload without transport-specific reshaping", () => {
+    const [event] = mapSessionUpdateToFrontendEvents("run-1", {
+      sessionUpdate: "agent_message_chunk",
+      content: {
+        type: "text",
+        text: `[[nanoboss-ui]] ${JSON.stringify(statusEvent)}\n`,
+      },
+    });
+
+    expect(event).toEqual({
+      type: "procedure_status",
+      runId: "run-1",
+      status: statusEvent,
+    });
+    expect(event?.type === "procedure_status" && formatProcedureStatusText(event.status)).toBe(
+      "[status] /research collect 2/3 - Gathering sources (waiting)",
+    );
   });
 
   test("normalizes provider-specific read payloads into consistent previews", () => {

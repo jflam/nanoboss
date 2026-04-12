@@ -153,12 +153,7 @@ class CompositeSessionUpdateEmitter implements SessionUpdateEmitter {
         this.eventLog.publish(this.sessionId, {
           type: "procedure_status",
           runId: this.runId,
-          procedure: event.procedure,
-          phase: event.phase,
-          message: event.message,
-          iteration: event.iteration,
-          autoApprove: event.autoApprove,
-          waiting: event.waiting,
+          status: event,
         });
         return;
       case "card":
@@ -1342,12 +1337,7 @@ function toPersistedReplayEvent(
       return {
         type: "procedure_status",
         runId: event.data.runId,
-        procedure: event.data.procedure,
-        phase: event.data.phase,
-        message: event.data.message,
-        iteration: event.data.iteration,
-        autoApprove: event.data.autoApprove,
-        waiting: event.data.waiting,
+        status: event.data.status,
       };
     case "procedure_card":
       return {

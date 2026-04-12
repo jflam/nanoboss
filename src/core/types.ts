@@ -1,4 +1,5 @@
 import type * as acp from "@agentclientprotocol/sdk";
+import type { ProcedureUiEvent } from "./context-shared.ts";
 import type { ToolPreviewBlock } from "./tool-call-preview.ts";
 
 export type KernelScalar = null | boolean | number | string;
@@ -255,12 +256,7 @@ export type PersistedFrontendEvent =
   | {
       type: "procedure_status";
       runId: string;
-      procedure: string;
-      phase?: string;
-      message: string;
-      iteration?: string;
-      autoApprove?: boolean;
-      waiting?: boolean;
+      status: Extract<ProcedureUiEvent, { type: "status" }>;
     }
   | {
       type: "procedure_card";

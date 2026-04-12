@@ -525,12 +525,15 @@ describe("tui reducer", () => {
       type: "frontend_event",
       event: eventEnvelope("procedure_status", {
         runId: "run-1",
-        procedure: "research",
-        phase: "collect",
-        message: "Gathering sources",
-        iteration: "2/3",
-        autoApprove: true,
-        waiting: true,
+        status: {
+          type: "status",
+          procedure: "research",
+          phase: "collect",
+          message: "Gathering sources",
+          iteration: "2/3",
+          autoApprove: true,
+          waiting: true,
+        },
       }),
     });
 

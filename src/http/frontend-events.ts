@@ -2,6 +2,7 @@ import type * as acp from "@agentclientprotocol/sdk";
 
 import { parseAssistantNoticeText } from "../agent/acp-updates.ts";
 import { parseProcedureUiMarker } from "../core/ui-cli.ts";
+import type { ProcedureUiEvent } from "../core/context-shared.ts";
 import type { ProcedureMemoryCard } from "../core/memory-cards.ts";
 import { normalizeAgentTokenUsage } from "../agent/token-usage.ts";
 import {
@@ -74,12 +75,7 @@ export type FrontendEvent =
   | {
       type: "procedure_status";
       runId: string;
-      procedure: string;
-      phase?: string;
-      message: string;
-      iteration?: string;
-      autoApprove?: boolean;
-      waiting?: boolean;
+      status: Extract<ProcedureUiEvent, { type: "status" }>;
     }
   | {
       type: "procedure_card";
@@ -379,12 +375,7 @@ function mapProcedureUiEventToFrontendEvent(
       return {
         type: "procedure_status",
         runId,
-        procedure: event.procedure,
-        phase: event.phase,
-        message: event.message,
-        iteration: event.iteration,
-        autoApprove: event.autoApprove,
-        waiting: event.waiting,
+        status: event,
       };
     case "card":
       return {

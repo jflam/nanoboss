@@ -339,15 +339,7 @@ function reduceFrontendEvent(state: UiState, event: FrontendEventEnvelope): UiSt
       }
       return {
         ...state,
-        statusLine: formatProcedureStatusText({
-          type: "status",
-          procedure: event.data.procedure,
-          phase: event.data.phase,
-          message: event.data.message,
-          iteration: event.data.iteration,
-          autoApprove: event.data.autoApprove,
-          waiting: event.data.waiting,
-        }),
+        statusLine: formatProcedureStatusText(event.data.status),
       };
     case "procedure_card":
       if (shouldIgnoreMismatchedRunEvent(state, event.data.runId)) {
