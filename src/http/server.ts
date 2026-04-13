@@ -1,6 +1,6 @@
 import { getBuildCommit, getBuildLabel } from "../core/build-info.ts";
 import { DEFAULT_HTTP_SERVER_PORT } from "../core/defaults.ts";
-import { hasPromptInputContent, parsePromptInputPayload } from "../core/prompt.ts";
+import { createTextPromptInput, hasPromptInputContent, parsePromptInputPayload } from "../core/prompt.ts";
 import { requireValue } from "../util/argv.ts";
 import type { FrontendEventEnvelope } from "./frontend-events.ts";
 import { NanobossService } from "../core/service.ts";
@@ -284,7 +284,7 @@ export async function runHttpServerCommand(argv: string[] = []): Promise<ReturnT
 }
 
 export function parseSessionPromptRequestBody(body: { prompt?: string; promptInput?: unknown }):
-  | { prompt: string | PromptInput }
+  | { prompt: PromptInput }
   | { error: string } {
   const promptInput = body.promptInput !== undefined
     ? parsePromptInputPayload(body.promptInput)
@@ -300,7 +300,7 @@ export function parseSessionPromptRequestBody(body: { prompt?: string; promptInp
 
   const prompt = body.prompt?.trim();
   return prompt
-    ? { prompt }
+    ? { prompt: createTextPromptInput(prompt) }
     : { error: "prompt is required" };
 }
 

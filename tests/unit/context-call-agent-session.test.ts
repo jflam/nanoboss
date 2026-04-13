@@ -21,6 +21,10 @@ interface MathResult {
   result: number;
 }
 
+function toPromptText(prompt: string | PromptInput): string {
+  return typeof prompt === "string" ? prompt : promptInputDisplayText(prompt);
+}
+
 const MathResultType = jsonType<MathResult>(
   typia.json.schema<MathResult>(),
   typia.createValidate<MathResult>(),
@@ -62,10 +66,10 @@ describe("procedure API session namespaces", () => {
       conversation as object,
       "prompt",
       async (
-        prompt: string,
+        prompt: string | PromptInput,
         options: { onUpdate?: (update: acp.SessionUpdate) => Promise<void> | void } = {},
       ) => {
-        prompts.push(prompt);
+        prompts.push(toPromptText(prompt));
         await options.onUpdate?.({
           sessionUpdate: "agent_message_chunk",
           content: {
@@ -120,8 +124,8 @@ describe("procedure API session namespaces", () => {
     Reflect.set(
       conversation as object,
       "prompt",
-      async (prompt: string) => {
-        prompts.push(prompt);
+      async (prompt: string | PromptInput) => {
+        prompts.push(toPromptText(prompt));
         return {
           raw: "4",
           updates: [],
@@ -147,8 +151,8 @@ describe("procedure API session namespaces", () => {
     Reflect.set(
       conversation as object,
       "prompt",
-      async (prompt: string) => {
-        prompts.push(prompt);
+      async (prompt: string | PromptInput) => {
+        prompts.push(toPromptText(prompt));
         return {
           raw: "inherited",
           updates: [],
@@ -190,11 +194,11 @@ describe("procedure API session namespaces", () => {
       "prompt",
       async function prompt(
         this: DefaultConversationSession,
-        promptText: string,
+        promptText: string | PromptInput,
       ) {
         promptedConversations.push(this);
         return {
-          raw: `${promptText} via ${this === conversation ? "root" : "fresh"}`,
+          raw: `${toPromptText(promptText)} via ${this === conversation ? "root" : "fresh"}`,
           updates: [],
           durationMs: 0,
         };

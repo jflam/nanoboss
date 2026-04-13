@@ -1,6 +1,6 @@
 import { DefaultConversationSession } from "../agent/default-session.ts";
 import { normalizeAgentTokenUsage } from "../agent/token-usage.ts";
-import { createTextPromptInput, hasPromptInputImages, promptInputDisplayText } from "./prompt.ts";
+import { createTextPromptInput } from "./prompt.ts";
 import { resolveDownstreamAgentConfig } from "./config.ts";
 import type { PreparedDefaultPrompt } from "./context-shared.ts";
 import type {
@@ -64,11 +64,7 @@ export class ContextSessionApiImpl implements SessionApi {
       invoke: async (prompt, options) => {
         const promptInput = options.promptInput ?? createTextPromptInput(prompt);
         const preparedPrompt = this.params.current.prepareDefaultPrompt?.(promptInput) ?? { promptInput };
-        const promptPayload = hasPromptInputImages(preparedPrompt.promptInput)
-          ? preparedPrompt.promptInput
-          : promptInputDisplayText(preparedPrompt.promptInput);
-
-        const result = await defaultConversation.prompt(promptPayload, {
+        const result = await defaultConversation.prompt(preparedPrompt.promptInput, {
           signal: options.signal,
           softStopSignal: options.softStopSignal,
           onUpdate: options.onUpdate,

@@ -3,6 +3,7 @@ import {
   RunCancelledError,
   defaultCancellationMessage,
 } from "../core/cancellation.ts";
+import { createTextPromptInput } from "../core/prompt.ts";
 import type { DefaultConversationSession } from "../agent/default-session.ts";
 import { buildProcedureExecutionResult, type ProcedureExecutionResult } from "./runner.ts";
 import { createValueRef, type SessionStore } from "../session/index.ts";
@@ -73,7 +74,7 @@ export async function syncRecoveredProcedureResultIntoDefaultConversation(params
   defaultAgentConfig: DownstreamAgentConfig;
 }): Promise<AgentTokenUsage | undefined> {
   await params.defaultConversation.prompt(
-    buildRecoveredProcedureSyncPrompt(params.sessionId, params.cell),
+    createTextPromptInput(buildRecoveredProcedureSyncPrompt(params.sessionId, params.cell)),
     {
       signal: params.signal,
     },

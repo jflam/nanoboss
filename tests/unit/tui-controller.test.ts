@@ -112,7 +112,16 @@ describe("NanobossTuiController", () => {
     expect(sendCalls).toEqual(["hello"]);
     expect(cancelCalls).toEqual([{ sessionId: "session-1", runId: "run-1" }]);
     expect(controller.getState().pendingPrompts).toEqual([
-      { id: "pending-1", text: "steer now", kind: "steering" },
+      {
+        id: "pending-1",
+        text: "steer now",
+        kind: "steering",
+        promptInput: {
+          parts: [
+            { type: "text", text: "steer now" },
+          ],
+        },
+      },
     ]);
 
     streams[0]?.emit(eventEnvelope("run_cancelled", {
@@ -227,7 +236,7 @@ describe("NanobossTuiController", () => {
         createHttpSession: async () => createSession("session-1"),
         sendSessionPrompt: async (_baseUrl, _sessionId, prompt) => {
           sendCalls.push(toPromptText(prompt));
-          if (prompt === "steer first") {
+          if (toPromptText(prompt) === "steer first") {
             throw new Error("network down");
           }
         },

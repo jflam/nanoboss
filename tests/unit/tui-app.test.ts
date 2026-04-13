@@ -416,7 +416,6 @@ describe("NanobossTuiApp", () => {
             };
           },
         }),
-        materializeClipboardImage: () => "/tmp/nanoboss-attached-images/test-image.png",
         createController: () => ({
           getState: () => currentState,
           async handleSubmit(input) {
@@ -449,7 +448,7 @@ describe("NanobossTuiApp", () => {
     expect(editor.getText()).toContain("[Image 1: PNG 1440x900 620KB]");
     expect(statuses).toEqual([
       "[clipboard] ctrl+v received",
-      "[clipboard] attached [Image 1: PNG 1440x900 620KB] -> /tmp/nanoboss-attached-images/test-image.png",
+      "[clipboard] attached [Image 1: PNG 1440x900 620KB]",
     ]);
 
     editor.submit();
@@ -469,7 +468,7 @@ describe("NanobossTuiApp", () => {
 
   test("backspace on an image token removes the whole token and the attachment does not survive later submits", async () => {
     const editor = new FakeEditor();
-    const submissions: Array<string | PromptInput> = [];
+    const submissions: PromptInput[] = [];
     let inputListener: ((data: string) => unknown) | undefined;
 
     new NanobossTuiApp(
@@ -504,11 +503,12 @@ describe("NanobossTuiApp", () => {
             };
           },
         }),
-        materializeClipboardImage: () => "/tmp/nanoboss-attached-images/test-image.png",
         createController: () => ({
           getState: () => createInitialUiState({ cwd: "/repo", showToolCalls: true }),
           async handleSubmit(input) {
-            submissions.push(input);
+            if (typeof input !== "string") {
+              submissions.push(input);
+            }
           },
           async queuePrompt() {},
           async cancelActiveRun() {},
@@ -586,7 +586,6 @@ describe("NanobossTuiApp", () => {
             };
           },
         }),
-        materializeClipboardImage: () => undefined,
         createController: () => ({
           getState: () => ({
             ...createInitialUiState({
@@ -666,8 +665,10 @@ describe("NanobossTuiApp", () => {
           capturedOnStateChange = deps.onStateChange;
           return {
             getState: () => currentState,
-            async handleSubmit(text: string) {
-              submitted.push(text);
+            async handleSubmit(input) {
+              submitted.push(typeof input === "string"
+                ? input
+                : input.parts.map((part) => part.type === "text" ? part.text : part.token).join(""));
             },
             async queuePrompt() {},
             async cancelActiveRun() {},
@@ -1100,7 +1101,7 @@ describe("NanobossTuiApp", () => {
 
   test("pressing tab while a run is active queues the current input", async () => {
     const editor = new FakeEditor();
-    const queued: string[] = [];
+    const queued: PromptInput[] = [];
     const currentState: UiState = {
       ...createInitialUiState({ cwd: "/repo", showToolCalls: true }),
       inputDisabled: true,
@@ -1166,7 +1167,7 @@ describe("NanobossTuiApp", () => {
 
   test("pressing tab while a run is active does not queue when autocomplete is showing", async () => {
     const editor = new FakeEditor();
-    const queued: string[] = [];
+    const queued: PromptInput[] = [];
     const currentState: UiState = {
       ...createInitialUiState({ cwd: "/repo", showToolCalls: true }),
       inputDisabled: true,
@@ -1197,8 +1198,10 @@ describe("NanobossTuiApp", () => {
         createController: () => ({
           getState: () => currentState,
           async handleSubmit() {},
-          async queuePrompt(text: string) {
-            queued.push(text);
+          async queuePrompt(input) {
+            if (typeof input !== "string") {
+              queued.push(input);
+            }
           },
           async cancelActiveRun() {},
           toggleToolOutput() {},

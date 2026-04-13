@@ -1,7 +1,4 @@
-import { mkdirSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-
+import { createTextPromptInput } from "../core/prompt.ts";
 import { writePersistedDefaultAgentSelection } from "../core/settings.ts";
 import { createClipboardImageProvider, type ClipboardImageProvider } from "./clipboard/provider.ts";
 import {
@@ -116,7 +113,6 @@ export interface NanobossTuiAppDeps {
   createTui?: (terminal: TerminalLike) => TuiLike;
   createEditor?: (tui: TuiLike, theme: NanobossTuiTheme) => EditorLike;
   createClipboardImageProvider?: () => ClipboardImageProvider;
-  materializeClipboardImage?: (image: ClipboardImage) => string | undefined;
   createController?: (
     params: NanobossTuiAppParams,
     deps: NanobossTuiControllerDeps,
@@ -177,7 +173,6 @@ export class NanobossTuiApp {
   private readonly view: ViewLike;
   private readonly controller: ControllerLike;
   private readonly clipboardImageProvider: ClipboardImageProvider;
-  private readonly materializeClipboardImage: (image: ClipboardImage) => string | undefined;
   private readonly now: () => number;
   private state: UiState;
   private readonly composerState = createComposerState();
@@ -206,7 +201,6 @@ export class NanobossTuiApp {
       autocompleteMaxVisible: 8,
     });
     this.clipboardImageProvider = deps.createClipboardImageProvider?.() ?? createClipboardImageProvider();
-    this.materializeClipboardImage = deps.materializeClipboardImage ?? materializeClipboardImageToTempFile;
 
     const controllerDeps: NanobossTuiControllerDeps = {
       promptForModelSelection: async (currentSelection) => {
@@ -368,15 +362,12 @@ export class NanobossTuiApp {
     }
 
     const record = attachClipboardImage(this.composerState, image);
-    const materializedPath = this.materializeClipboardImage(image);
     if (this.editor.insertTextAtCursor) {
       this.editor.insertTextAtCursor(record.token);
     } else {
       this.editor.setText(`${this.editor.getText()}${record.token}`);
     }
-    this.controller.showStatus(materializedPath
-      ? `[clipboard] attached ${record.token} -> ${materializedPath}`
-      : `[clipboard] attached ${record.token}`);
+    this.controller.showStatus(`[clipboard] attached ${record.token}`);
   }
 
   private handleImageTokenDeletion(direction: "backspace" | "delete"): boolean {
@@ -608,7 +599,7 @@ export class NanobossTuiApp {
     }
 
     if (action.reply) {
-      void this.controller.handleSubmit(action.reply);
+      void this.controller.handleSubmit(createTextPromptInput(action.reply));
     }
   }
 
@@ -633,7 +624,7 @@ export class NanobossTuiApp {
     const command = action.kind === "archive"
       ? `archive ${action.focusId}`
       : `continue ${action.focusId}`;
-    void this.controller.handleSubmit(command);
+    void this.controller.handleSubmit(createTextPromptInput(command));
   }
 
   private async stop(): Promise<void> {
@@ -742,32 +733,6 @@ function textIndexToCursor(text: string, index: number): { line: number; col: nu
   const line = Math.max(0, lines.length - 1);
   const col = (lines.at(-1) ?? "").length;
   return { line, col };
-}
-
-function materializeClipboardImageToTempFile(image: ClipboardImage): string | undefined {
-  try {
-    const extension = fileExtensionForMimeType(image.mimeType);
-    const dir = join(tmpdir(), "nanoboss-attached-images");
-    mkdirSync(dir, { recursive: true });
-    const path = join(dir, `clipboard-${Date.now()}-${crypto.randomUUID()}.${extension}`);
-    writeFileSync(path, Buffer.from(image.data, "base64"));
-    return path;
-  } catch {
-    return undefined;
-  }
-}
-
-function fileExtensionForMimeType(mimeType: string): string {
-  const subtype = mimeType.split("/")[1]?.toLowerCase();
-  if (!subtype) {
-    return "bin";
-  }
-
-  if (subtype === "jpeg") {
-    return "jpg";
-  }
-
-  return subtype;
 }
 
 function getSimplify2Continuation(

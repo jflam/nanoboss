@@ -93,9 +93,10 @@ export class DefaultConversationSession {
     const startedAt = Date.now();
     appendTimingTraceEvent(options.timingTrace, "default_session", "prompt_started");
     const session = await this.ensureSession(options.timingTrace);
+    const promptInput = typeof prompt === "string" ? createTextPromptInput(prompt) : prompt;
 
     try {
-      const result = await session.prompt(prompt, options);
+      const result = await session.prompt(promptInput, options);
       this.persistedSessionId = session.sessionId;
       this.lastTokenSnapshot = result.tokenSnapshot ?? this.lastTokenSnapshot;
       appendTimingTraceEvent(options.timingTrace, "default_session", "prompt_completed", {
@@ -322,7 +323,7 @@ class PersistentAcpSession {
   }
 
   async prompt(
-    prompt: string | PromptInput,
+    prompt: PromptInput,
     options: DefaultSessionPromptOptions = {},
   ): Promise<{ raw: string; logFile?: string; updates: acp.SessionUpdate[]; tokenSnapshot?: AgentTokenSnapshot }> {
     if (!this.isAlive()) {
@@ -338,8 +339,7 @@ class PersistentAcpSession {
       throw new RunCancelledError(defaultCancellationMessage("abort"), "abort");
     }
 
-    const promptInput = typeof prompt === "string" ? createTextPromptInput(prompt) : prompt;
-    if (hasPromptInputImages(promptInput) && this.state.capabilities?.promptCapabilities?.image !== true) {
+    if (hasPromptInputImages(prompt) && this.state.capabilities?.promptCapabilities?.image !== true) {
       throw new Error("The configured downstream agent does not advertise ACP image prompt support.");
     }
 
@@ -371,15 +371,15 @@ class PersistentAcpSession {
         this.state.writeEvent({
           event: "prompt_request",
           sessionId: this.sessionId,
-          prompt: summarizePromptInputForAcpLog(promptInput),
+          prompt: summarizePromptInputForAcpLog(prompt),
         });
         appendTimingTraceEvent(options.timingTrace, "default_session", "prompt_rpc_started", {
           sessionId: this.sessionId,
-          promptLength: promptInputDisplayText(promptInput).length,
+          promptLength: promptInputDisplayText(prompt).length,
         });
         promptResponse = await this.state.connection.prompt({
           sessionId: this.sessionId,
-          prompt: promptInputToAcpBlocks(promptInput),
+          prompt: promptInputToAcpBlocks(prompt),
         });
         this.state.writeEvent({
           event: "prompt_response",

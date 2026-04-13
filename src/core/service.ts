@@ -549,13 +549,13 @@ export class NanobossService {
         procedure: procedureName,
       });
       const promptResult = await session.defaultConversation.prompt(
-        buildMcpProcedureDispatchPrompt(
+        createTextPromptInput(buildMcpProcedureDispatchPrompt(
           session.store.sessionId,
           procedureName,
           procedurePrompt,
           toDownstreamAgentSelection(session.defaultAgentConfig),
           dispatchCorrelationId,
-        ),
+        )),
         {
           signal: options.signal,
           softStopSignal: options.softStopSignal,
