@@ -10,12 +10,15 @@ import { CommandState } from "./context-state.ts";
 import { type UiApi } from "./ui-api.ts";
 import { UiApiImpl } from "./ui-emitter.ts";
 import type { RunLogger } from "./logger.ts";
+import { normalizeProcedurePromptInput } from "./prompt.ts";
 import type { RunTimingTrace } from "./timing-trace.ts";
 import type {
   AgentInvocationApi,
   ProcedureApi,
+  ProcedurePromptInput,
   DownstreamAgentConfig,
   DownstreamAgentSelection,
+  PromptInput,
   ProcedureInvocationApi,
   ProcedureRegistryLike,
   SessionApi,
@@ -36,16 +39,17 @@ interface CommandContextParams {
   emitter: SessionUpdateEmitter;
   store: SessionStore;
   cell: ActiveCell;
+  promptInput?: string | PromptInput;
   signal?: AbortSignal;
   softStopSignal?: AbortSignal;
   defaultConversation?: DefaultConversationSession;
   getDefaultAgentConfig?: () => DownstreamAgentConfig;
   setDefaultAgentSelection?: (selection: DownstreamAgentSelection) => DownstreamAgentConfig;
-  prepareDefaultPrompt?: (prompt: string) => PreparedDefaultPrompt;
+  prepareDefaultPrompt?: (promptInput: PromptInput) => PreparedDefaultPrompt;
   rootDefaultConversation?: DefaultConversationSession;
   rootGetDefaultAgentConfig?: () => DownstreamAgentConfig;
   rootSetDefaultAgentSelection?: (selection: DownstreamAgentSelection) => DownstreamAgentConfig;
-  rootPrepareDefaultPrompt?: (prompt: string) => PreparedDefaultPrompt;
+  rootPrepareDefaultPrompt?: (promptInput: PromptInput) => PreparedDefaultPrompt;
   assertCanStartBoundary?: () => void;
   timingTrace?: RunTimingTrace;
 }
@@ -53,6 +57,7 @@ interface CommandContextParams {
 export class CommandContextImpl implements ProcedureApi {
   readonly cwd: string;
   readonly sessionId: string;
+  readonly promptInput: ProcedurePromptInput;
   readonly agent: AgentInvocationApi;
   readonly state: StateApi;
   readonly ui: UiApi;
@@ -69,7 +74,7 @@ export class CommandContextImpl implements ProcedureApi {
   private readonly rootDefaultConversation?: DefaultConversationSession;
   private readonly rootGetDefaultAgentConfigValue: () => DownstreamAgentConfig;
   private readonly rootSetDefaultAgentSelectionValue: (selection: DownstreamAgentSelection) => DownstreamAgentConfig;
-  private readonly rootPrepareDefaultPromptValue?: (prompt: string) => PreparedDefaultPrompt;
+  private readonly rootPrepareDefaultPromptValue?: (promptInput: PromptInput) => PreparedDefaultPrompt;
   private readonly assertCanStartBoundaryValue?: () => void;
   private readonly timingTrace?: RunTimingTrace;
 
@@ -83,6 +88,9 @@ export class CommandContextImpl implements ProcedureApi {
     this.softStopSignal = params.softStopSignal;
     this.store = params.store;
     this.cell = params.cell;
+    this.promptInput = normalizeProcedurePromptInput(
+      params.promptInput ?? params.cell.input,
+    );
     const defaultConversation = params.defaultConversation;
     const getDefaultAgentConfig = params.getDefaultAgentConfig
       ?? (() => resolveDownstreamAgentConfig(this.cwd));
@@ -171,6 +179,7 @@ export class CommandContextImpl implements ProcedureApi {
       emitter: this.emitter,
       store: this.store,
       cell: binding.cell,
+      promptInput: binding.promptInput,
       signal: this.signal,
       softStopSignal: this.softStopSignal,
       defaultConversation: binding.defaultConversation,

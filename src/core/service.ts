@@ -7,6 +7,16 @@ import { resolveDownstreamAgentConfig, toDownstreamAgentSelection } from "./conf
 import { type SessionUpdateEmitter } from "./context.ts";
 import type { ProcedureUiEvent } from "./context-shared.ts";
 import { formatErrorMessage } from "./error-format.ts";
+import {
+  createTextPromptInput,
+  hasPromptInputContent,
+  hasPromptInputImages,
+  normalizePromptInput,
+  prependPromptInputText,
+  promptInputAttachmentSummaries,
+  promptInputDisplayText,
+  promptInputToPlainText,
+} from "./prompt.ts";
 import { DefaultConversationSession } from "../agent/default-session.ts";
 import { normalizeAgentTokenUsage } from "../agent/token-usage.ts";
 import {
@@ -59,6 +69,7 @@ import type {
   FrontendPendingProcedureContinuation,
   PendingProcedureContinuation,
   PersistedFrontendEvent,
+  PromptInput,
   Procedure,
   ProcedureRegistryLike,
 } from "./types.ts";
@@ -436,10 +447,11 @@ export class NanobossService {
 
   private prepareDefaultPrompt(
     session: SessionState,
-    prompt: string,
+    promptInput: PromptInput,
     runId: string,
     timingTrace?: RunTimingTrace,
-  ): { prompt: string; markSubmitted: () => void } {
+  ): { promptInput: PromptInput; markSubmitted: () => void } {
+    const prompt = promptInputDisplayText(promptInput);
     appendTimingTraceEvent(timingTrace, "service", "prepare_default_prompt_started", {
       runId,
       promptLength: prompt.length,
@@ -477,24 +489,25 @@ export class NanobossService {
         promptLength: prompt.length,
       });
       return {
-        prompt,
+        promptInput,
         markSubmitted() {},
       };
     }
 
-    blocks.push(`User message:\n${prompt}`);
-
-    const preparedPrompt = blocks.join("\n\n");
+    const preparedPrompt = prependPromptInputText(promptInput, [
+      ...blocks,
+      "User message:",
+    ]);
     appendTimingTraceEvent(timingTrace, "service", "prepare_default_prompt_completed", {
       runId,
       cardCount: cards.length,
       includedRecoveryGuidance: includeRecoveryGuidance,
       wrappedPrompt: true,
-      promptLength: preparedPrompt.length,
+      promptLength: promptInputDisplayText(preparedPrompt).length,
     });
 
     return {
-      prompt: preparedPrompt,
+      promptInput: preparedPrompt,
       markSubmitted: () => {
         for (const card of cards) {
           session.syncedProcedureMemoryCellIds.add(card.cell.cellId);
@@ -864,7 +877,7 @@ export class NanobossService {
 
   async prompt(
     sessionId: string,
-    promptText: string,
+    promptText: string | PromptInput,
     delegate?: SessionUpdateEmitter,
   ): Promise<{ stopReason: "end_turn"; runId: string }> {
     const session = this.sessions.get(sessionId);
@@ -872,13 +885,18 @@ export class NanobossService {
       throw new Error(`Unknown session: ${sessionId}`);
     }
 
+    const promptInput = normalizePromptInput(promptText);
+    if (!hasPromptInputContent(promptInput)) {
+      throw new Error("prompt is required");
+    }
+
     this.cancelActiveProcedureDispatches(sessionId, session, session.activeRun);
     session.activeRun?.abortController.abort();
     session.activeRun?.softStopController.abort();
 
-    const text = promptText.trim();
-    const { commandName, commandPrompt, continuation } = resolveCommand(
-      text,
+    const displayPrompt = promptInputDisplayText(promptInput);
+    const { commandName, commandPrompt, commandPromptInput, continuation } = resolveCommand(
+      promptInput,
       session.pendingProcedureContinuation,
     );
     const procedure = commandName === DISMISS_CONTINUATION_COMMAND_NAME
@@ -900,7 +918,7 @@ export class NanobossService {
     appendTimingTraceEvent(directTimingTrace, "service", "submit_received", {
       runId,
       procedure: procedureName,
-      promptLength: commandPrompt.length,
+      promptLength: promptInputDisplayText(commandPromptInput).length,
       mode: continuation ? "resume" : "direct",
     });
     const startedAt = Date.now();
@@ -945,7 +963,7 @@ export class NanobossService {
       type: "run_started",
       runId,
       procedure: procedureName,
-      prompt: commandPrompt,
+      prompt: promptInputDisplayText(commandPromptInput),
       startedAt: new Date(startedAt).toISOString(),
     });
     markRunActivity();
@@ -958,6 +976,27 @@ export class NanobossService {
     );
 
     try {
+      if (hasPromptInputImages(commandPromptInput) && procedureName !== "default") {
+        const error = `Image prompts are currently only supported for /default. /${procedureName} cannot accept images yet.`;
+        delegate?.emit({
+          sessionUpdate: "agent_message_chunk",
+          content: {
+            type: "text",
+            text: `${error}\n`,
+          },
+        });
+        await emitter.flush();
+        this.publishRunFailed({
+          session,
+          sessionId,
+          runId,
+          procedure: procedureName,
+          error,
+          markRunActivity,
+        });
+        return { stopReason: "end_turn", runId };
+      }
+
       if (!procedure) {
         const error = continuation
           ? `Pending continuation for /${commandName} is no longer available.`
@@ -1024,6 +1063,7 @@ export class NanobossService {
           registry: this.registry,
           procedure,
           prompt: commandPrompt,
+          promptInput: commandPromptInput,
           emitter,
           signal: activeRun.abortController.signal,
           softStopSignal: activeRun.softStopController.signal,
@@ -1165,7 +1205,7 @@ export class NanobossService {
           },
         });
       }
-      this.persistSessionState(session, { prompt: text });
+      this.persistSessionState(session, { prompt: displayPrompt });
       if (session.activeRun === activeRun) {
         session.activeRun = undefined;
       }
@@ -1653,29 +1693,63 @@ function buildPendingProcedureContinuation(
 }
 
 function resolveCommand(
-  text: string,
+  input: PromptInput,
   pendingProcedureContinuation?: PendingProcedureContinuation,
 ): {
   commandName: string;
   commandPrompt: string;
+  commandPromptInput: PromptInput;
   continuation?: PendingProcedureContinuation;
 } {
+  const text = promptInputDisplayText(input).trim();
   if (!text.startsWith("/")) {
     return pendingProcedureContinuation
       ? {
           commandName: pendingProcedureContinuation.procedure,
-          commandPrompt: text,
+          commandPrompt: promptInputToPlainText(input),
+          commandPromptInput: input,
           continuation: pendingProcedureContinuation,
         }
       : {
           commandName: "default",
-          commandPrompt: text,
+          commandPrompt: promptInputToPlainText(input),
+          commandPromptInput: input,
         };
   }
 
-  const [name, ...rest] = text.slice(1).split(/\s+/);
+  const firstPart = input.parts[0];
+  if (!firstPart || firstPart.type !== "text") {
+    return {
+      commandName: "default",
+      commandPrompt: promptInputToPlainText(input),
+      commandPromptInput: input,
+    };
+  }
+
+  const match = firstPart.text.match(/^\/(\S+)(?:\s+)?/);
+  if (!match) {
+    return {
+      commandName: "default",
+      commandPrompt: promptInputToPlainText(input),
+      commandPromptInput: input,
+    };
+  }
+
+  const commandName = match[1] || "default";
+  const consumed = match[0].length;
+  const remainingFirstText = firstPart.text.slice(consumed);
+  const commandPromptInput: PromptInput = {
+    parts: normalizePromptInput({
+      parts: [
+        { type: "text", text: remainingFirstText },
+        ...input.parts.slice(1),
+      ],
+    }).parts,
+  };
+
   return {
-    commandName: name || "default",
-    commandPrompt: rest.join(" "),
+    commandName,
+    commandPrompt: promptInputToPlainText(commandPromptInput),
+    commandPromptInput,
   };
 }

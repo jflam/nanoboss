@@ -1,5 +1,6 @@
 import { DefaultConversationSession } from "../agent/default-session.ts";
 import { normalizeAgentTokenUsage } from "../agent/token-usage.ts";
+import { createTextPromptInput, hasPromptInputImages, promptInputDisplayText } from "./prompt.ts";
 import { resolveDownstreamAgentConfig } from "./config.ts";
 import type { PreparedDefaultPrompt } from "./context-shared.ts";
 import type {
@@ -7,6 +8,7 @@ import type {
   CallAgentTransport,
   DownstreamAgentConfig,
   DownstreamAgentSelection,
+  PromptInput,
   ProcedureSessionMode,
   SessionApi,
 } from "./types.ts";
@@ -16,7 +18,7 @@ interface SessionBindingSource {
   defaultConversation?: DefaultConversationSession;
   getDefaultAgentConfig: () => DownstreamAgentConfig;
   setDefaultAgentSelection: (selection: DownstreamAgentSelection) => DownstreamAgentConfig;
-  prepareDefaultPrompt?: (prompt: string) => PreparedDefaultPrompt;
+  prepareDefaultPrompt?: (promptInput: PromptInput) => PreparedDefaultPrompt;
 }
 
 export interface ProcedureInvocationBinding extends SessionBindingSource {}
@@ -60,9 +62,13 @@ export class ContextSessionApiImpl implements SessionApi {
 
     return {
       invoke: async (prompt, options) => {
-        const preparedPrompt = this.params.current.prepareDefaultPrompt?.(prompt) ?? { prompt };
+        const promptInput = options.promptInput ?? createTextPromptInput(prompt);
+        const preparedPrompt = this.params.current.prepareDefaultPrompt?.(promptInput) ?? { promptInput };
+        const promptPayload = hasPromptInputImages(preparedPrompt.promptInput)
+          ? preparedPrompt.promptInput
+          : promptInputDisplayText(preparedPrompt.promptInput);
 
-        const result = await defaultConversation.prompt(preparedPrompt.prompt, {
+        const result = await defaultConversation.prompt(promptPayload, {
           signal: options.signal,
           softStopSignal: options.softStopSignal,
           onUpdate: options.onUpdate,

@@ -2,6 +2,7 @@ import type { ToolPreviewBlock } from "../core/tool-call-preview.ts";
 import type {
   DownstreamAgentSelection,
   FrontendPendingProcedureContinuation,
+  PromptInput,
 } from "../core/types.ts";
 
 export type ToolCardThemeMode = "dark" | "light";
@@ -10,6 +11,7 @@ export interface UiPendingPrompt {
   id: string;
   text: string;
   kind: "steering" | "queued";
+  promptInput?: PromptInput;
 }
 
 export interface UiTurn {

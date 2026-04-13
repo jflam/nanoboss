@@ -9,7 +9,11 @@ import { DefaultConversationSession } from "../../src/agent/default-session.ts";
 import { CommandContextImpl } from "../../src/core/context.ts";
 import { resolveDownstreamAgentConfig } from "../../src/core/config.ts";
 import { RunLogger } from "../../src/core/logger.ts";
-import { jsonType, type DownstreamAgentConfig, type ProcedureApi } from "../../src/core/types.ts";
+import {
+  normalizePromptInput,
+  promptInputDisplayText,
+} from "../../src/core/prompt.ts";
+import { jsonType, type DownstreamAgentConfig, type ProcedureApi, type PromptInput } from "../../src/core/types.ts";
 import { ProcedureRegistry } from "../../src/procedure/registry.ts";
 import { SessionStore } from "../../src/session/index.ts";
 
@@ -37,8 +41,15 @@ describe("procedure API session namespaces", () => {
   test("typed default-session calls reuse the default transport and keep parse retries", async () => {
     let submittedCount = 0;
     const { conversation, ctx, emittedUpdates } = createContext({
-      prepareDefaultPrompt: (prompt: string) => ({
-        prompt: `Prepared default prompt\n\nUser message:\n${prompt}`,
+      prepareDefaultPrompt: (promptInput: PromptInput) => ({
+        promptInput: normalizePromptInput({
+          parts: [
+            {
+              type: "text",
+              text: `Prepared default prompt\n\nUser message:\n${promptInputDisplayText(promptInput)}`,
+            },
+          ],
+        }),
         markSubmitted: () => {
           submittedCount += 1;
         },
@@ -89,8 +100,15 @@ describe("procedure API session namespaces", () => {
   test("untyped default-session calls use the same unified ctx.agent.run path", async () => {
     let submittedCount = 0;
     const { conversation, ctx, emittedUpdates } = createContext({
-      prepareDefaultPrompt: (prompt: string) => ({
-        prompt: `Prepared default prompt\n\nUser message:\n${prompt}`,
+      prepareDefaultPrompt: (promptInput: PromptInput) => ({
+        promptInput: normalizePromptInput({
+          parts: [
+            {
+              type: "text",
+              text: `Prepared default prompt\n\nUser message:\n${promptInputDisplayText(promptInput)}`,
+            },
+          ],
+        }),
         markSubmitted: () => {
           submittedCount += 1;
         },
@@ -303,7 +321,10 @@ describe("procedure API session namespaces", () => {
 });
 
 function createContext(options: {
-  prepareDefaultPrompt?: (prompt: string) => { prompt: string; markSubmitted?: () => void };
+  prepareDefaultPrompt?: (promptInput: PromptInput) => {
+    promptInput: PromptInput;
+    markSubmitted?: () => void;
+  };
 } = {}): {
   conversation: DefaultConversationSession;
   ctx: ProcedureApi;

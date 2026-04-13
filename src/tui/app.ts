@@ -1,4 +1,19 @@
+import { mkdirSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
 import { writePersistedDefaultAgentSelection } from "../core/settings.ts";
+import { createClipboardImageProvider, type ClipboardImageProvider } from "./clipboard/provider.ts";
+import {
+  attachClipboardImage,
+  buildPromptInputFromComposer,
+  clearComposerState,
+  findImageTokenRangeAtCursor,
+  type ComposerImageRecord,
+  type ComposerState,
+  createComposerState,
+  reconcileComposerState,
+} from "./composer.ts";
 
 import {
   NanobossTuiController,
@@ -15,6 +30,7 @@ import type {
   DownstreamAgentSelection,
   DownstreamAgentProvider,
   FrontendPendingProcedureContinuation,
+  PromptInput,
   Simplify2CheckpointContinuationUi,
   Simplify2CheckpointContinuationUiAction,
   Simplify2FocusPickerContinuationUi,
@@ -37,6 +53,7 @@ import {
 import type { UiState } from "./state.ts";
 import { createNanobossTuiTheme, type NanobossTuiTheme } from "./theme.ts";
 import { NanobossAppView } from "./views.ts";
+import type { ClipboardImage } from "./composer.ts";
 
 export interface NanobossTuiAppParams {
   cwd?: string;
@@ -53,6 +70,9 @@ interface EditorLike {
   addToHistory(text: string): void;
   setText(text: string): void;
   getText(): string;
+  getCursor?(): { line: number; col: number };
+  setCursor?(line: number, col: number): void;
+  insertTextAtCursor?(text: string): void;
   isShowingAutocomplete(): boolean;
   setAutocompleteProvider(provider: unknown): void;
 }
@@ -79,11 +99,12 @@ interface ViewLike {
 
 interface ControllerLike {
   getState(): UiState;
-  handleSubmit(text: string): Promise<void>;
-  queuePrompt(text: string): Promise<void>;
+  handleSubmit(text: string | PromptInput): Promise<void>;
+  queuePrompt(text: string | PromptInput): Promise<void>;
   cancelActiveRun(): Promise<void>;
   toggleToolOutput(): void;
   toggleSimplify2AutoApprove(): void;
+  showStatus(text: string): void;
   requestExit(): void;
   run(): Promise<string | undefined>;
   stop(): Promise<void>;
@@ -94,6 +115,8 @@ export interface NanobossTuiAppDeps {
   createTerminal?: () => TerminalLike;
   createTui?: (terminal: TerminalLike) => TuiLike;
   createEditor?: (tui: TuiLike, theme: NanobossTuiTheme) => EditorLike;
+  createClipboardImageProvider?: () => ClipboardImageProvider;
+  materializeClipboardImage?: (image: ClipboardImage) => string | undefined;
   createController?: (
     params: NanobossTuiAppParams,
     deps: NanobossTuiControllerDeps,
@@ -153,8 +176,12 @@ export class NanobossTuiApp {
   private readonly editor: EditorLike;
   private readonly view: ViewLike;
   private readonly controller: ControllerLike;
+  private readonly clipboardImageProvider: ClipboardImageProvider;
+  private readonly materializeClipboardImage: (image: ClipboardImage) => string | undefined;
   private readonly now: () => number;
   private state: UiState;
+  private readonly composerState = createComposerState();
+  private clearedComposerStateSnapshot?: ComposerState;
   private autocompleteSignature = "";
   private stopped = false;
   private liveRefreshInterval?: ReturnType<typeof setInterval>;
@@ -178,6 +205,8 @@ export class NanobossTuiApp {
       paddingX: 1,
       autocompleteMaxVisible: 8,
     });
+    this.clipboardImageProvider = deps.createClipboardImageProvider?.() ?? createClipboardImageProvider();
+    this.materializeClipboardImage = deps.materializeClipboardImage ?? materializeClipboardImageToTempFile;
 
     const controllerDeps: NanobossTuiControllerDeps = {
       promptForModelSelection: async (currentSelection) => {
@@ -196,6 +225,7 @@ export class NanobossTuiApp {
         this.editor.addToHistory(text);
       },
       onClearInput: () => {
+        clearComposerState(this.composerState);
         this.editor.setText("");
       },
     };
@@ -204,9 +234,21 @@ export class NanobossTuiApp {
     this.view = deps.createView?.(this.editor, this.theme, this.state) ?? new NanobossAppView(this.editor as Editor, this.theme, this.state);
 
     this.editor.onSubmit = (text) => {
-      void this.controller.handleSubmit(text);
+      const promptInput = buildPromptInputForSubmit(
+        this.composerState,
+        text,
+        this.clearedComposerStateSnapshot,
+      );
+      this.clearedComposerStateSnapshot = undefined;
+      void this.controller.handleSubmit(promptInput);
     };
-    this.editor.onChange = () => {
+    this.editor.onChange = (text) => {
+      if (text.length === 0 && this.composerState.imagesByToken.size > 0) {
+        this.clearedComposerStateSnapshot = cloneComposerState(this.composerState);
+      } else if (text.length > 0) {
+        this.clearedComposerStateSnapshot = undefined;
+      }
+      reconcileComposerState(this.composerState, text);
       this.updateEditorSubmitState();
     };
 
@@ -245,6 +287,19 @@ export class NanobossTuiApp {
 
       if (matchesKey(data, "ctrl+g")) {
         this.controller.toggleSimplify2AutoApprove();
+        return { consume: true };
+      }
+
+      if (matchesKey(data, "backspace") && this.handleImageTokenDeletion("backspace")) {
+        return { consume: true };
+      }
+
+      if (matchesKey(data, "delete") && this.handleImageTokenDeletion("delete")) {
+        return { consume: true };
+      }
+
+      if (matchesKey(data, "ctrl+v")) {
+        void this.handleCtrlVImagePaste();
         return { consume: true };
       }
 
@@ -296,6 +351,50 @@ export class NanobossTuiApp {
 
   private updateEditorSubmitState(): void {
     this.editor.disableSubmit = shouldDisableEditorSubmit(this.state.inputDisabled, this.editor.getText());
+  }
+
+  private async handleCtrlVImagePaste(): Promise<void> {
+    this.controller.showStatus("[clipboard] ctrl+v received");
+    const image = await this.clipboardImageProvider.readImage();
+    if (!image) {
+      this.controller.showStatus("[clipboard] ctrl+v received, but no image was readable from the clipboard");
+      return;
+    }
+
+    const record = attachClipboardImage(this.composerState, image);
+    const materializedPath = this.materializeClipboardImage(image);
+    if (this.editor.insertTextAtCursor) {
+      this.editor.insertTextAtCursor(record.token);
+    } else {
+      this.editor.setText(`${this.editor.getText()}${record.token}`);
+    }
+    this.controller.showStatus(materializedPath
+      ? `[clipboard] attached ${record.token} -> ${materializedPath}`
+      : `[clipboard] attached ${record.token}`);
+  }
+
+  private handleImageTokenDeletion(direction: "backspace" | "delete"): boolean {
+    const text = this.editor.getText();
+    if (text.length === 0 || this.composerState.imagesByToken.size === 0) {
+      return false;
+    }
+
+    const cursor = this.editor.getCursor?.();
+    if (!cursor) {
+      return false;
+    }
+
+    const cursorIndex = cursorToTextIndex(text, cursor);
+    const match = findImageTokenRangeAtCursor(this.composerState, text, cursorIndex, direction);
+    if (!match) {
+      return false;
+    }
+
+    this.composerState.imagesByToken.delete(match.token);
+    const nextText = `${text.slice(0, match.start)}${text.slice(match.end)}`;
+    applyEditorTextAndCursor(this.editor, nextText, match.start);
+    this.controller.showStatus(`[clipboard] removed ${match.token}`);
+    return true;
   }
 
   private handleCtrlC(): boolean {
@@ -573,6 +672,96 @@ export class NanobossTuiApp {
     clearIntervalFn(this.liveRefreshInterval);
     this.liveRefreshInterval = undefined;
   }
+}
+
+function buildPromptInputForSubmit(
+  composerState: ComposerState,
+  text: string,
+  clearedSnapshot?: ComposerState,
+): PromptInput {
+  const promptInput = buildPromptInputFromComposer(composerState, text);
+  if (promptInput.parts.some((part) => part.type === "image") || !clearedSnapshot) {
+    return promptInput;
+  }
+
+  return buildPromptInputFromComposer(clearedSnapshot, text);
+}
+
+function cloneComposerState(state: ComposerState): ComposerState {
+  return {
+    nextImageNumber: state.nextImageNumber,
+    imagesByToken: new Map<string, ComposerImageRecord>(state.imagesByToken),
+  };
+}
+
+function applyEditorTextAndCursor(editor: EditorLike, text: string, cursorIndex: number): void {
+  editor.setText(text);
+  const targetCursor = textIndexToCursor(text, cursorIndex);
+  if (editor.setCursor) {
+    editor.setCursor(targetCursor.line, targetCursor.col);
+    return;
+  }
+
+  const editorImpl = editor as EditorLike & {
+    state?: { cursorLine: number; cursorCol: number };
+    setCursorCol?: (col: number) => void;
+  };
+  if (!editorImpl.state) {
+    return;
+  }
+
+  editorImpl.state.cursorLine = targetCursor.line;
+  if (typeof editorImpl.setCursorCol === "function") {
+    editorImpl.setCursorCol(targetCursor.col);
+  } else {
+    editorImpl.state.cursorCol = targetCursor.col;
+  }
+}
+
+function cursorToTextIndex(text: string, cursor: { line: number; col: number }): number {
+  const lines = text.split("\n");
+  let index = 0;
+
+  for (let lineIndex = 0; lineIndex < cursor.line; lineIndex += 1) {
+    index += (lines[lineIndex] ?? "").length + 1;
+  }
+
+  return index + cursor.col;
+}
+
+function textIndexToCursor(text: string, index: number): { line: number; col: number } {
+  const clampedIndex = Math.max(0, Math.min(index, text.length));
+  const before = text.slice(0, clampedIndex);
+  const lines = before.split("\n");
+  const line = Math.max(0, lines.length - 1);
+  const col = (lines.at(-1) ?? "").length;
+  return { line, col };
+}
+
+function materializeClipboardImageToTempFile(image: ClipboardImage): string | undefined {
+  try {
+    const extension = fileExtensionForMimeType(image.mimeType);
+    const dir = join(tmpdir(), "nanoboss-attached-images");
+    mkdirSync(dir, { recursive: true });
+    const path = join(dir, `clipboard-${Date.now()}-${crypto.randomUUID()}.${extension}`);
+    writeFileSync(path, Buffer.from(image.data, "base64"));
+    return path;
+  } catch {
+    return undefined;
+  }
+}
+
+function fileExtensionForMimeType(mimeType: string): string {
+  const subtype = mimeType.split("/")[1]?.toLowerCase();
+  if (!subtype) {
+    return "bin";
+  }
+
+  if (subtype === "jpeg") {
+    return "jpg";
+  }
+
+  return subtype;
 }
 
 function getSimplify2Continuation(

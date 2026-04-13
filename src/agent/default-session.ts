@@ -3,6 +3,13 @@ import type * as acp from "@agentclientprotocol/sdk";
 import { parseAssistantNoticeText } from "./acp-updates.ts";
 import { parseProcedureUiMarker } from "../core/ui-cli.ts";
 import {
+  createTextPromptInput,
+  hasPromptInputImages,
+  promptInputDisplayText,
+  promptInputToAcpBlocks,
+  summarizePromptInputForAcpLog,
+} from "../core/prompt.ts";
+import {
   closeAcpConnection,
   openAcpConnection,
   type OpenAcpConnection,
@@ -11,7 +18,7 @@ import { buildAgentRuntimeSessionRuntime } from "./runtime-capability.ts";
 import { RunCancelledError, defaultCancellationMessage } from "../core/cancellation.ts";
 import { appendTimingTraceEvent, type RunTimingTrace } from "../core/timing-trace.ts";
 import { collectTokenSnapshot, enrichToolCallUpdateWithTokenUsage } from "./token-metrics.ts";
-import type { AgentTokenSnapshot, CallAgentOptions, DownstreamAgentConfig } from "../core/types.ts";
+import type { AgentTokenSnapshot, CallAgentOptions, DownstreamAgentConfig, PromptInput } from "../core/types.ts";
 
 interface DefaultSessionPromptOptions {
   onUpdate?: CallAgentOptions["onUpdate"];
@@ -80,7 +87,7 @@ export class DefaultConversationSession {
   }
 
   async prompt(
-    prompt: string,
+    prompt: string | PromptInput,
     options: DefaultSessionPromptOptions = {},
   ): Promise<DefaultSessionPromptResult> {
     const startedAt = Date.now();
@@ -315,7 +322,7 @@ class PersistentAcpSession {
   }
 
   async prompt(
-    prompt: string,
+    prompt: string | PromptInput,
     options: DefaultSessionPromptOptions = {},
   ): Promise<{ raw: string; logFile?: string; updates: acp.SessionUpdate[]; tokenSnapshot?: AgentTokenSnapshot }> {
     if (!this.isAlive()) {
@@ -329,6 +336,11 @@ class PersistentAcpSession {
     if (options.signal?.aborted) {
       this.close();
       throw new RunCancelledError(defaultCancellationMessage("abort"), "abort");
+    }
+
+    const promptInput = typeof prompt === "string" ? createTextPromptInput(prompt) : prompt;
+    if (hasPromptInputImages(promptInput) && this.state.capabilities?.promptCapabilities?.image !== true) {
+      throw new Error("The configured downstream agent does not advertise ACP image prompt support.");
     }
 
     const collector: PromptCollector = {
@@ -356,18 +368,23 @@ class PersistentAcpSession {
     try {
       let promptResponse: acp.PromptResponse;
       try {
+        this.state.writeEvent({
+          event: "prompt_request",
+          sessionId: this.sessionId,
+          prompt: summarizePromptInputForAcpLog(promptInput),
+        });
         appendTimingTraceEvent(options.timingTrace, "default_session", "prompt_rpc_started", {
           sessionId: this.sessionId,
-          promptLength: prompt.length,
+          promptLength: promptInputDisplayText(promptInput).length,
         });
         promptResponse = await this.state.connection.prompt({
           sessionId: this.sessionId,
-          prompt: [
-            {
-              type: "text",
-              text: prompt,
-            },
-          ],
+          prompt: promptInputToAcpBlocks(promptInput),
+        });
+        this.state.writeEvent({
+          event: "prompt_response",
+          sessionId: this.sessionId,
+          stopReason: promptResponse.stopReason,
         });
         appendTimingTraceEvent(options.timingTrace, "default_session", "prompt_rpc_completed", {
           sessionId: this.sessionId,

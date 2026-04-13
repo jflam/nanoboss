@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import type { FrontendCommand, FrontendEventEnvelope } from "../../src/http/frontend-events.ts";
 import { NanobossTuiController, type SessionResponse } from "../../src/tui/controller.ts";
-import type { DownstreamAgentSelection } from "../../src/core/types.ts";
+import type { DownstreamAgentSelection, PromptInput } from "../../src/core/types.ts";
 
 interface FakeStreamRecord {
   sessionId: string;
@@ -10,6 +10,12 @@ interface FakeStreamRecord {
   closed: Promise<void>;
   emit: (event: FrontendEventEnvelope) => void;
   close: () => void;
+}
+
+function toPromptText(prompt: string | PromptInput): string {
+  return typeof prompt === "string"
+    ? prompt
+    : prompt.parts.map((part) => part.type === "text" ? part.text : part.token).join("");
 }
 
 describe("NanobossTuiController", () => {
@@ -45,7 +51,7 @@ describe("NanobossTuiController", () => {
         ensureMatchingHttpServer: async () => {},
         createHttpSession: async () => createSession("session-1"),
         sendSessionPrompt: async (_baseUrl, _sessionId, prompt) => {
-          sendCalls.push(prompt);
+          sendCalls.push(toPromptText(prompt));
         },
         startSessionEventStream: ({ sessionId, onEvent }) => createFakeStream([], sessionId, onEvent),
         onExit: () => {
@@ -81,7 +87,7 @@ describe("NanobossTuiController", () => {
         ensureMatchingHttpServer: async () => {},
         createHttpSession: async () => createSession("session-1"),
         sendSessionPrompt: async (_baseUrl, _sessionId, prompt) => {
-          sendCalls.push(prompt);
+          sendCalls.push(toPromptText(prompt));
         },
         cancelSessionRun: async (_baseUrl, sessionId, runId) => {
           cancelCalls.push({ sessionId, runId });
@@ -143,7 +149,7 @@ describe("NanobossTuiController", () => {
         ensureMatchingHttpServer: async () => {},
         createHttpSession: async () => createSession("session-1"),
         sendSessionPrompt: async (_baseUrl, _sessionId, prompt) => {
-          sendCalls.push(prompt);
+          sendCalls.push(toPromptText(prompt));
         },
         cancelSessionRun: async (_baseUrl, sessionId, runId) => {
           cancelCalls.push({ sessionId, runId });
@@ -220,7 +226,7 @@ describe("NanobossTuiController", () => {
         ensureMatchingHttpServer: async () => {},
         createHttpSession: async () => createSession("session-1"),
         sendSessionPrompt: async (_baseUrl, _sessionId, prompt) => {
-          sendCalls.push(prompt);
+          sendCalls.push(toPromptText(prompt));
           if (prompt === "steer first") {
             throw new Error("network down");
           }
@@ -321,7 +327,7 @@ describe("NanobossTuiController", () => {
         ensureMatchingHttpServer: async () => {},
         createHttpSession: async () => createSession("session-1"),
         sendSessionPrompt: async (_baseUrl, _sessionId, prompt) => {
-          sendCalls.push(prompt);
+          sendCalls.push(toPromptText(prompt));
         },
         startSessionEventStream: ({ sessionId, onEvent }) => createFakeStream([], sessionId, onEvent),
       },
@@ -366,7 +372,7 @@ describe("NanobossTuiController", () => {
         ensureMatchingHttpServer: async () => {},
         createHttpSession: async () => createSession("session-1"),
         sendSessionPrompt: async (_baseUrl, _sessionId, prompt) => {
-          sendCalls.push(prompt);
+          sendCalls.push(toPromptText(prompt));
         },
         startSessionEventStream: ({ sessionId, onEvent }) => createFakeStream(streams, sessionId, onEvent),
         promptForModelSelection: async () => ({
@@ -417,7 +423,7 @@ describe("NanobossTuiController", () => {
         ensureMatchingHttpServer: async () => {},
         createHttpSession: async () => createSession("session-1"),
         sendSessionPrompt: async (_baseUrl, _sessionId, prompt) => {
-          sendCalls.push(prompt);
+          sendCalls.push(toPromptText(prompt));
         },
         startSessionEventStream: ({ sessionId, onEvent }) => createFakeStream([], sessionId, onEvent),
         confirmPersistDefaultAgentSelection: async () => false,
@@ -641,7 +647,7 @@ describe("NanobossTuiController", () => {
         ensureMatchingHttpServer: async () => {},
         createHttpSession: async () => createSession("session-1"),
         sendSessionPrompt: async (_baseUrl, _sessionId, prompt) => {
-          sendCalls.push(prompt);
+          sendCalls.push(toPromptText(prompt));
         },
         startSessionEventStream: ({ sessionId, onEvent }) => createFakeStream(streams, sessionId, onEvent),
       },
@@ -700,7 +706,7 @@ describe("NanobossTuiController", () => {
         ensureMatchingHttpServer: async () => {},
         resumeHttpSession: async () => createSession("session-1"),
         sendSessionPrompt: async (_baseUrl, _sessionId, prompt) => {
-          sendCalls.push(prompt);
+          sendCalls.push(toPromptText(prompt));
         },
         startSessionEventStream: ({ sessionId, onEvent }) => createFakeStream(streams, sessionId, onEvent),
       },
@@ -751,7 +757,7 @@ describe("NanobossTuiController", () => {
         ensureMatchingHttpServer: async () => {},
         createHttpSession: async () => createSession("session-1"),
         sendSessionPrompt: async (_baseUrl, _sessionId, prompt) => {
-          sendCalls.push(prompt);
+          sendCalls.push(toPromptText(prompt));
         },
         startSessionEventStream: ({ sessionId, onEvent }) => createFakeStream(streams, sessionId, onEvent),
       },
@@ -808,7 +814,7 @@ describe("NanobossTuiController", () => {
         ensureMatchingHttpServer: async () => {},
         createHttpSession: async () => createSession("session-1"),
         sendSessionPrompt: async (_baseUrl, _sessionId, prompt) => {
-          sendCalls.push(prompt);
+          sendCalls.push(toPromptText(prompt));
         },
         startSessionEventStream: ({ sessionId, onEvent }) => createFakeStream(streams, sessionId, onEvent),
       },

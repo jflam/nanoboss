@@ -1,5 +1,6 @@
 import type * as acp from "@agentclientprotocol/sdk";
 
+import type { PromptInput } from "./types.ts";
 import type { UiCardParams, UiStatusParams } from "./types.ts";
 
 export type ProcedureUiEvent =
@@ -19,6 +20,6 @@ export interface SessionUpdateEmitter {
 }
 
 export interface PreparedDefaultPrompt {
-  prompt: string;
+  promptInput: PromptInput;
   markSubmitted?: () => void;
 }

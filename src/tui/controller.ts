@@ -1,4 +1,5 @@
 import { buildModelCommand } from "../core/model-command.ts";
+import { normalizePromptInput, promptInputDisplayText } from "../core/prompt.ts";
 import { resolveDownstreamAgentConfig } from "../core/config.ts";
 import { getBuildLabel } from "../core/build-info.ts";
 import { getBuildFreshnessNotice } from "../core/build-freshness.ts";
@@ -17,7 +18,7 @@ import {
   type FrontendEventEnvelope,
 } from "../http/frontend-events.ts";
 import { formatAgentBanner } from "../core/runtime-banner.ts";
-import type { DownstreamAgentSelection, ProcedureContinuationUi } from "../core/types.ts";
+import type { DownstreamAgentSelection, ProcedureContinuationUi, PromptInput } from "../core/types.ts";
 
 import {
   isExitRequest,
@@ -37,6 +38,8 @@ export interface SessionResponse {
   agentLabel: string;
   defaultAgentSelection?: DownstreamAgentSelection;
 }
+
+type SubmittedPrompt = string | PromptInput;
 
 export interface NanobossTuiControllerParams {
   cwd?: string;
@@ -139,7 +142,8 @@ export class NanobossTuiController {
     }
   }
 
-  async handleSubmit(text: string): Promise<void> {
+  async handleSubmit(input: SubmittedPrompt): Promise<void> {
+    const text = getSubmittedPromptDisplayText(input);
     const trimmed = text.trim();
     if (trimmed.length === 0) {
       return;
@@ -161,18 +165,18 @@ export class NanobossTuiController {
     if (this.state.inputDisabled) {
       const blockedCommand = getBusyLocalCommandLabel(trimmed);
       if (blockedCommand) {
-        this.dispatch({
-          type: "local_status",
-          text: `[run] wait for the current run to finish before using ${blockedCommand}`,
-        });
-        return;
-      }
-
-      this.deps.onAddHistory?.(text);
-      this.deps.onClearInput?.();
-      await this.enqueuePendingPrompt(text, "steering");
+      this.dispatch({
+        type: "local_status",
+        text: `[run] wait for the current run to finish before using ${blockedCommand}`,
+      });
       return;
     }
+
+    this.deps.onAddHistory?.(text);
+    this.deps.onClearInput?.();
+    await this.enqueuePendingPrompt(input, "steering");
+    return;
+  }
 
     if (isNewSessionRequest(trimmed)) {
       this.deps.onClearInput?.();
@@ -193,10 +197,11 @@ export class NanobossTuiController {
 
     this.deps.onAddHistory?.(text);
     this.deps.onClearInput?.();
-    await this.forwardPrompt(text);
+    await this.forwardPrompt(input);
   }
 
-  async queuePrompt(text: string): Promise<void> {
+  async queuePrompt(input: SubmittedPrompt): Promise<void> {
+    const text = getSubmittedPromptDisplayText(input);
     const trimmed = text.trim();
     if (trimmed.length === 0 || !this.state.inputDisabled) {
       return;
@@ -213,7 +218,7 @@ export class NanobossTuiController {
 
     this.deps.onAddHistory?.(text);
     this.deps.onClearInput?.();
-    await this.enqueuePendingPrompt(text, "queued");
+    await this.enqueuePendingPrompt(input, "queued");
   }
 
   async cancelActiveRun(): Promise<void> {
@@ -248,6 +253,10 @@ export class NanobossTuiController {
     if (enabled) {
       void this.maybeAutoApproveCurrentContinuation();
     }
+  }
+
+  showStatus(text: string): void {
+    this.dispatch({ type: "local_status", text });
   }
 
   requestExit(): void {
@@ -350,13 +359,16 @@ export class NanobossTuiController {
     }
   }
 
-  private async enqueuePendingPrompt(text: string, kind: UiPendingPrompt["kind"]): Promise<void> {
+  private async enqueuePendingPrompt(input: SubmittedPrompt, kind: UiPendingPrompt["kind"]): Promise<void> {
+    const promptInput = typeof input === "string" ? undefined : normalizePromptInput(input);
+    const text = getSubmittedPromptDisplayText(input);
     this.dispatch({
       type: "local_pending_prompt_added",
       prompt: {
         id: `pending-${this.nextPendingPromptId++}`,
         text,
         kind,
+        ...(promptInput ? { promptInput } : {}),
       },
     });
 
@@ -382,7 +394,7 @@ export class NanobossTuiController {
     });
 
     try {
-      const forwarded = await this.forwardPrompt(nextPrompt.text);
+      const forwarded = await this.forwardPrompt(nextPrompt.promptInput ?? nextPrompt.text);
       if (!forwarded && this.state.pendingPrompts.length > 0) {
         this.dispatch({
           type: "local_pending_prompts_cleared",
@@ -456,8 +468,8 @@ export class NanobossTuiController {
     }
   }
 
-  private async forwardPrompt(prompt: string): Promise<boolean> {
-    this.dispatch({ type: "local_user_submitted", text: prompt });
+  private async forwardPrompt(prompt: SubmittedPrompt): Promise<boolean> {
+    this.dispatch({ type: "local_user_submitted", text: getSubmittedPromptDisplayText(prompt) });
 
     try {
       if (!this.state.sessionId) {
@@ -549,6 +561,10 @@ function selectNextPendingPrompt(prompts: UiPendingPrompt[]): UiPendingPrompt | 
 
 function formatPendingPromptClearStatus(count: number): string {
   return `[run] cleared ${count} pending prompt${count === 1 ? "" : "s"} after send failed`;
+}
+
+function getSubmittedPromptDisplayText(prompt: SubmittedPrompt): string {
+  return typeof prompt === "string" ? prompt : promptInputDisplayText(prompt);
 }
 
 function buildContinuationSignature(continuation: {

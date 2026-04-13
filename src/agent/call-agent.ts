@@ -3,6 +3,13 @@ import type * as acp from "@agentclientprotocol/sdk";
 import { collectTextSessionUpdates, parseAssistantNoticeText, summarizeAgentOutput } from "./acp-updates.ts";
 import { parseProcedureUiMarker } from "../core/ui-cli.ts";
 import {
+  createTextPromptInput,
+  hasPromptInputImages,
+  promptInputDisplayText,
+  promptInputToAcpBlocks,
+  summarizePromptInputForAcpLog,
+} from "../core/prompt.ts";
+import {
   applyAcpSessionConfig,
   closeAcpConnection,
   openAcpConnection,
@@ -39,6 +46,7 @@ export async function callAgent<T = string>(
   transport: CallAgentTransport = defaultTransport,
 ): Promise<AgentRunResult<T & KernelValue>> {
   const result = await invokeAgent(prompt, descriptor, options, transport);
+  const displayPrompt = options.promptInput ? promptInputDisplayText(options.promptInput) : prompt;
   const cwd = options.config?.cwd ?? process.cwd();
   const store = new SessionStore({
     sessionId: crypto.randomUUID(),
@@ -46,7 +54,7 @@ export async function callAgent<T = string>(
   });
   const cell = store.startCell({
     procedure: "callAgent",
-    input: prompt,
+    input: displayPrompt,
     kind: "agent",
   });
   const finalized = store.finalizeCell(cell, {
@@ -73,6 +81,12 @@ export async function invokeAgent<T = string>(
   options: CallAgentOptions = {},
   transport: CallAgentTransport = defaultTransport,
 ): Promise<InvokedAgentResult<T>> {
+  if (options.promptInput && hasPromptInputImages(options.promptInput) && (descriptor || options.namedRefs)) {
+    throw new Error(
+      "Image prompts are only supported for untyped downstream calls without named refs in the first cut.",
+    );
+  }
+
   const startedAt = Date.now();
   let lastError = "";
   let lastRaw = "";
@@ -326,6 +340,10 @@ async function runAcpPrompt(
   prompt: string,
   options: CallAgentOptions,
 ): Promise<{ raw: string; logFile?: string; updates: acp.SessionUpdate[]; tokenSnapshot?: AgentTokenSnapshot }> {
+  if (options.promptInput && hasPromptInputImages(options.promptInput)) {
+    throw new Error("Image prompts are only supported when reusing the default ACP conversation.");
+  }
+
   if (options.softStopSignal?.aborted) {
     throw new RunCancelledError(defaultCancellationMessage("soft_stop"), "soft_stop");
   }
@@ -398,14 +416,20 @@ async function runAcpPrompt(
 
     let promptResponse: acp.PromptResponse;
     try {
+      const promptInput = options.promptInput ?? createTextPromptInput(prompt);
+      state.writeEvent({
+        event: "prompt_request",
+        sessionId,
+        prompt: summarizePromptInputForAcpLog(promptInput),
+      });
       promptResponse = await state.connection.prompt({
         sessionId,
-        prompt: [
-          {
-            type: "text",
-            text: prompt,
-          },
-        ],
+        prompt: promptInputToAcpBlocks(promptInput),
+      });
+      state.writeEvent({
+        event: "prompt_response",
+        sessionId,
+        stopReason: promptResponse.stopReason,
       });
     } catch (error) {
       if (options.softStopSignal?.aborted) {

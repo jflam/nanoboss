@@ -1,4 +1,5 @@
 import { normalizeProcedureResult } from "../session/index.ts";
+import { createTextPromptInput, promptInputDisplayText } from "./prompt.ts";
 import type { SessionStore } from "../session/index.ts";
 import { formatErrorMessage } from "./error-format.ts";
 import type { RunLogger } from "./logger.ts";
@@ -18,6 +19,7 @@ export interface ChildContextBindingParams extends ProcedureInvocationBinding {
   procedureName: string;
   spanId: string;
   cell: ActiveCell;
+  promptInput: ReturnType<typeof createTextPromptInput>;
 }
 
 interface ProcedureInvocationApiImplParams {
@@ -47,9 +49,10 @@ export class ProcedureInvocationApiImpl implements ProcedureInvocationApi {
     const childSpanId = this.params.logger.newSpan(this.params.spanId);
     const startedAt = Date.now();
     this.params.assertCanStartBoundary();
+    const promptInput = createTextPromptInput(prompt);
     const childCell = this.params.store.startCell({
       procedure: name,
-      input: prompt,
+      input: promptInputDisplayText(promptInput),
       kind: "procedure",
       parentCellId: this.params.cell.cell.cellId,
     });
@@ -68,6 +71,7 @@ export class ProcedureInvocationApiImpl implements ProcedureInvocationApi {
         procedureName: name,
         spanId: childSpanId,
         cell: childCell,
+        promptInput,
         ...binding,
       });
       const rawResult = await procedure.execute(prompt, childContext);

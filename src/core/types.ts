@@ -27,6 +27,42 @@ export interface PendingProcedureContinuation<TState extends KernelValue = Kerne
   cell: CellRef;
 }
 
+export interface PromptImagePart {
+  type: "image";
+  token: string;
+  mimeType: string;
+  data: string;
+  width?: number;
+  height?: number;
+  byteLength?: number;
+}
+
+export type PromptPart =
+  | {
+      type: "text";
+      text: string;
+    }
+  | PromptImagePart;
+
+export interface PromptInput {
+  parts: PromptPart[];
+}
+
+export interface PromptImageSummary {
+  token: string;
+  mimeType: string;
+  width?: number;
+  height?: number;
+  byteLength?: number;
+}
+
+export interface ProcedurePromptInput {
+  parts: PromptPart[];
+  text: string;
+  displayText: string;
+  images: PromptImageSummary[];
+}
+
 export interface Simplify2CheckpointContinuationUiAction {
   id: "approve" | "stop" | "focus_tests" | "other";
   label: string;
@@ -99,6 +135,7 @@ export interface CellRecord {
     kind: CellKind;
     dispatchCorrelationId?: string;
     defaultAgentSelection?: DownstreamAgentSelection;
+    promptImages?: PromptImageSummary[];
   };
 }
 
@@ -347,6 +384,7 @@ export interface CommandCallAgentOptions {
   agent?: DownstreamAgentSelection;
   stream?: boolean;
   refs?: Record<string, CellRef | ValueRef>;
+  promptInput?: PromptInput;
 }
 
 export interface CommandCallProcedureOptions {
@@ -418,6 +456,7 @@ export interface ProcedureInvocationApi {
 export interface ProcedureApi {
   readonly cwd: string;
   readonly sessionId: string;
+  readonly promptInput?: ProcedurePromptInput;
   readonly agent: AgentInvocationApi;
   /**
    * Durable run state: stored cells, traversal, and refs.
@@ -455,6 +494,7 @@ export interface CallAgentOptions {
   onUpdate?: (update: acp.SessionUpdate) => Promise<void> | void;
   signal?: AbortSignal;
   softStopSignal?: AbortSignal;
+  promptInput?: PromptInput;
 }
 
 export interface CallAgentTransport {

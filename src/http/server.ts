@@ -1,5 +1,6 @@
 import { getBuildCommit, getBuildLabel } from "../core/build-info.ts";
 import { DEFAULT_HTTP_SERVER_PORT } from "../core/defaults.ts";
+import { parsePromptInputPayload } from "../core/prompt.ts";
 import { requireValue } from "../util/argv.ts";
 import type { FrontendEventEnvelope } from "./frontend-events.ts";
 import { NanobossService } from "../core/service.ts";
@@ -176,8 +177,15 @@ export async function runHttpServerCommand(argv: string[] = []): Promise<ReturnT
           return error(404, `Unknown session: ${sessionId}`);
         }
 
-        const body = await readJson<{ prompt?: string }>(request);
-        const prompt = body.prompt?.trim();
+        const body = await readJson<{ prompt?: string; promptInput?: unknown }>(request);
+        const promptInput = body.promptInput !== undefined
+          ? parsePromptInputPayload(body.promptInput)
+          : undefined;
+        if (body.promptInput !== undefined && !promptInput) {
+          return error(400, "promptInput is invalid");
+        }
+
+        const prompt = promptInput ?? body.prompt?.trim();
         if (!prompt) {
           return error(400, "prompt is required");
         }

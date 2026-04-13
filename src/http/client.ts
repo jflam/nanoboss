@@ -1,5 +1,5 @@
 import type { FrontendEventEnvelope } from "./frontend-events.ts";
-import type { DownstreamAgentSelection } from "../core/types.ts";
+import type { DownstreamAgentSelection, PromptInput } from "../core/types.ts";
 
 export interface ServerHealthResponse {
   status: string;
@@ -108,8 +108,11 @@ export async function resumeHttpSession(
 export async function sendSessionPrompt(
   baseUrl: string,
   sessionId: string,
-  prompt: string,
+  prompt: string | PromptInput,
 ): Promise<void> {
+  const body = typeof prompt === "string"
+    ? { prompt }
+    : { promptInput: prompt };
   const response = await fetch(
     new URL(`/v1/sessions/${sessionId}/prompts`, baseUrl),
     {
@@ -118,7 +121,7 @@ export async function sendSessionPrompt(
         "content-type": "application/json",
         connection: "close",
       },
-      body: JSON.stringify({ prompt }),
+      body: JSON.stringify(body),
     },
   );
 

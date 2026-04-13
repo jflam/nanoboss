@@ -10,6 +10,11 @@ import { RunLogger } from "../core/logger.ts";
 import { inferDataShape } from "../core/data-shape.ts";
 import { formatErrorMessage } from "../core/error-format.ts";
 import {
+  promptInputAttachmentSummaries,
+  promptInputDisplayText,
+  promptInputToPlainText,
+} from "../core/prompt.ts";
+import {
   type SessionStore,
   createValueRef,
   normalizeProcedureResult,
@@ -26,6 +31,7 @@ import type {
   KernelValue,
   Procedure,
   ProcedurePause,
+  PromptInput,
   ProcedureRegistryLike,
   ValueRef,
 } from "../core/types.ts";
@@ -76,13 +82,14 @@ export async function executeTopLevelProcedure(params: {
   registry: ProcedureRegistryLike;
   procedure: Procedure;
   prompt: string;
+  promptInput?: PromptInput;
   emitter: ProcedureRunnerEmitter;
   signal?: AbortSignal;
   softStopSignal?: AbortSignal;
   defaultConversation?: DefaultConversationSession;
   getDefaultAgentConfig: () => DownstreamAgentConfig;
   setDefaultAgentSelection: (selection: DownstreamAgentSelection) => DownstreamAgentConfig;
-  prepareDefaultPrompt?: (prompt: string) => PreparedDefaultPrompt;
+  prepareDefaultPrompt?: (promptInput: PromptInput) => PreparedDefaultPrompt;
   onError?: (ctx: CommandContextImpl, errorText: string) => void | Promise<void>;
   dispatchCorrelationId?: string;
   assertCanStartBoundary?: () => void;
@@ -94,11 +101,15 @@ export async function executeTopLevelProcedure(params: {
 }): Promise<ProcedureExecutionResult> {
   const logger = new RunLogger();
   const rootSpanId = logger.newSpan();
+  const promptInput = params.promptInput;
+  const displayPrompt = promptInput ? promptInputDisplayText(promptInput) : params.prompt;
+  const plainTextPrompt = promptInput ? promptInputToPlainText(promptInput) : params.prompt;
   const rootCell = params.store.startCell({
     procedure: params.procedure.name,
-    input: params.prompt,
+    input: displayPrompt,
     kind: "top_level",
     dispatchCorrelationId: params.dispatchCorrelationId,
+    promptImages: promptInput ? promptInputAttachmentSummaries(promptInput) : undefined,
   });
   const beforeSelection = toDownstreamAgentSelection(params.getDefaultAgentConfig());
   const startedAt = Date.now();
@@ -113,6 +124,7 @@ export async function executeTopLevelProcedure(params: {
     emitter: params.emitter,
     store: params.store,
     cell: rootCell,
+    promptInput,
     signal: params.signal,
     softStopSignal: params.softStopSignal,
     defaultConversation: params.defaultConversation,
@@ -127,7 +139,7 @@ export async function executeTopLevelProcedure(params: {
     spanId: rootSpanId,
     procedure: params.procedure.name,
     kind: "procedure_start",
-    prompt: params.prompt,
+    prompt: displayPrompt,
   });
   appendTimingTraceEvent(params.timingTrace, "procedure_runner", "top_level_procedure_started", {
     procedure: params.procedure.name,
@@ -136,7 +148,7 @@ export async function executeTopLevelProcedure(params: {
   try {
     const rawResult = params.resume
       ? await resumeTopLevelProcedure(params.procedure, params.resume.prompt, params.resume.state, ctx)
-      : await params.procedure.execute(params.prompt, ctx);
+      : await params.procedure.execute(plainTextPrompt, ctx);
     const result = normalizeProcedureResult(rawResult);
     const afterSelection = toDownstreamAgentSelection(params.getDefaultAgentConfig());
     const changedSelection = sameSelection(beforeSelection, afterSelection) ? undefined : afterSelection;

@@ -10,6 +10,7 @@ const BUILD_HOOK_TIMEOUT_MS = 30_000;
 
 import { DefaultConversationSession } from "../../src/agent/default-session.ts";
 import type { Procedure } from "../../src/core/types.ts";
+import { createTextPromptInput, promptInputDisplayText } from "../../src/core/prompt.ts";
 import { ProcedureRegistry } from "../../src/procedure/registry.ts";
 import type { FrontendEventEnvelope, ReplayableFrontendEvent } from "../../src/http/frontend-events.ts";
 import { SessionStore } from "../../src/session/index.ts";
@@ -265,6 +266,46 @@ describe("NanobossService", () => {
 
     expect(textEvents).toHaveLength(1);
     expect(textEvents[0]?.data.text).toBe("4");
+  });
+
+  test("rejects image prompts for non-default procedures with a clear failure event", async () => {
+    const registry = new ProcedureRegistry({ procedureRoots: [mkdtempSync(join(tmpdir(), "nab-service-image-guard-"))] });
+    registry.loadBuiltins();
+
+    const service = new NanobossService(registry);
+    const session = service.createSession({ cwd: process.cwd() });
+
+    await service.prompt(session.sessionId, {
+      parts: [
+        { type: "text", text: "/model " },
+        {
+          type: "image",
+          token: "[Image 1: PNG 10x10 1KB]",
+          mimeType: "image/png",
+          data: "YWJj",
+          width: 10,
+          height: 10,
+          byteLength: 1024,
+        },
+      ],
+    });
+
+    const events = service.getSessionEvents(session.sessionId)?.after(-1) ?? [];
+    const started = events.find((event) => event.type === "run_started");
+    const failed = events.findLast((event) => event.type === "run_failed");
+
+    expect(started?.type).toBe("run_started");
+    if (started?.type !== "run_started") {
+      throw new Error("Missing run_started event");
+    }
+    expect(started.data.procedure).toBe("model");
+    expect(started.data.prompt).toContain("[Image 1: PNG 10x10 1KB]");
+
+    expect(failed?.type).toBe("run_failed");
+    if (failed?.type !== "run_failed") {
+      throw new Error("Missing run_failed event");
+    }
+    expect(failed.data.error).toContain("only supported for /default");
   });
 
   test("publishes a final token usage event before run completion for assistant replies", async () => {
@@ -748,7 +789,10 @@ describe("NanobossService", () => {
     const session = service.createSession({ cwd });
     const sessionState = getInternalSessionState(service, session.sessionId);
     const prepareDefaultPrompt = Reflect.get(service as object, "prepareDefaultPrompt") as
-      | ((session: InternalSessionState, prompt: string, runId: string) => { prompt: string; markSubmitted: () => void })
+      | ((session: InternalSessionState, promptInput: import("../../src/core/types.ts").PromptInput, runId: string) => {
+          promptInput: import("../../src/core/types.ts").PromptInput;
+          markSubmitted: () => void;
+        })
       | undefined;
 
     sessionState.store.finalizeCell(
@@ -770,7 +814,9 @@ describe("NanobossService", () => {
         throw new Error("Expected prepareDefaultPrompt");
       }
 
-      const followUpPrompt = prepareDefaultPrompt(sessionState, "what mattered most?", "run-test").prompt;
+      const followUpPrompt = promptInputDisplayText(
+        prepareDefaultPrompt(sessionState, createTextPromptInput("what mattered most?"), "run-test").promptInput,
+      );
 
       expect(followUpPrompt).toContain("Nanoboss session memory update:");
       expect(followUpPrompt).toContain("procedure: /review");

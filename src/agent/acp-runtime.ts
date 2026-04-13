@@ -115,6 +115,12 @@ export async function openAcpConnection(config: DownstreamAgentConfig): Promise<
       protocolVersion: acp.PROTOCOL_VERSION,
       clientCapabilities: {},
     });
+    writeEvent({
+      event: "initialized",
+      protocolVersion: initialized.protocolVersion,
+      agentCapabilities: initialized.agentCapabilities,
+      authMethods: initialized.authMethods,
+    });
 
     return {
       child,

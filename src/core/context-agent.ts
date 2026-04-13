@@ -3,6 +3,7 @@ import type * as acp from "@agentclientprotocol/sdk";
 import { collectTextSessionUpdates, summarizeAgentOutput } from "../agent/acp-updates.ts";
 import { invokeAgent } from "../agent/call-agent.ts";
 import { normalizeAgentTokenUsage } from "../agent/token-usage.ts";
+import { promptInputAttachmentSummaries, promptInputDisplayText } from "./prompt.ts";
 import type { SessionStore } from "../session/index.ts";
 import { RunCancelledError, defaultCancellationMessage, normalizeRunCancelledError } from "./cancellation.ts";
 import { resolveDownstreamAgentConfig } from "./config.ts";
@@ -54,6 +55,7 @@ export class AgentRunRecorder {
       rawInput?: unknown;
       emitToolCallEvents: boolean;
       agent?: DownstreamAgentSelection;
+      promptInput?: CommandCallAgentOptions["promptInput"];
     },
   ): StartedAgentRun {
     const started: StartedAgentRun = {
@@ -66,6 +68,7 @@ export class AgentRunRecorder {
         input: prompt,
         kind: "agent",
         parentCellId: this.params.cell.cell.cellId,
+        promptImages: params.promptInput ? promptInputAttachmentSummaries(params.promptInput) : undefined,
       }),
     };
 
@@ -255,6 +258,8 @@ export class AgentInvocationApiImpl implements AgentInvocationApi {
       : undefined;
     const options = (descriptor ? maybeOptions : descriptorOrOptions) as CommandCallAgentOptions | undefined;
     const sessionMode = options?.session ?? "fresh";
+    const promptInput = options?.promptInput;
+    const displayPrompt = promptInput ? promptInputDisplayText(promptInput) : prompt;
     this.params.assertCanStartBoundary();
     const useDefaultSession = sessionMode === "default" && this.params.sessionManager.hasDefaultConversation();
     const agentConfig = useDefaultSession && options?.agent
@@ -262,20 +267,22 @@ export class AgentInvocationApiImpl implements AgentInvocationApi {
       : options?.agent
         ? resolveDownstreamAgentConfig(this.params.cwd, options.agent)
         : this.params.sessionManager.getDefaultAgentConfig();
-    const started = this.params.recorder.begin(prompt, useDefaultSession
+    const started = this.params.recorder.begin(displayPrompt, useDefaultSession
       ? {
           emitToolCallEvents: false,
           agent: options?.agent,
+          promptInput,
         }
       : {
-          title: `callAgent${formatAgentLabel(options?.agent)}: ${summarizeText(prompt, 60)}`,
+          title: `callAgent${formatAgentLabel(options?.agent)}: ${summarizeText(displayPrompt, 60)}`,
           rawInput: {
-            prompt,
+            prompt: displayPrompt,
             agent: options?.agent,
             refs: options?.refs,
           },
           emitToolCallEvents: true,
           agent: options?.agent,
+          promptInput,
         });
     const namedRefs = resolveNamedRefs(this.params.store, options?.refs);
     const transport = this.params.sessionManager.createCallAgentTransport(sessionMode, this.params.timingTrace);
@@ -286,6 +293,7 @@ export class AgentInvocationApiImpl implements AgentInvocationApi {
         namedRefs,
         signal: this.params.signal,
         softStopSignal: this.params.softStopSignal,
+        promptInput,
         onUpdate: async (update) => {
           if (shouldForwardNestedAgentUpdate(update, options?.stream !== false)) {
             this.params.emitter.emit(withNestedToolCallMetadata(update, started.toolCallId));

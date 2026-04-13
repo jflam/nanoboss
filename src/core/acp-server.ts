@@ -3,6 +3,7 @@ import { Readable, Writable } from "node:stream";
 
 import { getBuildLabel } from "./build-info.ts";
 import type { ProcedureUiEvent, SessionUpdateEmitter } from "./context.ts";
+import { promptInputFromAcpBlocks } from "./prompt.ts";
 import { parseDownstreamAgentSelection } from "./downstream-agent-selection.ts";
 import { NanobossService } from "./service.ts";
 import type { DownstreamAgentSelection } from "./types.ts";
@@ -53,6 +54,9 @@ class Nanoboss implements acp.Agent {
       },
       agentCapabilities: {
         loadSession: false,
+        promptCapabilities: {
+          image: true,
+        },
       },
     };
   }
@@ -85,7 +89,7 @@ class Nanoboss implements acp.Agent {
 
   async prompt(params: acp.PromptRequest): Promise<acp.PromptResponse> {
     const emitter = new QueuedSessionUpdateEmitter(this.connection, params.sessionId);
-    await this.service.prompt(params.sessionId, extractPromptText(params.prompt), emitter);
+    await this.service.prompt(params.sessionId, promptInputFromAcpBlocks(params.prompt), emitter);
     return { stopReason: "end_turn" };
   }
 
@@ -122,13 +126,6 @@ export function extractDefaultAgentSelection(params: acp.NewSessionRequest): Dow
   }
 
   return parseDownstreamAgentSelection((record as Record<string, unknown>).defaultAgentSelection);
-}
-
-function extractPromptText(prompt: acp.PromptRequest["prompt"]): string {
-  return prompt
-    .map((block) => (block.type === "text" ? block.text : ""))
-    .filter(Boolean)
-    .join("\n");
 }
 
 export async function runAcpServerCommand(): Promise<void> {

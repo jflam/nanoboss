@@ -32,6 +32,7 @@ interface CellDraft {
     kind: CellKind;
     dispatchCorrelationId?: string;
     defaultAgentSelection?: DownstreamAgentSelection;
+    promptImages?: CellRecord["meta"]["promptImages"];
   };
   streamChunks: string[];
 }
@@ -100,6 +101,7 @@ export class SessionStore {
     kind: CellKind;
     parentCellId?: string;
     dispatchCorrelationId?: string;
+    promptImages?: CellRecord["meta"]["promptImages"];
   }): CellDraft {
     return {
       cell: createCellRef(this.sessionId, crypto.randomUUID()),
@@ -110,6 +112,7 @@ export class SessionStore {
         parentCellId: params.parentCellId,
         kind: params.kind,
         dispatchCorrelationId: params.dispatchCorrelationId,
+        promptImages: params.promptImages,
       },
       streamChunks: [],
     };

@@ -1,11 +1,14 @@
 import { describe, expect, test } from "bun:test";
 
 import { NanobossTuiApp } from "../../src/tui/app.ts";
+import type { PromptInput } from "../../src/core/types.ts";
 import { createInitialUiState, type UiState } from "../../src/tui/state.ts";
 import { createNanobossTuiTheme } from "../../src/tui/theme.ts";
 
 class FakeEditor {
   text = "";
+  cursorLine = 0;
+  cursorCol = 0;
   disableSubmit = false;
   onSubmit?: (text: string) => void;
   onChange?: (text: string) => void;
@@ -19,11 +22,35 @@ class FakeEditor {
 
   setText(text: string): void {
     this.text = text;
+    const lines = text.split("\n");
+    this.cursorLine = Math.max(0, lines.length - 1);
+    this.cursorCol = (lines.at(-1) ?? "").length;
     this.onChange?.(text);
   }
 
   getText(): string {
     return this.text;
+  }
+
+  getCursor(): { line: number; col: number } {
+    return {
+      line: this.cursorLine,
+      col: this.cursorCol,
+    };
+  }
+
+  setCursor(line: number, col: number): void {
+    this.cursorLine = line;
+    this.cursorCol = col;
+  }
+
+  insertTextAtCursor(text: string): void {
+    const lines = this.text.split("\n");
+    const currentLine = lines[this.cursorLine] ?? "";
+    lines[this.cursorLine] = `${currentLine.slice(0, this.cursorCol)}${text}${currentLine.slice(this.cursorCol)}`;
+    this.text = lines.join("\n");
+    this.cursorCol += text.length;
+    this.onChange?.(this.text);
   }
 
   isShowingAutocomplete(): boolean {
@@ -36,7 +63,10 @@ class FakeEditor {
 
   submit(): void {
     if (!this.disableSubmit) {
-      this.onSubmit?.(this.text);
+      const submitted = this.text;
+      this.text = "";
+      this.onChange?.("");
+      this.onSubmit?.(submitted);
     }
   }
 }
@@ -82,7 +112,7 @@ function createViewStub(onSetState?: () => void) {
 describe("NanobossTuiApp", () => {
   test("keeps pi-tui submit enabled for steering input while a run is active", () => {
     const editor = new FakeEditor();
-    const handledSubmissions: string[] = [];
+    const handledSubmissions: PromptInput[] = [];
     let currentState: UiState = createInitialUiState({
       cwd: "/repo",
       showToolCalls: true,
@@ -112,13 +142,16 @@ describe("NanobossTuiApp", () => {
           capturedOnStateChange = deps.onStateChange;
           return {
             getState: () => currentState,
-            async handleSubmit(text: string) {
-              handledSubmissions.push(text);
+            async handleSubmit(input) {
+              if (typeof input !== "string") {
+                handledSubmissions.push(input);
+              }
             },
             async queuePrompt() {},
             async cancelActiveRun() {},
             toggleToolOutput() {},
             toggleSimplify2AutoApprove() {},
+            showStatus() {},
             requestExit() {},
             async run() {
               return undefined;
@@ -142,7 +175,13 @@ describe("NanobossTuiApp", () => {
     expect(editor.disableSubmit).toBe(false);
 
     editor.submit();
-    expect(handledSubmissions).toEqual(["steer here"]);
+    expect(handledSubmissions).toEqual([
+      {
+        parts: [
+          { type: "text", text: "steer here" },
+        ],
+      },
+    ]);
   });
 
   test("keeps the leading slash when completing namespaced slash commands", async () => {
@@ -181,6 +220,7 @@ describe("NanobossTuiApp", () => {
             async cancelActiveRun() {},
             toggleToolOutput() {},
             toggleSimplify2AutoApprove() {},
+            showStatus() {},
             requestExit() {},
             async run() {
               return undefined;
@@ -265,6 +305,7 @@ describe("NanobossTuiApp", () => {
             toggles.push("toggle");
           },
           toggleSimplify2AutoApprove() {},
+          showStatus() {},
           requestExit() {},
           async run() {
             return undefined;
@@ -318,6 +359,7 @@ describe("NanobossTuiApp", () => {
           toggleSimplify2AutoApprove() {
             toggles.push("toggle");
           },
+          showStatus() {},
           requestExit() {},
           async run() {
             return undefined;
@@ -333,6 +375,178 @@ describe("NanobossTuiApp", () => {
 
     expect(result).toEqual({ consume: true });
     expect(toggles).toEqual(["toggle"]);
+  });
+
+  test("pressing ctrl+v inserts an image token and submits structured prompt input", async () => {
+    const editor = new FakeEditor();
+    const submissions: PromptInput[] = [];
+    const statuses: string[] = [];
+    const currentState: UiState = createInitialUiState({ cwd: "/repo", showToolCalls: true });
+    let inputListener: ((data: string) => unknown) | undefined;
+
+    new NanobossTuiApp(
+      {
+        serverUrl: "http://localhost:3000",
+        showToolCalls: true,
+      },
+      {
+        createTerminal: () => ({
+          setTitle() {},
+          async drainInput() {},
+        }),
+        createTui: () => ({
+          addInputListener(listener) {
+            inputListener = listener;
+          },
+          addChild() {},
+          setFocus() {},
+          start() {},
+          requestRender() {},
+          stop() {},
+        }),
+        createEditor: () => editor,
+        createClipboardImageProvider: () => ({
+          async readImage() {
+            return {
+              mimeType: "image/png",
+              data: "YWJj",
+              width: 1440,
+              height: 900,
+              byteLength: 620 * 1024,
+            };
+          },
+        }),
+        materializeClipboardImage: () => "/tmp/nanoboss-attached-images/test-image.png",
+        createController: () => ({
+          getState: () => currentState,
+          async handleSubmit(input) {
+            if (typeof input !== "string") {
+              submissions.push(input);
+            }
+          },
+          async queuePrompt() {},
+          async cancelActiveRun() {},
+          toggleToolOutput() {},
+          toggleSimplify2AutoApprove() {},
+          showStatus(text: string) {
+            statuses.push(text);
+          },
+          requestExit() {},
+          async run() {
+            return undefined;
+          },
+          async stop() {},
+        }),
+        createView: () => createViewStub(),
+      },
+    );
+
+    editor.setText("inspect ");
+    const result = inputListener?.("\u0016");
+    await Promise.resolve();
+
+    expect(result).toEqual({ consume: true });
+    expect(editor.getText()).toContain("[Image 1: PNG 1440x900 620KB]");
+    expect(statuses).toEqual([
+      "[clipboard] ctrl+v received",
+      "[clipboard] attached [Image 1: PNG 1440x900 620KB] -> /tmp/nanoboss-attached-images/test-image.png",
+    ]);
+
+    editor.submit();
+
+    expect(submissions).toHaveLength(1);
+    expect(submissions[0]?.parts[0]).toEqual({ type: "text", text: "inspect " });
+    expect(submissions[0]?.parts[1]).toMatchObject({
+      type: "image",
+      token: "[Image 1: PNG 1440x900 620KB]",
+      mimeType: "image/png",
+      data: "YWJj",
+      width: 1440,
+      height: 900,
+      byteLength: 620 * 1024,
+    });
+  });
+
+  test("backspace on an image token removes the whole token and the attachment does not survive later submits", async () => {
+    const editor = new FakeEditor();
+    const submissions: Array<string | PromptInput> = [];
+    let inputListener: ((data: string) => unknown) | undefined;
+
+    new NanobossTuiApp(
+      {
+        serverUrl: "http://localhost:3000",
+        showToolCalls: true,
+      },
+      {
+        createTerminal: () => ({
+          setTitle() {},
+          async drainInput() {},
+        }),
+        createTui: () => ({
+          addInputListener(listener) {
+            inputListener = listener;
+          },
+          addChild() {},
+          setFocus() {},
+          start() {},
+          requestRender() {},
+          stop() {},
+        }),
+        createEditor: () => editor,
+        createClipboardImageProvider: () => ({
+          async readImage() {
+            return {
+              mimeType: "image/png",
+              data: "YWJj",
+              width: 1440,
+              height: 900,
+              byteLength: 620 * 1024,
+            };
+          },
+        }),
+        materializeClipboardImage: () => "/tmp/nanoboss-attached-images/test-image.png",
+        createController: () => ({
+          getState: () => createInitialUiState({ cwd: "/repo", showToolCalls: true }),
+          async handleSubmit(input) {
+            submissions.push(input);
+          },
+          async queuePrompt() {},
+          async cancelActiveRun() {},
+          toggleToolOutput() {},
+          toggleSimplify2AutoApprove() {},
+          showStatus() {},
+          requestExit() {},
+          async run() {
+            return undefined;
+          },
+          async stop() {},
+        }),
+        createView: () => createViewStub(),
+      },
+    );
+
+    editor.setText("inspect ");
+    inputListener?.("\u0016");
+    await Promise.resolve();
+
+    const token = "[Image 1: PNG 1440x900 620KB]";
+    expect(editor.getText()).toBe(`inspect ${token}`);
+    expect(editor.getCursor()).toEqual({ line: 0, col: `inspect ${token}`.length });
+
+    const backspaceResult = inputListener?.("\u007f");
+    await Promise.resolve();
+
+    expect(backspaceResult).toEqual({ consume: true });
+    expect(editor.getText()).toBe("inspect ");
+    expect(editor.getCursor()).toEqual({ line: 0, col: "inspect ".length });
+
+    editor.submit();
+    editor.setText("second turn");
+    editor.submit();
+
+    expect(submissions).toHaveLength(2);
+    expect(submissions[0]).toEqual({ parts: [{ type: "text", text: "inspect " }] });
+    expect(submissions[1]).toEqual({ parts: [{ type: "text", text: "second turn" }] });
   });
 
   test("opens the simplify2 continuation overlay and action 1 submits approval", async () => {
@@ -372,6 +586,7 @@ describe("NanobossTuiApp", () => {
             async cancelActiveRun() {},
             toggleToolOutput() {},
             toggleSimplify2AutoApprove() {},
+            showStatus() {},
             requestExit() {},
             async run() {
               return undefined;
@@ -447,6 +662,7 @@ describe("NanobossTuiApp", () => {
             async cancelActiveRun() {},
             toggleToolOutput() {},
             toggleSimplify2AutoApprove() {},
+            showStatus() {},
             requestExit() {},
             async run() {
               return undefined;
@@ -533,6 +749,7 @@ describe("NanobossTuiApp", () => {
           async cancelActiveRun() {},
           toggleToolOutput() {},
           toggleSimplify2AutoApprove() {},
+          showStatus() {},
           requestExit() {
             exits.push("exit");
           },
@@ -590,6 +807,7 @@ describe("NanobossTuiApp", () => {
           async cancelActiveRun() {},
           toggleToolOutput() {},
           toggleSimplify2AutoApprove() {},
+          showStatus() {},
           requestExit() {
             exits.push("exit");
           },
@@ -647,6 +865,7 @@ describe("NanobossTuiApp", () => {
           async cancelActiveRun() {},
           toggleToolOutput() {},
           toggleSimplify2AutoApprove() {},
+          showStatus() {},
           requestExit() {
             exits.push("exit");
           },
@@ -706,6 +925,7 @@ describe("NanobossTuiApp", () => {
             toggles.push("toggle");
           },
           toggleSimplify2AutoApprove() {},
+          showStatus() {},
           requestExit() {},
           async run() {
             return undefined;
@@ -771,6 +991,7 @@ describe("NanobossTuiApp", () => {
             },
             toggleToolOutput() {},
             toggleSimplify2AutoApprove() {},
+            showStatus() {},
             requestExit() {},
             async run() {
               return undefined;
@@ -829,6 +1050,7 @@ describe("NanobossTuiApp", () => {
           async cancelActiveRun() {},
           toggleToolOutput() {},
           toggleSimplify2AutoApprove() {},
+          showStatus() {},
           requestExit() {},
           async run() {
             return undefined;
@@ -886,6 +1108,7 @@ describe("NanobossTuiApp", () => {
           async cancelActiveRun() {},
           toggleToolOutput() {},
           toggleSimplify2AutoApprove() {},
+          showStatus() {},
           requestExit() {},
           async run() {
             return undefined;
@@ -944,6 +1167,7 @@ describe("NanobossTuiApp", () => {
             async cancelActiveRun() {},
             toggleToolOutput() {},
             toggleSimplify2AutoApprove() {},
+            showStatus() {},
             requestExit() {},
             async run() {
               currentState = {
@@ -1022,6 +1246,7 @@ describe("NanobossTuiApp", () => {
             async cancelActiveRun() {},
             toggleToolOutput() {},
             toggleSimplify2AutoApprove() {},
+            showStatus() {},
             requestExit() {},
             async run() {
               return undefined;
