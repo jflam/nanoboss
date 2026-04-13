@@ -66,14 +66,8 @@ export function formatToolDurationLine(theme: NanobossTuiTheme, toolCall: UiTool
   return theme.toolCardMeta(`Took ${formatDuration(toolCall.durationMs)}`);
 }
 
-export function getCanonicalToolName(toolCall: Pick<UiToolCall, "toolName" | "kind">): string | undefined {
-  const toolName = toolCall.toolName?.trim().toLowerCase();
-  if (toolName) {
-    return toolName;
-  }
-
-  const kind = toolCall.kind.trim().toLowerCase();
-  return kind && kind !== "other" && kind !== "thought" && kind !== "wrapper" ? kind : undefined;
+export function getCanonicalToolName(toolCall: Pick<UiToolCall, "toolName">): string | undefined {
+  return toolCall.toolName?.trim().toLowerCase() || undefined;
 }
 
 export function formatToolHeader(theme: NanobossTuiTheme, header: string | undefined, fallbackTitle: string): string {
@@ -222,11 +216,11 @@ export function formatErrorLines(
 }
 
 export function formatExpandedToolHeader(toolCall: UiToolCall): string | undefined {
-  return normalizeToolInputPayload(toolCall, toolCall.rawInput).header ?? toolCall.callPreview?.header;
+  return normalizeToolInputPayload({ toolName: toolCall.toolName }, toolCall.rawInput).header ?? toolCall.callPreview?.header;
 }
 
 export function getExpandedToolInputBlock(toolCall: UiToolCall): ToolPreviewBlock | undefined {
-  const normalized = normalizeToolInputPayload(toolCall, toolCall.rawInput);
+  const normalized = normalizeToolInputPayload({ toolName: toolCall.toolName }, toolCall.rawInput);
   const record = asRecord(toolCall.rawInput);
 
   switch (normalized.toolName) {
@@ -273,7 +267,7 @@ export function getExpandedToolInputBlock(toolCall: UiToolCall): ToolPreviewBloc
 }
 
 export function getExpandedToolResultBlock(toolCall: UiToolCall): ToolPreviewBlock | undefined {
-  const normalized = normalizeToolResultPayload(toolCall, toolCall.rawOutput);
+  const normalized = normalizeToolResultPayload({ toolName: toolCall.toolName }, toolCall.rawOutput);
   const record = asRecord(toolCall.rawOutput);
   const expandedContent = firstString(record?.expandedContent, record?.expanded_content);
 

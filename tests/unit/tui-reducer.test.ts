@@ -44,6 +44,7 @@ describe("tui reducer", () => {
         toolCallId: "tool-1",
         title: "Mock read README.md",
         kind: "read",
+        toolName: "read",
         status: "pending",
         callPreview: { header: "read README.md" },
       }),
@@ -721,6 +722,7 @@ describe("tui reducer", () => {
         toolCallId: "tool-1",
         title: "Mock read README.md",
         kind: "read",
+        toolName: "read",
         status: "pending",
         callPreview: { header: "read README.md" },
       }),
@@ -865,6 +867,7 @@ describe("tui reducer", () => {
         toolCallId: "tool-1",
         title: "callAgent: summarize the diff",
         kind: "other",
+        toolName: "agent",
       }),
     });
     state = reduceUiState(state, {
@@ -1011,7 +1014,7 @@ describe("tui reducer", () => {
     expect(state.transcriptItems).toContainEqual({ type: "tool_call", id: "leaf" });
   });
 
-  test("out-of-order tool updates synthesize a placeholder card", () => {
+  test("out-of-order tool updates synthesize a placeholder card from canonical toolName", () => {
     let state = createInitialUiState({ cwd: "/repo", showToolCalls: true });
 
     state = reduceUiState(state, {
@@ -1020,6 +1023,7 @@ describe("tui reducer", () => {
         runId: "run-1",
         toolCallId: "tool-missing",
         title: "write",
+        toolName: "write",
         status: "failed",
         errorPreview: { bodyLines: ["permission denied"] },
       }),
@@ -1042,6 +1046,38 @@ describe("tui reducer", () => {
       },
     ]);
     expect(state.transcriptItems).toContainEqual({ type: "tool_call", id: "tool-missing" });
+  });
+
+  test("title-only tool updates stay presentation-only when semantic identity is missing", () => {
+    let state = createInitialUiState({ cwd: "/repo", showToolCalls: true });
+
+    state = reduceUiState(state, {
+      type: "frontend_event",
+      event: eventEnvelope("tool_updated", {
+        runId: "run-1",
+        toolCallId: "tool-missing",
+        title: "write",
+        status: "failed",
+        errorPreview: { bodyLines: ["permission denied"] },
+      }),
+    });
+
+    expect(state.toolCalls).toEqual([
+      {
+        id: "tool-missing",
+        runId: "run-1",
+        title: "write",
+        kind: "other",
+        toolName: undefined,
+        status: "failed",
+        depth: 0,
+        isWrapper: false,
+        callPreview: undefined,
+        resultPreview: undefined,
+        errorPreview: { bodyLines: ["permission denied"] },
+        durationMs: undefined,
+      },
+    ]);
   });
 
   test("does not create tool cards or split assistant text when tool cards are hidden by preference", () => {

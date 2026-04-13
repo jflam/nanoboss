@@ -5,7 +5,6 @@ import {
 } from "../http/frontend-events.ts";
 import type { DownstreamAgentSelection } from "../core/types.ts";
 import { formatProcedureStatusText } from "../core/ui-cli.ts";
-import { normalizeToolName } from "../core/tool-payload-normalizer.ts";
 import type { ToolCardThemeMode } from "./state.ts";
 
 import {
@@ -371,10 +370,7 @@ function reduceFrontendEvent(state: UiState, event: RenderedFrontendEventEnvelop
       const existing = state.toolCalls.find((toolCall) => toolCall.id === event.data.toolCallId);
       const parentToolCallId = event.data.parentToolCallId ?? existing?.parentToolCallId;
       const isStructuralOnly = shouldSuppressToolTraceTitle(event.data.title);
-      const toolName = existing?.toolName ?? event.data.toolName ?? normalizeToolName({
-        title: event.data.title,
-        kind: event.data.kind,
-      });
+      const toolName = existing?.toolName ?? event.data.toolName;
       const activeRunAttemptedToolCallIds = state.activeRunId === event.data.runId
         ? appendUniqueString(state.activeRunAttemptedToolCallIds, event.data.toolCallId)
         : state.activeRunAttemptedToolCallIds;
@@ -420,7 +416,7 @@ function reduceFrontendEvent(state: UiState, event: RenderedFrontendEventEnvelop
       const parentToolCallId = event.data.parentToolCallId ?? existing?.parentToolCallId;
       const isWrapper = existing?.isWrapper ?? existing?.kind === "wrapper";
       const isStructuralOnly = shouldSuppressToolTraceTitle(title);
-      const toolName = existing?.toolName ?? event.data.toolName ?? normalizeToolName({ title });
+      const toolName = existing?.toolName ?? event.data.toolName;
       const activeRunSucceededToolCallIds = state.activeRunId === event.data.runId && event.data.status === "completed"
         ? appendUniqueString(state.activeRunSucceededToolCallIds, event.data.toolCallId)
         : state.activeRunSucceededToolCallIds;
