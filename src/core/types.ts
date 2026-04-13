@@ -322,7 +322,7 @@ export interface ProcedureRegistryLike {
   register(procedure: Procedure): void;
   loadProcedureFromPath(path: string): Promise<Procedure>;
   persist(procedureName: string, source: string, cwd: string): Promise<string>;
-  listMetadata(): ProcedureMetadata[];
+  listMetadata(): DeferredProcedureMetadata[];
 }
 
 export type AgentSessionMode = "fresh" | "default";

@@ -91,8 +91,8 @@ export class ProcedureRegistry implements ProcedureRegistryLike {
     return this.procedures.get(name);
   }
 
-  listMetadata(): ProcedureMetadata[] {
-    return [...this.procedures.values()].map(copyProcedureMetadata);
+  listMetadata(): DeferredProcedureMetadata[] {
+    return [...this.procedures.values()].map(toDeferredProcedureMetadata);
   }
 
   register(procedure: Procedure): void {
@@ -102,20 +102,21 @@ export class ProcedureRegistry implements ProcedureRegistryLike {
 
   loadBuiltins(): void {
     for (const procedure of BUILTIN_PROCEDURES) {
-      if (!this.procedures.has(procedure.name)) {
-        this.register(procedure);
-      }
+      this.assertProcedure(procedure);
+      this.registerLoadableProcedure(toDeferredProcedureMetadata(procedure), () => procedure);
     }
 
     if (!this.procedures.has("create")) {
-      this.register(createCreateProcedure(this));
+      const procedure = createCreateProcedure(this);
+      this.assertProcedure(procedure);
+      this.registerLoadableProcedure(toDeferredProcedureMetadata(procedure), () => procedure);
     }
   }
 
   async loadFromDisk(): Promise<void> {
     for (const procedureRoot of this.procedureRoots) {
       for (const { path, ...metadata } of discoverDiskProcedures(procedureRoot)) {
-        this.registerDeferredProcedure(metadata, () => this.loadProcedureFromPath(path));
+        this.registerLoadableProcedure(metadata, () => this.loadProcedureFromPath(path));
       }
     }
   }
@@ -144,7 +145,7 @@ export class ProcedureRegistry implements ProcedureRegistryLike {
     }
   }
 
-  private registerDeferredProcedure(
+  private registerLoadableProcedure(
     metadata: DeferredProcedureMetadata,
     load: () => Procedure | Promise<Procedure>,
   ): void {
@@ -204,19 +205,20 @@ function uniquePaths(paths: string[]): string[] {
   return [...new Set(paths.map((path) => resolve(path)))];
 }
 
-function copyProcedureMetadata(metadata: ProcedureMetadata): ProcedureMetadata {
+function toDeferredProcedureMetadata(procedure: Procedure): DeferredProcedureMetadata {
   return {
-    name: metadata.name,
-    description: metadata.description,
-    inputHint: metadata.inputHint,
-    executionMode: metadata.executionMode,
+    name: procedure.name,
+    description: procedure.description,
+    inputHint: procedure.inputHint,
+    executionMode: procedure.executionMode,
+    supportsResume: typeof procedure.resume === "function",
   };
 }
 
-export function projectProcedureMetadata(
-  procedures: readonly ProcedureMetadata[],
+export function projectProcedureMetadata<T extends ProcedureMetadata>(
+  procedures: readonly T[],
   options: { includeHidden?: boolean } = {},
-): ProcedureMetadata[] {
+): T[] {
   return options.includeHidden ? [...procedures] : procedures.filter((procedure) => procedure.name !== "default");
 }
 

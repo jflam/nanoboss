@@ -23,6 +23,36 @@ function describeProcedureMetadata(
   };
 }
 
+function findListedProcedureMetadata(
+  registry: ProcedureRegistry,
+  name: string,
+): ReturnType<ProcedureRegistry["listMetadata"]>[number] | undefined {
+  return registry.listMetadata().find((procedure) => procedure.name === name);
+}
+
+function getRegisteredProcedure(
+  registry: ProcedureRegistry,
+  name: string,
+): NonNullable<ReturnType<ProcedureRegistry["get"]>> {
+  const procedure = registry.get(name);
+  if (!procedure) {
+    throw new Error(`expected ${name} procedure to be registered`);
+  }
+
+  return procedure;
+}
+
+function projectSingleProcedureMetadata(
+  procedure: DeferredProcedureMetadata,
+): ReturnType<ProcedureRegistry["listMetadata"]>[number] {
+  const [metadata] = projectProcedureMetadata([procedure]);
+  if (!metadata) {
+    throw new Error(`expected ${procedure.name} metadata to be projectable`);
+  }
+
+  return metadata;
+}
+
 describe("ProcedureRegistry", () => {
   test("loads procedures from the procedure root", async () => {
     const procedureRoot = mkdtempSync(join(tmpdir(), "nab-procedures-"));
@@ -197,7 +227,7 @@ describe("ProcedureRegistry", () => {
     await expect(procedure?.resume?.("again", { note: "saved" } as never, {} as never)).resolves.toBe("again:saved");
   });
 
-  test("exposes the same metadata surface for built-in and disk procedures", async () => {
+  test("keeps the same metadata contract before and after realization for built-in and disk procedures", async () => {
     const procedureRoot = mkdtempSync(join(tmpdir(), "nab-descriptor-procedures-"));
     writeFileSync(
       join(procedureRoot, "guided.ts"),
@@ -219,16 +249,11 @@ describe("ProcedureRegistry", () => {
 
     const expectedMetadata = [
       {
-        ...CREATE_PROCEDURE_METADATA,
-        executionMode: undefined,
-        supportsResume: false,
-      },
-      {
-        name: "simplify",
-        description: "Find and apply simplifications one opportunity at a time",
-        inputHint: "Optional focus or scope",
+        name: "model",
+        description: "Set or inspect the default agent/model for this session",
+        inputHint: "[agent] [model]",
         executionMode: "harness" as const,
-        supportsResume: true,
+        supportsResume: false,
       },
       {
         name: "guided",
@@ -237,27 +262,49 @@ describe("ProcedureRegistry", () => {
         executionMode: "defaultConversation" as const,
         supportsResume: false,
       },
-    ];
+    ] as const;
+
+    const executions = new Map<string, () => Promise<unknown>>([
+      [
+        "model",
+        async () =>
+          await getRegisteredProcedure(registry, "model").execute("", {
+            session: {
+              getDefaultAgentConfig: () => ({ command: "codex", args: [], model: "gpt-5" }),
+              setDefaultAgentSelection: () => ({ command: "codex", args: [], model: "gpt-5" }),
+              getDefaultAgentTokenUsage: async () => undefined,
+            },
+          } as never),
+      ],
+      ["guided", async () => await getRegisteredProcedure(registry, "guided").execute("", {} as never)],
+    ]);
+
     for (const expected of expectedMetadata) {
-      expect(describeProcedureMetadata(registry.get(expected.name))).toEqual(expected);
+      const metadata = projectSingleProcedureMetadata(expected);
+      expect(describeProcedureMetadata(getRegisteredProcedure(registry, expected.name))).toEqual(expected);
+      expect(findListedProcedureMetadata(registry, expected.name)).toEqual(metadata);
+      expect(projectProcedureMetadata(registry.listMetadata()).find((procedure) => procedure.name === expected.name))
+        .toEqual(metadata);
+      expect(
+        projectProcedureMetadata(registry.listMetadata())
+          .map(toAvailableCommand)
+          .find((command) => command.name === expected.name),
+      ).toEqual(toAvailableCommand(metadata));
+
+      const execute = executions.get(expected.name);
+      if (!execute) {
+        throw new Error(`expected ${expected.name} execution to be registered`);
+      }
+      await expect(execute()).resolves.toBeDefined();
+
+      expect(describeProcedureMetadata(getRegisteredProcedure(registry, expected.name))).toEqual(expected);
+      expect(findListedProcedureMetadata(registry, expected.name)).toEqual(metadata);
     }
 
-    const expectedCommands = expectedMetadata.map(({
-      supportsResume: _supportsResume,
-      ...metadata
-    }) => toAvailableCommand(metadata));
-    const availableCommands = projectProcedureMetadata(registry.listMetadata()).map(toAvailableCommand);
-    for (const expected of expectedCommands) {
-      expect(availableCommands.find((command) => command.name === expected.name)).toEqual(expected);
-    }
-
-    await expect(registry.get("guided")?.execute("", {} as never)).resolves.toBe("guided");
-    expect(describeProcedureMetadata(registry.get("guided"))).toEqual(expectedMetadata[2]);
-    expect(projectProcedureMetadata(registry.listMetadata()).find((procedure) => procedure.name === "guided")).toEqual({
-      name: "guided",
-      description: "guided command",
-      inputHint: "what to do",
-      executionMode: "defaultConversation",
+    expect(describeProcedureMetadata(registry.get(CREATE_PROCEDURE_METADATA.name))).toEqual({
+      ...CREATE_PROCEDURE_METADATA,
+      executionMode: undefined,
+      supportsResume: false,
     });
   });
 
@@ -285,6 +332,7 @@ describe("ProcedureRegistry", () => {
       description: "runtime metadata procedure",
       inputHint: undefined,
       executionMode: undefined,
+      supportsResume: false,
     });
 
     await expect(registry.get("runtime-shaped")?.execute("", {} as never)).resolves.toBe("runtime");
@@ -295,6 +343,7 @@ describe("ProcedureRegistry", () => {
       description: "runtime metadata procedure",
       inputHint: "runtime only hint",
       executionMode: undefined,
+      supportsResume: false,
     });
   });
 
@@ -340,12 +389,14 @@ describe("ProcedureRegistry", () => {
         description: "default command",
         executionMode: undefined,
         inputHint: undefined,
+        supportsResume: false,
       },
       {
         name: "double",
         description: "double a number",
         executionMode: undefined,
         inputHint: "number",
+        supportsResume: false,
       },
     ]);
     expect(registry.listMetadata().find((procedure) => procedure.name === "default")).toEqual({
@@ -353,6 +404,7 @@ describe("ProcedureRegistry", () => {
       description: "default command",
       executionMode: undefined,
       inputHint: undefined,
+      supportsResume: false,
     });
     expect(projectProcedureMetadata(registry.listMetadata()).map(toAvailableCommand)).toEqual([
       {
