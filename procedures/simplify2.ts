@@ -170,6 +170,18 @@ interface SimplifyAppliedSlice {
   hypothesisId: string;
   title: string;
   sourceHypothesisId?: string;
+  decision?: {
+    kind: HypothesisKind;
+    risk: Risk;
+    summary: string;
+    rationale: string;
+    rankingReason?: string;
+    checkpointReason?: string;
+    expectedDelta: SimplifyHypothesisExpectedDelta;
+    implementationScope: string[];
+    testImplications: string[];
+    evidence: SimplifyEvidenceRef[];
+  };
   result: SimplifyApplyResult;
   commit?: SimplifyCommitStatus;
 }
@@ -1310,6 +1322,18 @@ async function applySimplificationSlice(
         hypothesisId: selectedHypothesis.canonicalId ?? selectedHypothesis.id,
         sourceHypothesisId: selectedHypothesis.sourceHypothesisId ?? selectedHypothesis.id,
         title: selectedHypothesis.title,
+        decision: {
+          kind: selectedHypothesis.kind,
+          risk: selectedHypothesis.risk,
+          summary: selectedHypothesis.summary,
+          rationale: selectedHypothesis.rationale,
+          rankingReason: selectedHypothesis.rankingReason,
+          checkpointReason: selectedHypothesis.checkpointReason,
+          expectedDelta: selectedHypothesis.expectedDelta,
+          implementationScope: normalizePaths(selectedHypothesis.implementationScope),
+          testImplications: normalizeStrings(selectedHypothesis.testImplications),
+          evidence: selectedHypothesis.evidence,
+        },
         result: {
           ...applied,
           touchedFiles: normalizePaths(applied.touchedFiles),
@@ -2520,6 +2544,7 @@ function buildLatestApplyLead(state: Simplify2State): string | undefined {
   return [
     `Applied: ${latestApply.title}.`,
     latestApply.result.summary.trim(),
+    renderAppliedDecisionExplanation(latestApply, state.testContext.selectedSlice),
     renderTouchedFiles(latestApply.result.touchedFiles),
     renderValidationLine(state.testContext.lastValidation),
     renderCommitLine(latestApply.commit),
@@ -3166,6 +3191,61 @@ function renderPausedActions(): string {
 function renderTouchedFiles(files: string[]): string | undefined {
   const normalized = normalizePaths(files);
   return normalized.length > 0 ? `Touched files: ${normalized.join(", ")}` : undefined;
+}
+
+function renderAppliedDecisionExplanation(
+  applied: SimplifyAppliedSlice,
+  selectedSlice: TestSliceSelection[],
+): string | undefined {
+  const decision = applied.decision;
+  if (!decision) {
+    return undefined;
+  }
+
+  const lines = [
+    "Why this change:",
+    `- selected because: ${decision.rankingReason ?? "No explicit ranking reason was recorded."}`,
+    `- simplification target: ${decision.summary}`,
+    `- conceptual rationale: ${decision.rationale}`,
+    `- expected payoff: ${renderExpectedDelta(decision.expectedDelta) ?? "No explicit delta was recorded."}`,
+    `- intended scope: ${decision.implementationScope.join(", ") || "(none recorded)"}`,
+    `- supporting evidence: ${renderEvidenceRefs(decision.evidence) ?? "(none recorded)"}`,
+    `- test intent: ${decision.testImplications.join("; ") || "(none recorded)"}`,
+    `- realized conceptual changes: ${applied.result.conceptualChanges.join("; ") || "(none recorded)"}`,
+    `- realized test changes: ${applied.result.testChanges.join("; ") || "(none recorded)"}`,
+    `- validation focus: ${renderSelectedValidationFocus(selectedSlice)}`,
+    `- validation notes: ${applied.result.validationNotes.join("; ") || "(none recorded)"}`,
+  ];
+  if (decision.checkpointReason) {
+    lines.splice(4, 0, `- checkpoint context: ${decision.checkpointReason}`);
+  }
+  return lines.join("\n");
+}
+
+function renderExpectedDelta(delta: SimplifyHypothesisExpectedDelta): string | undefined {
+  const parts = [
+    typeof delta.conceptsReduced === "number" ? `concepts -${delta.conceptsReduced}` : "",
+    typeof delta.boundariesReduced === "number" ? `boundaries -${delta.boundariesReduced}` : "",
+    typeof delta.exceptionsReduced === "number" ? `exceptions -${delta.exceptionsReduced}` : "",
+    typeof delta.duplicateRepresentationsReduced === "number"
+      ? `duplicate representations -${delta.duplicateRepresentationsReduced}`
+      : "",
+    delta.testRuntimeDelta ? `test runtime ${delta.testRuntimeDelta}` : "",
+  ].filter(Boolean);
+  return parts.length > 0 ? parts.join("; ") : undefined;
+}
+
+function renderEvidenceRefs(evidence: SimplifyEvidenceRef[]): string | undefined {
+  const refs = evidence
+    .map((entry) => `${entry.kind}:${normalizePath(entry.ref)}${entry.note ? ` (${entry.note})` : ""}`)
+    .filter((entry) => entry.trim().length > 0)
+    .slice(0, 6);
+  return refs.length > 0 ? refs.join("; ") : undefined;
+}
+
+function renderSelectedValidationFocus(selectedSlice: TestSliceSelection[]): string {
+  const paths = normalizePaths(selectedSlice.map((entry) => entry.path));
+  return paths.join(", ") || "No trusted test slice matched the selected scope.";
 }
 
 function getRunResultDisplay(result: RunResult): string | undefined {

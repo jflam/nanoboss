@@ -379,6 +379,10 @@ describe("simplify2 procedure", () => {
     const normalized = normalizeProcedureResult(result);
     expect(normalized.pause).toBeUndefined();
     expect(normalized.display).toContain("Applied: Canonicalize continuation parsing.");
+    expect(normalized.display).toContain("Why this change:");
+    expect(normalized.display).toContain("- selected because: Small, coherent, and high-value cleanup.");
+    expect(normalized.display).toContain("- conceptual rationale: This removes duplicate parsing logic and sharpens the invariant.");
+    expect(normalized.display).toContain("- realized conceptual changes: one representation now owns continuation parsing");
     expect(normalized.display).toContain("Validation: passed.");
     expect(normalized.display).toContain("Landed one simplify2 slice for this focus after applying Canonicalize continuation parsing.");
 
@@ -502,6 +506,9 @@ describe("simplify2 procedure", () => {
 
     const normalized = normalizeProcedureResult(result);
     expect(normalized.display).toContain("Applied: Canonicalize continuation parsing.");
+    expect(normalized.display).toContain("Why this change:");
+    expect(normalized.display).toContain("- selected because: Small, coherent, and high-value cleanup.");
+    expect(normalized.display).toContain("- realized conceptual changes: one representation now owns continuation parsing");
     expect(normalized.pause?.question).toContain("Challenge continuation persistence ownership");
   });
 
@@ -602,6 +609,11 @@ describe("simplify2 procedure", () => {
 
     const normalized = normalizeProcedureResult(resumeResult);
     expect(normalized.display).toContain("Applied: Collapse continuation parsing ownership.");
+    expect(normalized.display).toContain("Why this change:");
+    expect(normalized.display).toContain("- selected because: Worth doing after a human checkpoint.");
+    expect(normalized.display).toContain("- checkpoint context: Ownership changes should be reviewed before apply.");
+    expect(normalized.display).toContain("- conceptual rationale: This removes duplicated parsing decisions.");
+    expect(normalized.display).toContain("- realized conceptual changes: one owner now enforces parsing invariants");
     expect(normalized.display).toContain("Validation: passed.");
     expect(normalized.display).toContain("Commit: created.");
     expect(normalized.display).toContain("Landed one simplify2 slice for this focus after applying Collapse continuation parsing ownership.");
