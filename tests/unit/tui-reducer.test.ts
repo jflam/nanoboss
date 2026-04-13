@@ -816,7 +816,7 @@ describe("tui reducer", () => {
     expect(state.transcriptItems).toEqual([]);
   });
 
-  test("suppresses structural-only wrappers from the transcript while retaining parent-linked hierarchy", () => {
+  test("obeys producer-owned hidden tool metadata while retaining parent-linked hierarchy", () => {
     let state = createInitialUiState({ cwd: "/repo", showToolCalls: true });
 
     state = reduceUiState(state, {
@@ -835,6 +835,8 @@ describe("tui reducer", () => {
         toolCallId: "wrapper",
         title: "nanoboss-procedure_dispatch_wait",
         kind: "wrapper",
+        transcriptVisible: false,
+        removeOnTerminal: true,
       }),
     });
     state = reduceUiState(state, {
@@ -974,6 +976,7 @@ describe("tui reducer", () => {
         parentToolCallId: "tool-parent",
         title: "defaultSession: hello",
         kind: "wrapper",
+        removeOnTerminal: true,
       }),
     });
     state = reduceUiState(state, {

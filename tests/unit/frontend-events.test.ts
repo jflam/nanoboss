@@ -236,6 +236,37 @@ describe("frontend-events", () => {
     expect(updated?.type === "tool_updated" && updated.errorPreview?.bodyLines?.[0]?.length).toBeLessThanOrEqual(160);
   });
 
+  test("maps failed ACP tool updates with explicit cancelled output to cancelled frontend tool status", () => {
+    expect(
+      mapSessionUpdateToFrontendEvents("run-1", {
+        sessionUpdate: "tool_call_update",
+        toolCallId: "tool-1",
+        status: "failed",
+        rawOutput: {
+          error: "Stopped.",
+          cancelled: true,
+        },
+      }),
+    ).toEqual([
+      {
+        type: "tool_updated",
+        runId: "run-1",
+        toolCallId: "tool-1",
+        title: undefined,
+        status: "cancelled",
+        resultPreview: undefined,
+        errorPreview: {
+          bodyLines: ["Stopped."],
+        },
+        durationMs: undefined,
+        rawOutput: {
+          error: "Stopped.",
+          cancelled: true,
+        },
+      },
+    ]);
+  });
+
   test("treats raw procedure ui marker text as plain text at the frontend event boundary", () => {
     expect(
       mapSessionUpdateToFrontendEvents("run-1", {
@@ -407,6 +438,71 @@ describe("frontend-events", () => {
         status: "pending",
         callPreview: undefined,
         rawInput: undefined,
+      },
+    ]);
+  });
+
+  test("maps producer-owned parentage and visibility metadata onto frontend tool events", () => {
+    expect(
+      mapSessionUpdateToFrontendEvents("run-1", {
+        sessionUpdate: "tool_call",
+        toolCallId: "tool-child",
+        title: "procedure_dispatch_wait",
+        kind: "other",
+        _meta: {
+          nanoboss: {
+            parentToolCallId: "tool-parent",
+            transcriptVisible: false,
+            removeOnTerminal: true,
+          },
+        },
+      }),
+    ).toEqual([
+      {
+        type: "tool_started",
+        runId: "run-1",
+        toolCallId: "tool-child",
+        parentToolCallId: "tool-parent",
+        transcriptVisible: false,
+        removeOnTerminal: true,
+        title: "procedure_dispatch_wait",
+        kind: "other",
+        toolName: "procedure_dispatch_wait",
+        status: undefined,
+        callPreview: undefined,
+        rawInput: undefined,
+      },
+    ]);
+
+    expect(
+      mapSessionUpdateToFrontendEvents("run-1", {
+        sessionUpdate: "tool_call_update",
+        toolCallId: "tool-child",
+        title: "procedure_dispatch_wait",
+        status: "completed",
+        _meta: {
+          nanoboss: {
+            parentToolCallId: "tool-parent",
+            transcriptVisible: false,
+            removeOnTerminal: true,
+          },
+        },
+      }),
+    ).toEqual([
+      {
+        type: "tool_updated",
+        runId: "run-1",
+        toolCallId: "tool-child",
+        parentToolCallId: "tool-parent",
+        transcriptVisible: false,
+        removeOnTerminal: true,
+        title: "procedure_dispatch_wait",
+        toolName: "procedure_dispatch_wait",
+        status: "completed",
+        resultPreview: undefined,
+        errorPreview: undefined,
+        durationMs: undefined,
+        rawOutput: undefined,
       },
     ]);
   });

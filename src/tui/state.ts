@@ -33,6 +33,8 @@ export interface UiToolCall {
   id: string;
   runId: string;
   parentToolCallId?: string;
+  transcriptVisible?: boolean;
+  removeOnTerminal?: boolean;
   title: string;
   kind: string;
   toolName?: string;

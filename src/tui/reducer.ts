@@ -7,11 +7,7 @@ import type { DownstreamAgentSelection } from "../core/types.ts";
 import { formatProcedureStatusText } from "../core/ui-cli.ts";
 import type { ToolCardThemeMode } from "./state.ts";
 
-import {
-  formatTokenUsageLine,
-  shouldRemoveCompletedWrapperCard,
-  shouldSuppressToolTraceTitle,
-} from "./format.ts";
+import { formatTokenUsageLine } from "./format.ts";
 import { LOCAL_TUI_COMMANDS } from "./commands.ts";
 import {
   createInitialUiState,
@@ -369,7 +365,8 @@ function reduceFrontendEvent(state: UiState, event: RenderedFrontendEventEnvelop
       }
       const existing = state.toolCalls.find((toolCall) => toolCall.id === event.data.toolCallId);
       const parentToolCallId = event.data.parentToolCallId ?? existing?.parentToolCallId;
-      const isStructuralOnly = shouldSuppressToolTraceTitle(event.data.title);
+      const transcriptVisible = event.data.transcriptVisible ?? existing?.transcriptVisible ?? true;
+      const removeOnTerminal = event.data.removeOnTerminal ?? existing?.removeOnTerminal ?? false;
       const toolName = existing?.toolName ?? event.data.toolName;
       const activeRunAttemptedToolCallIds = state.activeRunId === event.data.runId
         ? appendUniqueString(state.activeRunAttemptedToolCallIds, event.data.toolCallId)
@@ -386,6 +383,8 @@ function reduceFrontendEvent(state: UiState, event: RenderedFrontendEventEnvelop
         id: event.data.toolCallId,
         runId: event.data.runId,
         ...(parentToolCallId ? { parentToolCallId } : {}),
+        ...(transcriptVisible === false ? { transcriptVisible } : {}),
+        ...(removeOnTerminal ? { removeOnTerminal } : {}),
         title: event.data.title,
         kind: event.data.kind,
         toolName,
@@ -403,19 +402,19 @@ function reduceFrontendEvent(state: UiState, event: RenderedFrontendEventEnvelop
       const nextState = {
         ...state,
         toolCalls: recomputeToolCallDepths(upsertToolCall(state.toolCalls, nextToolCall)),
-        transcriptItems: isStructuralOnly
+        transcriptItems: !transcriptVisible
           ? state.transcriptItems
           : appendTranscriptItem(state.transcriptItems, { type: "tool_call", id: nextToolCall.id }),
         activeRunAttemptedToolCallIds,
       };
-      return existing || isStructuralOnly ? nextState : markAssistantTextBoundary(nextState);
+      return existing || !transcriptVisible ? nextState : markAssistantTextBoundary(nextState);
     }
     case "tool_updated": {
       const existing = state.toolCalls.find((toolCall) => toolCall.id === event.data.toolCallId);
       const title = event.data.title ?? existing?.title ?? event.data.toolCallId;
       const parentToolCallId = event.data.parentToolCallId ?? existing?.parentToolCallId;
-      const isWrapper = existing?.isWrapper ?? existing?.kind === "wrapper";
-      const isStructuralOnly = shouldSuppressToolTraceTitle(title);
+      const transcriptVisible = event.data.transcriptVisible ?? existing?.transcriptVisible ?? true;
+      const removeOnTerminal = event.data.removeOnTerminal ?? existing?.removeOnTerminal ?? false;
       const toolName = existing?.toolName ?? event.data.toolName;
       const activeRunSucceededToolCallIds = state.activeRunId === event.data.runId && event.data.status === "completed"
         ? appendUniqueString(state.activeRunSucceededToolCallIds, event.data.toolCallId)
@@ -432,12 +431,14 @@ function reduceFrontendEvent(state: UiState, event: RenderedFrontendEventEnvelop
         id: event.data.toolCallId,
         runId: event.data.runId,
         ...(parentToolCallId ? { parentToolCallId } : {}),
+        ...(transcriptVisible === false ? { transcriptVisible } : {}),
+        ...(removeOnTerminal ? { removeOnTerminal } : {}),
         title,
         kind: existing?.kind ?? "other",
         toolName,
         status: event.data.status,
         depth: existing?.depth ?? 0,
-        isWrapper,
+        isWrapper: existing?.isWrapper ?? existing?.kind === "wrapper",
         callPreview: existing?.callPreview,
         resultPreview: mergeToolPreview(existing?.resultPreview, event.data.resultPreview),
         errorPreview: mergeToolPreview(existing?.errorPreview, event.data.errorPreview),
@@ -448,17 +449,14 @@ function reduceFrontendEvent(state: UiState, event: RenderedFrontendEventEnvelop
 
       let toolCalls = state.toolCalls;
       let transcriptItems = state.transcriptItems;
-      const shouldRemoveTerminalWrapper = isWrapper
-        && isTerminalToolStatus(event.data.status)
-        && (isStructuralOnly
-          || shouldRemoveCompletedWrapperCard(title));
+      const shouldRemoveTerminalToolCall = removeOnTerminal && isTerminalToolStatus(event.data.status);
 
-      if (shouldRemoveTerminalWrapper) {
+      if (shouldRemoveTerminalToolCall) {
         toolCalls = removeToolCallAndReparent(toolCalls, event.data.toolCallId);
         transcriptItems = removeTranscriptItem(transcriptItems, "tool_call", event.data.toolCallId);
       } else {
         toolCalls = recomputeToolCallDepths(upsertToolCall(toolCalls, nextToolCall));
-        transcriptItems = isStructuralOnly
+        transcriptItems = !transcriptVisible
           ? transcriptItems
           : appendTranscriptItem(transcriptItems, { type: "tool_call", id: nextToolCall.id });
       }
@@ -469,7 +467,7 @@ function reduceFrontendEvent(state: UiState, event: RenderedFrontendEventEnvelop
         transcriptItems,
         activeRunSucceededToolCallIds,
       };
-      return existing || isStructuralOnly || shouldRemoveTerminalWrapper
+      return existing || !transcriptVisible || shouldRemoveTerminalToolCall
         ? nextState
         : markAssistantTextBoundary(nextState);
     }

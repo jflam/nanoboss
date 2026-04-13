@@ -100,6 +100,8 @@ export type FrontendEvent =
       runId: string;
       toolCallId: string;
       parentToolCallId?: string;
+      transcriptVisible?: boolean;
+      removeOnTerminal?: boolean;
       title: string;
       kind: string;
       toolName?: string;
@@ -112,6 +114,8 @@ export type FrontendEvent =
       runId: string;
       toolCallId: string;
       parentToolCallId?: string;
+      transcriptVisible?: boolean;
+      removeOnTerminal?: boolean;
       title?: string;
       toolName?: string;
       status: string;
@@ -264,18 +268,58 @@ export function isTextDeltaEvent(event: FrontendEventEnvelope): event is TextDel
   return event.type === "text_delta";
 }
 
-function getNanobossToolKindMeta(update: Extract<acp.SessionUpdate, { sessionUpdate: "tool_call" }>): string | undefined {
+interface NanobossToolMeta {
+  toolKind?: string;
+  parentToolCallId?: string;
+  transcriptVisible?: boolean;
+  removeOnTerminal?: boolean;
+}
+
+function getNanobossToolMeta(
+  update: Extract<acp.SessionUpdate, { sessionUpdate: "tool_call" | "tool_call_update" }>,
+): NanobossToolMeta {
   const meta = update._meta;
   if (!meta || typeof meta !== "object") {
-    return undefined;
+    return {};
   }
 
   const nanoboss = "nanoboss" in meta ? meta.nanoboss : undefined;
   if (!nanoboss || typeof nanoboss !== "object") {
-    return undefined;
+    return {};
   }
 
-  return "toolKind" in nanoboss && typeof nanoboss.toolKind === "string" ? nanoboss.toolKind : undefined;
+  const toolMeta: NanobossToolMeta = {};
+  if ("toolKind" in nanoboss && typeof nanoboss.toolKind === "string") {
+    toolMeta.toolKind = nanoboss.toolKind;
+  }
+  if ("parentToolCallId" in nanoboss && typeof nanoboss.parentToolCallId === "string") {
+    toolMeta.parentToolCallId = nanoboss.parentToolCallId;
+  }
+  if ("transcriptVisible" in nanoboss && typeof nanoboss.transcriptVisible === "boolean") {
+    toolMeta.transcriptVisible = nanoboss.transcriptVisible;
+  }
+  if ("removeOnTerminal" in nanoboss && typeof nanoboss.removeOnTerminal === "boolean") {
+    toolMeta.removeOnTerminal = nanoboss.removeOnTerminal;
+  }
+  return toolMeta;
+}
+
+function normalizeToolUpdateStatus(
+  update: Extract<acp.SessionUpdate, { sessionUpdate: "tool_call_update" }>,
+): string {
+  const status = update.status ?? "pending";
+  return status === "failed" && isCancelledToolOutput(update.rawOutput)
+    ? "cancelled"
+    : status;
+}
+
+function isCancelledToolOutput(rawOutput: unknown): boolean {
+  return Boolean(
+    rawOutput
+    && typeof rawOutput === "object"
+    && "cancelled" in rawOutput
+    && rawOutput.cancelled === true,
+  );
 }
 
 export function isToolStartedEvent(event: FrontendEventEnvelope): event is ToolStartedEventEnvelope {
@@ -362,7 +406,8 @@ export function mapSessionUpdateToFrontendEvents(
       ];
     }
     case "tool_call": {
-      const toolKind = getNanobossToolKindMeta(update) ?? String(update.kind);
+      const toolMeta = getNanobossToolMeta(update);
+      const toolKind = toolMeta.toolKind ?? String(update.kind);
       const toolName = normalizeToolName({ title: update.title, kind: toolKind });
       const preview = summarizeToolCallStart({
         toolName,
@@ -375,6 +420,9 @@ export function mapSessionUpdateToFrontendEvents(
           type: "tool_started",
           runId,
           toolCallId: update.toolCallId,
+          ...(toolMeta.parentToolCallId ? { parentToolCallId: toolMeta.parentToolCallId } : {}),
+          ...(toolMeta.transcriptVisible !== undefined ? { transcriptVisible: toolMeta.transcriptVisible } : {}),
+          ...(toolMeta.removeOnTerminal !== undefined ? { removeOnTerminal: toolMeta.removeOnTerminal } : {}),
           title: update.title,
           kind: toolKind,
           ...(toolName ? { toolName } : {}),
@@ -385,6 +433,8 @@ export function mapSessionUpdateToFrontendEvents(
       ];
     }
     case "tool_call_update": {
+      const toolMeta = getNanobossToolMeta(update);
+      const status = normalizeToolUpdateStatus(update);
       const toolName = update.title ? normalizeToolName({ title: update.title }) : undefined;
       const preview = summarizeToolCallUpdate({
         toolName,
@@ -395,9 +445,12 @@ export function mapSessionUpdateToFrontendEvents(
           type: "tool_updated",
           runId,
           toolCallId: update.toolCallId,
+          ...(toolMeta.parentToolCallId ? { parentToolCallId: toolMeta.parentToolCallId } : {}),
+          ...(toolMeta.transcriptVisible !== undefined ? { transcriptVisible: toolMeta.transcriptVisible } : {}),
+          ...(toolMeta.removeOnTerminal !== undefined ? { removeOnTerminal: toolMeta.removeOnTerminal } : {}),
           title: update.title ?? undefined,
           ...(toolName ? { toolName } : {}),
-          status: update.status ?? "pending",
+          status,
           resultPreview: preview.resultPreview,
           errorPreview: preview.errorPreview,
           durationMs: preview.durationMs,
@@ -413,7 +466,7 @@ export function mapSessionUpdateToFrontendEvents(
           usage,
           sourceUpdate: "tool_call_update",
           toolCallId: update.toolCallId,
-          status: update.status ?? undefined,
+          status,
         });
       }
 

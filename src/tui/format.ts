@@ -1,14 +1,6 @@
 import { getAgentTokenUsagePercent } from "../agent/token-usage.ts";
 import type { AgentTokenUsage } from "../core/types.ts";
 
-export function shouldRemoveCompletedWrapperCard(title: string): boolean {
-  return title.startsWith("callAgent") || title.startsWith("defaultSession:") || title.includes("procedure_dispatch");
-}
-
-export function shouldSuppressToolTraceTitle(title: string): boolean {
-  return title.includes("procedure_dispatch_wait");
-}
-
 export function formatToolTraceLine(depth: number, text: string): string {
   return `${"│ ".repeat(depth)}${text}`;
 }

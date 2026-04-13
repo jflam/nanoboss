@@ -103,6 +103,7 @@ export class AgentRunRecorder {
         _meta: {
           nanoboss: {
             toolKind: "wrapper",
+            removeOnTerminal: true,
           },
         },
         status: "pending",
@@ -154,6 +155,11 @@ export class AgentRunRecorder {
         sessionUpdate: "tool_call_update",
         toolCallId: started.toolCallId,
         status: "completed",
+        _meta: {
+          nanoboss: {
+            removeOnTerminal: true,
+          },
+        },
         rawOutput: {
           cell: finalized.cell,
           dataRef: finalized.dataRef,
@@ -194,9 +200,17 @@ export class AgentRunRecorder {
       this.params.emitter.emit({
         sessionUpdate: "tool_call_update",
         toolCallId: started.toolCallId,
-        status: cancelled ? "cancelled" : "failed",
-        rawOutput: { error: message },
-      } as acp.SessionUpdate);
+        status: "failed",
+        _meta: {
+          nanoboss: {
+            removeOnTerminal: true,
+          },
+        },
+        rawOutput: {
+          error: message,
+          ...(cancelled ? { cancelled: true } : {}),
+        },
+      });
     }
 
     throw cancelled ?? error;
@@ -274,7 +288,7 @@ export class AgentInvocationApiImpl implements AgentInvocationApi {
         softStopSignal: this.params.softStopSignal,
         onUpdate: async (update) => {
           if (shouldForwardNestedAgentUpdate(update, options?.stream !== false)) {
-            this.params.emitter.emit(update);
+            this.params.emitter.emit(withNestedToolCallMetadata(update, started.toolCallId));
           }
         },
       }, transport);
@@ -399,4 +413,84 @@ function shouldForwardNestedAgentUpdate(
     update.sessionUpdate === "tool_call_update" ||
     update.sessionUpdate === "usage_update"
   );
+}
+
+function withNestedToolCallMetadata(
+  update: acp.SessionUpdate,
+  parentToolCallId?: string,
+): acp.SessionUpdate {
+  if (update.sessionUpdate !== "tool_call" && update.sessionUpdate !== "tool_call_update") {
+    return update;
+  }
+
+  const metadata = getNestedToolCallMetadata(update, parentToolCallId);
+  if (!metadata) {
+    return update;
+  }
+
+  return {
+    ...update,
+    _meta: mergeNanobossToolMeta(update._meta, metadata),
+  };
+}
+
+function getNestedToolCallMetadata(
+  update: Extract<acp.SessionUpdate, { sessionUpdate: "tool_call" | "tool_call_update" }>,
+  parentToolCallId?: string,
+): Record<string, unknown> | undefined {
+  const existingNanobossMeta = getNanobossMeta(update._meta);
+  const nextMetadata: Record<string, unknown> = {};
+
+  if (parentToolCallId && typeof existingNanobossMeta?.parentToolCallId !== "string") {
+    nextMetadata.parentToolCallId = parentToolCallId;
+  }
+
+  const title = typeof update.title === "string" ? update.title : undefined;
+  if (
+    title
+    && isInternalProcedureDispatchToolTitle(title)
+    && typeof existingNanobossMeta?.transcriptVisible !== "boolean"
+  ) {
+    nextMetadata.transcriptVisible = false;
+  }
+
+  if (
+    title
+    && isInternalProcedureDispatchToolTitle(title)
+    && typeof existingNanobossMeta?.removeOnTerminal !== "boolean"
+  ) {
+    nextMetadata.removeOnTerminal = true;
+  }
+
+  return Object.keys(nextMetadata).length > 0 ? nextMetadata : undefined;
+}
+
+function isInternalProcedureDispatchToolTitle(title: string): boolean {
+  return title.includes("procedure_dispatch_start") || title.includes("procedure_dispatch_wait");
+}
+
+function mergeNanobossToolMeta(
+  meta: acp.SessionUpdate["_meta"],
+  nanobossFields: Record<string, unknown>,
+): NonNullable<acp.SessionUpdate["_meta"]> {
+  const base = meta && typeof meta === "object" ? meta : {};
+  const existingNanoboss = getNanobossMeta(base);
+  return {
+    ...base,
+    nanoboss: {
+      ...(existingNanoboss ?? {}),
+      ...nanobossFields,
+    },
+  };
+}
+
+function getNanobossMeta(meta: unknown): Record<string, unknown> | undefined {
+  if (!meta || typeof meta !== "object") {
+    return undefined;
+  }
+
+  const nanoboss = "nanoboss" in meta ? meta.nanoboss : undefined;
+  return nanoboss && typeof nanoboss === "object"
+    ? nanoboss as Record<string, unknown>
+    : undefined;
 }
