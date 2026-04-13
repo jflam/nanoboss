@@ -68,7 +68,7 @@ flowchart TD
   ACPServer --> Service[NanobossService\nsrc/core/service.ts]
   HTTPServer --> Service
 
-  Service --> Context[CommandContext named APIs / procedures\nsrc/core/context.ts]
+  Service --> Context[ProcedureApi / procedures\nsrc/core/context.ts + context-*.ts]
   Context --> AgentRuntime[ACP runtime\nsrc/agent/acp-runtime.ts]
 
   AgentRuntime -->|stdio ACP| Downstream[Downstream agent\nclaude / gemini / codex / copilot]
@@ -162,7 +162,7 @@ For procedure authors, the namespace split is:
 
 ```mermaid
 flowchart LR
-  Service[NanobossService / CommandContext] --> Runtime[ACP runtime\nsrc/agent/acp-runtime.ts]
+  Service[NanobossService / RuntimeService] --> Runtime[ACP runtime\nsrc/agent/acp-runtime.ts]
   Runtime -->|spawn + stdio ACP| Agent[Downstream agent]
 ```
 
@@ -170,7 +170,12 @@ Relevant files:
 - `src/agent/acp-runtime.ts`
 - `src/agent/call-agent.ts`
 - `src/agent/default-session.ts`
+- `src/runtime/service.ts`
+- `src/runtime/api.ts`
 - `src/core/context.ts`
+- `src/core/context-agent.ts`
+- `src/core/context-session.ts`
+- `src/core/context-state.ts`
 
 ---
 
@@ -186,7 +191,7 @@ This is the current shape:
 
 ```mermaid
 sequenceDiagram
-  participant Ctx as CommandContext named APIs
+  participant Ctx as ProcedureApi named APIs
   participant ACP as ACP runtime
   participant Agent as Downstream agent
   participant MCP as Global nanoboss MCP stdio server
