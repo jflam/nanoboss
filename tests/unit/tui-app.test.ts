@@ -549,6 +549,93 @@ describe("NanobossTuiApp", () => {
     expect(submissions[1]).toEqual({ parts: [{ type: "text", text: "second turn" }] });
   });
 
+  test("tab-queued prompts preserve attached images while a run is active", async () => {
+    const editor = new FakeEditor();
+    const queued: PromptInput[] = [];
+    let inputListener: ((data: string) => unknown) | undefined;
+
+    new NanobossTuiApp(
+      {
+        serverUrl: "http://localhost:3000",
+        showToolCalls: true,
+      },
+      {
+        createTerminal: () => ({
+          setTitle() {},
+          async drainInput() {},
+        }),
+        createTui: () => ({
+          addInputListener(listener) {
+            inputListener = listener;
+          },
+          addChild() {},
+          setFocus() {},
+          start() {},
+          requestRender() {},
+          stop() {},
+        }),
+        createEditor: () => editor,
+        createClipboardImageProvider: () => ({
+          async readImage() {
+            return {
+              mimeType: "image/png",
+              data: "YWJj",
+              width: 640,
+              height: 480,
+              byteLength: 2048,
+            };
+          },
+        }),
+        materializeClipboardImage: () => undefined,
+        createController: () => ({
+          getState: () => ({
+            ...createInitialUiState({
+              cwd: "/repo",
+              showToolCalls: true,
+            }),
+            inputDisabled: true,
+          }),
+          async handleSubmit() {},
+          async queuePrompt(input) {
+            if (typeof input !== "string") {
+              queued.push(input);
+            }
+          },
+          async cancelActiveRun() {},
+          toggleToolOutput() {},
+          toggleSimplify2AutoApprove() {},
+          showStatus() {},
+          requestExit() {},
+          async run() {
+            return undefined;
+          },
+          async stop() {},
+        }),
+        createView: () => createViewStub(),
+      },
+    );
+
+    editor.setText("queue ");
+    inputListener?.("\u0016");
+    await Promise.resolve();
+
+    const result = inputListener?.("\t");
+    await Promise.resolve();
+
+    expect(result).toEqual({ consume: true });
+    expect(queued).toHaveLength(1);
+    expect(queued[0]?.parts[0]).toEqual({ type: "text", text: "queue " });
+    expect(queued[0]?.parts[1]).toMatchObject({
+      type: "image",
+      token: "[Image 1: PNG 640x480 2KB]",
+      mimeType: "image/png",
+      data: "YWJj",
+      width: 640,
+      height: 480,
+      byteLength: 2048,
+    });
+  });
+
   test("opens the simplify2 continuation overlay and action 1 submits approval", async () => {
     const editor = new FakeEditor();
     const submitted: string[] = [];
@@ -1044,8 +1131,10 @@ describe("NanobossTuiApp", () => {
         createController: () => ({
           getState: () => currentState,
           async handleSubmit() {},
-          async queuePrompt(text: string) {
-            queued.push(text);
+          async queuePrompt(input) {
+            if (typeof input !== "string") {
+              queued.push(input);
+            }
           },
           async cancelActiveRun() {},
           toggleToolOutput() {},
@@ -1066,7 +1155,13 @@ describe("NanobossTuiApp", () => {
     await Promise.resolve();
 
     expect(result).toEqual({ consume: true });
-    expect(queued).toEqual(["after this"]);
+    expect(queued).toEqual([
+      {
+        parts: [
+          { type: "text", text: "after this" },
+        ],
+      },
+    ]);
   });
 
   test("pressing tab while a run is active does not queue when autocomplete is showing", async () => {

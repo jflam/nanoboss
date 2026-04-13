@@ -267,7 +267,13 @@ export class NanobossTuiApp {
           return undefined;
         }
 
-        void this.controller.queuePrompt(text);
+        const promptInput = buildPromptInputForSubmit(
+          this.composerState,
+          text,
+          this.clearedComposerStateSnapshot,
+        );
+        this.clearedComposerStateSnapshot = undefined;
+        void this.controller.queuePrompt(promptInput);
         return { consume: true };
       }
 
