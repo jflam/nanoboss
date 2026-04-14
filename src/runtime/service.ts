@@ -1,6 +1,6 @@
 import { inferDataShape } from "../core/data-shape.ts";
 import { shouldLoadDiskCommands } from "../core/runtime-mode.ts";
-import { cellRefFromRunRef, valueRefFromRef } from "../session/store-refs.ts";
+import { valueRefFromRef } from "../session/store-refs.ts";
 import type {
   CellDescendantsOptions,
   DownstreamAgentSelection,
@@ -10,11 +10,7 @@ import type {
   ProcedureRegistryLike,
   RunRef,
 } from "../core/types.ts";
-import {
-  publicKernelValueFromStored,
-  runRecordFromCellRecord,
-  runSummaryFromCellSummary,
-} from "../core/types.ts";
+import { publicKernelValueFromStored } from "../core/types.ts";
 import {
   ProcedureDispatchJobManager,
 } from "../procedure/dispatch-jobs.ts";
@@ -34,31 +30,27 @@ export class NanobossRuntimeService {
 
   listRuns(args: ListRunsArgs = {}) {
     const store = this.createStore(args.sessionId);
-    const summaries = args.scope === "recent"
-      ? store.recent({ procedure: args.procedure, limit: args.limit })
-      : store.topLevelRuns({ procedure: args.procedure, limit: args.limit });
-    return summaries.map(runSummaryFromCellSummary);
+    return args.scope === "recent"
+      ? store.recentRuns({ procedure: args.procedure, limit: args.limit })
+      : store.topLevelRunSummaries({ procedure: args.procedure, limit: args.limit });
   }
 
   getRun(runRef: RunRef) {
-    const cellRef = cellRefFromRunRef(runRef);
-    return runRecordFromCellRecord(runRef.sessionId, this.createStoreForRunRef(runRef).readCell(cellRef));
+    return this.createStoreForRunRef(runRef).readRun(runRef);
   }
 
   getRunAncestors(
     runRef: RunRef,
     args: { includeSelf?: boolean; limit?: number } = {},
   ) {
-    const cellRef = cellRefFromRunRef(runRef);
-    return this.createStoreForRunRef(runRef).ancestors(cellRef, args).map(runSummaryFromCellSummary);
+    return this.createStoreForRunRef(runRef).ancestorRuns(runRef, args);
   }
 
   getRunDescendants(
     runRef: RunRef,
     args: CellDescendantsOptions = {},
   ) {
-    const cellRef = cellRefFromRunRef(runRef);
-    return this.createStoreForRunRef(runRef).descendants(cellRef, args).map(runSummaryFromCellSummary);
+    return this.createStoreForRunRef(runRef).descendantRuns(runRef, args);
   }
 
   refRead(ref: Ref): unknown {
@@ -93,13 +85,12 @@ export class NanobossRuntimeService {
       throw new Error("get_schema requires runRef or ref");
     }
 
-    const cellRef = cellRefFromRunRef(args.runRef);
     const store = this.createStoreForRunRef(args.runRef);
-    const cell = store.readCell(cellRef);
+    const run = store.readRun(args.runRef);
     return {
       target: args.runRef,
-      dataShape: inferDataShape(cell.output.data),
-      explicitDataSchema: cell.output.explicitDataSchema,
+      dataShape: inferDataShape(run.output.data),
+      explicitDataSchema: run.output.explicitDataSchema,
     };
   }
 

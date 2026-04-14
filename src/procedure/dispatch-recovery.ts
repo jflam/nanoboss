@@ -8,8 +8,9 @@ import type { DefaultConversationSession } from "../agent/default-session.ts";
 import { buildProcedureExecutionResult, type ProcedureExecutionResult } from "./runner.ts";
 import type { SessionStore } from "../session/index.ts";
 import { inferDataShape } from "../core/data-shape.ts";
-import type { AgentTokenUsage, CellRecord, DownstreamAgentConfig, Ref } from "../core/types.ts";
+import type { AgentTokenUsage, DownstreamAgentConfig, Ref } from "../core/types.ts";
 import { createRef } from "../core/types.ts";
+import type { CellRecord } from "../session/store-records.ts";
 import { summarizeText } from "../util/text.ts";
 
 export function isProcedureDispatchTimeout(message: string | undefined): boolean {

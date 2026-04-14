@@ -5,11 +5,9 @@ import {
   pauseFromContinuation,
 } from "../../src/core/contracts.ts";
 import {
-  cellRecordFromRunRecord,
-  cellSummaryFromRunSummary,
   runRecordFromCellRecord,
   runSummaryFromCellSummary,
-} from "../../src/core/types.ts";
+} from "../../src/session/store-records.ts";
 import {
   cellRefFromRunRef,
   refFromValueRef,
@@ -135,8 +133,6 @@ describe("core contracts", () => {
         promptImages: undefined,
       },
     });
-    expect(cellRecordFromRunRecord(runRecord)).toEqual(cellRecord);
-
     const summary = {
       cell: { sessionId: "session-1", cellId: "cell-1" },
       procedure: "review",
@@ -167,7 +163,6 @@ describe("core contracts", () => {
       explicitDataSchema: { type: "object" },
       createdAt: "2026-04-13T10:00:00.000Z",
     });
-    expect(cellSummaryFromRunSummary(runSummary)).toEqual(summary);
   });
 
   test("uses canonical session family shapes directly", () => {

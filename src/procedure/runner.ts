@@ -23,7 +23,6 @@ import { appendTimingTraceEvent, type RunTimingTrace } from "../core/timing-trac
 import { summarizeText } from "../util/text.ts";
 import type {
   AgentTokenUsage,
-  CellRecord,
   DownstreamAgentConfig,
   DownstreamAgentSelection,
   KernelValue,
@@ -35,6 +34,7 @@ import type {
   RunRef,
 } from "../core/types.ts";
 import { createRef } from "../core/types.ts";
+import type { CellRecord } from "../session/store-records.ts";
 
 export interface ProcedureExecutionResult {
   procedure: string;

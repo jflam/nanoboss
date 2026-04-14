@@ -7,19 +7,24 @@ import { inferDataShape } from "../core/data-shape.ts";
 import { writeJsonFileAtomicSync } from "../util/repo-artifacts.ts";
 import { summarizeText } from "../util/text.ts";
 import {
+  cellRefFromRunRef,
   createCellRef,
   createValueRef,
   runRefFromCellRef,
   type CellRef,
   type ValueRef,
 } from "./store-refs.ts";
+import {
+  runRecordFromCellRecord,
+  runSummaryFromCellSummary,
+  type CellRecord,
+  type CellSummary,
+} from "./store-records.ts";
 import type {
   CellAncestorsOptions,
   CellDescendantsOptions,
   CellFilterOptions,
   CellKind,
-  CellRecord,
-  CellSummary,
   DownstreamAgentSelection,
   KernelValue,
   PersistedFrontendEvent,
@@ -29,7 +34,9 @@ import type {
   ProcedurePause,
   ProcedureResult,
   RefStat,
+  RunRecord,
   RunRef,
+  RunSummary,
   TopLevelRunsOptions,
 } from "../core/types.ts";
 
@@ -267,6 +274,10 @@ export class SessionStore {
     return getValueAtPath(cell, valueRef.path);
   }
 
+  readRun(runRef: RunRef): RunRecord {
+    return runRecordFromCellRecord(this.sessionId, this.readCell(cellRefFromRunRef(runRef)));
+  }
+
   statRef(valueRef: ValueRef): RefStat {
     const value = this.readRef(valueRef);
     const preview = buildPreview(value);
@@ -295,11 +306,20 @@ export class SessionStore {
     });
   }
 
+  recentRuns(options: RecentOptions = {}): RunSummary[] {
+    return this.recent(options).map(runSummaryFromCellSummary);
+  }
+
   latest(options: RecentOptions = {}): CellSummary | undefined {
     return this.recent({
       ...options,
       limit: 1,
     })[0];
+  }
+
+  latestRun(options: RecentOptions = {}): RunSummary | undefined {
+    const summary = this.latest(options);
+    return summary ? runSummaryFromCellSummary(summary) : undefined;
   }
 
   parent(cellRef: CellRef): CellSummary | undefined {
@@ -309,11 +329,20 @@ export class SessionStore {
     return parentCellId ? this.toSummaryByCellId(parentCellId) : undefined;
   }
 
+  parentRun(runRef: RunRef): RunSummary | undefined {
+    const summary = this.parent(cellRefFromRunRef(runRef));
+    return summary ? runSummaryFromCellSummary(summary) : undefined;
+  }
+
   children(cellRef: CellRef, options: Omit<CellDescendantsOptions, "maxDepth"> = {}): CellSummary[] {
     return this.descendants(cellRef, {
       ...options,
       maxDepth: 1,
     });
+  }
+
+  childRuns(runRef: RunRef, options: Omit<CellDescendantsOptions, "maxDepth"> = {}): RunSummary[] {
+    return this.children(cellRefFromRunRef(runRef), options).map(runSummaryFromCellSummary);
   }
 
   ancestors(cellRef: CellRef, options: CellAncestorsOptions = {}): CellSummary[] {
@@ -332,6 +361,10 @@ export class SessionStore {
     }
 
     return ancestors;
+  }
+
+  ancestorRuns(runRef: RunRef, options: CellAncestorsOptions = {}): RunSummary[] {
+    return this.ancestors(cellRefFromRunRef(runRef), options).map(runSummaryFromCellSummary);
   }
 
   descendants(cellRef: CellRef, options: CellDescendantsOptions = {}): CellSummary[] {
@@ -387,9 +420,17 @@ export class SessionStore {
     return descendants;
   }
 
+  descendantRuns(runRef: RunRef, options: CellDescendantsOptions = {}): RunSummary[] {
+    return this.descendants(cellRefFromRunRef(runRef), options).map(runSummaryFromCellSummary);
+  }
+
   topLevelRuns(options: TopLevelRunsOptions = {}): CellSummary[] {
     this.loadExistingCells();
     return this.collectReverseSummaries(this.topLevelCellIds, options);
+  }
+
+  topLevelRunSummaries(options: TopLevelRunsOptions = {}): RunSummary[] {
+    return this.topLevelRuns(options).map(runSummaryFromCellSummary);
   }
 
   readCell(cellRef: CellRef): CellRecord {

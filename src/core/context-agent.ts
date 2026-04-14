@@ -5,7 +5,7 @@ import { invokeAgent } from "../agent/call-agent.ts";
 import { normalizeAgentTokenUsage } from "../agent/token-usage.ts";
 import { promptInputDisplayText } from "./prompt.ts";
 import type { SessionStore } from "../session/index.ts";
-import { cellRefFromRunRef, valueRefFromRef } from "../session/store-refs.ts";
+import { valueRefFromRef } from "../session/store-refs.ts";
 import { RunCancelledError, defaultCancellationMessage, normalizeRunCancelledError } from "./cancellation.ts";
 import { resolveDownstreamAgentConfig } from "./config.ts";
 import { formatErrorMessage } from "./error-format.ts";
@@ -27,7 +27,7 @@ import type {
   RunRef,
   TypeDescriptor,
 } from "./types.ts";
-import { publicKernelValueFromStored, runRecordFromCellRecord } from "./types.ts";
+import { publicKernelValueFromStored } from "./types.ts";
 
 type ActiveCell = ReturnType<SessionStore["startCell"]>;
 
@@ -408,7 +408,7 @@ function resolveNamedRefs(
       name,
       isRef(ref)
         ? publicKernelValueFromStored(store.readRef(valueRefFromRef(ref)) as KernelValue)
-        : runRecordFromCellRecord(ref.sessionId, store.readCell(cellRefFromRunRef(ref))),
+        : store.readRun(ref),
     ]),
   );
 }
