@@ -8,16 +8,15 @@ import type { DefaultConversationSession } from "../agent/default-session.ts";
 import { buildProcedureExecutionResult, type ProcedureExecutionResult } from "./runner.ts";
 import type { SessionStore } from "../session/index.ts";
 import { inferDataShape } from "../core/data-shape.ts";
-import type { AgentTokenUsage, DownstreamAgentConfig, Ref } from "../core/types.ts";
+import type { AgentTokenUsage, DownstreamAgentConfig, Ref, RunRecord } from "../core/types.ts";
 import { createRef } from "../core/types.ts";
-import type { CellRecord } from "../session/store-records.ts";
 import { summarizeText } from "../util/text.ts";
 
 export function isProcedureDispatchTimeout(message: string | undefined): boolean {
   return Boolean(message && /request timed out/i.test(message));
 }
 
-export async function waitForRecoveredProcedureDispatchRecord(
+export async function waitForRecoveredProcedureDispatchRun(
   store: SessionStore,
   params: {
     procedureName: string;
@@ -25,7 +24,7 @@ export async function waitForRecoveredProcedureDispatchRecord(
     signal?: AbortSignal;
     softStopSignal?: AbortSignal;
   },
-): Promise<CellRecord | undefined> {
+): Promise<RunRecord | undefined> {
   const deadline = Date.now() + getProcedureDispatchRecoveryWaitMs();
 
   for (;;) {
@@ -37,7 +36,7 @@ export async function waitForRecoveredProcedureDispatchRecord(
       throw new RunCancelledError(defaultCancellationMessage("abort"), "abort");
     }
 
-    const found = findRecoveredProcedureDispatchRecord(store, params);
+    const found = findRecoveredProcedureDispatchRun(store, params);
     if (found) {
       return found;
     }
@@ -50,18 +49,18 @@ export async function waitForRecoveredProcedureDispatchRecord(
   }
 }
 
-export function findRecoveredProcedureDispatchRecord(
+export function findRecoveredProcedureDispatchRun(
   store: SessionStore,
   params: {
     procedureName: string;
     dispatchCorrelationId: string;
   },
-): CellRecord | undefined {
-  const summaries = store.topLevelRuns({ procedure: params.procedureName, limit: 50 });
+): RunRecord | undefined {
+  const summaries = store.topLevelRunSummaries({ procedure: params.procedureName, limit: 50 });
   for (const summary of summaries) {
-    const cell = store.readCell(summary.cell);
-    if (cell.meta.dispatchCorrelationId === params.dispatchCorrelationId) {
-      return cell;
+    const run = store.readRun(summary.run);
+    if (run.meta.dispatchCorrelationId === params.dispatchCorrelationId) {
+      return run;
     }
   }
 
@@ -70,13 +69,12 @@ export function findRecoveredProcedureDispatchRecord(
 
 export async function syncRecoveredProcedureResultIntoDefaultConversation(params: {
   defaultConversation: DefaultConversationSession;
-  sessionId: string;
-  record: CellRecord;
+  run: RunRecord;
   signal?: AbortSignal;
   defaultAgentConfig: DownstreamAgentConfig;
 }): Promise<AgentTokenUsage | undefined> {
   await params.defaultConversation.prompt(
-    createTextPromptInput(buildRecoveredProcedureSyncPrompt(params.sessionId, params.record)),
+    createTextPromptInput(buildRecoveredProcedureSyncPrompt(params.run)),
     {
       signal: params.signal,
     },
@@ -88,19 +86,18 @@ export async function syncRecoveredProcedureResultIntoDefaultConversation(params
   );
 }
 
-export function procedureDispatchResultFromRecoveredRecord(sessionId: string, record: CellRecord): ProcedureExecutionResult {
-  return buildProcedureExecutionResult({ sessionId, cell: record });
+export function procedureDispatchResultFromRecoveredRun(run: RunRecord): ProcedureExecutionResult {
+  return buildProcedureExecutionResult({ run });
 }
 
-export function buildRecoveredProcedureSyncPrompt(sessionId: string, record: CellRecord): string {
-  const run = { sessionId, runId: record.cellId };
-  const dataRef = record.output.data !== undefined
-    ? createRef(run, "output.data")
+export function buildRecoveredProcedureSyncPrompt(run: RunRecord): string {
+  const dataRef = run.output.data !== undefined
+    ? createRef(run.run, "output.data")
     : undefined;
-  const displayRef = record.output.display !== undefined
-    ? createRef(run, "output.display")
+  const displayRef = run.output.display !== undefined
+    ? createRef(run.run, "output.display")
     : undefined;
-  const dataShape = record.output.data !== undefined ? inferDataShape(record.output.data) : undefined;
+  const dataShape = run.output.data !== undefined ? inferDataShape(run.output.data) : undefined;
 
   return [
     "Nanoboss internal recovered procedure synchronization.",
@@ -108,19 +105,19 @@ export function buildRecoveredProcedureSyncPrompt(sessionId: string, record: Cel
     "Treat the following as the authoritative stored result for future turns in this same persistent master conversation.",
     "Do not answer the user. Respond with exactly: OK",
     "",
-    `Procedure: /${record.procedure}`,
-    record.input.trim() ? `Original input: ${summarizeText(record.input, 500)}` : undefined,
-    record.output.summary ? `Summary: ${summarizeText(record.output.summary, 800)}` : undefined,
-    record.output.memory ? `Memory: ${summarizeText(record.output.memory, 800)}` : undefined,
-    !record.output.summary && !record.output.memory && record.output.display
-      ? `Display preview: ${summarizeText(record.output.display, 1200)}`
+    `Procedure: /${run.procedure}`,
+    run.input.trim() ? `Original input: ${summarizeText(run.input, 500)}` : undefined,
+    run.output.summary ? `Summary: ${summarizeText(run.output.summary, 800)}` : undefined,
+    run.output.memory ? `Memory: ${summarizeText(run.output.memory, 800)}` : undefined,
+    !run.output.summary && !run.output.memory && run.output.display
+      ? `Display preview: ${summarizeText(run.output.display, 1200)}`
       : undefined,
-    `Run: session=${run.sessionId} run=${run.runId}`,
+    `Run: session=${run.run.sessionId} run=${run.run.runId}`,
     dataRef ? `Data ref: ${formatRef(dataRef)}` : undefined,
     displayRef ? `Display ref: ${formatRef(displayRef)}` : undefined,
     dataShape !== undefined ? `Data shape: ${JSON.stringify(dataShape)}` : undefined,
-    record.output.explicitDataSchema
-      ? `Explicit data schema: ${summarizeText(JSON.stringify(record.output.explicitDataSchema), 800)}`
+    run.output.explicitDataSchema
+      ? `Explicit data schema: ${summarizeText(JSON.stringify(run.output.explicitDataSchema), 800)}`
       : undefined,
     "",
     "Use the global nanoboss MCP tools later if you need exact stored values.",

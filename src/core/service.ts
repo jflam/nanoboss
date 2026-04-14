@@ -41,8 +41,8 @@ import {
 } from "../session/index.ts";
 import { startProcedureDispatchProgressBridge } from "../procedure/dispatch-progress.ts";
 import {
-  procedureDispatchResultFromRecoveredRecord,
-  waitForRecoveredProcedureDispatchRecord,
+  procedureDispatchResultFromRecoveredRun,
+  waitForRecoveredProcedureDispatchRun,
 } from "../procedure/dispatch-recovery.ts";
 import {
   ProcedureDispatchJobManager,
@@ -640,19 +640,19 @@ export class NanobossService {
         );
       }
 
-      const recoveredRecord = await waitForRecoveredProcedureDispatchRecord(session.store, {
+      const recoveredRun = await waitForRecoveredProcedureDispatchRun(session.store, {
         procedureName,
         dispatchCorrelationId,
         signal: options.signal,
         softStopSignal: options.softStopSignal,
       });
-      if (recoveredRecord) {
+      if (recoveredRun) {
         appendTimingTraceEvent(timingTrace, "service", "dispatch_result_recovered_from_store", {
           procedure: procedureName,
-          runId: recoveredRecord.cellId,
+          runId: recoveredRun.run.runId,
         });
         return {
-          result: procedureDispatchResultFromRecoveredRecord(session.store.sessionId, recoveredRecord),
+          result: procedureDispatchResultFromRecoveredRun(recoveredRun),
           tokenUsage: normalizeAgentTokenUsage(
             promptResult.tokenSnapshot ?? await session.defaultConversation.getCurrentTokenSnapshot(),
             session.defaultAgentConfig,

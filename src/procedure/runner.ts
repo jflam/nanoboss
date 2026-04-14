@@ -17,12 +17,12 @@ import {
   type SessionStore,
   normalizeProcedureResult,
 } from "../session/index.ts";
-import { runRefFromCellRef, type CellRef } from "../session/store-refs.ts";
 import { toDownstreamAgentSelection } from "../core/config.ts";
 import { appendTimingTraceEvent, type RunTimingTrace } from "../core/timing-trace.ts";
 import { summarizeText } from "../util/text.ts";
 import type {
   AgentTokenUsage,
+  Continuation,
   DownstreamAgentConfig,
   DownstreamAgentSelection,
   KernelValue,
@@ -31,10 +31,10 @@ import type {
   PromptInput,
   ProcedureRegistryLike,
   Ref,
+  RunRecord,
   RunRef,
 } from "../core/types.ts";
-import { createRef } from "../core/types.ts";
-import type { CellRecord } from "../session/store-records.ts";
+import { createRef, pauseFromContinuation } from "../core/types.ts";
 
 export interface ProcedureExecutionResult {
   procedure: string;
@@ -155,7 +155,7 @@ export async function executeTopLevelProcedure(params: {
     const finalized = params.store.finalizeCell(rootCell, result, {
       meta: changedSelection ? { defaultAgentSelection: changedSelection } : undefined,
     });
-    const record = params.store.readCell(finalized.cell);
+    const run = params.store.readRun(finalized.run);
 
     logger.write({
       spanId: rootSpanId,
@@ -167,8 +167,7 @@ export async function executeTopLevelProcedure(params: {
     });
 
     return buildProcedureExecutionResult({
-      sessionId: params.sessionId,
-      cell: record,
+      run,
       tokenUsage: params.emitter.currentTokenUsage,
       defaultAgentSelection: changedSelection,
     });
@@ -220,37 +219,39 @@ export async function executeTopLevelProcedure(params: {
 }
 
 export function buildProcedureExecutionResult(params: {
-  sessionId: string;
-  cell: CellRecord;
+  run: RunRecord;
   tokenUsage?: AgentTokenUsage;
   defaultAgentSelection?: DownstreamAgentSelection;
 }): ProcedureExecutionResult {
-  const cellRef = { sessionId: params.sessionId, cellId: params.cell.cellId };
-  const run = runRefFromCellRef(cellRef);
+  const pause = procedurePauseFromRunPause(params.run.output.pause);
   return {
-    procedure: params.cell.procedure,
-    run,
-    summary: params.cell.output.summary,
-    display: params.cell.output.display,
-    memory: params.cell.output.memory,
-    dataRef: params.cell.output.data !== undefined
-      ? createRef(run, "output.data")
+    procedure: params.run.procedure,
+    run: params.run.run,
+    summary: params.run.output.summary,
+    display: params.run.output.display,
+    memory: params.run.output.memory,
+    dataRef: params.run.output.data !== undefined
+      ? createRef(params.run.run, "output.data")
       : undefined,
-    displayRef: params.cell.output.display !== undefined
-      ? createRef(run, "output.display")
+    displayRef: params.run.output.display !== undefined
+      ? createRef(params.run.run, "output.display")
       : undefined,
-    streamRef: params.cell.output.stream !== undefined
-      ? createRef(run, "output.stream")
+    streamRef: params.run.output.stream !== undefined
+      ? createRef(params.run.run, "output.stream")
       : undefined,
-    pause: params.cell.output.pause,
-    pauseRef: params.cell.output.pause !== undefined
-      ? createRef(run, "output.pause")
+    pause,
+    pauseRef: pause !== undefined
+      ? createRef(params.run.run, "output.pause")
       : undefined,
-    dataShape: params.cell.output.data !== undefined ? inferDataShape(params.cell.output.data) : undefined,
-    explicitDataSchema: params.cell.output.explicitDataSchema,
+    dataShape: params.run.output.data !== undefined ? inferDataShape(params.run.output.data) : undefined,
+    explicitDataSchema: params.run.output.explicitDataSchema,
     tokenUsage: params.tokenUsage,
-    defaultAgentSelection: params.defaultAgentSelection ?? params.cell.meta.defaultAgentSelection,
+    defaultAgentSelection: params.defaultAgentSelection ?? params.run.meta.defaultAgentSelection,
   };
+}
+
+function procedurePauseFromRunPause(pause: Continuation | undefined): ProcedurePause | undefined {
+  return pause ? pauseFromContinuation(pause) : undefined;
 }
 
 export function buildRunCompletedEvent(params: {

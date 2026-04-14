@@ -12,9 +12,8 @@ import { join } from "node:path";
 
 import { defaultCancellationMessage } from "../core/cancellation.ts";
 import { resolveDownstreamAgentConfig } from "../core/config.ts";
-import { cellRefFromRunRef } from "../session/store-refs.ts";
 import { appendTimingTraceEvent, createRunTimingTrace } from "../core/timing-trace.ts";
-import { findRecoveredProcedureDispatchRecord } from "./dispatch-recovery.ts";
+import { findRecoveredProcedureDispatchRun } from "./dispatch-recovery.ts";
 import {
   ProcedureDispatchProgressEmitter,
   buildProcedureDispatchProgressPath,
@@ -397,7 +396,7 @@ export class ProcedureDispatchJobManager {
 
     const record = job.run
       ? this.tryReadStoredRunRecord(job.run)
-      : findRecoveredProcedureDispatchRecord(this.createStore(), {
+      : findRecoveredProcedureDispatchRun(this.createStore(), {
         procedureName: job.procedure,
         dispatchCorrelationId: job.dispatchCorrelationId,
       });
@@ -429,7 +428,7 @@ export class ProcedureDispatchJobManager {
         status: "failed",
         updatedAt: new Date().toISOString(),
         completedAt,
-        run: { sessionId: this.params.sessionId, runId: record.cellId },
+        run: record.run,
         error: job.error ?? record.output.summary ?? `${job.procedure} failed`,
       };
       this.writeJob(failed);
@@ -437,8 +436,7 @@ export class ProcedureDispatchJobManager {
     }
 
     const result = buildProcedureExecutionResult({
-      sessionId: this.params.sessionId,
-      cell: record,
+      run: record,
       tokenUsage: job.result?.tokenUsage,
       defaultAgentSelection: job.result?.defaultAgentSelection ?? job.defaultAgentSelection,
     });
@@ -459,7 +457,7 @@ export class ProcedureDispatchJobManager {
 
   private tryReadStoredRunRecord(run: RunRef) {
     try {
-      return this.createStore().readCell(cellRefFromRunRef(run));
+      return this.createStore().readRun(run);
     } catch {
       return undefined;
     }
@@ -697,7 +695,7 @@ function isProcessAlive(pid: number): boolean {
   }
 }
 
-function looksLikeProcedureFailureRecord(record: ReturnType<SessionStore["readCell"]>): boolean {
+function looksLikeProcedureFailureRecord(record: ReturnType<SessionStore["readRun"]>): boolean {
   return (
     record.output.data === undefined &&
     record.output.display === undefined &&
