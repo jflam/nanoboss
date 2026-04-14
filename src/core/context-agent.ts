@@ -198,6 +198,7 @@ export class AgentRunRecorder {
       agentProvider: agent?.provider,
       agentModel: agent?.model,
     });
+    this.params.store.discardPendingPromptImages(started.childCell.meta.promptImages);
 
     if (started.emitToolCallEvents && started.toolCallId) {
       this.params.emitter.emit({

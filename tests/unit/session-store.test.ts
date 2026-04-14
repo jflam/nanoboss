@@ -352,6 +352,71 @@ describe("SessionStore", () => {
     expect(reloaded.readCell(finalized.cell).meta.promptImages).toEqual(promptImages);
   });
 
+  test("promotes staged prompt image attachments when a persisted cell is loaded after a crash window", () => {
+    const rootDir = mkdtempSync(join(process.cwd(), ".tmp-session-store-"));
+    tempDirs.push(rootDir);
+
+    const store = new SessionStore({
+      sessionId: "session-attachment-recovery",
+      cwd: process.cwd(),
+      rootDir,
+    });
+    const promptInput: PromptInput = {
+      parts: [
+        { type: "text", text: "recover " },
+        {
+          type: "image",
+          token: "[Image 1: PNG 10x10 3B]",
+          mimeType: "image/png",
+          data: "YWJj",
+          width: 10,
+          height: 10,
+          byteLength: 3,
+        },
+      ],
+    };
+
+    const promptImages = expectDefined(store.persistPromptImages(promptInput), "Expected persisted prompt images");
+    const attachmentPath = expectDefined(promptImages[0]?.attachmentPath, "Expected attachment path");
+    const attachmentFile = join(rootDir, attachmentPath);
+    const stagedFile = `${attachmentFile}.tmp`;
+
+    expect(existsSync(stagedFile)).toBe(true);
+    expect(existsSync(attachmentFile)).toBe(false);
+
+    const draft = store.startCell({
+      procedure: "default",
+      input: "recover [Image 1: PNG 10x10 3B]",
+      kind: "top_level",
+      promptImages,
+    });
+    writeFileSync(
+      join(rootDir, "cells", `123-${draft.cell.cellId}.json`),
+      `${JSON.stringify({
+        cellId: draft.cell.cellId,
+        procedure: draft.procedure,
+        input: draft.input,
+        output: {
+          display: "recovered\n",
+          summary: "recovered",
+        },
+        meta: draft.meta,
+      }, null, 2)}\n`,
+      "utf8",
+    );
+
+    const reloaded = new SessionStore({
+      sessionId: "session-attachment-recovery",
+      cwd: process.cwd(),
+      rootDir,
+    });
+
+    expect(existsSync(stagedFile)).toBe(false);
+    expect(existsSync(attachmentFile)).toBe(true);
+    expect(readFileSync(attachmentFile).toString("base64")).toBe("YWJj");
+    expect(reloaded.topLevelRuns({ limit: 1 })[0]?.procedure).toBe("default");
+  });
+
   test("removes stale staged attachment temp files when a store is reloaded", () => {
     const rootDir = mkdtempSync(join(process.cwd(), ".tmp-session-store-"));
     tempDirs.push(rootDir);

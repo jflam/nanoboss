@@ -87,7 +87,7 @@ export class SessionStore {
 
   private readonly cellsDir: string;
   private readonly attachmentsDir: string;
-  private readonly pendingAttachmentTempPaths = new Map<string, string>();
+  private readonly pendingAttachmentStages = new Map<string, { tempPath: string; refCount: number }>();
   private readonly cells = new Map<string, CellRecord>();
   private readonly cellFilePaths = new Map<string, string>();
   private readonly order: string[] = [];
@@ -148,8 +148,6 @@ export class SessionStore {
     result: ProcedureResult<T>,
     options: FinalizeCellOptions = {},
   ): RunResult<T> {
-    this.promotePendingPromptImages(draft.meta.promptImages);
-
     const stream = draft.streamChunks.join("") || options.stream;
     const display = result.display ?? options.display ?? options.raw;
     const summary = result.summary ?? options.summary ?? (
@@ -186,6 +184,12 @@ export class SessionStore {
 
     const filePath = join(this.cellsDir, `${Date.now()}-${record.cellId}.json`);
     writeJsonFileAtomicSync(filePath, record);
+    try {
+      this.promotePendingPromptImages(draft.meta.promptImages);
+    } catch (error) {
+      unlinkSync(filePath);
+      throw error;
+    }
 
     this.storeCellRecord(record, filePath);
 
@@ -533,6 +537,7 @@ export class SessionStore {
         continue;
       }
 
+      this.promotePersistedPromptImages(record.meta.promptImages);
       this.storeCellRecord(record, filePath);
     }
   }
@@ -548,12 +553,24 @@ export class SessionStore {
     const attachmentId = extension ? `${digest}.${extension}` : digest;
     const attachmentPath = `attachments/${attachmentId}`;
     const filePath = join(this.rootDir, attachmentPath);
-    const pendingTempPath = this.pendingAttachmentTempPaths.get(attachmentPath);
+    const tempPath = buildAttachmentTempPath(filePath);
+    const pendingStage = this.pendingAttachmentStages.get(attachmentPath);
 
-    if (!existsSync(filePath) && (!pendingTempPath || !existsSync(pendingTempPath))) {
-      const tempPath = buildAttachmentTempPath(filePath);
-      writeFileSync(tempPath, bytes);
-      this.pendingAttachmentTempPaths.set(attachmentPath, tempPath);
+    if (!existsSync(filePath)) {
+      if (pendingStage && existsSync(pendingStage.tempPath)) {
+        pendingStage.refCount += 1;
+      } else if (existsSync(tempPath)) {
+        this.pendingAttachmentStages.set(attachmentPath, {
+          tempPath,
+          refCount: 1,
+        });
+      } else {
+        writeFileSync(tempPath, bytes);
+        this.pendingAttachmentStages.set(attachmentPath, {
+          tempPath,
+          refCount: 1,
+        });
+      }
     }
 
     return {
@@ -567,7 +584,7 @@ export class SessionStore {
     };
   }
 
-  private promotePendingPromptImages(promptImages: CellRecord["meta"]["promptImages"]): void {
+  discardPendingPromptImages(promptImages: CellRecord["meta"]["promptImages"]): void {
     for (const image of promptImages ?? []) {
       const attachmentPath = image.attachmentPath;
       if (!attachmentPath) {
@@ -576,25 +593,83 @@ export class SessionStore {
 
       const filePath = join(this.rootDir, attachmentPath);
       if (existsSync(filePath)) {
-        this.deletePendingAttachmentTemp(attachmentPath);
+        this.pendingAttachmentStages.delete(attachmentPath);
         continue;
       }
 
-      const tempPath = this.pendingAttachmentTempPaths.get(attachmentPath);
-      if (!tempPath || !existsSync(tempPath)) {
-        throw new Error(`Missing staged prompt image attachment: ${attachmentPath}`);
+      const stage = this.pendingAttachmentStages.get(attachmentPath);
+      if (!stage || !existsSync(stage.tempPath)) {
+        continue;
       }
 
-      renameSync(tempPath, filePath);
-      this.pendingAttachmentTempPaths.delete(attachmentPath);
+      stage.refCount -= 1;
+      if (stage.refCount <= 0) {
+        unlinkSync(stage.tempPath);
+        this.pendingAttachmentStages.delete(attachmentPath);
+      }
     }
   }
 
-  private deletePendingAttachmentTemp(attachmentPath: string): void {
-    const tempPath = this.pendingAttachmentTempPaths.get(attachmentPath);
-    this.pendingAttachmentTempPaths.delete(attachmentPath);
-    if (tempPath && existsSync(tempPath)) {
-      unlinkSync(tempPath);
+  private promotePersistedPromptImages(promptImages: CellRecord["meta"]["promptImages"]): void {
+    for (const image of promptImages ?? []) {
+      const attachmentPath = image.attachmentPath;
+      if (!attachmentPath) {
+        continue;
+      }
+
+      const filePath = join(this.rootDir, attachmentPath);
+      if (existsSync(filePath)) {
+        continue;
+      }
+
+      const tempPath = buildAttachmentTempPath(filePath);
+      if (existsSync(tempPath)) {
+        renameSync(tempPath, filePath);
+      }
+    }
+  }
+
+  private promotePendingPromptImages(promptImages: CellRecord["meta"]["promptImages"]): void {
+    const promotions: Array<{ attachmentPath: string; filePath: string; tempPath: string }> = [];
+
+    for (const image of promptImages ?? []) {
+      const attachmentPath = image.attachmentPath;
+      if (!attachmentPath) {
+        continue;
+      }
+
+      const filePath = join(this.rootDir, attachmentPath);
+      if (existsSync(filePath)) {
+        this.pendingAttachmentStages.delete(attachmentPath);
+        continue;
+      }
+
+      const tempPath = buildAttachmentTempPath(filePath);
+      if (!existsSync(tempPath)) {
+        throw new Error(`Missing staged prompt image attachment: ${attachmentPath}`);
+      }
+
+      promotions.push({ attachmentPath, filePath, tempPath });
+    }
+
+    const promoted: typeof promotions = [];
+    try {
+      for (const promotion of promotions) {
+        renameSync(promotion.tempPath, promotion.filePath);
+        promoted.push(promotion);
+      }
+    } catch (error) {
+      for (let index = promoted.length - 1; index >= 0; index -= 1) {
+        const promotion = promoted[index];
+        if (promotion && existsSync(promotion.filePath) && !existsSync(promotion.tempPath)) {
+          renameSync(promotion.filePath, promotion.tempPath);
+        }
+      }
+      throw error;
+    }
+
+    for (const promotion of promotions) {
+      this.pendingAttachmentStages.delete(promotion.attachmentPath);
     }
   }
 
@@ -641,7 +716,7 @@ function fileExtensionForMimeType(mimeType: string): string | undefined {
 }
 
 function buildAttachmentTempPath(path: string): string {
-  return `${path}.${process.pid}.${crypto.randomUUID()}.tmp`;
+  return `${path}.tmp`;
 }
 
 function matchesCell(record: CellRecord, options: Pick<CellFilterOptions, "kind" | "procedure">): boolean {

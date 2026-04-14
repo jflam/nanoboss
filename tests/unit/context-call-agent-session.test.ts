@@ -1,6 +1,6 @@
 import type * as acp from "@agentclientprotocol/sdk";
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import typia from "typia";
@@ -322,6 +322,33 @@ describe("procedure API session namespaces", () => {
     expect(latest?.cell).toEqual(otherTopLevel.cell);
     expect(topLevelRuns.map((run) => run.cell)).toContainEqual(otherTopLevel.cell);
   });
+
+  test("failed typed image calls discard staged prompt attachments", async () => {
+    const { ctx, store } = createContext();
+
+    await expect(
+      ctx.agent.run("Inspect this image", MathResultType, {
+        promptInput: {
+          parts: [
+            { type: "text", text: "Inspect this image " },
+            {
+              type: "image",
+              token: "[Image 1: PNG 10x10 3B]",
+              mimeType: "image/png",
+              data: "YWJj",
+              width: 10,
+              height: 10,
+              byteLength: 3,
+            },
+          ],
+        },
+      }),
+    ).rejects.toThrow("Image prompts are only supported");
+
+    const attachmentsDir = join(store.rootDir, "attachments");
+    expect(existsSync(attachmentsDir)).toBe(true);
+    expect(readdirSync(attachmentsDir)).toEqual([]);
+  });
 });
 
 function createContext(options: {
@@ -345,6 +372,7 @@ function createContext(options: {
   const store = new SessionStore({
     sessionId: crypto.randomUUID(),
     cwd,
+    rootDir: join(cwd, ".nanoboss", "sessions", "test-session"),
   });
   const emittedUpdates: acp.SessionUpdate[] = [];
   let config = createMockConfig(cwd);
