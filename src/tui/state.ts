@@ -1,7 +1,7 @@
 import type { ToolPreviewBlock } from "../core/tool-call-preview.ts";
 import type {
   DownstreamAgentSelection,
-  FrontendPendingContinuation,
+  FrontendContinuation,
   PromptInput,
 } from "../core/types.ts";
 
@@ -77,7 +77,7 @@ export interface UiState {
   stopRequestedRunId?: string;
   statusLine?: string;
   tokenUsageLine?: string;
-  pendingContinuation?: FrontendPendingContinuation;
+  pendingContinuation?: FrontendContinuation;
   inputDisabled: boolean;
   showToolCalls: boolean;
   expandedToolOutput: boolean;

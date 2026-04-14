@@ -66,7 +66,7 @@ import type {
   AgentTokenUsage,
   DownstreamAgentConfig,
   DownstreamAgentSelection,
-  FrontendPendingContinuation,
+  FrontendContinuation,
   PendingContinuation,
   PersistedFrontendEvent,
   PromptInput,
@@ -349,7 +349,7 @@ export class NanobossService {
   private publishPendingContinuation(sessionId: string, session: SessionState): void {
     session.events.publish(sessionId, {
       type: "continuation_updated",
-      continuation: toFrontendPendingContinuation(session.pendingContinuation),
+      continuation: toFrontendContinuation(session.pendingContinuation),
     });
   }
 
@@ -1638,9 +1638,9 @@ function buildAvailableCommands(registry: ProcedureRegistryLike): acp.AvailableC
     : [...commands, DISMISS_CONTINUATION_COMMAND];
 }
 
-function toFrontendPendingContinuation(
+function toFrontendContinuation(
   continuation?: PendingContinuation,
-): FrontendPendingContinuation | undefined {
+): FrontendContinuation | undefined {
   if (!continuation) {
     return undefined;
   }
@@ -1650,7 +1650,7 @@ function toFrontendPendingContinuation(
     question: continuation.question,
     inputHint: continuation.inputHint,
     suggestedReplies: continuation.suggestedReplies,
-    continuationUi: continuation.ui,
+    ui: continuation.ui,
   };
 }
 
@@ -1690,7 +1690,7 @@ function buildPendingContinuation(
     state: result.pause.state,
     inputHint: result.pause.inputHint,
     suggestedReplies: result.pause.suggestedReplies,
-    ui: result.pause.continuationUi,
+    ui: result.pause.ui,
   };
 }
 

@@ -27,14 +27,13 @@ import type {
   DownstreamAgentSelection,
   KernelValue,
   Procedure,
-  ProcedurePause,
   PromptInput,
   ProcedureRegistryLike,
   Ref,
   RunRecord,
   RunRef,
 } from "../core/types.ts";
-import { createRef, pauseFromContinuation } from "../core/types.ts";
+import { createRef } from "../core/types.ts";
 
 export interface ProcedureExecutionResult {
   procedure: string;
@@ -45,7 +44,7 @@ export interface ProcedureExecutionResult {
   dataRef?: Ref;
   displayRef?: Ref;
   streamRef?: Ref;
-  pause?: ProcedurePause;
+  pause?: Continuation;
   pauseRef?: Ref;
   dataShape?: unknown;
   explicitDataSchema?: object;
@@ -223,7 +222,6 @@ export function buildProcedureExecutionResult(params: {
   tokenUsage?: AgentTokenUsage;
   defaultAgentSelection?: DownstreamAgentSelection;
 }): ProcedureExecutionResult {
-  const pause = procedurePauseFromRunPause(params.run.output.pause);
   return {
     procedure: params.run.procedure,
     run: params.run.run,
@@ -239,8 +237,8 @@ export function buildProcedureExecutionResult(params: {
     streamRef: params.run.output.stream !== undefined
       ? createRef(params.run.run, "output.stream")
       : undefined,
-    pause,
-    pauseRef: pause !== undefined
+    pause: params.run.output.pause,
+    pauseRef: params.run.output.pause !== undefined
       ? createRef(params.run.run, "output.pause")
       : undefined,
     dataShape: params.run.output.data !== undefined ? inferDataShape(params.run.output.data) : undefined,
@@ -248,10 +246,6 @@ export function buildProcedureExecutionResult(params: {
     tokenUsage: params.tokenUsage,
     defaultAgentSelection: params.defaultAgentSelection ?? params.run.meta.defaultAgentSelection,
   };
-}
-
-function procedurePauseFromRunPause(pause: Continuation | undefined): ProcedurePause | undefined {
-  return pause ? pauseFromContinuation(pause) : undefined;
 }
 
 export function buildRunCompletedEvent(params: {
@@ -311,7 +305,7 @@ export function buildRunPausedEvent(params: {
     display: params.result.display,
     inputHint: params.result.pause.inputHint,
     suggestedReplies: params.result.pause.suggestedReplies,
-    continuationUi: params.result.pause.continuationUi,
+    ui: params.result.pause.ui,
     tokenUsage: params.tokenUsage,
   };
 }

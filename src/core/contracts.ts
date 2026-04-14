@@ -1,6 +1,7 @@
 export type {
   AgentSession,
   Continuation,
+  FrontendContinuation,
   ContinuationUi,
   PendingContinuation,
   Ref,
@@ -15,9 +16,7 @@ export type {
 } from "./types.ts";
 
 export {
-  continuationFromPause,
   createRef,
   createRunRef,
   createSessionRef,
-  pauseFromContinuation,
 } from "./types.ts";

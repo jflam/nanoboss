@@ -506,7 +506,7 @@ function reduceFrontendEvent(state: UiState, event: RenderedFrontendEventEnvelop
           question: event.data.question,
           inputHint: event.data.inputHint,
           suggestedReplies: event.data.suggestedReplies,
-          continuationUi: event.data.continuationUi,
+          ui: event.data.ui,
         },
       };
     }

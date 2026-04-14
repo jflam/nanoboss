@@ -698,7 +698,7 @@ describe("NanobossTuiApp", () => {
       pendingContinuation: {
         procedure: "simplify2",
         question: "Approve this simplify2 slice?",
-        continuationUi: {
+        ui: {
           kind: "simplify2_checkpoint",
           title: "Simplify2 checkpoint",
           actions: [
@@ -774,7 +774,7 @@ describe("NanobossTuiApp", () => {
       pendingContinuation: {
         procedure: "simplify2",
         question: "Choose a focus",
-        continuationUi: {
+        ui: {
           kind: "simplify2_focus_picker",
           title: "Simplify2 focuses",
           entries: [

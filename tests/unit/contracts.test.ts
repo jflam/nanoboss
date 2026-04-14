@@ -1,10 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
 import {
-  continuationFromPause,
-  pauseFromContinuation,
-} from "../../src/core/contracts.ts";
-import {
   runRecordFromCellRecord,
   runSummaryFromCellSummary,
 } from "../../src/session/store-records.ts";
@@ -36,28 +32,26 @@ describe("core contracts", () => {
     expect(valueRefFromRef(ref)).toEqual(valueRef);
   });
 
-  test("round-trips continuation families", () => {
-    const pause = {
+  test("uses canonical continuation families directly", () => {
+    const continuation = {
       question: "Approve this change?",
       state: { step: 2 },
       inputHint: "reply",
       suggestedReplies: ["approve", "stop"],
-      continuationUi: {
+      ui: {
         kind: "simplify2_checkpoint" as const,
         title: "Checkpoint",
         actions: [{ id: "approve" as const, label: "Approve", reply: "approve" }],
       },
     };
 
-    const continuation = continuationFromPause(pause);
     expect(continuation).toEqual({
       question: "Approve this change?",
       state: { step: 2 },
       inputHint: "reply",
       suggestedReplies: ["approve", "stop"],
-      ui: pause.continuationUi,
+      ui: continuation.ui,
     });
-    expect(pauseFromContinuation(continuation)).toEqual(pause);
 
     const pending = {
       procedure: "simplify2",
@@ -66,7 +60,7 @@ describe("core contracts", () => {
       state: { step: 2 },
       inputHint: "reply",
       suggestedReplies: ["approve", "stop"],
-      ui: pause.continuationUi,
+      ui: continuation.ui,
     };
 
     expect(pending).toEqual({
@@ -76,7 +70,7 @@ describe("core contracts", () => {
       state: { step: 2 },
       inputHint: "reply",
       suggestedReplies: ["approve", "stop"],
-      ui: pause.continuationUi,
+      ui: continuation.ui,
     });
   });
 

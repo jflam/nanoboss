@@ -193,7 +193,7 @@ function createPausedSimplify2LikeProcedure(): Procedure {
           state: {
             step: 1,
           },
-          continuationUi: {
+          ui: {
             kind: "simplify2_checkpoint",
             title: "Simplify2 checkpoint",
             actions: [
@@ -1277,7 +1277,7 @@ describe("NanobossService", () => {
       throw new Error("Expected run_paused event");
     }
 
-    expect(paused.data.continuationUi).toEqual({
+    expect(paused.data.ui).toEqual({
       kind: "simplify2_checkpoint",
       title: "Simplify2 checkpoint",
       actions: [

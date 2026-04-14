@@ -25,13 +25,13 @@ import type {
   CellDescendantsOptions,
   CellFilterOptions,
   CellKind,
+  Continuation,
   DownstreamAgentSelection,
   KernelValue,
   PersistedFrontendEvent,
   PromptImagePart,
   PromptImageSummary,
   PromptInput,
-  ProcedurePause,
   ProcedureResult,
   RefStat,
   RunRecord,
@@ -77,7 +77,7 @@ export interface StoredRunResult<T extends KernelValue = KernelValue> {
   dataRef?: ValueRef;
   displayRef?: ValueRef;
   streamRef?: ValueRef;
-  pause?: ProcedurePause;
+  pause?: Continuation;
   pauseRef?: ValueRef;
   summary?: string;
   rawRef?: ValueRef;

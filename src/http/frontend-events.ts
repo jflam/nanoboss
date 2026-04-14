@@ -12,8 +12,8 @@ import {
 import { normalizeToolName } from "../core/tool-payload-normalizer.ts";
 import type {
   AgentTokenUsage,
-  FrontendPendingContinuation,
-  ProcedureContinuationUi,
+  ContinuationUi,
+  FrontendContinuation,
   RunRef,
 } from "../core/types.ts";
 
@@ -47,7 +47,7 @@ export type FrontendEvent =
     }
   | {
       type: "continuation_updated";
-      continuation?: FrontendPendingContinuation;
+      continuation?: FrontendContinuation;
     }
   | {
       type: "memory_cards";
@@ -144,7 +144,7 @@ export type FrontendEvent =
       display?: string;
       inputHint?: string;
       suggestedReplies?: string[];
-      continuationUi?: ProcedureContinuationUi;
+      ui?: ContinuationUi;
       tokenUsage?: AgentTokenUsage;
     }
   | {

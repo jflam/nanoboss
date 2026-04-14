@@ -18,7 +18,7 @@ import {
   type FrontendEventEnvelope,
 } from "../http/frontend-events.ts";
 import { formatAgentBanner } from "../core/runtime-banner.ts";
-import type { DownstreamAgentSelection, ProcedureContinuationUi, PromptInput } from "../core/types.ts";
+import type { ContinuationUi, DownstreamAgentSelection, PromptInput } from "../core/types.ts";
 
 import {
   isExitRequest,
@@ -492,7 +492,7 @@ export class NanobossTuiController {
     if (
       event.type !== "run_paused"
       || event.data.procedure !== "simplify2"
-      || event.data.continuationUi?.kind !== "simplify2_checkpoint"
+      || event.data.ui?.kind !== "simplify2_checkpoint"
       || !this.state.simplify2AutoApprove
     ) {
       return;
@@ -503,7 +503,7 @@ export class NanobossTuiController {
       question: event.data.question,
       inputHint: event.data.inputHint,
       suggestedReplies: event.data.suggestedReplies,
-      continuationUi: event.data.continuationUi,
+      ui: event.data.ui,
     }));
   }
 
@@ -512,7 +512,7 @@ export class NanobossTuiController {
     if (
       !continuation
       || continuation.procedure !== "simplify2"
-      || continuation.continuationUi?.kind !== "simplify2_checkpoint"
+      || continuation.ui?.kind !== "simplify2_checkpoint"
       || this.state.inputDisabled
     ) {
       return;
@@ -567,13 +567,13 @@ function buildContinuationSignature(continuation: {
   question: string;
   inputHint?: string;
   suggestedReplies?: string[];
-  continuationUi?: ProcedureContinuationUi;
+  ui?: ContinuationUi;
 }): string {
   return JSON.stringify({
     procedure: continuation.procedure,
     question: continuation.question,
     inputHint: continuation.inputHint,
     suggestedReplies: continuation.suggestedReplies,
-    continuationUi: continuation.continuationUi,
+    ui: continuation.ui,
   });
 }

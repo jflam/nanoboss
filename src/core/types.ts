@@ -54,14 +54,6 @@ export function createSessionRef(sessionId: string): SessionRef {
   return { sessionId };
 }
 
-export interface ProcedurePause<TState extends KernelValue = KernelValue> {
-  question: string;
-  state: TState;
-  inputHint?: string;
-  suggestedReplies?: string[];
-  continuationUi?: ProcedureContinuationUi;
-}
-
 export interface PromptImagePart {
   type: "image";
   token: string;
@@ -134,11 +126,9 @@ export interface Simplify2FocusPickerContinuationUi {
   actions: Simplify2FocusPickerContinuationUiAction[];
 }
 
-export type ProcedureContinuationUi =
+export type ContinuationUi =
   | Simplify2CheckpointContinuationUi
   | Simplify2FocusPickerContinuationUi;
-
-export type ContinuationUi = ProcedureContinuationUi;
 
 export interface Continuation<TState extends KernelValue = KernelValue> {
   question: string;
@@ -148,41 +138,17 @@ export interface Continuation<TState extends KernelValue = KernelValue> {
   ui?: ContinuationUi;
 }
 
-export interface FrontendPendingContinuation {
+export interface FrontendContinuation {
   procedure: string;
   question: string;
   inputHint?: string;
   suggestedReplies?: string[];
-  continuationUi?: ProcedureContinuationUi;
+  ui?: ContinuationUi;
 }
 
 export interface PendingContinuation<TState extends KernelValue = KernelValue> extends Continuation<TState> {
   procedure: string;
   run: RunRef;
-}
-
-export function continuationFromPause<TState extends KernelValue = KernelValue>(
-  pause: ProcedurePause<TState>,
-): Continuation<TState> {
-  return {
-    question: pause.question,
-    state: publicKernelValueFromStored(pause.state) as TState,
-    inputHint: pause.inputHint,
-    suggestedReplies: pause.suggestedReplies,
-    ui: pause.continuationUi,
-  };
-}
-
-export function pauseFromContinuation<TState extends KernelValue = KernelValue>(
-  continuation: Continuation<TState>,
-): ProcedurePause<TState> {
-  return {
-    question: continuation.question,
-    state: storedKernelValueFromPublic(continuation.state) as TState,
-    inputHint: continuation.inputHint,
-    suggestedReplies: continuation.suggestedReplies,
-    continuationUi: continuation.ui,
-  };
 }
 
 export type KernelValue =
@@ -488,7 +454,7 @@ export interface ProcedureResult<T extends KernelValue = KernelValue> {
   display?: string;
   summary?: string;
   memory?: string;
-  pause?: ProcedurePause;
+  pause?: Continuation;
   explicitDataSchema?: object;
 }
 
@@ -498,7 +464,7 @@ export interface RunResult<T extends KernelValue = KernelValue> {
   dataRef?: Ref;
   displayRef?: Ref;
   streamRef?: Ref;
-  pause?: ProcedurePause;
+  pause?: Continuation;
   pauseRef?: Ref;
   summary?: string;
   rawRef?: Ref;

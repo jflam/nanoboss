@@ -12,10 +12,10 @@ import { formatErrorMessage } from "../core/error-format.ts";
 import { parseDownstreamAgentSelection } from "../core/downstream-agent-selection.ts";
 import { resolveWorkspaceKey } from "../core/workspace-identity.ts";
 import type {
+  ContinuationUi,
   DownstreamAgentSelection,
   KernelValue,
   PendingContinuation,
-  ProcedureContinuationUi,
   SessionRef,
   Simplify2CheckpointContinuationUiAction,
   Simplify2FocusPickerContinuationUi,
@@ -187,7 +187,7 @@ function parsePendingContinuation(value: unknown): PendingContinuation | undefin
   };
 }
 
-function parseContinuationUi(value: unknown): ProcedureContinuationUi | undefined {
+function parseContinuationUi(value: unknown): ContinuationUi | undefined {
   const record = asRecord(value);
   if (record?.kind === "simplify2_checkpoint") {
     const title = asNonEmptyString(record.title);

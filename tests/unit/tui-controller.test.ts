@@ -681,7 +681,7 @@ describe("NanobossTuiController", () => {
       run: { sessionId: "session-1", runId: "cell-1" },
       question: "Approve this simplify2 slice?",
       display: "paused",
-      continuationUi: {
+      ui: {
         kind: "simplify2_checkpoint",
         title: "Simplify2 checkpoint",
         actions: [
@@ -728,7 +728,7 @@ describe("NanobossTuiController", () => {
       continuation: {
         procedure: "simplify2",
         question: "Approve this simplify2 slice?",
-        continuationUi: {
+        ui: {
           kind: "simplify2_checkpoint",
           title: "Simplify2 checkpoint",
           actions: [
@@ -782,7 +782,7 @@ describe("NanobossTuiController", () => {
       run: { sessionId: "session-1", runId: "cell-1" },
       question: "Choose a focus",
       display: "paused",
-      continuationUi: {
+      ui: {
         kind: "simplify2_focus_picker",
         title: "Simplify2 focuses",
         entries: [
@@ -836,7 +836,7 @@ describe("NanobossTuiController", () => {
       continuation: {
         procedure: "simplify2",
         question: "Approve this simplify2 slice?",
-        continuationUi: {
+        ui: {
           kind: "simplify2_checkpoint",
           title: "Simplify2 checkpoint",
           actions: [

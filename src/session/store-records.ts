@@ -5,19 +5,16 @@ import {
 } from "./store-refs.ts";
 import type {
   CellKind,
+  Continuation,
   DownstreamAgentSelection,
   JsonValue,
   KernelValue,
   PersistedFrontendEvent,
-  ProcedurePause,
   PromptImageSummary,
   RunRecord,
   RunSummary,
 } from "../core/types.ts";
-import {
-  continuationFromPause,
-  publicKernelValueFromStored,
-} from "../core/types.ts";
+import { publicKernelValueFromStored } from "../core/types.ts";
 
 export interface CellRecord {
   cellId: string;
@@ -29,7 +26,7 @@ export interface CellRecord {
     stream?: string;
     summary?: string;
     memory?: string;
-    pause?: ProcedurePause;
+    pause?: Continuation;
     explicitDataSchema?: object;
     replayEvents?: PersistedFrontendEvent[];
   };
@@ -73,7 +70,7 @@ export function runRecordFromCellRecord(sessionId: string, record: CellRecord): 
       stream: record.output.stream,
       summary: record.output.summary,
       memory: record.output.memory,
-      pause: record.output.pause ? continuationFromPause(record.output.pause) : undefined,
+      pause: record.output.pause ? publicKernelValueFromStored(record.output.pause) as Continuation : undefined,
       explicitDataSchema: record.output.explicitDataSchema,
       replayEvents: record.output.replayEvents,
     },

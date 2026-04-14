@@ -90,7 +90,7 @@ describe("simplify2 procedure", () => {
     expect(pausedState.mode).toBe("checkpoint");
     expect(pausedState.notebook.currentCheckpoint?.hypothesisId).toMatch(/^hyp-[0-9a-f]{12}$/);
     expect(pausedState.notebook.currentCheckpoint?.hypothesisId).not.toBe("hyp-boundary-checkpoint");
-    expect(normalized.pause?.continuationUi).toMatchObject({
+    expect(normalized.pause?.ui).toMatchObject({
       kind: "simplify2_checkpoint",
       actions: [
         { id: "approve", reply: "approve it" },
@@ -1200,7 +1200,7 @@ describe("simplify2 procedure", () => {
 
     const normalized = normalizeProcedureResult(result);
     expect(normalized.summary).toBe("simplify2: choose focus");
-    expect(normalized.pause?.continuationUi).toMatchObject({
+    expect(normalized.pause?.ui).toMatchObject({
       kind: "simplify2_focus_picker",
       actions: [
         { id: "continue" },

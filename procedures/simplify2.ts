@@ -896,7 +896,7 @@ function buildFocusPickerResult(
       suggestedReplies: pickerEntries.length === 0
         ? ["new session metadata cleanup", "stop"]
         : ["1", "archive 1", "new session metadata cleanup", "stop"],
-      continuationUi: {
+      ui: {
         ...SIMPLIFY2_FOCUS_PICKER_UI,
         entries: pickerEntries.map((entry) => ({
           id: entry.id,
@@ -1808,7 +1808,7 @@ function buildPausedResult(
       state: persisted,
       inputHint: "Reply with approve, reject, redirect the search, revise the design, or stop",
       suggestedReplies: SUGGESTED_REPLIES,
-      continuationUi: SIMPLIFY2_CONTINUATION_UI,
+      ui: SIMPLIFY2_CONTINUATION_UI,
     },
   };
 }
@@ -2611,7 +2611,7 @@ function buildBlockedDirtyWorktreeResumeResult(
       state: persisted,
       inputHint: "Reply with approve, reject, redirect the search, revise the design, or stop",
       suggestedReplies: SUGGESTED_REPLIES,
-      continuationUi: SIMPLIFY2_CONTINUATION_UI,
+      ui: SIMPLIFY2_CONTINUATION_UI,
     },
   };
 }
