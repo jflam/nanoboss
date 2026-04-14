@@ -541,6 +541,44 @@
       background: linear-gradient(90deg, var(--amber), var(--ice));
     }
 
+    .speaker-notes {
+      display: none;
+      position: fixed;
+      left: 18px;
+      bottom: 18px;
+      z-index: 65;
+      width: min(420px, calc(100vw - 36px));
+      max-height: min(44vh, 420px);
+      overflow: auto;
+      padding: 16px 18px;
+      border-radius: 18px;
+      border: 1px solid rgba(139, 209, 255, 0.24);
+      background: rgba(7, 11, 18, 0.92);
+      box-shadow: 0 24px 70px rgba(0, 0, 0, 0.46);
+      backdrop-filter: blur(10px);
+    }
+
+    body.notes-open .slide.active .speaker-notes {
+      display: block;
+    }
+
+    .speaker-notes h3 {
+      margin-bottom: 8px;
+      font-size: 18px;
+      color: var(--ice);
+    }
+
+    .speaker-notes p,
+    .speaker-notes li {
+      font-size: 14px;
+      line-height: 1.42;
+      color: #e4eefc;
+    }
+
+    .speaker-notes .small {
+      color: var(--muted);
+    }
+
     .small {
       color: var(--soft);
       font-size: 13px;
@@ -605,7 +643,8 @@
       body::after,
       .progress,
       .hud,
-      .nav {
+      .nav,
+      .speaker-notes {
         display: none !important;
       }
 
@@ -654,9 +693,10 @@
 <body>
   <div class="progress"><div id="progress-bar"></div></div>
   <div class="hud">
-    <span id="slide-counter">1 / 11</span>
+    <span id="slide-counter">1 / 16</span>
     <span id="slide-title">Cover</span>
     <span>&larr; &rarr; navigate</span>
+    <span>N notes</span>
   </div>
 
   <main class="deck" id="deck">
@@ -674,16 +714,18 @@
           <div class="stat"><div class="n">1</div><div class="l">durable run graph</div></div>
           <div class="stat"><div class="n">2026-04-13</div><div class="l">active refactor plan</div></div>
         </div>
-        <div class="panel">
-          <h3>Talk arc</h3>
-          <ul class="bullets">
-            <li>Why generic harnesses flatten too many real workflow differences</li>
-            <li>How nanoboss is built: sessions, runs, procedures, ACP, MCP, HTTP/SSE</li>
-            <li>Why procedures are the core customization surface</li>
-            <li>How the current refactor direction turns the runtime into cleaner libraries</li>
-          </ul>
-        </div>
       </div>
+      <aside class="speaker-notes">
+        <h3>Talk Arc</h3>
+        <ul class="bullets">
+          <li>Why generic harnesses flatten too many real workflow differences</li>
+          <li>Why cheap code changes engineering psychology before it changes architecture</li>
+          <li>How nanoboss is built: sessions, runs, procedures, ACP, MCP, HTTP/SSE</li>
+          <li>Why procedures are the core customization and judgment surface</li>
+          <li>How the current refactor direction turns the runtime into cleaner libraries</li>
+        </ul>
+        <div class="small">Press <span class="mono">n</span> again to hide notes.</div>
+      </aside>
       <footer class="footer">
         <div>Snapshot for talk prep: April 14, 2026.</div>
         <div class="refs">Evidence: README.md · docs/architecture.md · src/core/service.ts</div>
@@ -719,7 +761,7 @@
         </div>
         <div class="panel rows">
           <h3>What nanoboss is trying instead</h3>
-          <div class="callout">Treat workflow logic as code, not as prompt folklore.</div>
+          <div class="callout">Treat workflow logic as code, not as prompt folklore. Generic harnesses usually remove friction at exactly the wrong moment.</div>
           <ul class="bullets">
             <li>Procedures encode domain-specific orchestration in TypeScript.</li>
             <li>Each procedure chooses its own agent continuity, structure, and validation path.</li>
@@ -735,15 +777,147 @@
           </div>
         </div>
       </div>
+      <aside class="speaker-notes">
+        <h3>Problem Notes</h3>
+        <ul class="bullets">
+          <li>Do not over-explain each box. The point is flattening.</li>
+          <li>Generic harnesses erase real differences in memory, continuity, and success criteria.</li>
+          <li>Transition line: the deeper problem is not only technical, it is psychological.</li>
+        </ul>
+      </aside>
       <footer class="footer">
         <div>The slogan version: a Jedi does not buy an off-the-shelf lightsaber.</div>
         <div class="refs">Evidence: procedures/simplify2.ts · procedures/autoresearch/* · procedures/kb/*</div>
       </footer>
     </section>
 
+    <section class="slide" data-title="Psychology - Skip Thinking">
+      <header>
+        <div class="eyebrow">2 · psychology</div>
+        <h2>Cheap code makes it easier to skip judgment</h2>
+      </header>
+      <div class="content">
+        <div class="quote">“The moments where you want to skip thinking are exactly the moments where thinking matters most.”</div>
+        <div class="grid-2">
+          <div class="panel">
+            <h3>What changed</h3>
+            <ul class="bullets">
+              <li>The old bottleneck was typing and implementation throughput.</li>
+              <li>The new bottleneck is deciding when not to generate code yet.</li>
+              <li>When code becomes cheap, premature implementation becomes psychologically attractive.</li>
+              <li>That temptation is strongest exactly when the problem is still underspecified.</li>
+            </ul>
+          </div>
+          <div class="panel">
+            <h3>What matters now</h3>
+            <div class="lead">The core engineering skill is no longer just producing code. It is knowing where to slow the system down before speculative structure becomes real.</div>
+          </div>
+        </div>
+      </div>
+      <aside class="speaker-notes">
+        <h3>Skip Thinking Notes</h3>
+        <ul class="bullets">
+          <li>Pause on the quote and read it slowly.</li>
+          <li>AI lowers the cost of acting, not the cost of being wrong.</li>
+          <li>The new failure mode is implementing before understanding.</li>
+          <li>Bridge: once the wrong code exists, the system starts defending it.</li>
+        </ul>
+      </aside>
+      <footer class="footer">
+        <div>This is the behavioral failure mode behind bad agent workflows: cheap action outruns judgment.</div>
+        <div class="refs">Quote source: Armin Ronacher, AI Engineer Talk, slide 9</div>
+      </footer>
+    </section>
+
+    <section class="slide" data-title="Psychology - Entropy">
+      <header>
+        <div class="eyebrow">3 · psychology</div>
+        <h2>Messy codebases become self-reinforcing under agents</h2>
+      </header>
+      <div class="content grid-2">
+        <div class="panel rows">
+          <h3>Why entropy compounds</h3>
+          <div class="code">cheap code
+  -> premature implementation
+  -> messy local pattern
+  -> agent sees existing pattern as precedent
+  -> more surface area built on top
+  -> deletion feels riskier
+  -> even more code gets added around the mess</div>
+          <div class="callout">Agents are generally much better at extending local patterns than deleting them. Deletion requires global confidence, boundary reasoning, and risk ownership.</div>
+        </div>
+        <div class="panel rows">
+          <h3>Why this matters for your codebase</h3>
+          <ul class="bullets">
+            <li>Once bad code exists, every future agent run is biased toward preserving it.</li>
+            <li>Removing code is scary because it forces a stronger proof burden than adding it.</li>
+            <li>Agentic cleanup is expensive, uncertain, and often deferred.</li>
+            <li>The best time to remove bad code is before it exists.</li>
+          </ul>
+          <div class="callout ice">That is why “skip thinking” is so dangerous. The wrong structure hardens faster than the organization can reason it back out.</div>
+        </div>
+      </div>
+      <aside class="speaker-notes">
+        <h3>Entropy Notes</h3>
+        <ul class="bullets">
+          <li>Say explicitly that agents are better at adding than deleting.</li>
+          <li>Deletion feels scary because it needs global confidence, not local plausibility.</li>
+          <li>Your punchline: the best time to remove bad code is before it exists.</li>
+          <li>Bridge to human placement: where do we insert judgment before the mess hardens?</li>
+        </ul>
+      </aside>
+      <footer class="footer">
+        <div>Cheap generation changes the economics of entropy: mess appears faster, deletion gets harder.</div>
+        <div class="refs">Inspired by Armin Ronacher, AI Engineer Talk, slide 12</div>
+      </footer>
+    </section>
+
+    <section class="slide" data-title="Psychology - Judgment Gates">
+      <header>
+        <div class="eyebrow">4 · psychology</div>
+        <h2>The human belongs at structural checkpoints, not everywhere and not only at the end</h2>
+      </header>
+      <div class="content grid-2">
+        <div class="panel rows">
+          <h3>Where judgment matters most</h3>
+          <ul class="bullets">
+            <li>Before a vague idea becomes durable code.</li>
+            <li>Before a local patch establishes a precedent the next agent will copy.</li>
+            <li>Before a boundary crossing or debt decision gets hidden inside generated output.</li>
+            <li>Before deletion becomes harder than addition.</li>
+          </ul>
+        </div>
+        <div class="panel rows">
+          <h3>What the runtime should do</h3>
+          <ul class="bullets">
+            <li>Allow fast agentic execution when the structure is already clear.</li>
+            <li>Insert deliberate friction when the next step changes architecture or complexity.</li>
+            <li>Persist evidence so a human can review the actual reasoning path, not just the final patch.</li>
+            <li>Make checkpointing a first-class workflow concept instead of an ad hoc habit.</li>
+          </ul>
+        </div>
+        <div class="panel" style="grid-column: 1 / -1;">
+          <h3>Why this fits nanoboss</h3>
+          <div class="lead">The question is not whether to keep a human in the loop. The question is where. Nanoboss procedures, continuations, and harness checkpoints are a way to encode those judgment gates directly into the workflow.</div>
+        </div>
+      </div>
+      <aside class="speaker-notes">
+        <h3>Judgment Gates Notes</h3>
+        <ul class="bullets">
+          <li>This is still the psychology section, not the org-design section.</li>
+          <li>Make it concrete: the human matters before speculative structure becomes durable.</li>
+          <li>Transition: nanoboss matters because procedures let you encode those gates.</li>
+        </ul>
+      </aside>
+      <footer class="footer">
+        <div>This is the workflow answer to cheap code: place human judgment exactly where structural mistakes become expensive.</div>
+        <div class="refs">Synthesized from the talk thesis and nanoboss workflow model</div>
+      </footer>
+    </section>
+
     <section class="slide" data-title="Principle">
       <header>
-        <div class="eyebrow">2 · design principle</div>
+        <div class="eyebrow">5 · design principle</div>
         <h2>nanoboss is a harness construction kit: the runtime stays small, the workflows get specialized</h2>
       </header>
       <div class="content">
@@ -776,18 +950,26 @@
         </div>
         <div class="panel">
           <h3>Why this matters</h3>
-          <div class="lead">If the primitives are stable and inspectable, developers can build very different workflows on top of the same runtime: validation-gated commits, resumable architecture simplification, repo-local knowledge pipelines, bounded research loops, or model-selection procedures.</div>
+          <div class="lead">If the primitives are stable and inspectable, developers can build very different workflows on top of the same runtime: validation-gated commits, resumable architecture simplification, repo-local knowledge pipelines, bounded research loops, or model-selection procedures. The point is not just customization. The point is to encode where thinking, review, and pause points belong.</div>
         </div>
       </div>
+      <aside class="speaker-notes">
+        <h3>Principle Notes</h3>
+        <ul class="bullets">
+          <li>This is the thesis slide for the technical half.</li>
+          <li>Stress that procedures are not plugin fluff, they are authored workflow semantics.</li>
+          <li>Use the phrase: the runtime stays small, the workflows get specific.</li>
+        </ul>
+      </aside>
       <footer class="footer">
-        <div>nanoboss is opinionated about the runtime shape, not about a single universal workflow.</div>
+        <div>nanoboss is opinionated about the runtime shape, not about a single universal workflow or a single universal level of friction.</div>
         <div class="refs">Evidence: src/core/types.ts · src/session/store.ts · src/procedure/runner.ts</div>
       </footer>
     </section>
 
     <section class="slide" data-title="Architecture">
       <header>
-        <div class="eyebrow">3 · transport stack</div>
+        <div class="eyebrow">6 · transport stack</div>
         <h2>Three transport roles, one runtime</h2>
       </header>
       <div class="content grid-2">
@@ -823,6 +1005,14 @@
           <div class="callout ice">This is a key point for the talk: nanoboss does not worship one protocol. It picks the best protocol for each role.</div>
         </div>
       </div>
+      <aside class="speaker-notes">
+        <h3>Architecture Notes</h3>
+        <ul class="bullets">
+          <li>Explain the mixed stack as intentional specialization by role.</li>
+          <li>Users talk over HTTP/SSE or CLI, agents over ACP, runtime inspection over MCP.</li>
+          <li>The architecture mirrors the larger thesis: do not force one abstraction everywhere.</li>
+        </ul>
+      </aside>
       <footer class="footer">
         <div>Mixed stack is a feature, not an architectural accident.</div>
         <div class="refs">Evidence: docs/architecture.md · src/http/server.ts · src/agent/default-session.ts · src/mcp/server.ts</div>
@@ -831,7 +1021,7 @@
 
     <section class="slide" data-title="Run Graph">
       <header>
-        <div class="eyebrow">4 · durable state</div>
+        <div class="eyebrow">7 · durable state</div>
         <h2>The real runtime artifact is not the chat transcript. It is the session-backed run graph.</h2>
       </header>
       <div class="content grid-2">
@@ -864,6 +1054,14 @@
           </div>
         </div>
       </div>
+      <aside class="speaker-notes">
+        <h3>Run Graph Notes</h3>
+        <ul class="bullets">
+          <li>Say plainly: the durable artifact is the run graph, not just the transcript.</li>
+          <li>This is what enables provenance, traversal, and recovery.</li>
+          <li>Refs matter because they keep the system durable and non-copy-heavy.</li>
+        </ul>
+      </aside>
       <footer class="footer">
         <div>nanoboss stores work as execution structure, not only as conversation text.</div>
         <div class="refs">Evidence: src/session/store.ts · src/core/types.ts · src/core/context-state.ts</div>
@@ -872,7 +1070,7 @@
 
     <section class="slide" data-title="Procedure API">
       <header>
-        <div class="eyebrow">5 · authoring surface</div>
+        <div class="eyebrow">8 · authoring surface</div>
         <h2>The procedure API is the lightsaber hilt: this is where developers shape workflow behavior</h2>
       </header>
       <div class="content grid-2">
@@ -917,18 +1115,26 @@
     return { data: analysis.dataRef, summary: "custom workflow completed" };
   }
 }</div>
-          <div class="callout good">Fresh vs default vs inherit is not a minor option. It is how the author chooses when continuity helps and when isolation matters.</div>
+          <div class="callout good">Fresh vs default vs inherit is not a minor option. It is how the author chooses when continuity helps, when isolation matters, and where a human should be brought back into the loop before more code is generated.</div>
         </div>
       </div>
+      <aside class="speaker-notes">
+        <h3>Procedure API Notes</h3>
+        <ul class="bullets">
+          <li>This is the lightsaber hilt slide. Slow down here.</li>
+          <li>Walk through ctx.agent, ctx.procedures, ctx.state, ctx.session, ctx.ui as judgment tools.</li>
+          <li>Fresh vs default vs inherit is where authors decide continuity and risk boundaries.</li>
+        </ul>
+      </aside>
       <footer class="footer">
-        <div>Procedures are deterministic workflow code wrapped around agentic subcalls.</div>
+        <div>Procedures are deterministic workflow code wrapped around agentic subcalls and explicit judgment placement.</div>
         <div class="refs">Evidence: src/core/context.ts · src/core/context-session.ts · src/core/context-procedures.ts · src/core/context-state.ts</div>
       </footer>
     </section>
 
     <section class="slide" data-title="Routing">
       <header>
-        <div class="eyebrow">6 · control semantics</div>
+        <div class="eyebrow">9 · control semantics</div>
         <h2>nanoboss does not just execute commands. It routes plain text, continuations, and harness modes deliberately.</h2>
       </header>
       <div class="content grid-2">
@@ -939,7 +1145,7 @@
             <li>If input is plain text and a procedure is paused, the reply goes back to that continuation.</li>
             <li>Otherwise plain text flows to <span class="mono">/default</span>, the persistent master conversation.</li>
           </ul>
-          <div class="callout">That means the chat surface is only the shell. The real semantics are driven by procedure routing and continuation state.</div>
+          <div class="callout">That means the chat surface is only the shell. The real semantics are driven by procedure routing and continuation state. Continuations are not just UX. They are deliberate friction.</div>
         </div>
         <div class="panel rows">
           <h3>Execution modes in practice</h3>
@@ -953,15 +1159,23 @@
           </table>
         </div>
       </div>
+      <aside class="speaker-notes">
+        <h3>Routing Notes</h3>
+        <ul class="bullets">
+          <li>Important line: continuations are deliberate friction.</li>
+          <li>This is the cleanest technical answer to the psychology slides.</li>
+          <li>Nanoboss can force the workflow to stop exactly where human judgment matters.</li>
+        </ul>
+      </aside>
       <footer class="footer">
-        <div>This is where nanoboss stops being "slash commands on top of chat" and becomes a control runtime.</div>
+        <div>This is where nanoboss stops being "slash commands on top of chat" and becomes a control runtime with explicit checkpoint semantics.</div>
         <div class="refs">Evidence: src/core/service.ts resolveCommand(...) · src/core/types.ts ProcedureExecutionMode</div>
       </footer>
     </section>
 
     <section class="slide" data-title="Procedure Supply Chain">
       <header>
-        <div class="eyebrow">7 · extension model</div>
+        <div class="eyebrow">10 · extension model</div>
         <h2>Custom workflows are loaded like software, not pasted like prompts</h2>
       </header>
       <div class="content grid-2">
@@ -992,6 +1206,14 @@ persistProcedureSource(...)
 createCreateProcedure(...)</div>
         </div>
       </div>
+      <aside class="speaker-notes">
+        <h3>Supply Chain Notes</h3>
+        <ul class="bullets">
+          <li>The point here is that custom workflows behave like software, not prompt snippets.</li>
+          <li>Call out repo-local and profile-level procedures as the path to organizational specialization.</li>
+          <li>/create matters because authoring workflows becomes part of the runtime itself.</li>
+        </ul>
+      </aside>
       <footer class="footer">
         <div>The extensibility story is code-first, file-backed, and versionable.</div>
         <div class="refs">Evidence: src/procedure/registry.ts · src/procedure/disk-loader.ts · src/procedure/create.ts · docs/procedure-packages.md</div>
@@ -1000,7 +1222,7 @@ createCreateProcedure(...)</div>
 
     <section class="slide" data-title="Workflow Examples">
       <header>
-        <div class="eyebrow">8 · concrete workflows</div>
+        <div class="eyebrow">11 · concrete workflows</div>
         <h2>Different procedures embody different theories of agent work</h2>
       </header>
       <div class="content grid-4">
@@ -1025,7 +1247,7 @@ createCreateProcedure(...)</div>
         <div class="panel">
           <h3>Same runtime, different harness semantics</h3>
           <ul class="bullets">
-            <li><span class="mono">/simplify2</span> is a hypothesis-driven architecture loop.</li>
+            <li><span class="mono">/simplify2</span> is a hypothesis-driven architecture loop with explicit checkpoints before more complexity is allowed into the codebase.</li>
             <li><span class="mono">/autoresearch</span> is a bounded optimization process with explicit lifecycle commands.</li>
             <li><span class="mono">/kb/refresh</span> is a multi-stage data pipeline.</li>
             <li><span class="mono">/second-opinion</span> is a multi-model critique composition.</li>
@@ -1036,6 +1258,14 @@ createCreateProcedure(...)</div>
           <div class="lead">These are not "the same agent with different prompts." They are different workflow machines built on a shared runtime.</div>
         </div>
       </div>
+      <aside class="speaker-notes">
+        <h3>Workflow Examples Notes</h3>
+        <ul class="bullets">
+          <li>Use this slide to prove these are distinct workflow machines, not one agent with different prompts.</li>
+          <li>Spend most time on simplify2 because it best matches the checkpoint and entropy thesis.</li>
+          <li>Then gesture quickly at autoresearch, KB, and commit as other workflow shapes.</li>
+        </ul>
+      </aside>
       <footer class="footer">
         <div>This is the strongest evidence against one universal harness.</div>
         <div class="refs">Evidence: procedures/simplify2.ts · procedures/autoresearch/* · procedures/kb/* · procedures/second-opinion.ts</div>
@@ -1044,7 +1274,7 @@ createCreateProcedure(...)</div>
 
     <section class="slide" data-title="MCP and Agents">
       <header>
-        <div class="eyebrow">9 · agent-facing runtime</div>
+        <div class="eyebrow">12 · agent-facing runtime</div>
         <h2>The downstream agent is not trapped in the prompt. It gets a controlled runtime via MCP.</h2>
       </header>
       <div class="content grid-2">
@@ -1069,21 +1299,73 @@ createCreateProcedure(...)</div>
           <div class="small">Nanoboss is effectively giving the model a stable API for the workflow runtime itself.</div>
         </div>
       </div>
+      <aside class="speaker-notes">
+        <h3>MCP Notes</h3>
+        <ul class="bullets">
+          <li>The model is not trapped inside prompt text; it gets a runtime API.</li>
+          <li>This reduces hidden context and file scraping.</li>
+          <li>Say this is how agents reason over durable workflow state rather than hallucinated memory.</li>
+        </ul>
+      </aside>
       <footer class="footer">
         <div>The prompt becomes thinner because the runtime becomes richer.</div>
         <div class="refs">Evidence: src/mcp/server.ts · src/runtime/service.ts · src/procedure/dispatch-jobs.ts · src/agent/runtime-capability.ts</div>
       </footer>
     </section>
 
+    <section class="slide" data-title="Org Consequence">
+      <header>
+        <div class="eyebrow">13 · organizational consequence</div>
+        <h2>Once workflows are encoded explicitly, the org naturally splits into designing them and operating them</h2>
+      </header>
+      <div class="content grid-2">
+        <div class="panel rows">
+          <h3>The architect function</h3>
+          <ul class="bullets">
+            <li>Designs procedures, system boundaries, tests, triage loops, and approval points.</li>
+            <li>Defines what “good” looks like for the agents.</li>
+            <li>Critiques plans before complexity becomes durable.</li>
+            <li>Owns the workflow semantics, not just the code output.</li>
+          </ul>
+        </div>
+        <div class="panel rows">
+          <h3>The operator function</h3>
+          <ul class="bullets">
+            <li>Works effectively inside authored workflows.</li>
+            <li>Investigates, validates, reviews, approves, refines UI, and handles bounded tasks.</li>
+            <li>Lets AI assign and execute work where the structure is already known.</li>
+            <li>Focuses human attention where judgment is still needed, not where typing used to be needed.</li>
+          </ul>
+        </div>
+        <div class="panel" style="grid-column: 1 / -1;">
+          <h3>Why it belongs here</h3>
+          <div class="lead">This is not the premise of the talk. It is the consequence. Once you understand nanoboss procedures as judgment-bearing workflow code, Pang's architect/operator split starts to feel natural instead of theoretical.</div>
+        </div>
+      </div>
+      <aside class="speaker-notes">
+        <h3>Org Consequence Notes</h3>
+        <ul class="bullets">
+          <li>Now Pang fits, because the audience already understands procedures and checkpoints.</li>
+          <li>Present this as an implication of the architecture, not as labor-market futurism.</li>
+          <li>Architects design workflows; operators work effectively inside them.</li>
+        </ul>
+      </aside>
+      <footer class="footer">
+        <div>This is the organizational consequence of explicit workflow design, not the starting assumption.</div>
+        <div class="refs">Peter Pang, “The New Engineering Org” post · integrated after the technical model is established</div>
+      </footer>
+    </section>
+
     <section class="slide" data-title="Refactor Direction">
       <header>
-        <div class="eyebrow">10 · code for agents</div>
-        <h2>nanoboss is also a testing ground for how agent runtimes should be structured in code</h2>
+        <div class="eyebrow">14 · medium-complexity software</div>
+        <h2>nanoboss is also a testing ground for how medium-complexity software should be structured</h2>
       </header>
       <div class="content grid-2">
         <div class="panel rows">
           <h3>Current refactor thesis</h3>
           <div class="callout">The active plan is not "split folders into packages." It is "simplify the ontology first, then extract libraries around the canonical concepts."</div>
+          <div class="callout ice">Nanoboss sits in a useful middle zone: roughly 22k lines of app code and about the same again in tests. Not small, not huge. Big enough that naming and boundaries matter, small enough that you can still refactor the whole thing coherently.</div>
           <table class="table">
             <thead><tr><th>Concept family</th><th>Why it matters</th></tr></thead>
             <tbody>
@@ -1107,18 +1389,26 @@ createCreateProcedure(...)</div>
             <div class="chip ice">@nanoboss/app-runtime</div>
             <div class="chip ice">@nanoboss/adapters-*</div>
           </div>
-          <div class="lead">This matters to the talk because it reinforces the same philosophy: do not build around accidental protocol or storage terms; build around the real runtime nouns developers need.</div>
+          <div class="lead">This matters to the talk because it reinforces the same philosophy: do not build around accidental protocol or storage terms; build around the real nouns developers need. Nanoboss is not only a testbed for agent workflow ideas. It is a testbed for how medium-complexity software should simplify itself around canonical concepts and cleaner boundaries.</div>
         </div>
       </div>
+      <aside class="speaker-notes">
+        <h3>Refactor Notes</h3>
+        <ul class="bullets">
+          <li>Frame this as nanoboss being a research vehicle for medium-complexity software design under agent pressure.</li>
+          <li>The ontology cleanup mirrors the same judgment-boundary philosophy.</li>
+          <li>Do not get lost in package names; focus on cleaner canonical concepts.</li>
+        </ul>
+      </aside>
       <footer class="footer">
-        <div>This is the "nanoboss as research vehicle" part of the story.</div>
+        <div>This is the "nanoboss as research vehicle" part of the story, broader than agent runtime design alone.</div>
         <div class="refs">Evidence: plans/2026-04-13-library-refactor-plan.md · plans/2026-04-13-nanoboss-nouns-verbs-inventory.md</div>
       </footer>
     </section>
 
     <section class="slide" data-title="Close">
       <header>
-        <div class="eyebrow">11 · close</div>
+        <div class="eyebrow">15 · close</div>
         <h2>What nanoboss is really offering</h2>
       </header>
       <div class="content">
@@ -1129,12 +1419,21 @@ createCreateProcedure(...)</div>
             <li>Procedures are the unit of customization.</li>
             <li>Sessions, runs, refs, and continuations give those procedures durable structure.</li>
             <li>ACP and MCP are not the product. They are transport choices inside the runtime.</li>
+            <li>Better agent systems put humans at the exact points where structural judgment matters.</li>
             <li>The active refactor is trying to make those runtime concepts cleaner, more portable, and more library-like.</li>
             <li>The lightsaber metaphor works because nanoboss is about crafted workflow identity, not generic agent theater.</li>
           </ul>
         </div>
-        <div class="callout ice">If you want one line for the presentation: nanoboss treats agentic workflow as software architecture, not as a prompt preset.</div>
+        <div class="callout ice">If you want one line for the presentation: nanoboss treats agentic workflow as software architecture, not as a prompt preset, and uses procedures to place human judgment exactly where it matters.</div>
       </div>
+      <aside class="speaker-notes">
+        <h3>Close Notes</h3>
+        <ul class="bullets">
+          <li>Return to the lightsaber metaphor.</li>
+          <li>Restate the strongest line: nanoboss lets you encode where human judgment belongs.</li>
+          <li>End on architecture, not hype.</li>
+        </ul>
+      </aside>
       <footer class="footer">
         <div>Presentation file: <span class="mono">docs/nanoboss-lightsaber-presentation.html</span></div>
         <div class="refs">Built from repo sources on April 14, 2026.</div>
@@ -1188,6 +1487,9 @@ createCreateProcedure(...)</div>
       } else if (event.key === "End") {
         event.preventDefault();
         setSlide(slides.length - 1);
+      } else if (event.key === "n" || event.key === "N") {
+        event.preventDefault();
+        document.body.classList.toggle("notes-open");
       }
     });
 
