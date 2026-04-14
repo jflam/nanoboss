@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import typia from "typia";
 
-import { DefaultConversationSession } from "../../src/agent/default-session.ts";
+import { createAgentSession, type CreateAgentSessionParams } from "../../src/agent/default-session.ts";
 import { CommandContextImpl } from "../../src/core/context.ts";
 import { resolveDownstreamAgentConfig } from "../../src/core/config.ts";
 import { RunLogger } from "../../src/core/logger.ts";
@@ -13,7 +13,7 @@ import {
   normalizePromptInput,
   promptInputDisplayText,
 } from "../../src/core/prompt.ts";
-import { jsonType, type DownstreamAgentConfig, type ProcedureApi, type PromptInput } from "../../src/core/types.ts";
+import { jsonType, type AgentSession, type DownstreamAgentConfig, type ProcedureApi, type PromptInput } from "../../src/core/types.ts";
 import { ProcedureRegistry } from "../../src/procedure/registry.ts";
 import { SessionStore } from "../../src/session/index.ts";
 
@@ -182,28 +182,30 @@ describe("procedure API session namespaces", () => {
   });
 
   test("ctx.procedures.run with session fresh gives the child a private default binding", async () => {
-    const { conversation, ctx, registry } = createContext();
+    const promptedSessions: AgentSession[] = [];
+    let rootSession: AgentSession | undefined;
+    const { conversation, ctx, registry } = createContext({
+      createAgentSession: (params) => {
+        const session = createAgentSession(params);
+        Reflect.set(
+          session as object,
+          "prompt",
+          async function prompt(this: AgentSession, promptText: string | PromptInput) {
+            promptedSessions.push(this);
+            return {
+              raw: `${toPromptText(promptText)} via ${this === rootSession ? "root" : "fresh"}`,
+              updates: [],
+              durationMs: 0,
+            };
+          },
+        );
+        rootSession ??= session;
+        return session;
+      },
+    });
     const rootConfigBefore = ctx.session.getDefaultAgentConfig();
-    const promptedConversations: DefaultConversationSession[] = [];
-    const originalPrompt = DefaultConversationSession.prototype.prompt;
 
     Reflect.set(conversation as object, "persistedSessionId", "default-session-root");
-
-    Reflect.set(
-      DefaultConversationSession.prototype as object,
-      "prompt",
-      async function prompt(
-        this: DefaultConversationSession,
-        promptText: string | PromptInput,
-      ) {
-        promptedConversations.push(this);
-        return {
-          raw: `${toPromptText(promptText)} via ${this === conversation ? "root" : "fresh"}`,
-          updates: [],
-          durationMs: 0,
-        };
-      },
-    );
 
     registry.register({
       name: "child",
@@ -228,41 +230,43 @@ describe("procedure API session namespaces", () => {
       },
     });
 
-    try {
-      const result = await ctx.procedures.run<{
-        reply: string;
-        selection: DownstreamAgentConfig;
-      }>("child", "private child session", { session: "fresh" });
+    const result = await ctx.procedures.run<{
+      reply: string;
+      selection: DownstreamAgentConfig;
+    }>("child", "private child session", { session: "fresh" });
 
-      expect(result.data?.reply).toBe("private child session via fresh");
-      expect(promptedConversations).toHaveLength(1);
-      expect(promptedConversations[0]).not.toBe(conversation);
-      expect(result.data?.selection.provider).toBe("codex");
-      expect(result.data?.selection.model).toBe("gpt-5.4/high");
-      expect(ctx.session.getDefaultAgentConfig()).toEqual(rootConfigBefore);
-    } finally {
-      Reflect.set(DefaultConversationSession.prototype as object, "prompt", originalPrompt);
-    }
+    expect(result.data?.reply).toBe("private child session via fresh");
+    expect(promptedSessions).toHaveLength(1);
+    expect(promptedSessions[0]).not.toBe(conversation);
+    expect(result.data?.selection.provider).toBe("codex");
+    expect(result.data?.selection.model).toBe("gpt-5.4/high");
+    expect(ctx.session.getDefaultAgentConfig()).toEqual(rootConfigBefore);
   });
 
   test("ctx.procedures.run with session default rebinds nested children to the master session", async () => {
-    const { conversation, ctx, registry } = createContext();
-    const promptedConversations: DefaultConversationSession[] = [];
-    const originalPrompt = DefaultConversationSession.prototype.prompt;
+    const promptedSessions: AgentSession[] = [];
+    let rootSession: AgentSession | undefined;
+    const { conversation, ctx, registry } = createContext({
+      createAgentSession: (params) => {
+        const session = createAgentSession(params);
+        Reflect.set(
+          session as object,
+          "prompt",
+          async function prompt(this: AgentSession) {
+            promptedSessions.push(this);
+            return {
+              raw: "master session reply",
+              updates: [],
+              durationMs: 0,
+            };
+          },
+        );
+        rootSession ??= session;
+        return session;
+      },
+    });
 
     Reflect.set(conversation as object, "persistedSessionId", "default-session-master");
-    Reflect.set(
-      DefaultConversationSession.prototype as object,
-      "prompt",
-      async function prompt(this: DefaultConversationSession) {
-        promptedConversations.push(this);
-        return {
-          raw: "master session reply",
-          updates: [],
-          durationMs: 0,
-        };
-      },
-    );
 
     registry.register({
       name: "inner",
@@ -288,14 +292,10 @@ describe("procedure API session namespaces", () => {
       },
     });
 
-    try {
-      const result = await ctx.procedures.run("outer", "", { session: "fresh" });
+    const result = await ctx.procedures.run("outer", "", { session: "fresh" });
 
-      expect(result.data).toBe("master session reply");
-      expect(promptedConversations).toEqual([conversation]);
-    } finally {
-      Reflect.set(DefaultConversationSession.prototype as object, "prompt", originalPrompt);
-    }
+    expect(result.data).toBe("master session reply");
+    expect(promptedSessions).toEqual([conversation]);
   });
 
   test("ctx.state owns durable run traversal while ctx.session owns live default-agent control", async () => {
@@ -356,8 +356,9 @@ function createContext(options: {
     promptInput: PromptInput;
     markSubmitted?: () => void;
   };
+  createAgentSession?: (params: CreateAgentSessionParams) => AgentSession;
 } = {}): {
-  conversation: DefaultConversationSession;
+  conversation: AgentSession;
   ctx: ProcedureApi;
   emittedUpdates: acp.SessionUpdate[];
   registry: ProcedureRegistry;
@@ -376,7 +377,8 @@ function createContext(options: {
   });
   const emittedUpdates: acp.SessionUpdate[] = [];
   let config = createMockConfig(cwd);
-  const conversation = new DefaultConversationSession({
+  const createSession = options.createAgentSession ?? createAgentSession;
+  const conversation = createSession({
     config,
   });
 
@@ -407,6 +409,7 @@ function createContext(options: {
       return nextConfig;
     },
     prepareDefaultPrompt: options.prepareDefaultPrompt,
+    createAgentSession: createSession,
   });
 
   return {

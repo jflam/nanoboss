@@ -37,12 +37,17 @@ interface PromptCollector {
   timingTrace?: RunTimingTrace;
 }
 
-interface DefaultConversationSessionParams {
+interface AcpAgentSessionParams {
   config: DownstreamAgentConfig;
   persistedSessionId?: acp.SessionId;
 }
 
-export class DefaultConversationSession implements AgentSession {
+export type CreateAgentSessionParams = AcpAgentSessionParams;
+export type CreateAgentSession = (params: CreateAgentSessionParams) => AgentSession;
+
+export const createAgentSession: CreateAgentSession = (params) => new AcpAgentSession(params);
+
+class AcpAgentSession implements AgentSession {
   private persistedSessionId?: acp.SessionId;
   private liveSession?: PersistentAcpSession;
   private config: DownstreamAgentConfig;
@@ -50,7 +55,7 @@ export class DefaultConversationSession implements AgentSession {
   private sessionPromise?: Promise<PersistentAcpSession>;
   private sessionGeneration = 0;
 
-  constructor(params: DefaultConversationSessionParams) {
+  constructor(params: AcpAgentSessionParams) {
     this.config = params.config;
     this.persistedSessionId = params.persistedSessionId;
   }

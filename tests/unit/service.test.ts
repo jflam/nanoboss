@@ -8,8 +8,8 @@ const MOCK_AGENT_PATH = join(process.cwd(), "tests/fixtures/mock-agent.ts");
 const SELF_COMMAND_PATH = join(process.cwd(), "dist", "nanoboss");
 const BUILD_HOOK_TIMEOUT_MS = 30_000;
 
-import { DefaultConversationSession } from "../../src/agent/default-session.ts";
-import type { Procedure, PromptInput } from "../../src/core/types.ts";
+import { createAgentSession } from "../../src/agent/default-session.ts";
+import type { AgentSession, Procedure, PromptInput } from "../../src/core/types.ts";
 import { createTextPromptInput, promptInputDisplayText } from "../../src/core/prompt.ts";
 import { ProcedureRegistry } from "../../src/procedure/registry.ts";
 import type { FrontendEventEnvelope, ReplayableFrontendEvent } from "../../src/http/frontend-events.ts";
@@ -18,7 +18,7 @@ import { extractProcedureDispatchResult, NanobossService } from "../../src/core/
 
 interface InternalSessionState {
   store: SessionStore;
-  defaultAgentSession: DefaultConversationSession;
+  defaultAgentSession: AgentSession;
 }
 
 beforeAll(() => {
@@ -1148,7 +1148,7 @@ describe("NanobossService", () => {
 
   test("soft stop keeps the persistent default ACP session alive", async () => {
     await withMockAgentEnv(async () => {
-      const session = new DefaultConversationSession({
+      const session = createAgentSession({
         config: {
           provider: "copilot",
           command: "bun",

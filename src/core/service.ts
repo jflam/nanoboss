@@ -17,7 +17,7 @@ import {
   promptInputDisplayText,
   promptInputToPlainText,
 } from "./prompt.ts";
-import { DefaultConversationSession } from "../agent/default-session.ts";
+import { createAgentSession } from "../agent/default-session.ts";
 import { normalizeAgentTokenUsage } from "../agent/token-usage.ts";
 import {
   collectUnsyncedProcedureMemoryCards,
@@ -316,7 +316,7 @@ export class NanobossService {
       sessionId: params.sessionId,
       cwd: params.cwd,
     });
-    const defaultAgentSession = new DefaultConversationSession({
+    const defaultAgentSession = createAgentSession({
       config: defaultAgentConfig,
       persistedSessionId: params.defaultAgentSessionId,
     });

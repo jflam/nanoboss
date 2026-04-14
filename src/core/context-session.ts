@@ -1,4 +1,4 @@
-import { DefaultConversationSession } from "../agent/default-session.ts";
+import { createAgentSession, type CreateAgentSession } from "../agent/default-session.ts";
 import { normalizeAgentTokenUsage } from "../agent/token-usage.ts";
 import { createTextPromptInput } from "./prompt.ts";
 import { resolveDownstreamAgentConfig } from "./config.ts";
@@ -28,6 +28,7 @@ interface ContextSessionApiImplParams {
   cwd: string;
   current: SessionBindingSource;
   root: SessionBindingSource;
+  createAgentSession?: CreateAgentSession;
 }
 
 export class ContextSessionApiImpl implements SessionApi {
@@ -85,7 +86,7 @@ export class ContextSessionApiImpl implements SessionApi {
 
     if (sessionMode === "fresh") {
       let defaultAgentConfig = cloneDownstreamAgentConfig(this.getDefaultAgentConfig());
-      const agentSession = new DefaultConversationSession({
+      const agentSession = (this.params.createAgentSession ?? createAgentSession)({
         config: defaultAgentConfig,
       });
 

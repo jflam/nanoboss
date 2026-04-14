@@ -1,4 +1,5 @@
 import type { SessionStore } from "../session/index.ts";
+import type { CreateAgentSession } from "../agent/default-session.ts";
 import { RunCancelledError, defaultCancellationMessage } from "./cancellation.ts";
 import { resolveDownstreamAgentConfig } from "./config.ts";
 import { AgentInvocationApiImpl, AgentRunRecorder } from "./context-agent.ts";
@@ -50,6 +51,7 @@ interface CommandContextParams {
   rootGetDefaultAgentConfig?: () => DownstreamAgentConfig;
   rootSetDefaultAgentSelection?: (selection: DownstreamAgentSelection) => DownstreamAgentConfig;
   rootPrepareDefaultPrompt?: (promptInput: PromptInput) => PreparedDefaultPrompt;
+  createAgentSession?: CreateAgentSession;
   assertCanStartBoundary?: () => void;
   timingTrace?: RunTimingTrace;
 }
@@ -75,6 +77,7 @@ export class CommandContextImpl implements ProcedureApi {
   private readonly rootGetDefaultAgentConfigValue: () => DownstreamAgentConfig;
   private readonly rootSetDefaultAgentSelectionValue: (selection: DownstreamAgentSelection) => DownstreamAgentConfig;
   private readonly rootPrepareDefaultPromptValue?: (promptInput: PromptInput) => PreparedDefaultPrompt;
+  private readonly createAgentSessionValue?: CreateAgentSession;
   private readonly assertCanStartBoundaryValue?: () => void;
   private readonly timingTrace?: RunTimingTrace;
 
@@ -101,6 +104,7 @@ export class CommandContextImpl implements ProcedureApi {
     this.rootGetDefaultAgentConfigValue = params.rootGetDefaultAgentConfig ?? getDefaultAgentConfig;
     this.rootSetDefaultAgentSelectionValue = params.rootSetDefaultAgentSelection ?? setDefaultAgentSelection;
     this.rootPrepareDefaultPromptValue = params.rootPrepareDefaultPrompt ?? prepareDefaultPrompt;
+    this.createAgentSessionValue = params.createAgentSession;
     this.assertCanStartBoundaryValue = params.assertCanStartBoundary;
     this.timingTrace = params.timingTrace;
     this.state = new CommandState(this.store, this.cwd, this.cell.cell.cellId);
@@ -119,6 +123,7 @@ export class CommandContextImpl implements ProcedureApi {
         setDefaultAgentSelection: this.rootSetDefaultAgentSelectionValue,
         prepareDefaultPrompt: this.rootPrepareDefaultPromptValue,
       },
+      createAgentSession: this.createAgentSessionValue,
     });
     this.session = contextSessionApi;
 
@@ -190,6 +195,7 @@ export class CommandContextImpl implements ProcedureApi {
       rootGetDefaultAgentConfig: this.rootGetDefaultAgentConfigValue,
       rootSetDefaultAgentSelection: this.rootSetDefaultAgentSelectionValue,
       rootPrepareDefaultPrompt: this.rootPrepareDefaultPromptValue,
+      createAgentSession: this.createAgentSessionValue,
       assertCanStartBoundary: this.assertCanStartBoundaryValue,
       timingTrace: this.timingTrace,
     });
