@@ -67,12 +67,13 @@ import type {
   DownstreamAgentConfig,
   DownstreamAgentSelection,
   FrontendPendingProcedureContinuation,
-  PendingProcedureContinuation,
+  PendingContinuation,
   PersistedFrontendEvent,
   PromptInput,
   Procedure,
   ProcedureRegistryLike,
 } from "./types.ts";
+import { runRefFromCellRef } from "./types.ts";
 
 interface ActiveRunState {
   runId: string;
@@ -92,10 +93,10 @@ interface SessionState {
   recentRecoverySyncAtMs?: number;
   activeRun?: ActiveRunState;
   commands: FrontendCommand[];
-  pendingProcedureContinuation?: PendingProcedureContinuation;
+  pendingContinuation?: PendingContinuation;
 }
 
-export interface SessionDescriptor {
+export interface RuntimeSessionDescriptor {
   sessionId: string;
   cwd: string;
   commands: FrontendCommand[];
@@ -204,7 +205,7 @@ export class NanobossService {
     return buildAvailableCommands(this.registry);
   }
 
-  createSession(params: { cwd: string; defaultAgentSelection?: DownstreamAgentSelection; sessionId?: string }): SessionDescriptor {
+  createSession(params: { cwd: string; defaultAgentSelection?: DownstreamAgentSelection; sessionId?: string }): RuntimeSessionDescriptor {
     const sessionId = params.sessionId ?? crypto.randomUUID();
     if (this.sessions.has(sessionId)) {
       throw new Error(`Session already exists: ${sessionId}`);
@@ -222,14 +223,14 @@ export class NanobossService {
       type: "commands_updated",
       commands: state.commands,
     });
-    this.publishPendingProcedureContinuation(sessionId, state);
+    this.publishPendingContinuation(sessionId, state);
 
     return this.buildSessionDescriptor(sessionId, state);
   }
 
   async createSessionReady(
     params: { cwd: string; defaultAgentSelection?: DownstreamAgentSelection; sessionId?: string },
-  ): Promise<SessionDescriptor> {
+  ): Promise<RuntimeSessionDescriptor> {
     const session = this.createSession(params);
     return await this.awaitDefaultConversationWarm(session.sessionId);
   }
@@ -238,7 +239,7 @@ export class NanobossService {
     sessionId: string;
     cwd?: string;
     defaultAgentSelection?: DownstreamAgentSelection;
-  }): SessionDescriptor {
+  }): RuntimeSessionDescriptor {
     const existing = this.sessions.get(params.sessionId);
     if (existing) {
       this.persistSessionState(existing);
@@ -255,8 +256,8 @@ export class NanobossService {
       sessionId: params.sessionId,
       cwd,
       defaultAgentSelection: params.defaultAgentSelection ?? stored?.defaultAgentSelection,
-      defaultAcpSessionId: stored?.defaultAcpSessionId,
-      pendingProcedureContinuation: stored?.pendingProcedureContinuation,
+      defaultAgentSessionId: stored?.defaultAgentSessionId,
+      pendingContinuation: stored?.pendingContinuation,
     });
     this.restorePersistedSessionHistory(params.sessionId, state);
 
@@ -266,7 +267,7 @@ export class NanobossService {
       type: "commands_updated",
       commands: state.commands,
     });
-    this.publishPendingProcedureContinuation(params.sessionId, state);
+    this.publishPendingContinuation(params.sessionId, state);
 
     return this.buildSessionDescriptor(params.sessionId, state);
   }
@@ -275,12 +276,12 @@ export class NanobossService {
     sessionId: string;
     cwd?: string;
     defaultAgentSelection?: DownstreamAgentSelection;
-  }): Promise<SessionDescriptor> {
+  }): Promise<RuntimeSessionDescriptor> {
     const session = this.resumeSession(params);
     return await this.awaitDefaultConversationWarm(session.sessionId);
   }
 
-  getSession(sessionId: string): SessionDescriptor | undefined {
+  getSession(sessionId: string): RuntimeSessionDescriptor | undefined {
     const state = this.sessions.get(sessionId);
     if (!state) {
       return undefined;
@@ -289,7 +290,7 @@ export class NanobossService {
     return this.buildSessionDescriptor(sessionId, state);
   }
 
-  private async awaitDefaultConversationWarm(sessionId: string): Promise<SessionDescriptor> {
+  private async awaitDefaultConversationWarm(sessionId: string): Promise<RuntimeSessionDescriptor> {
     const state = this.sessions.get(sessionId);
     if (!state) {
       throw new Error(`Unknown session: ${sessionId}`);
@@ -304,8 +305,8 @@ export class NanobossService {
     sessionId: string;
     cwd: string;
     defaultAgentSelection?: DownstreamAgentSelection;
-    defaultAcpSessionId?: string;
-    pendingProcedureContinuation?: PendingProcedureContinuation;
+    defaultAgentSessionId?: string;
+    pendingContinuation?: PendingContinuation;
   }): SessionState {
     const commands = toFrontendCommands(buildAvailableCommands(this.registry));
     const defaultAgentConfig = this.resolveDefaultAgentConfig(params.cwd, params.defaultAgentSelection);
@@ -315,7 +316,7 @@ export class NanobossService {
     });
     const defaultConversation = new DefaultConversationSession({
       config: defaultAgentConfig,
-      persistedSessionId: params.defaultAcpSessionId,
+      persistedSessionId: params.defaultAgentSessionId,
     });
     if (shouldPrewarmDefaultConversation()) {
       void defaultConversation.warm();
@@ -329,11 +330,11 @@ export class NanobossService {
       defaultConversation,
       syncedProcedureMemoryCellIds: new Set(),
       commands,
-      pendingProcedureContinuation: params.pendingProcedureContinuation,
+      pendingContinuation: params.pendingContinuation,
     };
   }
 
-  private buildSessionDescriptor(sessionId: string, state: SessionState): SessionDescriptor {
+  private buildSessionDescriptor(sessionId: string, state: SessionState): RuntimeSessionDescriptor {
     return {
       sessionId,
       cwd: state.cwd,
@@ -344,20 +345,20 @@ export class NanobossService {
     };
   }
 
-  private publishPendingProcedureContinuation(sessionId: string, session: SessionState): void {
+  private publishPendingContinuation(sessionId: string, session: SessionState): void {
     session.events.publish(sessionId, {
       type: "continuation_updated",
-      continuation: toFrontendPendingProcedureContinuation(session.pendingProcedureContinuation),
+      continuation: toFrontendPendingContinuation(session.pendingContinuation),
     });
   }
 
-  private setPendingProcedureContinuation(
+  private setPendingContinuation(
     sessionId: string,
     session: SessionState,
-    continuation?: PendingProcedureContinuation,
+    continuation?: PendingContinuation,
   ): void {
-    session.pendingProcedureContinuation = continuation;
-    this.publishPendingProcedureContinuation(sessionId, session);
+    session.pendingContinuation = continuation;
+    this.publishPendingContinuation(sessionId, session);
   }
 
   private restorePersistedSessionHistory(sessionId: string, session: SessionState): void {
@@ -395,11 +396,11 @@ export class NanobossService {
     options: { prompt?: string; preserveDefaultAcpSessionId?: boolean } = {},
   ): SessionMetadata {
     const existing = readSessionMetadata(session.store.sessionId, session.store.rootDir);
-    const defaultAcpSessionId = session.defaultConversation.currentSessionId
-      ?? (options.preserveDefaultAcpSessionId === false ? undefined : existing?.defaultAcpSessionId);
+    const defaultAgentSessionId = session.defaultConversation.currentSessionId
+      ?? (options.preserveDefaultAcpSessionId === false ? undefined : existing?.defaultAgentSessionId);
 
     return writeSessionMetadata({
-      sessionId: session.store.sessionId,
+      session: { sessionId: session.store.sessionId },
       cwd: session.cwd,
       rootDir: session.store.rootDir,
       createdAt: existing?.createdAt ?? new Date().toISOString(),
@@ -407,8 +408,8 @@ export class NanobossService {
       initialPrompt: existing?.initialPrompt ?? options.prompt,
       lastPrompt: options.prompt ?? existing?.lastPrompt,
       defaultAgentSelection: toDownstreamAgentSelection(session.defaultAgentConfig),
-      defaultAcpSessionId,
-      pendingProcedureContinuation: session.pendingProcedureContinuation,
+      defaultAgentSessionId,
+      pendingContinuation: session.pendingContinuation,
     });
   }
 
@@ -897,7 +898,7 @@ export class NanobossService {
     const displayPrompt = promptInputDisplayText(promptInput);
     const { commandName, commandPrompt, commandPromptInput, continuation } = resolveCommand(
       promptInput,
-      session.pendingProcedureContinuation,
+      session.pendingContinuation,
     );
     const procedure = commandName === DISMISS_CONTINUATION_COMMAND_NAME
       ? createDismissContinuationProcedure(session)
@@ -1002,7 +1003,7 @@ export class NanobossService {
           ? `Pending continuation for /${commandName} is no longer available.`
           : `Unknown command: /${commandName}`;
         if (continuation) {
-          this.setPendingProcedureContinuation(sessionId, session, undefined);
+          this.setPendingContinuation(sessionId, session, undefined);
         }
         delegate?.emit({
           sessionUpdate: "agent_message_chunk",
@@ -1027,7 +1028,7 @@ export class NanobossService {
 
       if (continuation && !procedure.resume) {
         const error = `Procedure /${procedure.name} does not support continuation.`;
-        this.setPendingProcedureContinuation(sessionId, session, undefined);
+        this.setPendingContinuation(sessionId, session, undefined);
         delegate?.emit({
           sessionUpdate: "agent_message_chunk",
           content: {
@@ -1090,10 +1091,10 @@ export class NanobossService {
         });
 
         if (result.pause) {
-          this.setPendingProcedureContinuation(
+          this.setPendingContinuation(
             sessionId,
             session,
-            buildPendingProcedureContinuation(procedure.name, result),
+            buildPendingContinuation(procedure.name, result),
           );
           this.publishRunPaused({
             session,
@@ -1107,9 +1108,9 @@ export class NanobossService {
           });
         } else {
           if (continuation) {
-            this.setPendingProcedureContinuation(sessionId, session, undefined);
+            this.setPendingContinuation(sessionId, session, undefined);
           } else if (procedure.name === DISMISS_CONTINUATION_COMMAND_NAME) {
-            this.setPendingProcedureContinuation(sessionId, session, undefined);
+            this.setPendingContinuation(sessionId, session, undefined);
           }
           this.publishRunCompleted({
             session,
@@ -1636,8 +1637,8 @@ function buildAvailableCommands(registry: ProcedureRegistryLike): acp.AvailableC
     : [...commands, DISMISS_CONTINUATION_COMMAND];
 }
 
-function toFrontendPendingProcedureContinuation(
-  continuation?: PendingProcedureContinuation,
+function toFrontendPendingContinuation(
+  continuation?: PendingContinuation,
 ): FrontendPendingProcedureContinuation | undefined {
   if (!continuation) {
     return undefined;
@@ -1648,7 +1649,7 @@ function toFrontendPendingProcedureContinuation(
     question: continuation.question,
     inputHint: continuation.inputHint,
     suggestedReplies: continuation.suggestedReplies,
-    continuationUi: continuation.continuationUi,
+    continuationUi: continuation.ui,
   };
 }
 
@@ -1658,8 +1659,8 @@ function createDismissContinuationProcedure(session: SessionState): Procedure {
     description: DISMISS_CONTINUATION_COMMAND.description,
     executionMode: "harness",
     async execute() {
-      const pending = session.pendingProcedureContinuation;
-      session.pendingProcedureContinuation = undefined;
+      const pending = session.pendingContinuation;
+      session.pendingContinuation = undefined;
       return pending
         ? {
             display: `Cleared the pending continuation for /${pending.procedure}. Future plain-text replies will go to /default again.`,
@@ -1673,42 +1674,42 @@ function createDismissContinuationProcedure(session: SessionState): Procedure {
   };
 }
 
-function buildPendingProcedureContinuation(
+function buildPendingContinuation(
   procedure: string,
   result: ProcedureExecutionResult,
-): PendingProcedureContinuation {
+): PendingContinuation {
   if (!result.pause) {
     throw new Error("Cannot persist continuation without pause metadata.");
   }
 
   return {
     procedure,
-    cell: result.cell,
+    run: result.run ?? runRefFromCellRef(result.cell),
     question: result.pause.question,
     state: result.pause.state,
     inputHint: result.pause.inputHint,
     suggestedReplies: result.pause.suggestedReplies,
-    continuationUi: result.pause.continuationUi,
+    ui: result.pause.continuationUi,
   };
 }
 
 function resolveCommand(
   input: PromptInput,
-  pendingProcedureContinuation?: PendingProcedureContinuation,
+  pendingContinuation?: PendingContinuation,
 ): {
   commandName: string;
   commandPrompt: string;
   commandPromptInput: PromptInput;
-  continuation?: PendingProcedureContinuation;
+  continuation?: PendingContinuation;
 } {
   const text = promptInputDisplayText(input).trim();
   if (!text.startsWith("/")) {
-    return pendingProcedureContinuation
+    return pendingContinuation
       ? {
-          commandName: pendingProcedureContinuation.procedure,
+          commandName: pendingContinuation.procedure,
           commandPrompt: promptInputToPlainText(input),
           commandPromptInput: input,
-          continuation: pendingProcedureContinuation,
+          continuation: pendingContinuation,
         }
       : {
           commandName: "default",

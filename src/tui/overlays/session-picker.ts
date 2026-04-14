@@ -16,7 +16,7 @@ export async function promptForStoredSessionSelection(
   const selectedId = await promptWithSelectList(theme, {
     title: `Resume nanoboss session — ${cwd}`,
     items: sessions.map((session) => ({
-      value: session.sessionId,
+      value: session.session.sessionId,
       label: formatSessionLine(session, cwd),
       description: formatSessionDetailLine(session),
     })),
@@ -24,10 +24,10 @@ export async function promptForStoredSessionSelection(
     maxVisible: 10,
     selectedDetailTitle: "First user prompt",
     renderSelectedDetail: (item) => {
-      const session = sessions.find((candidate) => candidate.sessionId === item.value);
+      const session = sessions.find((candidate) => candidate.session.sessionId === item.value);
       return session ? formatSessionInitialPrompt(session) : "(no turns yet)";
     },
   });
 
-  return sessions.find((session) => session.sessionId === selectedId);
+  return sessions.find((session) => session.session.sessionId === selectedId);
 }

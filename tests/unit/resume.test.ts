@@ -49,7 +49,7 @@ describe("runResumeCommand", () => {
 
     try {
       writeSessionMetadata({
-        sessionId: "session-123",
+        session: { sessionId: "session-123" },
         cwd: "/repo-one",
         rootDir: join(tempHome, ".nanoboss", "sessions", "session-123"),
         createdAt: "2026-04-01T10:00:00.000Z",
@@ -82,14 +82,14 @@ describe("runResumeCommand", () => {
 
     try {
       writeSessionMetadata({
-        sessionId: "session-most-recent",
+        session: { sessionId: "session-most-recent" },
         cwd,
         rootDir: join(tempHome, ".nanoboss", "sessions", "session-most-recent"),
         createdAt: "2026-04-01T10:00:00.000Z",
         updatedAt: "2026-04-01T12:00:00.000Z",
       });
       writeSessionMetadata({
-        sessionId: "session-current",
+        session: { sessionId: "session-current" },
         cwd,
         rootDir: join(tempHome, ".nanoboss", "sessions", "session-current"),
         createdAt: "2026-04-01T09:00:00.000Z",
@@ -122,21 +122,21 @@ describe("runResumeCommand", () => {
 
     try {
       writeSessionMetadata({
-        sessionId: "session-other-workspace",
+        session: { sessionId: "session-other-workspace" },
         cwd: "/repo-one",
         rootDir: join(tempHome, ".nanoboss", "sessions", "session-other-workspace"),
         createdAt: "2026-04-01T08:00:00.000Z",
         updatedAt: "2026-04-01T13:00:00.000Z",
       });
       writeSessionMetadata({
-        sessionId: "session-older",
+        session: { sessionId: "session-older" },
         cwd,
         rootDir: join(tempHome, ".nanoboss", "sessions", "session-older"),
         createdAt: "2026-04-01T09:00:00.000Z",
         updatedAt: "2026-04-01T10:00:00.000Z",
       });
       writeSessionMetadata({
-        sessionId: "session-latest",
+        session: { sessionId: "session-latest" },
         cwd,
         rootDir: join(tempHome, ".nanoboss", "sessions", "session-latest"),
         createdAt: "2026-04-01T10:00:00.000Z",
@@ -148,7 +148,7 @@ describe("runResumeCommand", () => {
         `${JSON.stringify({
           workspaces: {
             [resolveWorkspaceKey(cwd)]: {
-              sessionId: "session-missing",
+              session: { sessionId: "session-missing" },
               cwd,
               rootDir: join(tempHome, ".nanoboss", "sessions", "session-missing"),
               createdAt: "2026-04-01T11:00:00.000Z",

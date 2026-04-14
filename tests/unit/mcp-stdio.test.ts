@@ -44,7 +44,7 @@ describe("global nanoboss MCP stdio transport", () => {
       summary: "review summary",
     });
     writeSessionMetadata({
-      sessionId,
+      session: { sessionId },
       cwd: process.cwd(),
       rootDir,
       createdAt: "2026-04-03T00:00:00.000Z",

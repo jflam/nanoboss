@@ -34,8 +34,9 @@ describe("session cleanup inspection", () => {
     const tempSessionDir = join(baseDir, "temp-session");
     mkdirSync(tempSessionDir, { recursive: true });
     writeFileSync(join(tempSessionDir, "session.json"), `${JSON.stringify({
-      sessionId: "temp-session",
+      session: { sessionId: "temp-session" },
       cwd: "/var/folders/8v/s_xb_zrn41q8zf2sxwycl0z40000gn/T/nab-workspace-test",
+      rootDir: tempSessionDir,
       initialPrompt: "/review patch",
       createdAt: "2026-04-03T00:00:00.000Z",
       updatedAt: "2026-04-03T00:00:00.000Z",
@@ -44,8 +45,9 @@ describe("session cleanup inspection", () => {
     const namespaceFixtureDir = join(baseDir, "namespace-fixture");
     mkdirSync(namespaceFixtureDir, { recursive: true });
     writeFileSync(join(namespaceFixtureDir, "session.json"), `${JSON.stringify({
-      sessionId: "namespace-fixture",
+      session: { sessionId: "namespace-fixture" },
       cwd: "/repo",
+      rootDir: namespaceFixtureDir,
       initialPrompt: "/research how we use typia to enforce types in ctx.agent.run() calls in nanoboss procedures",
       createdAt: "2026-04-03T00:00:00.000Z",
       updatedAt: "2026-04-03T00:00:00.000Z",
@@ -54,8 +56,9 @@ describe("session cleanup inspection", () => {
     const emptySessionDir = join(baseDir, "session-from-client");
     mkdirSync(emptySessionDir, { recursive: true });
     writeFileSync(join(emptySessionDir, "session.json"), `${JSON.stringify({
-      sessionId: "session-from-client",
+      session: { sessionId: "session-from-client" },
       cwd: "/repo",
+      rootDir: emptySessionDir,
       createdAt: "2026-04-03T00:00:00.000Z",
       updatedAt: "2026-04-03T00:00:00.000Z",
     })}\n`);

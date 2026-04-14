@@ -8,7 +8,7 @@ import type { SessionMetadata } from "../../src/session/index.ts";
 
 function session(overrides: Partial<SessionMetadata> = {}): SessionMetadata {
   return {
-    sessionId: "session-12345678",
+    session: { sessionId: "session-12345678" },
     cwd: "/repo",
     rootDir: "/repo/.nanoboss/sessions/session-12345678",
     createdAt: "2026-04-03T10:00:00.000Z",

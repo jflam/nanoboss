@@ -179,7 +179,7 @@ export class NanobossRuntimeService {
       const metadata = readSessionMetadata(explicitSessionId);
       if (metadata) {
         return {
-          sessionId: metadata.sessionId,
+          sessionId: metadata.session.sessionId,
           cwd: metadata.cwd,
           rootDir: metadata.rootDir,
         };
@@ -196,7 +196,7 @@ export class NanobossRuntimeService {
       const current = readCurrentSessionMetadata(this.params.cwd);
       if (current) {
         return {
-          sessionId: current.sessionId,
+          sessionId: current.session.sessionId,
           cwd: current.cwd,
           rootDir: current.rootDir,
         };

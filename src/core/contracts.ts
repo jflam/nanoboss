@@ -23,13 +23,9 @@ export {
   createRunRef,
   createSessionRef,
   pauseFromContinuation,
-  pendingContinuationFromLegacy,
-  pendingProcedureContinuationFromPending,
   refFromValueRef,
   runRecordFromCellRecord,
   runRefFromCellRef,
   runSummaryFromCellSummary,
-  sessionDescriptorFromLegacy,
-  sessionMetadataRecordFromLegacy,
   valueRefFromRef,
 } from "./types.ts";

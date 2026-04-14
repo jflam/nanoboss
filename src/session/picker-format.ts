@@ -6,14 +6,14 @@ export function formatSessionLine(session: SessionMetadata, cwd: string): string
   if (session.cwd === cwd) {
     markers.push("here");
   }
-  if (session.defaultAcpSessionId) {
+  if (session.defaultAgentSessionId) {
     markers.push("native");
   }
 
   const prefix = markers.length > 0 ? `[${markers.join(",")}] ` : "";
   const timestamp = formatTimestamp(session.updatedAt);
   const prompt = summarizeText(session.initialPrompt ?? "(no turns yet)", 96);
-  return `${prefix}${timestamp} ${session.sessionId.slice(0, 8)} ${prompt}`;
+  return `${prefix}${timestamp} ${session.session.sessionId.slice(0, 8)} ${prompt}`;
 }
 
 export function formatSessionDetailLine(session: SessionMetadata): string {

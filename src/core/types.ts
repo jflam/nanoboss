@@ -87,11 +87,6 @@ export interface ProcedurePause<TState extends KernelValue = KernelValue> {
   continuationUi?: ProcedureContinuationUi;
 }
 
-export interface PendingProcedureContinuation<TState extends KernelValue = KernelValue> extends ProcedurePause<TState> {
-  procedure: string;
-  cell: CellRef;
-}
-
 export interface PromptImagePart {
   type: "image";
   token: string;
@@ -178,10 +173,13 @@ export interface Continuation<TState extends KernelValue = KernelValue> {
   ui?: ContinuationUi;
 }
 
-export type FrontendPendingProcedureContinuation = Pick<
-  PendingProcedureContinuation,
-  "procedure" | "question" | "inputHint" | "suggestedReplies" | "continuationUi"
->;
+export interface FrontendPendingProcedureContinuation {
+  procedure: string;
+  question: string;
+  inputHint?: string;
+  suggestedReplies?: string[];
+  continuationUi?: ProcedureContinuationUi;
+}
 
 export interface PendingContinuation<TState extends KernelValue = KernelValue> extends Continuation<TState> {
   procedure: string;
@@ -209,26 +207,6 @@ export function pauseFromContinuation<TState extends KernelValue = KernelValue>(
     inputHint: continuation.inputHint,
     suggestedReplies: continuation.suggestedReplies,
     continuationUi: continuation.ui,
-  };
-}
-
-export function pendingContinuationFromLegacy<TState extends KernelValue = KernelValue>(
-  continuation: PendingProcedureContinuation<TState>,
-): PendingContinuation<TState> {
-  return {
-    procedure: continuation.procedure,
-    run: runRefFromCellRef(continuation.cell),
-    ...continuationFromPause(continuation),
-  };
-}
-
-export function pendingProcedureContinuationFromPending<TState extends KernelValue = KernelValue>(
-  continuation: PendingContinuation<TState>,
-): PendingProcedureContinuation<TState> {
-  return {
-    procedure: continuation.procedure,
-    cell: cellRefFromRunRef(continuation.run),
-    ...pauseFromContinuation(continuation),
   };
 }
 
@@ -404,42 +382,6 @@ export function cellSummaryFromRunSummary(summary: RunSummary): CellSummary {
     dataShape: summary.dataShape,
     explicitDataSchema: summary.explicitDataSchema,
     createdAt: summary.createdAt,
-  };
-}
-
-export function sessionDescriptorFromLegacy(params: {
-  sessionId: string;
-  cwd: string;
-  defaultAgentSelection?: DownstreamAgentSelection;
-}): SessionDescriptor {
-  return {
-    session: createSessionRef(params.sessionId),
-    cwd: params.cwd,
-    defaultAgentSelection: params.defaultAgentSelection,
-  };
-}
-
-export function sessionMetadataRecordFromLegacy(params: {
-  sessionId: string;
-  cwd: string;
-  rootDir: string;
-  createdAt: string;
-  updatedAt: string;
-  defaultAgentSelection?: DownstreamAgentSelection;
-  defaultAgentSessionId?: string;
-  pendingProcedureContinuation?: PendingProcedureContinuation;
-}): SessionMetadataRecord {
-  return {
-    session: createSessionRef(params.sessionId),
-    cwd: params.cwd,
-    rootDir: params.rootDir,
-    createdAt: params.createdAt,
-    updatedAt: params.updatedAt,
-    defaultAgentSelection: params.defaultAgentSelection,
-    defaultAgentSessionId: params.defaultAgentSessionId,
-    pendingContinuation: params.pendingProcedureContinuation
-      ? pendingContinuationFromLegacy(params.pendingProcedureContinuation)
-      : undefined,
   };
 }
 

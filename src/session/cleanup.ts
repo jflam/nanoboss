@@ -141,7 +141,7 @@ function inspectSessionDirectory(rootDir: string): SessionCleanupCandidate | und
   const cwd = metadata?.cwd ?? partialMetadata?.cwd;
   const initialPrompt = metadata?.initialPrompt ?? partialMetadata?.initialPrompt;
   const reasons = classifyCleanupReasons({
-    sessionId,
+    sessionId: metadata?.session.sessionId ?? sessionId,
     cwd,
     initialPrompt,
     hasSessionJson,

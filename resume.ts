@@ -59,19 +59,19 @@ export async function runResumeCommand(
     serverUrl: options.serverUrl,
     showToolCalls: options.showToolCalls,
     simplify2AutoApprove: options.simplify2AutoApprove,
-    sessionId: selected.sessionId,
+    sessionId: selected.session.sessionId,
   });
 }
 
 function resolveExplicitSession(sessionId: string): SessionMetadata | undefined {
-  return listSessionSummaries().find((session) => session.sessionId === sessionId);
+  return listSessionSummaries().find((session) => session.session.sessionId === sessionId);
 }
 
 function resolveDefaultSession(cwd: string): SessionMetadata | undefined {
   const sessions = listSessionSummaries();
-  const currentSessionId = readCurrentSessionMetadata(cwd)?.sessionId;
+  const currentSessionId = readCurrentSessionMetadata(cwd)?.session.sessionId;
   if (currentSessionId) {
-    const current = sessions.find((session) => session.sessionId === currentSessionId);
+    const current = sessions.find((session) => session.session.sessionId === currentSessionId);
     if (current) {
       return current;
     }

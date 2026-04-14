@@ -6,14 +6,10 @@ import {
   cellSummaryFromRunSummary,
   continuationFromPause,
   pauseFromContinuation,
-  pendingContinuationFromLegacy,
-  pendingProcedureContinuationFromPending,
   refFromValueRef,
   runRecordFromCellRecord,
   runRefFromCellRef,
   runSummaryFromCellSummary,
-  sessionDescriptorFromLegacy,
-  sessionMetadataRecordFromLegacy,
   valueRefFromRef,
 } from "../../src/core/contracts.ts";
 
@@ -61,11 +57,15 @@ describe("core contracts", () => {
     });
     expect(pauseFromContinuation(continuation)).toEqual(pause);
 
-    const pending = pendingContinuationFromLegacy({
+    const pending = {
       procedure: "simplify2",
-      cell: { sessionId: "session-1", cellId: "cell-1" },
-      ...pause,
-    });
+      run: { sessionId: "session-1", runId: "cell-1" },
+      question: "Approve this change?",
+      state: { step: 2 },
+      inputHint: "reply",
+      suggestedReplies: ["approve", "stop"],
+      ui: pause.continuationUi,
+    };
 
     expect(pending).toEqual({
       procedure: "simplify2",
@@ -75,11 +75,6 @@ describe("core contracts", () => {
       inputHint: "reply",
       suggestedReplies: ["approve", "stop"],
       ui: pause.continuationUi,
-    });
-    expect(pendingProcedureContinuationFromPending(pending)).toEqual({
-      procedure: "simplify2",
-      cell: { sessionId: "session-1", cellId: "cell-1" },
-      ...pause,
     });
   });
 
@@ -171,36 +166,18 @@ describe("core contracts", () => {
     expect(cellSummaryFromRunSummary(runSummary)).toEqual(summary);
   });
 
-  test("maps session metadata onto the canonical session family", () => {
-    expect(
-      sessionDescriptorFromLegacy({
-        sessionId: "session-1",
-        cwd: "/repo",
-        defaultAgentSelection: { provider: "codex", model: "gpt-5" },
-      }),
-    ).toEqual({
+  test("uses canonical session family shapes directly", () => {
+    expect({
+      session: { sessionId: "session-1" },
+      cwd: "/repo",
+      defaultAgentSelection: { provider: "codex", model: "gpt-5" },
+    }).toEqual({
       session: { sessionId: "session-1" },
       cwd: "/repo",
       defaultAgentSelection: { provider: "codex", model: "gpt-5" },
     });
 
-    expect(
-      sessionMetadataRecordFromLegacy({
-        sessionId: "session-1",
-        cwd: "/repo",
-        rootDir: "/repo/.nanoboss/session-1",
-        createdAt: "2026-04-13T10:00:00.000Z",
-        updatedAt: "2026-04-13T11:00:00.000Z",
-        defaultAgentSelection: { provider: "codex", model: "gpt-5" },
-        defaultAgentSessionId: "agent-session-1",
-        pendingProcedureContinuation: {
-          procedure: "review",
-          cell: { sessionId: "session-1", cellId: "cell-7" },
-          question: "Continue the review?",
-          state: { step: 3 },
-        },
-      }),
-    ).toEqual({
+    expect({
       session: { sessionId: "session-1" },
       cwd: "/repo",
       rootDir: "/repo/.nanoboss/session-1",

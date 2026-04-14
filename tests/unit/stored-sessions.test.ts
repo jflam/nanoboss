@@ -27,33 +27,33 @@ describe("session persistence", () => {
 
     try {
       writeSessionMetadata({
-        sessionId: "session-older",
+        session: { sessionId: "session-older" },
         cwd: "/repo",
         rootDir: join(tempHome, ".nanoboss", "sessions", "session-older"),
         createdAt: "2026-04-01T09:00:00.000Z",
         updatedAt: "2026-04-01T10:00:00.000Z",
       });
       writeSessionMetadata({
-        sessionId: "session-123",
+        session: { sessionId: "session-123" },
         cwd: "/repo",
         rootDir: join(tempHome, ".nanoboss", "sessions", "session-123"),
         createdAt: "2026-04-01T10:00:00.000Z",
         updatedAt: "2026-04-01T11:00:00.000Z",
         initialPrompt: "first prompt",
-        defaultAcpSessionId: "acp-123",
+        defaultAgentSessionId: "acp-123",
       });
 
       const sessions = listSessionSummaries();
       expect(sessions).toHaveLength(2);
-      expect(sessions.map((session) => session.sessionId)).toEqual([
+      expect(sessions.map((session) => session.session.sessionId)).toEqual([
         "session-123",
         "session-older",
       ]);
       expect(sessions[0]).toMatchObject({
-        sessionId: "session-123",
+        session: { sessionId: "session-123" },
         cwd: "/repo",
         initialPrompt: "first prompt",
-        defaultAcpSessionId: "acp-123",
+        defaultAgentSessionId: "acp-123",
       });
     } finally {
       if (originalHome === undefined) {
@@ -73,7 +73,7 @@ describe("session persistence", () => {
       const sessionRoot = join(tempHome, ".nanoboss", "sessions", "session-fast");
       mkdirSync(sessionRoot, { recursive: true });
       writeFileSync(join(sessionRoot, "session.json"), `${JSON.stringify({
-        sessionId: "session-fast",
+        session: { sessionId: "session-fast" },
         cwd: "/repo",
         rootDir: sessionRoot,
         createdAt: "2026-04-01T10:00:00.000Z",
@@ -85,7 +85,7 @@ describe("session persistence", () => {
       const sessions = listSessionSummaries();
       expect(sessions).toHaveLength(1);
       expect(sessions[0]).toMatchObject({
-        sessionId: "session-fast",
+        session: { sessionId: "session-fast" },
         cwd: "/repo",
         rootDir: sessionRoot,
         initialPrompt: "first prompt",
@@ -108,7 +108,7 @@ describe("session persistence", () => {
       const validSessionRoot = join(tempHome, ".nanoboss", "sessions", "session-valid");
       mkdirSync(validSessionRoot, { recursive: true });
       writeFileSync(join(validSessionRoot, "session.json"), `${JSON.stringify({
-        sessionId: "session-valid",
+        session: { sessionId: "session-valid" },
         cwd: "/repo",
         rootDir: validSessionRoot,
         createdAt: "2026-04-01T10:00:00.000Z",
@@ -121,7 +121,7 @@ describe("session persistence", () => {
       const invalidSessionRoot = join(tempHome, ".nanoboss", "sessions", "session-invalid");
       mkdirSync(invalidSessionRoot, { recursive: true });
       writeFileSync(join(invalidSessionRoot, "session.json"), `${JSON.stringify({
-        sessionId: "session-invalid",
+        session: { sessionId: "session-invalid" },
         cwd: "/repo",
         rootDir: invalidSessionRoot,
         createdAt: "2026-04-01T12:00:00.000Z",
@@ -134,10 +134,10 @@ describe("session persistence", () => {
 
       const sessions = listSessionSummaries();
       expect(sessions).toHaveLength(2);
-      expect(sessions.find((session) => session.sessionId === "session-valid")?.defaultAgentSelection).toEqual({
+      expect(sessions.find((session) => session.session.sessionId === "session-valid")?.defaultAgentSelection).toEqual({
         provider: "codex",
       });
-      expect(sessions.find((session) => session.sessionId === "session-invalid")?.defaultAgentSelection).toBeUndefined();
+      expect(sessions.find((session) => session.session.sessionId === "session-invalid")?.defaultAgentSelection).toBeUndefined();
     } finally {
       if (originalHome === undefined) {
         delete process.env.HOME;
