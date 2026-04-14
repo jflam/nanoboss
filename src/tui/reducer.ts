@@ -234,12 +234,12 @@ function reduceFrontendEvent(state: UiState, event: RenderedFrontendEventEnvelop
         availableCommands: mergeAvailableCommands(event.data.commands),
       };
     case "run_restored": {
-      const pendingProcedureContinuation = event.data.status === "paused"
+      const pendingContinuation = event.data.status === "paused"
         ? {
             procedure: event.data.procedure,
             question: "",
           }
-        : state.pendingProcedureContinuation;
+        : state.pendingContinuation;
       const userTurn = createTurn({
         id: nextTurnId("user", state.turns.length),
         role: "user",
@@ -260,7 +260,7 @@ function reduceFrontendEvent(state: UiState, event: RenderedFrontendEventEnvelop
           activeProcedure: event.data.procedure,
           activeAssistantTurnId: undefined,
           assistantParagraphBreakPending: undefined,
-          pendingProcedureContinuation,
+          pendingContinuation,
         };
       }
 
@@ -279,7 +279,7 @@ function reduceFrontendEvent(state: UiState, event: RenderedFrontendEventEnvelop
         ...state,
         turns: [...nextTurns, assistantTurn],
         transcriptItems: appendTranscriptItem(nextTranscriptItems, { type: "turn", id: assistantTurn.id }),
-        pendingProcedureContinuation,
+        pendingContinuation,
       };
     }
     case "run_started": {
@@ -310,7 +310,7 @@ function reduceFrontendEvent(state: UiState, event: RenderedFrontendEventEnvelop
     case "continuation_updated":
       return {
         ...state,
-        pendingProcedureContinuation: event.data.continuation,
+        pendingContinuation: event.data.continuation,
       };
     case "assistant_notice":
       if (shouldIgnoreMismatchedRunEvent(state, event.data.runId)) {
@@ -501,7 +501,7 @@ function reduceFrontendEvent(state: UiState, event: RenderedFrontendEventEnvelop
       });
       return {
         ...nextState,
-        pendingProcedureContinuation: {
+        pendingContinuation: {
           procedure: event.data.procedure,
           question: event.data.question,
           inputHint: event.data.inputHint,

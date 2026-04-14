@@ -283,7 +283,7 @@ export class NanobossTuiController {
 
   private dispatch(action: UiAction): void {
     this.state = reduceUiState(this.state, action);
-    const continuation = this.state.pendingProcedureContinuation;
+    const continuation = this.state.pendingContinuation;
     if (!continuation) {
       this.lastAutoApprovedContinuationSignature = undefined;
     } else if (
@@ -508,7 +508,7 @@ export class NanobossTuiController {
   }
 
   private async maybeAutoApproveCurrentContinuation(): Promise<void> {
-    const continuation = this.state.pendingProcedureContinuation;
+    const continuation = this.state.pendingContinuation;
     if (
       !continuation
       || continuation.procedure !== "simplify2"

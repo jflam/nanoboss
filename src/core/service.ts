@@ -66,7 +66,7 @@ import type {
   AgentTokenUsage,
   DownstreamAgentConfig,
   DownstreamAgentSelection,
-  FrontendPendingProcedureContinuation,
+  FrontendPendingContinuation,
   PendingContinuation,
   PersistedFrontendEvent,
   PromptInput,
@@ -1639,7 +1639,7 @@ function buildAvailableCommands(registry: ProcedureRegistryLike): acp.AvailableC
 
 function toFrontendPendingContinuation(
   continuation?: PendingContinuation,
-): FrontendPendingProcedureContinuation | undefined {
+): FrontendPendingContinuation | undefined {
   if (!continuation) {
     return undefined;
   }

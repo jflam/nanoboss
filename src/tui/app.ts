@@ -26,7 +26,7 @@ import {
 import type {
   DownstreamAgentSelection,
   DownstreamAgentProvider,
-  FrontendPendingProcedureContinuation,
+  FrontendPendingContinuation,
   PromptInput,
   Simplify2CheckpointContinuationUi,
   Simplify2CheckpointContinuationUiAction,
@@ -123,11 +123,11 @@ export interface NanobossTuiAppDeps {
   now?: () => number;
 }
 
-type FrontendSimplify2CheckpointContinuation = FrontendPendingProcedureContinuation & {
+type FrontendSimplify2CheckpointContinuation = FrontendPendingContinuation & {
   continuationUi: Simplify2CheckpointContinuationUi;
 };
 
-type FrontendSimplify2FocusPickerContinuation = FrontendPendingProcedureContinuation & {
+type FrontendSimplify2FocusPickerContinuation = FrontendPendingContinuation & {
   continuationUi: Simplify2FocusPickerContinuationUi;
 };
 
@@ -518,7 +518,7 @@ export class NanobossTuiApp {
   }
 
   private syncSimplify2ContinuationComposer(): void {
-    const continuation = getSimplify2Continuation(this.state.pendingProcedureContinuation);
+    const continuation = getSimplify2Continuation(this.state.pendingContinuation);
     const signature = continuation ? buildSimplify2ContinuationSignature(continuation) : undefined;
     if (signature !== this.lastSeenSimplify2ContinuationSignature) {
       this.lastSeenSimplify2ContinuationSignature = signature;
@@ -736,7 +736,7 @@ function textIndexToCursor(text: string, index: number): { line: number; col: nu
 }
 
 function getSimplify2Continuation(
-  continuation: FrontendPendingProcedureContinuation | undefined,
+  continuation: FrontendPendingContinuation | undefined,
 ): FrontendSimplify2CheckpointContinuation | FrontendSimplify2FocusPickerContinuation | undefined {
   if (
     !continuation
@@ -761,7 +761,7 @@ function isSimplify2CheckpointContinuation(
 }
 
 function buildSimplify2ContinuationSignature(
-  continuation: FrontendPendingProcedureContinuation,
+  continuation: FrontendPendingContinuation,
 ): string {
   return JSON.stringify({
     procedure: continuation.procedure,

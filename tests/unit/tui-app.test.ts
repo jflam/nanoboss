@@ -695,7 +695,7 @@ describe("NanobossTuiApp", () => {
     currentState = {
       ...currentState,
       sessionId: "session-1",
-      pendingProcedureContinuation: {
+      pendingContinuation: {
         procedure: "simplify2",
         question: "Approve this simplify2 slice?",
         continuationUi: {
@@ -771,7 +771,7 @@ describe("NanobossTuiApp", () => {
     currentState = {
       ...currentState,
       sessionId: "session-1",
-      pendingProcedureContinuation: {
+      pendingContinuation: {
         procedure: "simplify2",
         question: "Choose a focus",
         continuationUi: {

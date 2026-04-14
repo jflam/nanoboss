@@ -627,7 +627,7 @@ describe("NanobossTuiController", () => {
 
     expect(controller.getState().inputDisabled).toBe(false);
     expect(controller.getState().statusLine).toBe("[continuation] /simplify active - waiting for your reply");
-    expect(controller.getState().pendingProcedureContinuation).toEqual({
+    expect(controller.getState().pendingContinuation).toEqual({
       procedure: "simplify",
       question: "What would you like instead?",
       inputHint: undefined,
@@ -743,7 +743,7 @@ describe("NanobossTuiController", () => {
 
     expect(sendCalls).toEqual([]);
     expect(controller.getState().simplify2AutoApprove).toBe(true);
-    expect(controller.getState().pendingProcedureContinuation).toMatchObject({
+    expect(controller.getState().pendingContinuation).toMatchObject({
       procedure: "simplify2",
       question: "Approve this simplify2 slice?",
     });

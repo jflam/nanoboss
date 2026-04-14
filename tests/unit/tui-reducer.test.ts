@@ -1211,7 +1211,7 @@ describe("tui reducer", () => {
       }),
     });
 
-    expect(state.pendingProcedureContinuation).toBeUndefined();
+    expect(state.pendingContinuation).toBeUndefined();
     expect(state.statusLine).toBe("[continuation] cleared /simplify");
   });
 

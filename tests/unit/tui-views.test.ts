@@ -159,7 +159,7 @@ describe("NanobossAppView", () => {
       ...createInitialUiState({ cwd: "/repo" }),
       sessionId: "session-1",
       statusLine: "[continuation] /simplify active - waiting for your reply",
-      pendingProcedureContinuation: {
+      pendingContinuation: {
         procedure: "simplify",
         question: "What would you like instead?",
       },

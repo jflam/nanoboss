@@ -173,7 +173,7 @@ export interface Continuation<TState extends KernelValue = KernelValue> {
   ui?: ContinuationUi;
 }
 
-export interface FrontendPendingProcedureContinuation {
+export interface FrontendPendingContinuation {
   procedure: string;
   question: string;
   inputHint?: string;
