@@ -1,4 +1,4 @@
-import { createAgentSession, type CreateAgentSession } from "../agent/default-session.ts";
+import { createAgentSession, type CreateAgentSession } from "../agent/acp-session.ts";
 import { normalizeAgentTokenUsage } from "../agent/token-usage.ts";
 import { createTextPromptInput } from "./prompt.ts";
 import { resolveDownstreamAgentConfig } from "./config.ts";

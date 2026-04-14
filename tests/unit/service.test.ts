@@ -8,7 +8,7 @@ const MOCK_AGENT_PATH = join(process.cwd(), "tests/fixtures/mock-agent.ts");
 const SELF_COMMAND_PATH = join(process.cwd(), "dist", "nanoboss");
 const BUILD_HOOK_TIMEOUT_MS = 30_000;
 
-import { createAgentSession } from "../../src/agent/default-session.ts";
+import { createAgentSession } from "../../src/agent/acp-session.ts";
 import type { AgentSession, Procedure, PromptInput } from "../../src/core/types.ts";
 import { createTextPromptInput, promptInputDisplayText } from "../../src/core/prompt.ts";
 import { ProcedureRegistry } from "../../src/procedure/registry.ts";

@@ -17,7 +17,7 @@ import {
   promptInputDisplayText,
   promptInputToPlainText,
 } from "./prompt.ts";
-import { createAgentSession } from "../agent/default-session.ts";
+import { createAgentSession } from "../agent/acp-session.ts";
 import { normalizeAgentTokenUsage } from "../agent/token-usage.ts";
 import {
   collectUnsyncedProcedureMemoryCards,

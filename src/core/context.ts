@@ -1,5 +1,5 @@
 import type { SessionStore } from "../session/index.ts";
-import type { CreateAgentSession } from "../agent/default-session.ts";
+import type { CreateAgentSession } from "../agent/acp-session.ts";
 import { RunCancelledError, defaultCancellationMessage } from "./cancellation.ts";
 import { resolveDownstreamAgentConfig } from "./config.ts";
 import { AgentInvocationApiImpl, AgentRunRecorder } from "./context-agent.ts";
