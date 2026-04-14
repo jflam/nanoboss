@@ -1,4 +1,3 @@
-import { DefaultConversationSession } from "../agent/default-session.ts";
 import type { SessionStore } from "../session/index.ts";
 import { RunCancelledError, defaultCancellationMessage } from "./cancellation.ts";
 import { resolveDownstreamAgentConfig } from "./config.ts";
@@ -13,6 +12,7 @@ import type { RunLogger } from "./logger.ts";
 import { normalizeProcedurePromptInput } from "./prompt.ts";
 import type { RunTimingTrace } from "./timing-trace.ts";
 import type {
+  AgentSession,
   AgentInvocationApi,
   ProcedureApi,
   ProcedurePromptInput,
@@ -42,11 +42,11 @@ interface CommandContextParams {
   promptInput?: string | PromptInput;
   signal?: AbortSignal;
   softStopSignal?: AbortSignal;
-  defaultConversation?: DefaultConversationSession;
+  agentSession?: AgentSession;
   getDefaultAgentConfig?: () => DownstreamAgentConfig;
   setDefaultAgentSelection?: (selection: DownstreamAgentSelection) => DownstreamAgentConfig;
   prepareDefaultPrompt?: (promptInput: PromptInput) => PreparedDefaultPrompt;
-  rootDefaultConversation?: DefaultConversationSession;
+  rootAgentSession?: AgentSession;
   rootGetDefaultAgentConfig?: () => DownstreamAgentConfig;
   rootSetDefaultAgentSelection?: (selection: DownstreamAgentSelection) => DownstreamAgentConfig;
   rootPrepareDefaultPrompt?: (promptInput: PromptInput) => PreparedDefaultPrompt;
@@ -71,7 +71,7 @@ export class CommandContextImpl implements ProcedureApi {
   private readonly softStopSignal?: AbortSignal;
   private readonly store: SessionStore;
   private readonly cell: ActiveCell;
-  private readonly rootDefaultConversation?: DefaultConversationSession;
+  private readonly rootAgentSession?: AgentSession;
   private readonly rootGetDefaultAgentConfigValue: () => DownstreamAgentConfig;
   private readonly rootSetDefaultAgentSelectionValue: (selection: DownstreamAgentSelection) => DownstreamAgentConfig;
   private readonly rootPrepareDefaultPromptValue?: (promptInput: PromptInput) => PreparedDefaultPrompt;
@@ -91,13 +91,13 @@ export class CommandContextImpl implements ProcedureApi {
     this.promptInput = normalizeProcedurePromptInput(
       params.promptInput ?? params.cell.input,
     );
-    const defaultConversation = params.defaultConversation;
     const getDefaultAgentConfig = params.getDefaultAgentConfig
       ?? (() => resolveDownstreamAgentConfig(this.cwd));
     const setDefaultAgentSelection = params.setDefaultAgentSelection
       ?? ((selection) => resolveDownstreamAgentConfig(this.cwd, selection));
     const prepareDefaultPrompt = params.prepareDefaultPrompt;
-    this.rootDefaultConversation = params.rootDefaultConversation ?? defaultConversation;
+    const agentSession = params.agentSession;
+    this.rootAgentSession = params.rootAgentSession ?? agentSession;
     this.rootGetDefaultAgentConfigValue = params.rootGetDefaultAgentConfig ?? getDefaultAgentConfig;
     this.rootSetDefaultAgentSelectionValue = params.rootSetDefaultAgentSelection ?? setDefaultAgentSelection;
     this.rootPrepareDefaultPromptValue = params.rootPrepareDefaultPrompt ?? prepareDefaultPrompt;
@@ -108,13 +108,13 @@ export class CommandContextImpl implements ProcedureApi {
     const contextSessionApi = new ContextSessionApiImpl({
       cwd: this.cwd,
       current: {
-        defaultConversation,
+        agentSession,
         getDefaultAgentConfig,
         setDefaultAgentSelection,
         prepareDefaultPrompt,
       },
       root: {
-        defaultConversation: this.rootDefaultConversation,
+        agentSession: this.rootAgentSession,
         getDefaultAgentConfig: this.rootGetDefaultAgentConfigValue,
         setDefaultAgentSelection: this.rootSetDefaultAgentSelectionValue,
         prepareDefaultPrompt: this.rootPrepareDefaultPromptValue,
@@ -182,11 +182,11 @@ export class CommandContextImpl implements ProcedureApi {
       promptInput: binding.promptInput,
       signal: this.signal,
       softStopSignal: this.softStopSignal,
-      defaultConversation: binding.defaultConversation,
+      agentSession: binding.agentSession,
       getDefaultAgentConfig: binding.getDefaultAgentConfig,
       setDefaultAgentSelection: binding.setDefaultAgentSelection,
       prepareDefaultPrompt: binding.prepareDefaultPrompt,
-      rootDefaultConversation: this.rootDefaultConversation,
+      rootAgentSession: this.rootAgentSession,
       rootGetDefaultAgentConfig: this.rootGetDefaultAgentConfigValue,
       rootSetDefaultAgentSelection: this.rootSetDefaultAgentSelectionValue,
       rootPrepareDefaultPrompt: this.rootPrepareDefaultPromptValue,

@@ -53,14 +53,14 @@ describe("/default native session continuity", () => {
       try {
         const first = await conversation.prompt("what is 2+2");
         expect(first.raw).toBe("4");
-        const acpSessionId = conversation.currentSessionId;
+        const acpSessionId = conversation.sessionId;
         expect(acpSessionId).toBeTruthy();
 
         const second = await conversation.prompt("add 3 to result");
         expect(second.raw).toBe("7");
-        expect(conversation.currentSessionId).toBe(acpSessionId);
+        expect(conversation.sessionId).toBe(acpSessionId);
       } finally {
-        conversation.closeLiveSession();
+        conversation.close();
       }
     },
     30_000,
@@ -79,16 +79,16 @@ describe("/default native session continuity", () => {
 
       try {
         await conversation.prompt("what is 2+2");
-        const acpSessionId = conversation.currentSessionId;
+        const acpSessionId = conversation.sessionId;
         expect(acpSessionId).toBeTruthy();
 
-        conversation.closeLiveSession();
+        conversation.close();
 
         const second = await conversation.prompt("add 3 to result");
         expect(second.raw).toBe("7");
-        expect(conversation.currentSessionId).toBe(acpSessionId);
+        expect(conversation.sessionId).toBe(acpSessionId);
       } finally {
-        conversation.closeLiveSession();
+        conversation.close();
       }
     },
     30_000,
@@ -107,17 +107,17 @@ describe("/default native session continuity", () => {
 
       try {
         await conversation.prompt("what is 2+2");
-        const firstSessionId = conversation.currentSessionId;
+        const firstSessionId = conversation.sessionId;
         expect(firstSessionId).toBeTruthy();
 
-        conversation.closeLiveSession();
+        conversation.close();
 
         const second = await conversation.prompt("add 3 to result");
         expect(second.raw).toBe("no prior result");
-        expect(conversation.currentSessionId).toBeTruthy();
-        expect(conversation.currentSessionId).not.toBe(firstSessionId);
+        expect(conversation.sessionId).toBeTruthy();
+        expect(conversation.sessionId).not.toBe(firstSessionId);
       } finally {
-        conversation.closeLiveSession();
+        conversation.close();
       }
     },
     30_000,
@@ -136,7 +136,7 @@ describe("/default native session continuity", () => {
 
       try {
         await conversation.prompt("what is 2+2");
-        const firstSessionId = conversation.currentSessionId;
+        const firstSessionId = conversation.sessionId;
         expect(firstSessionId).toBeTruthy();
 
         conversation.updateConfig({
@@ -147,14 +147,14 @@ describe("/default native session continuity", () => {
           provider: "claude",
         });
 
-        expect(conversation.currentSessionId).toBeUndefined();
+        expect(conversation.sessionId).toBeUndefined();
 
         const second = await conversation.prompt("add 3 to result");
         expect(second.raw).toBe("no prior result");
-        expect(conversation.currentSessionId).toBeTruthy();
-        expect(conversation.currentSessionId).not.toBe(firstSessionId);
+        expect(conversation.sessionId).toBeTruthy();
+        expect(conversation.sessionId).not.toBe(firstSessionId);
       } finally {
-        conversation.closeLiveSession();
+        conversation.close();
       }
     },
     30_000,
@@ -183,7 +183,7 @@ describe("/default native session continuity", () => {
         expect(second.raw).toBe("7");
         expect(second.raw).not.toContain("late previous turn");
       } finally {
-        conversation.closeLiveSession();
+        conversation.close();
       }
     },
     30_000,

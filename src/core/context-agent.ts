@@ -268,7 +268,7 @@ export class AgentInvocationApiImpl implements AgentInvocationApi {
     const promptInput = options?.promptInput;
     const displayPrompt = promptInput ? promptInputDisplayText(promptInput) : prompt;
     this.params.assertCanStartBoundary();
-    const useDefaultSession = sessionMode === "default" && this.params.sessionManager.hasDefaultConversation();
+    const useDefaultSession = sessionMode === "default" && this.params.sessionManager.hasDefaultAgentSession();
     const agentConfig = useDefaultSession && options?.agent
       ? this.params.sessionManager.setDefaultAgentSelection(options.agent)
       : options?.agent
@@ -327,7 +327,7 @@ export class AgentInvocationApiImpl implements AgentInvocationApi {
         streamText: options?.stream !== false,
         rawOutputExtra: useDefaultSession
           ? {
-              sessionId: this.params.sessionManager.getDefaultConversationSessionId(),
+              sessionId: this.params.sessionManager.getDefaultAgentSessionId(),
               ...tokenUsageExtra,
             }
           : tokenUsageExtra,

@@ -398,7 +398,7 @@ function createContext(options: {
       input: "test",
       kind: "top_level",
     }),
-    defaultConversation: conversation,
+    agentSession: conversation,
     getDefaultAgentConfig: () => config,
     setDefaultAgentSelection: (selection) => {
       const nextConfig = resolveDownstreamAgentConfig(cwd, selection);

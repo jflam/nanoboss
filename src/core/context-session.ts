@@ -4,6 +4,7 @@ import { createTextPromptInput } from "./prompt.ts";
 import { resolveDownstreamAgentConfig } from "./config.ts";
 import type { PreparedDefaultPrompt } from "./context-shared.ts";
 import type {
+  AgentSession,
   AgentSessionMode,
   CallAgentTransport,
   DownstreamAgentConfig,
@@ -15,7 +16,7 @@ import type {
 import type { RunTimingTrace } from "./timing-trace.ts";
 
 interface SessionBindingSource {
-  defaultConversation?: DefaultConversationSession;
+  agentSession?: AgentSession;
   getDefaultAgentConfig: () => DownstreamAgentConfig;
   setDefaultAgentSelection: (selection: DownstreamAgentSelection) => DownstreamAgentConfig;
   prepareDefaultPrompt?: (promptInput: PromptInput) => PreparedDefaultPrompt;
@@ -41,12 +42,12 @@ export class ContextSessionApiImpl implements SessionApi {
   }
 
   async getDefaultAgentTokenSnapshot() {
-    return await this.params.current.defaultConversation?.getCurrentTokenSnapshot();
+    return await this.params.current.agentSession?.getCurrentTokenSnapshot();
   }
 
   async getDefaultAgentTokenUsage() {
     return normalizeAgentTokenUsage(
-      await this.params.current.defaultConversation?.getCurrentTokenSnapshot(),
+      await this.params.current.agentSession?.getCurrentTokenSnapshot(),
       this.getDefaultAgentConfig(),
     );
   }
@@ -55,8 +56,8 @@ export class ContextSessionApiImpl implements SessionApi {
     sessionMode: AgentSessionMode,
     timingTrace?: RunTimingTrace,
   ): CallAgentTransport | undefined {
-    const defaultConversation = this.params.current.defaultConversation;
-    if (sessionMode !== "default" || !defaultConversation) {
+    const agentSession = this.params.current.agentSession;
+    if (sessionMode !== "default" || !agentSession) {
       return undefined;
     }
 
@@ -64,7 +65,7 @@ export class ContextSessionApiImpl implements SessionApi {
       invoke: async (prompt, options) => {
         const promptInput = options.promptInput ?? createTextPromptInput(prompt);
         const preparedPrompt = this.params.current.prepareDefaultPrompt?.(promptInput) ?? { promptInput };
-        const result = await defaultConversation.prompt(preparedPrompt.promptInput, {
+        const result = await agentSession.prompt(preparedPrompt.promptInput, {
           signal: options.signal,
           softStopSignal: options.softStopSignal,
           onUpdate: options.onUpdate,
@@ -84,17 +85,17 @@ export class ContextSessionApiImpl implements SessionApi {
 
     if (sessionMode === "fresh") {
       let defaultAgentConfig = cloneDownstreamAgentConfig(this.getDefaultAgentConfig());
-      const defaultConversation = new DefaultConversationSession({
+      const agentSession = new DefaultConversationSession({
         config: defaultAgentConfig,
       });
 
       return {
-        defaultConversation,
+        agentSession,
         getDefaultAgentConfig: () => defaultAgentConfig,
         setDefaultAgentSelection: (selection) => {
           const nextConfig = resolveDownstreamAgentConfig(this.params.cwd, selection);
           defaultAgentConfig = nextConfig;
-          defaultConversation.updateConfig(nextConfig);
+          agentSession.updateConfig(nextConfig);
           return nextConfig;
         },
         prepareDefaultPrompt: this.params.current.prepareDefaultPrompt,
@@ -104,18 +105,18 @@ export class ContextSessionApiImpl implements SessionApi {
     return toProcedureInvocationBinding(this.params.current);
   }
 
-  getDefaultConversationSessionId(): string | undefined {
-    return this.params.current.defaultConversation?.currentSessionId;
+  getDefaultAgentSessionId(): string | undefined {
+    return this.params.current.agentSession?.sessionId;
   }
 
-  hasDefaultConversation(): boolean {
-    return this.params.current.defaultConversation !== undefined;
+  hasDefaultAgentSession(): boolean {
+    return this.params.current.agentSession !== undefined;
   }
 }
 
 function toProcedureInvocationBinding(binding: SessionBindingSource): ProcedureInvocationBinding {
   return {
-    defaultConversation: binding.defaultConversation,
+    agentSession: binding.agentSession,
     getDefaultAgentConfig: binding.getDefaultAgentConfig,
     setDefaultAgentSelection: binding.setDefaultAgentSelection,
     prepareDefaultPrompt: binding.prepareDefaultPrompt,

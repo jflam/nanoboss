@@ -4,7 +4,6 @@ import {
   type RunCancellationReason,
   normalizeRunCancelledError,
 } from "../core/cancellation.ts";
-import type { DefaultConversationSession } from "../agent/default-session.ts";
 import type { FrontendEvent } from "../http/frontend-events.ts";
 import { RunLogger } from "../core/logger.ts";
 import { formatErrorMessage } from "../core/error-format.ts";
@@ -21,6 +20,7 @@ import { toDownstreamAgentSelection } from "../core/config.ts";
 import { appendTimingTraceEvent, type RunTimingTrace } from "../core/timing-trace.ts";
 import { summarizeText } from "../util/text.ts";
 import type {
+  AgentSession,
   AgentTokenUsage,
   Continuation,
   DownstreamAgentConfig,
@@ -67,7 +67,7 @@ export async function executeTopLevelProcedure(params: {
   emitter: ProcedureRunnerEmitter;
   signal?: AbortSignal;
   softStopSignal?: AbortSignal;
-  defaultConversation?: DefaultConversationSession;
+  agentSession?: AgentSession;
   getDefaultAgentConfig: () => DownstreamAgentConfig;
   setDefaultAgentSelection: (selection: DownstreamAgentSelection) => DownstreamAgentConfig;
   prepareDefaultPrompt?: (promptInput: PromptInput) => PreparedDefaultPrompt;
@@ -108,7 +108,7 @@ export async function executeTopLevelProcedure(params: {
     promptInput,
     signal: params.signal,
     softStopSignal: params.softStopSignal,
-    defaultConversation: params.defaultConversation,
+    agentSession: params.agentSession,
     getDefaultAgentConfig: params.getDefaultAgentConfig,
     setDefaultAgentSelection: params.setDefaultAgentSelection,
     prepareDefaultPrompt: params.prepareDefaultPrompt,

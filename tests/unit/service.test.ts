@@ -18,7 +18,7 @@ import { extractProcedureDispatchResult, NanobossService } from "../../src/core/
 
 interface InternalSessionState {
   store: SessionStore;
-  defaultConversation: DefaultConversationSession;
+  defaultAgentSession: DefaultConversationSession;
 }
 
 beforeAll(() => {
@@ -1166,12 +1166,12 @@ describe("NanobossService", () => {
 
       await expect(promptPromise).rejects.toThrow("Stopped.");
 
-      const persistedSessionId = session.currentSessionId;
+      const persistedSessionId = session.sessionId;
       expect(typeof persistedSessionId).toBe("string");
       await expect(session.prompt("what is 2+2")).resolves.toMatchObject({ raw: "4" });
-      expect(session.currentSessionId).toBe(persistedSessionId);
+      expect(session.sessionId).toBe(persistedSessionId);
 
-      session.closeLiveSession();
+      session.close();
     }, {
       MOCK_AGENT_COOPERATIVE_CANCEL: "1",
     });

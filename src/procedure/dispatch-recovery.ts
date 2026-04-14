@@ -5,10 +5,9 @@ import {
 } from "../core/cancellation.ts";
 import { createTextPromptInput } from "../core/prompt.ts";
 import { runResultFromRunRecord } from "../core/run-result.ts";
-import type { DefaultConversationSession } from "../agent/default-session.ts";
 import type { SessionStore } from "../session/index.ts";
 import { inferDataShape } from "../core/data-shape.ts";
-import type { AgentTokenUsage, DownstreamAgentConfig, Ref, RunRecord, RunResult } from "../core/types.ts";
+import type { AgentSession, AgentTokenUsage, DownstreamAgentConfig, Ref, RunRecord, RunResult } from "../core/types.ts";
 import { createRef } from "../core/types.ts";
 import { summarizeText } from "../util/text.ts";
 
@@ -68,12 +67,12 @@ export function findRecoveredProcedureDispatchRun(
 }
 
 export async function syncRecoveredProcedureResultIntoDefaultConversation(params: {
-  defaultConversation: DefaultConversationSession;
+  agentSession: AgentSession;
   run: RunRecord;
   signal?: AbortSignal;
   defaultAgentConfig: DownstreamAgentConfig;
 }): Promise<AgentTokenUsage | undefined> {
-  await params.defaultConversation.prompt(
+  await params.agentSession.prompt(
     createTextPromptInput(buildRecoveredProcedureSyncPrompt(params.run)),
     {
       signal: params.signal,
@@ -81,7 +80,7 @@ export async function syncRecoveredProcedureResultIntoDefaultConversation(params
   );
 
   return normalizeAgentTokenUsage(
-    await params.defaultConversation.getCurrentTokenSnapshot(),
+    await params.agentSession.getCurrentTokenSnapshot(),
     params.defaultAgentConfig,
   );
 }

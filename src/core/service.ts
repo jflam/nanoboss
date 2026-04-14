@@ -62,6 +62,7 @@ import { shouldLoadDiskCommands } from "./runtime-mode.ts";
 import { appendTimingTraceEvent, createRunTimingTrace, type RunTimingTrace } from "./timing-trace.ts";
 import { isProcedureDispatchResult, isProcedureDispatchStatusResult } from "../runtime/api.ts";
 import type {
+  AgentSession,
   AgentTokenUsage,
   DownstreamAgentConfig,
   DownstreamAgentSelection,
@@ -89,7 +90,7 @@ interface SessionState {
   store: SessionStore;
   events: SessionEventLog;
   defaultAgentConfig: DownstreamAgentConfig;
-  defaultConversation: DefaultConversationSession;
+  defaultAgentSession: AgentSession;
   syncedProcedureMemoryRunIds: Set<string>;
   recentRecoverySyncAtMs?: number;
   activeRun?: ActiveRunState;
@@ -297,7 +298,7 @@ export class NanobossService {
       throw new Error(`Unknown session: ${sessionId}`);
     }
 
-    await state.defaultConversation.warm();
+    await state.defaultAgentSession.warm?.();
     this.persistSessionState(state);
     return this.buildSessionDescriptor(sessionId, state);
   }
@@ -315,12 +316,12 @@ export class NanobossService {
       sessionId: params.sessionId,
       cwd: params.cwd,
     });
-    const defaultConversation = new DefaultConversationSession({
+    const defaultAgentSession = new DefaultConversationSession({
       config: defaultAgentConfig,
       persistedSessionId: params.defaultAgentSessionId,
     });
-    if (shouldPrewarmDefaultConversation()) {
-      void defaultConversation.warm();
+    if (shouldPrewarmDefaultAgentSession()) {
+      void defaultAgentSession.warm?.();
     }
 
     return {
@@ -328,7 +329,7 @@ export class NanobossService {
       store,
       events: new SessionEventLog(),
       defaultAgentConfig,
-      defaultConversation,
+      defaultAgentSession,
       syncedProcedureMemoryRunIds: new Set(),
       commands,
       pendingContinuation: params.pendingContinuation,
@@ -397,7 +398,7 @@ export class NanobossService {
     options: { prompt?: string; preserveDefaultAcpSessionId?: boolean } = {},
   ): SessionMetadata {
     const existing = readSessionMetadata(session.store.sessionId, session.store.rootDir);
-    const defaultAgentSessionId = session.defaultConversation.currentSessionId
+    const defaultAgentSessionId = session.defaultAgentSession.sessionId
       ?? (options.preserveDefaultAcpSessionId === false ? undefined : existing?.defaultAgentSessionId);
 
     return writeSessionMetadata({
@@ -443,7 +444,7 @@ export class NanobossService {
     this.cancelActiveProcedureDispatches(sessionId, session, session.activeRun);
     session.activeRun?.abortController.abort();
     session.activeRun?.softStopController.abort();
-    session.defaultConversation.closeLiveSession();
+    session.defaultAgentSession.close();
     this.sessions.delete(sessionId);
   }
 
@@ -550,7 +551,7 @@ export class NanobossService {
       appendTimingTraceEvent(timingTrace, "service", "default_dispatch_prompt_started", {
         procedure: procedureName,
       });
-      const promptResult = await session.defaultConversation.prompt(
+      const promptResult = await session.defaultAgentSession.prompt(
         createTextPromptInput(buildMcpProcedureDispatchPrompt(
           session.store.sessionId,
           procedureName,
@@ -593,7 +594,7 @@ export class NanobossService {
         return {
           result,
           tokenUsage: normalizeAgentTokenUsage(
-            promptResult.tokenSnapshot ?? await session.defaultConversation.getCurrentTokenSnapshot(),
+            promptResult.tokenSnapshot ?? await session.defaultAgentSession.getCurrentTokenSnapshot(),
             session.defaultAgentConfig,
           ),
         };
@@ -623,7 +624,7 @@ export class NanobossService {
         return {
           result: dispatchStatus.result,
           tokenUsage: normalizeAgentTokenUsage(
-            promptResult.tokenSnapshot ?? await session.defaultConversation.getCurrentTokenSnapshot(),
+            promptResult.tokenSnapshot ?? await session.defaultAgentSession.getCurrentTokenSnapshot(),
             session.defaultAgentConfig,
           ),
         };
@@ -654,7 +655,7 @@ export class NanobossService {
         return {
           result: procedureDispatchResultFromRecoveredRun(recoveredRun),
           tokenUsage: normalizeAgentTokenUsage(
-            promptResult.tokenSnapshot ?? await session.defaultConversation.getCurrentTokenSnapshot(),
+            promptResult.tokenSnapshot ?? await session.defaultAgentSession.getCurrentTokenSnapshot(),
             session.defaultAgentConfig,
           ),
         };
@@ -746,7 +747,7 @@ export class NanobossService {
 
     const nextConfig = this.resolveDefaultAgentConfig(session.cwd, selection);
     session.defaultAgentConfig = nextConfig;
-    session.defaultConversation.updateConfig(nextConfig);
+    session.defaultAgentSession.updateConfig(nextConfig);
     this.persistSessionState(session, { preserveDefaultAcpSessionId: false });
   }
 
@@ -1069,12 +1070,12 @@ export class NanobossService {
           emitter,
           signal: activeRun.abortController.signal,
           softStopSignal: activeRun.softStopController.signal,
-          defaultConversation: session.defaultConversation,
+          agentSession: session.defaultAgentSession,
           getDefaultAgentConfig: () => session.defaultAgentConfig,
           setDefaultAgentSelection: (selection) => {
             const nextConfig = this.resolveDefaultAgentConfig(session.cwd, selection);
             session.defaultAgentConfig = nextConfig;
-            session.defaultConversation.updateConfig(nextConfig);
+            session.defaultAgentSession.updateConfig(nextConfig);
             return nextConfig;
           },
           prepareDefaultPrompt: (prompt) => this.prepareDefaultPrompt(session, prompt, runId, timingTrace),
@@ -1217,7 +1218,7 @@ export class NanobossService {
   }
 }
 
-function shouldPrewarmDefaultConversation(): boolean {
+function shouldPrewarmDefaultAgentSession(): boolean {
   return process.env.NANOBOSS_PREWARM_DEFAULT_SESSION !== "0";
 }
 

@@ -18,22 +18,15 @@ import { buildAgentRuntimeSessionRuntime } from "./runtime-capability.ts";
 import { RunCancelledError, defaultCancellationMessage } from "../core/cancellation.ts";
 import { appendTimingTraceEvent, type RunTimingTrace } from "../core/timing-trace.ts";
 import { collectTokenSnapshot, enrichToolCallUpdateWithTokenUsage } from "./token-metrics.ts";
-import type { AgentTokenSnapshot, CallAgentOptions, DownstreamAgentConfig, PromptInput } from "../core/types.ts";
-
-interface DefaultSessionPromptOptions {
-  onUpdate?: CallAgentOptions["onUpdate"];
-  signal?: AbortSignal;
-  softStopSignal?: AbortSignal;
-  timingTrace?: RunTimingTrace;
-}
-
-interface DefaultSessionPromptResult {
-  raw: string;
-  logFile?: string;
-  updates: acp.SessionUpdate[];
-  durationMs: number;
-  tokenSnapshot?: AgentTokenSnapshot;
-}
+import type {
+  AgentSession,
+  AgentSessionPromptOptions,
+  AgentSessionPromptResult,
+  AgentTokenSnapshot,
+  CallAgentOptions,
+  DownstreamAgentConfig,
+  PromptInput,
+} from "../core/types.ts";
 
 interface PromptCollector {
   raw: string;
@@ -49,7 +42,7 @@ interface DefaultConversationSessionParams {
   persistedSessionId?: acp.SessionId;
 }
 
-export class DefaultConversationSession {
+export class DefaultConversationSession implements AgentSession {
   private persistedSessionId?: acp.SessionId;
   private liveSession?: PersistentAcpSession;
   private config: DownstreamAgentConfig;
@@ -62,7 +55,7 @@ export class DefaultConversationSession {
     this.persistedSessionId = params.persistedSessionId;
   }
 
-  get currentSessionId(): string | undefined {
+  get sessionId(): string | undefined {
     return this.persistedSessionId;
   }
 
@@ -88,8 +81,8 @@ export class DefaultConversationSession {
 
   async prompt(
     prompt: string | PromptInput,
-    options: DefaultSessionPromptOptions = {},
-  ): Promise<DefaultSessionPromptResult> {
+    options: AgentSessionPromptOptions = {},
+  ): Promise<AgentSessionPromptResult> {
     const startedAt = Date.now();
     appendTimingTraceEvent(options.timingTrace, "default_session", "prompt_started");
     const session = await this.ensureSession(options.timingTrace);
@@ -130,13 +123,13 @@ export class DefaultConversationSession {
       return;
     }
 
-    this.closeLiveSession();
+    this.close();
     this.persistedSessionId = undefined;
     this.lastTokenSnapshot = undefined;
     this.config = config;
   }
 
-  closeLiveSession(): void {
+  close(): void {
     this.sessionGeneration += 1;
     this.sessionPromise = undefined;
     this.liveSession?.close();
@@ -324,7 +317,7 @@ class PersistentAcpSession {
 
   async prompt(
     prompt: PromptInput,
-    options: DefaultSessionPromptOptions = {},
+    options: AgentSessionPromptOptions = {},
   ): Promise<{ raw: string; logFile?: string; updates: acp.SessionUpdate[]; tokenSnapshot?: AgentTokenSnapshot }> {
     if (!this.isAlive()) {
       throw new Error("Default ACP session is not available");

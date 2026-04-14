@@ -1,6 +1,7 @@
 import type * as acp from "@agentclientprotocol/sdk";
 import type { ReplayableFrontendEvent } from "../http/frontend-events.ts";
 import type { CellRef, ValueRef } from "../session/store-refs.ts";
+import type { RunTimingTrace } from "./timing-trace.ts";
 import {
   cellRefFromRunRef,
   refFromValueRef,
@@ -483,10 +484,27 @@ export interface AgentRunResult<T extends KernelValue = KernelValue> extends Run
   tokenSnapshot?: AgentTokenSnapshot;
 }
 
+export interface AgentSessionPromptOptions {
+  onUpdate?: CallAgentOptions["onUpdate"];
+  signal?: AbortSignal;
+  softStopSignal?: AbortSignal;
+  timingTrace?: RunTimingTrace;
+}
+
+export interface AgentSessionPromptResult {
+  raw: string;
+  logFile?: string;
+  updates: acp.SessionUpdate[];
+  durationMs: number;
+  tokenSnapshot?: AgentTokenSnapshot;
+}
+
 export interface AgentSession {
   sessionId?: string;
-  prompt(prompt: string | PromptInput): Promise<AgentRunResult>;
+  getCurrentTokenSnapshot(): Promise<AgentTokenSnapshot | undefined>;
+  prompt(prompt: string | PromptInput, options?: AgentSessionPromptOptions): Promise<AgentSessionPromptResult>;
   warm?(): Promise<void>;
+  updateConfig(config: DownstreamAgentConfig): void;
   close(): void;
 }
 
