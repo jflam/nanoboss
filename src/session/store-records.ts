@@ -4,13 +4,13 @@ import {
   runRefFromCellRef,
 } from "./store-refs.ts";
 import type {
-  CellKind,
   Continuation,
   DownstreamAgentSelection,
   JsonValue,
   KernelValue,
   PersistedFrontendEvent,
   PromptImageSummary,
+  RunKind,
   RunRecord,
   RunSummary,
 } from "../core/types.ts";
@@ -33,7 +33,7 @@ export interface CellRecord {
   meta: {
     createdAt: string;
     parentCellId?: string;
-    kind: CellKind;
+    kind: RunKind;
     dispatchCorrelationId?: string;
     defaultAgentSelection?: DownstreamAgentSelection;
     promptImages?: PromptImageSummary[];
@@ -43,7 +43,7 @@ export interface CellRecord {
 export interface CellSummary {
   cell: CellRef;
   procedure: string;
-  kind: CellKind;
+  kind: RunKind;
   parentCellId?: string;
   summary?: string;
   memory?: string;

@@ -338,15 +338,14 @@ describe("procedure API session namespaces", () => {
       },
     );
 
-    expect("recent" in ctx.session).toBe(false);
-    expect("topLevelRuns" in ctx.session).toBe(false);
+    expect("list" in ctx.session).toBe(false);
     expect("getDefaultAgentConfig" in ctx.state).toBe(false);
 
-    const latest = await ctx.state.runs.latest();
-    const topLevelRuns = await ctx.state.runs.topLevelRuns();
+    const recentRuns = await ctx.state.runs.list({ scope: "recent", limit: 1 });
+    const topLevelRuns = await ctx.state.runs.list();
 
     expect(ctx.session.getDefaultAgentConfig()).toEqual(createMockConfig(ctx.cwd));
-    expect(latest?.run).toEqual(otherTopLevel.run);
+    expect(recentRuns[0]?.run).toEqual(otherTopLevel.run);
     expect(topLevelRuns.map((run) => run.run)).toContainEqual(otherTopLevel.run);
   });
 
@@ -455,7 +454,6 @@ function createMockConfig(
 ): DownstreamAgentConfig {
   return {
     command: "bun",
-    args: ["run", MOCK_AGENT_PATH],
     cwd,
     ...overrides,
     args: overrides.args ?? ["run", MOCK_AGENT_PATH],

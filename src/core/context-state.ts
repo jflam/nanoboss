@@ -1,16 +1,15 @@
 import type {
   KernelValue,
   Ref,
+  RunListOptions,
   RefsApi,
   RunAncestorsOptions,
   RunDescendantsOptions,
   RunRef,
   RunRecord,
   RunSummary,
-  SessionRecentOptions,
   StateApi,
   StateRunsApi,
-  TopLevelRunsOptions,
 } from "./types.ts";
 import type { SessionStore } from "../session/index.ts";
 import { valueRefFromRef } from "../session/store-refs.ts";
@@ -41,41 +40,30 @@ export class CommandRuns implements StateRunsApi {
     private readonly currentCellId: string,
   ) {}
 
-  async recent(options?: SessionRecentOptions): Promise<RunSummary[]> {
-    return this.store.recentRuns({
-      ...options,
-      excludeCellId: this.currentCellId,
-    });
-  }
+  async list(options: RunListOptions = {}): Promise<RunSummary[]> {
+    if (options.scope === "recent") {
+      return this.store.recentRuns({
+        procedure: options.procedure,
+        limit: options.limit,
+        excludeCellId: this.currentCellId,
+      });
+    }
 
-  async latest(options?: SessionRecentOptions): Promise<RunSummary | undefined> {
-    return this.store.latestRun({
-      ...options,
-      excludeCellId: this.currentCellId,
+    return this.store.topLevelRunSummaries({
+      procedure: options.procedure,
+      limit: options.limit,
     });
-  }
-
-  async topLevelRuns(options?: TopLevelRunsOptions): Promise<RunSummary[]> {
-    return this.store.topLevelRunSummaries(options);
   }
 
   async get(run: RunRef): Promise<RunRecord> {
     return this.store.readRun(run);
   }
 
-  async parent(run: RunRef): Promise<RunSummary | undefined> {
-    return this.store.parentRun(run);
-  }
-
-  async children(run: RunRef, options?: Omit<RunDescendantsOptions, "maxDepth">): Promise<RunSummary[]> {
-    return this.store.childRuns(run, options);
-  }
-
-  async ancestors(run: RunRef, options?: RunAncestorsOptions): Promise<RunSummary[]> {
+  async getAncestors(run: RunRef, options?: RunAncestorsOptions): Promise<RunSummary[]> {
     return this.store.ancestorRuns(run, options);
   }
 
-  async descendants(run: RunRef, options?: RunDescendantsOptions): Promise<RunSummary[]> {
+  async getDescendants(run: RunRef, options?: RunDescendantsOptions): Promise<RunSummary[]> {
     return this.store.descendantRuns(run, options);
   }
 }

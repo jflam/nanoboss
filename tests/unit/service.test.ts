@@ -1221,7 +1221,7 @@ describe("NanobossService", () => {
     expect(session.commands.some((command) => command.name === "default")).toBe(false);
     expect(session.commands.some((command) => command.name === "list_runs")).toBe(false);
     expect(session.commands.some((command) => command.name === "get_run")).toBe(false);
-    expect(session.commands.some((command) => command.name === "ref_read")).toBe(false);
+    expect(session.commands.some((command) => command.name === "read_ref")).toBe(false);
     expect(session.commands.some((command) => command.name === "dismiss")).toBe(true);
   });
 

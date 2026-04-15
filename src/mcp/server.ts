@@ -14,15 +14,15 @@ import {
   isProcedureDispatchStatusResult,
 } from "../runtime/api.ts";
 import type {
-  CellKind,
   ProcedureMetadata,
   Ref,
   RunRef,
+  RunKind,
 } from "../core/types.ts";
 
 export const MCP_PROTOCOL_VERSION = "2025-11-25";
 export const MCP_SERVER_NAME = "nanoboss";
-export const MCP_INSTRUCTIONS = "Use these tools to dispatch nanoboss procedures and inspect durable session state. Prefer an explicit sessionId for session-scoped operations such as procedure_dispatch_start, list_runs, and session_recent. If sessionId is omitted, the current session for the server working directory may be used when available.";
+export const MCP_INSTRUCTIONS = "Use these tools to dispatch nanoboss procedures and inspect durable session state. Prefer an explicit sessionId for session-scoped operations such as procedure_dispatch_start and list_runs. Use list_runs with scope='recent' only for true global recency scans. If sessionId is omitted, the current session for the server working directory may be used when available.";
 
 export interface McpServerOptions {
   instructions?: string;
@@ -259,7 +259,7 @@ const MCP_TOOLS: McpToolDefinition[] = [
       return {
         runRef: parseRunRef(args.runRef),
         options: {
-          kind: asOptionalCellKind(args.kind),
+          kind: asOptionalRunKind(args.kind),
           procedure: asOptionalString(args.procedure),
           maxDepth: asOptionalNonNegativeNumber(args.maxDepth, "maxDepth"),
           limit: asOptionalNonNegativeNumber(args.limit, "limit"),
@@ -317,7 +317,7 @@ const MCP_TOOLS: McpToolDefinition[] = [
     },
   }),
   defineTool({
-    name: "ref_read",
+    name: "read_ref",
     description: "Read the exact value at a durable session ref.",
     inputSchema: {
       type: "object",
@@ -333,34 +333,11 @@ const MCP_TOOLS: McpToolDefinition[] = [
       };
     },
     async call(api, args) {
-      return api.refRead(args.ref);
+      return api.readRef(args.ref);
     },
   }),
   defineTool({
-    name: "session_recent",
-    description: "Return recent completed session run summaries from the whole targeted session. Use this only for global recency scans, not as the primary structural retrieval path.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        sessionId: { type: "string" },
-        procedure: { type: "string" },
-        limit: { type: "number" },
-      },
-      additionalProperties: false,
-    },
-    parseArgs(args) {
-      return {
-        sessionId: asOptionalString(args.sessionId),
-        procedure: asOptionalString(args.procedure),
-        limit: asOptionalNonNegativeNumber(args.limit, "limit"),
-      };
-    },
-    async call(api, args) {
-      return api.listRuns({ ...args, scope: "recent" });
-    },
-  }),
-  defineTool({
-    name: "ref_stat",
+    name: "stat_ref",
     description: "Return lightweight metadata for a durable session ref.",
     inputSchema: {
       type: "object",
@@ -376,7 +353,7 @@ const MCP_TOOLS: McpToolDefinition[] = [
       };
     },
     async call(api, args) {
-      return api.refStat(args.ref);
+      return api.statRef(args.ref);
     },
   }),
   defineTool({
@@ -402,24 +379,43 @@ const MCP_TOOLS: McpToolDefinition[] = [
     },
   }),
   defineTool({
-    name: "get_schema",
-    description: "Return compact shape metadata for a run result or value ref.",
+    name: "get_ref_schema",
+    description: "Return compact shape metadata for a durable value ref.",
     inputSchema: {
       type: "object",
       properties: {
-        runRef: RUN_REF_SCHEMA,
         ref: REF_SCHEMA,
       },
+      required: ["ref"],
       additionalProperties: false,
     },
     parseArgs(args) {
       return {
-        runRef: args.runRef !== undefined ? parseRunRef(args.runRef) : undefined,
-        ref: args.ref !== undefined ? parseRef(args.ref) : undefined,
+        ref: parseRef(args.ref),
       };
     },
     async call(api, args) {
-      return api.getSchema(args);
+      return api.getRefSchema(args.ref);
+    },
+  }),
+  defineTool({
+    name: "get_run_schema",
+    description: "Return compact shape metadata for a stored run result.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        runRef: RUN_REF_SCHEMA,
+      },
+      required: ["runRef"],
+      additionalProperties: false,
+    },
+    parseArgs(args) {
+      return {
+        runRef: parseRunRef(args.runRef),
+      };
+    },
+    async call(api, args) {
+      return api.getRunSchema(args.runRef);
     },
   }),
 ];
@@ -637,7 +633,7 @@ function asOptionalBoolean(value: unknown): boolean | undefined {
   return typeof value === "boolean" ? value : undefined;
 }
 
-function asOptionalCellKind(value: unknown): CellKind | undefined {
+function asOptionalRunKind(value: unknown): RunKind | undefined {
   if (value === undefined) {
     return undefined;
   }

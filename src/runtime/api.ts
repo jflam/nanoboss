@@ -42,10 +42,11 @@ export interface RuntimeService {
   getRun(runRef: RunRef): unknown;
   getRunAncestors(runRef: RunRef, args?: { includeSelf?: boolean; limit?: number }): unknown;
   getRunDescendants(runRef: RunRef, args?: unknown): unknown;
-  refRead(ref: Ref): unknown;
-  refStat(ref: Ref): unknown;
+  readRef(ref: Ref): unknown;
+  statRef(ref: Ref): unknown;
   refWriteToFile(ref: Ref, path: string): { path: string };
-  getSchema(args: { runRef?: RunRef; ref?: Ref }): RuntimeSchemaResult;
+  getRefSchema(ref: Ref): RuntimeSchemaResult;
+  getRunSchema(runRef: RunRef): RuntimeSchemaResult;
   procedureList(args?: { includeHidden?: boolean; sessionId?: string }): Promise<ProcedureListResult>;
   procedureGet(args: { name: string; sessionId?: string }): Promise<ProcedureMetadata>;
   procedureDispatchStart(args: {

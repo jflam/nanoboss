@@ -914,7 +914,7 @@ function tokenizePrompt(input: string): string[] {
   let quote: "'" | "\"" | null = null;
 
   for (let index = 0; index < input.length; index += 1) {
-    const char = input[index];
+    const char = input.charAt(index);
     if ((char === "\"" || char === "'") && quote === null) {
       quote = char;
       continue;

@@ -236,9 +236,10 @@ describe("nanoboss MCP server", () => {
       rootDir,
     });
 
-    const recent = await callMcpTool(runtime, "session_recent", {
+    const recent = await callMcpTool(runtime, "list_runs", {
       procedure: "second-opinion",
       limit: 5,
+      scope: "recent",
     }) as Array<{
       summary?: string;
       memory?: string;
@@ -307,7 +308,7 @@ describe("nanoboss MCP server", () => {
     }) as { output: { summary?: string } }).output.summary).toBe("review summary");
 
     const reviewDataRef = createRef(reviewResult.run, "output.data");
-    const manifest = await callMcpTool(runtime, "ref_read", {
+    const manifest = await callMcpTool(runtime, "read_ref", {
       ref: reviewDataRef,
     });
     expect(manifest).toEqual({
@@ -321,7 +322,7 @@ describe("nanoboss MCP server", () => {
       (manifest as { plan?: typeof planResult.dataRef }).plan,
       "Expected plan ref in manifest",
     );
-    expect(await callMcpTool(runtime, "ref_read", {
+    expect(await callMcpTool(runtime, "read_ref", {
       ref: planRef,
     })).toEqual({
       critique: critiqueResult.dataRef ? createRef(critiqueResult.run, "output.data") : undefined,
@@ -331,17 +332,17 @@ describe("nanoboss MCP server", () => {
       (manifest as { summary?: typeof summaryResult.dataRef }).summary,
       "Expected summary ref in manifest",
     );
-    expect(await callMcpTool(runtime, "ref_read", {
+    expect(await callMcpTool(runtime, "read_ref", {
       ref: summaryRef,
     })).toEqual({
       outline: "review outline",
     });
 
-    expect((await callMcpTool(runtime, "ref_stat", {
+    expect((await callMcpTool(runtime, "stat_ref", {
       ref: reviewDataRef,
     }) as { type?: string }).type).toBe("object");
 
-    const schema = await callMcpTool(runtime, "get_schema", {
+    const schema = await callMcpTool(runtime, "get_run_schema", {
       runRef: reviewResult.run,
     }) as {
       dataShape?: unknown;
@@ -391,8 +392,12 @@ describe("nanoboss MCP server", () => {
     expect(toolNames).toContain("get_run_ancestors");
     expect(toolNames).toContain("get_run_descendants");
     expect(toolNames).toContain("get_run");
-    expect(toolNames).toContain("ref_read");
+    expect(toolNames).toContain("read_ref");
+    expect(toolNames).toContain("stat_ref");
+    expect(toolNames).toContain("get_ref_schema");
+    expect(toolNames).toContain("get_run_schema");
     expect(toolNames).not.toContain("session_last");
+    expect(toolNames).not.toContain("session_recent");
     expect(toolNames).not.toContain("cell_parent");
     expect(toolNames).not.toContain("cell_children");
     expect(toolNames).not.toContain("top_level_runs");
@@ -617,7 +622,7 @@ describe("nanoboss MCP server", () => {
     expect((await callMcpTool(runtime, "get_run", {
       runRef: expectDefined(dispatched.run, "Expected dispatched run"),
     }) as { meta: { dispatchCorrelationId?: string } }).meta.dispatchCorrelationId).toBe(dispatchCorrelationId);
-    expect(dispatched.dataRef ? await callMcpTool(runtime, "ref_read", {
+    expect(dispatched.dataRef ? await callMcpTool(runtime, "read_ref", {
       ref: dispatched.dataRef,
     }) : undefined).toEqual({
       subject: "patch",

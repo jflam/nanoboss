@@ -21,10 +21,6 @@ import {
   type CellSummary,
 } from "./store-records.ts";
 import type {
-  CellAncestorsOptions,
-  CellDescendantsOptions,
-  CellFilterOptions,
-  CellKind,
   Continuation,
   DownstreamAgentSelection,
   KernelValue,
@@ -34,11 +30,17 @@ import type {
   PromptInput,
   ProcedureResult,
   RefStat,
+  RunAncestorsOptions,
+  RunDescendantsOptions,
+  RunFilterOptions,
+  RunKind,
+  RunListOptions,
   RunRecord,
   RunRef,
   RunSummary,
-  TopLevelRunsOptions,
 } from "../core/types.ts";
+
+type TopLevelRunsOptions = Omit<RunListOptions, "scope">;
 
 interface CellDraft {
   cell: CellRef;
@@ -47,7 +49,7 @@ interface CellDraft {
   meta: {
     createdAt: string;
     parentCellId?: string;
-    kind: CellKind;
+    kind: RunKind;
     dispatchCorrelationId?: string;
     defaultAgentSelection?: DownstreamAgentSelection;
     promptImages?: CellRecord["meta"]["promptImages"];
@@ -137,7 +139,7 @@ export class SessionStore {
   startCell(params: {
     procedure: string;
     input: string;
-    kind: CellKind;
+    kind: RunKind;
     parentCellId?: string;
     dispatchCorrelationId?: string;
     promptImages?: CellRecord["meta"]["promptImages"];
@@ -334,18 +336,18 @@ export class SessionStore {
     return summary ? runSummaryFromCellSummary(summary) : undefined;
   }
 
-  children(cellRef: CellRef, options: Omit<CellDescendantsOptions, "maxDepth"> = {}): CellSummary[] {
+  children(cellRef: CellRef, options: Omit<RunDescendantsOptions, "maxDepth"> = {}): CellSummary[] {
     return this.descendants(cellRef, {
       ...options,
       maxDepth: 1,
     });
   }
 
-  childRuns(runRef: RunRef, options: Omit<CellDescendantsOptions, "maxDepth"> = {}): RunSummary[] {
+  childRuns(runRef: RunRef, options: Omit<RunDescendantsOptions, "maxDepth"> = {}): RunSummary[] {
     return this.children(cellRefFromRunRef(runRef), options).map(runSummaryFromCellSummary);
   }
 
-  ancestors(cellRef: CellRef, options: CellAncestorsOptions = {}): CellSummary[] {
+  ancestors(cellRef: CellRef, options: RunAncestorsOptions = {}): CellSummary[] {
     this.loadExistingCells();
     const cell = this.readCell(cellRef);
     const limit = normalizeLimit(options.limit);
@@ -363,11 +365,11 @@ export class SessionStore {
     return ancestors;
   }
 
-  ancestorRuns(runRef: RunRef, options: CellAncestorsOptions = {}): RunSummary[] {
+  ancestorRuns(runRef: RunRef, options: RunAncestorsOptions = {}): RunSummary[] {
     return this.ancestors(cellRefFromRunRef(runRef), options).map(runSummaryFromCellSummary);
   }
 
-  descendants(cellRef: CellRef, options: CellDescendantsOptions = {}): CellSummary[] {
+  descendants(cellRef: CellRef, options: RunDescendantsOptions = {}): CellSummary[] {
     this.loadExistingCells();
     this.readCell(cellRef);
     const limit = normalizeLimit(options.limit);
@@ -420,7 +422,7 @@ export class SessionStore {
     return descendants;
   }
 
-  descendantRuns(runRef: RunRef, options: CellDescendantsOptions = {}): RunSummary[] {
+  descendantRuns(runRef: RunRef, options: RunDescendantsOptions = {}): RunSummary[] {
     return this.descendants(cellRefFromRunRef(runRef), options).map(runSummaryFromCellSummary);
   }
 
@@ -772,7 +774,7 @@ function buildAttachmentTempPath(path: string): string {
   return `${path}.tmp`;
 }
 
-function matchesCell(record: CellRecord, options: Pick<CellFilterOptions, "kind" | "procedure">): boolean {
+function matchesCell(record: CellRecord, options: Pick<RunFilterOptions, "kind" | "procedure">): boolean {
   if (options.kind && record.meta.kind !== options.kind) {
     return false;
   }

@@ -11,7 +11,7 @@ export type {
   RunResult,
   RunSummary,
   SessionDescriptor,
-  SessionMetadataRecord,
+  SessionMetadata,
   SessionRef,
 } from "./types.ts";
 

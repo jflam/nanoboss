@@ -48,8 +48,7 @@ describe("procedure API surface", () => {
     expect(ctx.session).toBeDefined();
     expect(ctx.state.refs).toBeDefined();
     expect(ctx.state.runs).toBeDefined();
-    expect("recent" in ctx.session).toBe(false);
-    expect("topLevelRuns" in ctx.session).toBe(false);
+    expect("list" in ctx.session).toBe(false);
     expect("getDefaultAgentConfig" in ctx.state).toBe(false);
     expect(ctx.session.getDefaultAgentConfig()).toEqual(expectedConfig);
     expect(ctx.session.setDefaultAgentSelection({ provider: "copilot", model: "gpt-5.4/xhigh" })).toEqual({

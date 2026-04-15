@@ -6,8 +6,10 @@ import { join } from "node:path";
 
 import executePlan from "../../.nanoboss/procedures/execute-plan.ts";
 import {
+  type CommandCallProcedureOptions,
   createRef,
   createRunRef,
+  type KernelValue,
   type ProcedureApi,
   type Ref,
   type RunRef,
@@ -270,7 +272,11 @@ function createProcedureApi(options: {
     descriptorOrOptions?: unknown,
     options?: unknown,
   ) => Promise<Partial<RunResult>>;
-  onProcedureRun?: (name: string, prompt: string) => Promise<Partial<RunResult>>;
+  onProcedureRun?: (
+    name: string,
+    prompt: string,
+    procedureOptions?: CommandCallProcedureOptions,
+  ) => Promise<Partial<RunResult>>;
   onReadRef?: (ref: Ref) => Promise<unknown>;
 }): ProcedureApi {
   const agentRun = (async (
@@ -295,12 +301,19 @@ function createProcedureApi(options: {
       },
     },
     procedures: {
-      run: async (name, prompt) => {
-        const result = await options.onProcedureRun?.(name, prompt);
+      async run<T extends KernelValue = KernelValue>(
+        name: string,
+        prompt: string,
+        procedureOptions?: CommandCallProcedureOptions,
+      ): Promise<RunResult<T>> {
+        if (!options.onProcedureRun) {
+          throw new Error("procedures.run should not be called");
+        }
+        const result = await options.onProcedureRun(name, prompt, procedureOptions);
         return {
           run: runRef(`procedure-${crypto.randomUUID()}`),
           ...result,
-        } as RunResult;
+        } as RunResult<T>;
       },
     },
     ui: {
@@ -314,7 +327,12 @@ function createProcedureApi(options: {
     state: {
       runs: {} as never,
       refs: {
-        read: async (ref) => await options.onReadRef?.(ref),
+        async read<T = KernelValue>(ref: Ref): Promise<T> {
+          if (!options.onReadRef) {
+            throw new Error("state.refs.read should not be called");
+          }
+          return await options.onReadRef(ref) as T;
+        },
         stat: async () => {
           throw new Error("state.refs.stat should not be called");
         },

@@ -32,7 +32,7 @@ export interface SessionDescriptor {
   defaultAgentSelection?: DownstreamAgentSelection;
 }
 
-export interface SessionMetadataRecord {
+export interface SessionMetadata {
   session: SessionRef;
   cwd: string;
   rootDir: string;
@@ -159,9 +159,7 @@ export type KernelValue =
   | KernelValue[]
   | object;
 
-export type CellKind = "top_level" | "procedure" | "agent";
-
-export type RunKind = CellKind;
+export type RunKind = "top_level" | "procedure" | "agent";
 
 export interface RunRecord {
   run: RunRef;
@@ -301,7 +299,7 @@ function isRefLike(value: unknown): value is Ref {
 }
 
 export interface RunFilterOptions {
-  kind?: CellKind;
+  kind?: RunKind;
   procedure?: string;
   limit?: number;
 }
@@ -315,16 +313,11 @@ export interface RunDescendantsOptions extends RunFilterOptions {
   maxDepth?: number;
 }
 
-export type CellFilterOptions = RunFilterOptions;
-export type CellAncestorsOptions = RunAncestorsOptions;
-export type CellDescendantsOptions = RunDescendantsOptions;
-
-export interface SessionRecentOptions {
+export interface RunListOptions {
+  scope?: "recent" | "top_level";
   procedure?: string;
   limit?: number;
 }
-
-export type TopLevelRunsOptions = Omit<CellFilterOptions, "kind">;
 
 export interface RefsApi {
   read<T = KernelValue>(ref: Ref): Promise<T>;
@@ -333,21 +326,17 @@ export interface RefsApi {
 }
 
 export interface StateRunsApi {
-  recent(options?: SessionRecentOptions): Promise<RunSummary[]>;
-  latest(options?: SessionRecentOptions): Promise<RunSummary | undefined>;
-  topLevelRuns(options?: TopLevelRunsOptions): Promise<RunSummary[]>;
+  list(options?: RunListOptions): Promise<RunSummary[]>;
   get(run: RunRef): Promise<RunRecord>;
-  parent(run: RunRef): Promise<RunSummary | undefined>;
-  children(run: RunRef, options?: Omit<RunDescendantsOptions, "maxDepth">): Promise<RunSummary[]>;
-  ancestors(run: RunRef, options?: RunAncestorsOptions): Promise<RunSummary[]>;
-  descendants(run: RunRef, options?: RunDescendantsOptions): Promise<RunSummary[]>;
+  getAncestors(run: RunRef, options?: RunAncestorsOptions): Promise<RunSummary[]>;
+  getDescendants(run: RunRef, options?: RunDescendantsOptions): Promise<RunSummary[]>;
 }
 
 export interface SessionApi {
   /**
    * Live default-agent session control for the current procedure binding.
    *
-   * Durable run/cell history lives under `ctx.state`, not `ctx.session`.
+   * Durable run history lives under `ctx.state`, not `ctx.session`.
    */
   getDefaultAgentConfig(): DownstreamAgentConfig;
   setDefaultAgentSelection(selection: DownstreamAgentSelection): DownstreamAgentConfig;
@@ -357,7 +346,7 @@ export interface SessionApi {
 
 export interface StateApi {
   /**
-   * Durable session data and structural traversal over stored run cells.
+   * Durable session data and structural traversal over stored runs.
    *
    * Live default-agent controls live under `ctx.session`, not `ctx.state`.
    */

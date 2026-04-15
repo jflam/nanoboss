@@ -2,13 +2,13 @@ import { inferDataShape } from "../core/data-shape.ts";
 import { shouldLoadDiskCommands } from "../core/runtime-mode.ts";
 import { valueRefFromRef } from "../session/store-refs.ts";
 import type {
-  CellDescendantsOptions,
   DownstreamAgentSelection,
   KernelValue,
   ProcedureMetadata,
   Ref,
   ProcedureRegistryLike,
   RunRef,
+  RunDescendantsOptions,
 } from "../core/types.ts";
 import { publicKernelValueFromStored } from "../core/types.ts";
 import {
@@ -48,17 +48,17 @@ export class NanobossRuntimeService {
 
   getRunDescendants(
     runRef: RunRef,
-    args: CellDescendantsOptions = {},
+    args: RunDescendantsOptions = {},
   ) {
     return this.createStoreForRunRef(runRef).descendantRuns(runRef, args);
   }
 
-  refRead(ref: Ref): unknown {
+  readRef(ref: Ref): unknown {
     const valueRef = valueRefFromRef(ref);
     return publicKernelValueFromStored(this.createStoreForRef(ref).readRef(valueRef) as KernelValue);
   }
 
-  refStat(ref: Ref) {
+  statRef(ref: Ref) {
     const valueRef = valueRefFromRef(ref);
     return this.createStoreForRef(ref).statRef(valueRef);
   }
@@ -70,25 +70,21 @@ export class NanobossRuntimeService {
     return { path };
   }
 
-  getSchema(args: { runRef?: RunRef; ref?: Ref }): RuntimeSchemaResult {
-    if (args.ref) {
-      const valueRef = valueRefFromRef(args.ref);
-      const store = this.createStoreForRef(args.ref);
-      const value = store.readRef(valueRef);
-      return {
-        target: args.ref,
-        dataShape: inferDataShape(value),
-      };
-    }
-
-    if (!args.runRef) {
-      throw new Error("get_schema requires runRef or ref");
-    }
-
-    const store = this.createStoreForRunRef(args.runRef);
-    const run = store.readRun(args.runRef);
+  getRefSchema(ref: Ref): RuntimeSchemaResult {
+    const valueRef = valueRefFromRef(ref);
+    const store = this.createStoreForRef(ref);
+    const value = store.readRef(valueRef);
     return {
-      target: args.runRef,
+      target: ref,
+      dataShape: inferDataShape(value),
+    };
+  }
+
+  getRunSchema(runRef: RunRef): RuntimeSchemaResult {
+    const store = this.createStoreForRunRef(runRef);
+    const run = store.readRun(runRef);
+    return {
+      target: runRef,
       dataShape: inferDataShape(run.output.data),
       explicitDataSchema: run.output.explicitDataSchema,
     };
