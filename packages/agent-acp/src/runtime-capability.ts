@@ -1,9 +1,19 @@
 import type * as acp from "@agentclientprotocol/sdk";
 
-import { buildGlobalMcpStdioServer } from "@nanoboss/adapters-mcp";
+export interface AgentRuntimeSessionRuntime {
+  mcpServers: NonNullable<acp.NewSessionRequest["mcpServers"]>;
+}
 
-export function buildAgentRuntimeSessionRuntime(): Pick<acp.NewSessionRequest, "mcpServers"> {
-  return {
-    mcpServers: [buildGlobalMcpStdioServer()],
-  };
+export type AgentRuntimeSessionRuntimeFactory = () => AgentRuntimeSessionRuntime;
+
+let runtimeFactory: AgentRuntimeSessionRuntimeFactory | undefined;
+
+export function setAgentRuntimeSessionRuntimeFactory(
+  factory: AgentRuntimeSessionRuntimeFactory | undefined,
+): void {
+  runtimeFactory = factory;
+}
+
+export function buildAgentRuntimeSessionRuntime(): AgentRuntimeSessionRuntime {
+  return runtimeFactory?.() ?? { mcpServers: [] };
 }

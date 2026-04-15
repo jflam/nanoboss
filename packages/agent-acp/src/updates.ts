@@ -1,7 +1,7 @@
 import type * as acp from "@agentclientprotocol/sdk";
 
-import { parseProcedureUiMarker } from "../../../src/core/ui-cli.ts";
-import { summarizeText } from "../../../src/util/text.ts";
+import { summarizeText } from "./text.ts";
+import { parseProcedureUiMarker } from "./ui-marker.ts";
 
 export interface AssistantNotice {
   text: string;

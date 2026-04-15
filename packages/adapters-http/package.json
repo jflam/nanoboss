@@ -8,6 +8,7 @@
   },
   "dependencies": {
     "@agentclientprotocol/sdk": "^0.17.1",
+    "@nanoboss/agent-acp": "workspace:*",
     "@nanoboss/app-runtime": "workspace:*"
   }
 }

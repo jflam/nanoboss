@@ -22,9 +22,31 @@ export function normalizeRunCancelledError(
     return error;
   }
 
+  if (isRunCancelledErrorLike(error)) {
+    return new RunCancelledError(
+      error.message || defaultCancellationMessage(error.reason ?? reason),
+      error.reason ?? reason,
+    );
+  }
+
   if (error instanceof Error && error.name === "AbortError") {
     return new RunCancelledError(defaultCancellationMessage(reason), reason);
   }
 
   return undefined;
+}
+
+function isRunCancelledErrorLike(error: unknown): error is Error & {
+  reason?: RunCancellationReason;
+} {
+  if (!(error instanceof Error) || error.name !== "RunCancelledError") {
+    return false;
+  }
+
+  const candidate = error as Error & { reason?: RunCancellationReason };
+  return (
+    candidate.reason === undefined ||
+    candidate.reason === "soft_stop" ||
+    candidate.reason === "abort"
+  );
 }

@@ -2,9 +2,9 @@ import * as acp from "@agentclientprotocol/sdk";
 import { spawn } from "node:child_process";
 import { Readable, Writable } from "node:stream";
 
+import { collectTokenSnapshot } from "@nanoboss/agent-acp";
 import { resolveDownstreamAgentConfig } from "../src/core/config.ts";
-import { collectTokenSnapshot } from "../src/agent/token-metrics.ts";
-import type { AgentTokenSnapshot, DownstreamAgentProvider, DownstreamAgentSelection } from "../src/core/types.ts";
+import type { AgentTokenSnapshot, DownstreamAgentProvider, DownstreamAgentSelection } from "@nanoboss/procedure-sdk";
 
 interface ProbeArgs {
   provider: DownstreamAgentProvider;

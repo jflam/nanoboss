@@ -1,23 +1,22 @@
 import type * as acp from "@agentclientprotocol/sdk";
 
 import { parseAssistantNoticeText } from "./updates.ts";
-import { parseProcedureUiMarker } from "../../../src/core/ui-cli.ts";
+import { RunCancelledError, defaultCancellationMessage } from "./cancellation.ts";
 import {
   createTextPromptInput,
   hasPromptInputImages,
   promptInputDisplayText,
   promptInputToAcpBlocks,
   summarizePromptInputForAcpLog,
-} from "../../../src/core/prompt.ts";
+} from "./prompt.ts";
 import {
   closeAcpConnection,
   openAcpConnection,
   type OpenAcpConnection,
 } from "./runtime.ts";
 import { buildAgentRuntimeSessionRuntime } from "./runtime-capability.ts";
-import { RunCancelledError, defaultCancellationMessage } from "../../../src/core/cancellation.ts";
-import { appendTimingTraceEvent, type RunTimingTrace } from "../../../src/core/timing-trace.ts";
 import { collectTokenSnapshot, enrichToolCallUpdateWithTokenUsage } from "./token-metrics.ts";
+import { appendTimingTraceEvent, type RunTimingTrace } from "./timing-trace.ts";
 import type {
   AgentSession,
   AgentSessionPromptOptions,
@@ -26,7 +25,8 @@ import type {
   CallAgentOptions,
   DownstreamAgentConfig,
   PromptInput,
-} from "../../../src/core/types.ts";
+} from "./types.ts";
+import { parseProcedureUiMarker } from "./ui-marker.ts";
 
 interface PromptCollector {
   raw: string;

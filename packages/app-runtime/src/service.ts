@@ -1,5 +1,10 @@
 import type * as acp from "@agentclientprotocol/sdk";
-import { createAgentSession } from "@nanoboss/agent-acp";
+import {
+  createAgentSession,
+  normalizeAgentTokenUsage,
+  setAgentRuntimeSessionRuntimeFactory,
+} from "@nanoboss/agent-acp";
+import { buildGlobalMcpStdioServer } from "@nanoboss/adapters-mcp";
 
 import { buildMcpProcedureDispatchPrompt } from "../../../src/core/agent-runtime-instructions.ts";
 import { getBuildLabel } from "../../../src/core/build-info.ts";
@@ -18,7 +23,6 @@ import {
   promptInputDisplayText,
   promptInputToPlainText,
 } from "../../../src/core/prompt.ts";
-import { normalizeAgentTokenUsage } from "../../agent-acp/src/token-usage.ts";
 import {
   collectUnsyncedProcedureMemoryCards,
   materializeProcedureMemoryCard,
@@ -77,6 +81,10 @@ import type {
   RunRef,
   RunResult,
 } from "@nanoboss/procedure-sdk";
+
+setAgentRuntimeSessionRuntimeFactory(() => ({
+  mcpServers: [buildGlobalMcpStdioServer()],
+}));
 
 interface ActiveRunState {
   runId: string;

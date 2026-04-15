@@ -1,8 +1,11 @@
 import type * as acp from "@agentclientprotocol/sdk";
 
-import { collectTextSessionUpdates, summarizeAgentOutput } from "../../../agent-acp/src/updates.ts";
-import { invokeAgent } from "../../../agent-acp/src/transport.ts";
-import { normalizeAgentTokenUsage } from "../../../agent-acp/src/token-usage.ts";
+import {
+  collectTextSessionUpdates,
+  invokeAgent,
+  normalizeAgentTokenUsage,
+  summarizeAgentOutput,
+} from "@nanoboss/agent-acp";
 import { promptInputDisplayText } from "../../../../src/core/prompt.ts";
 import type { SessionStore } from "@nanoboss/store";
 import { RunCancelledError, defaultCancellationMessage, normalizeRunCancelledError } from "../../../../src/core/cancellation.ts";

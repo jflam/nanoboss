@@ -7,8 +7,8 @@ import {
   callAgent,
   parseAgentResponse,
   sanitizeJsonResponse,
-} from "../../src/agent/call-agent.ts";
-import type { CallAgentTransport } from "../../src/core/types.ts";
+  type CallAgentTransport,
+} from "@nanoboss/agent-acp";
 import { jsonType } from "@nanoboss/procedure-sdk";
 
 interface MathResult {

@@ -3,7 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   getAgentTokenUsagePercent,
   normalizeAgentTokenUsage,
-} from "../../src/agent/token-usage.ts";
+} from "@nanoboss/agent-acp";
 
 describe("token-usage", () => {
   test("normalizes token snapshots into a stable usage shape", () => {

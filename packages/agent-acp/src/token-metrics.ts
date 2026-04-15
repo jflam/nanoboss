@@ -4,7 +4,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 
 import { normalizeAgentTokenUsage } from "./token-usage.ts";
-import type { AgentTokenSnapshot, DownstreamAgentConfig } from "../../../src/core/types.ts";
+import type { AgentTokenSnapshot, DownstreamAgentConfig } from "./types.ts";
 
 interface CollectTokenSnapshotParams {
   childPid?: number | undefined;

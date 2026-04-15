@@ -1,4 +1,4 @@
-import { normalizeAgentTokenUsage } from "../../../agent-acp/src/token-usage.ts";
+import { normalizeAgentTokenUsage } from "@nanoboss/agent-acp";
 import {
   RunCancelledError,
   defaultCancellationMessage,

@@ -7,7 +7,7 @@ import {
   listSelectableModelOptions,
 } from "../src/agent/model-catalog.ts";
 import { formatAgentBanner } from "../src/core/runtime-banner.ts";
-import { getAgentTokenUsagePercent } from "../src/agent/token-usage.ts";
+import { getAgentTokenUsagePercent } from "@nanoboss/agent-acp";
 import type { AgentTokenUsage, Procedure } from "@nanoboss/procedure-sdk";
 
 export default {

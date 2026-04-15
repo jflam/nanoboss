@@ -1,9 +1,8 @@
 import type * as acp from "@agentclientprotocol/sdk";
 
-import { parseAssistantNoticeText } from "../../agent-acp/src/updates.ts";
+import { normalizeAgentTokenUsage, parseAssistantNoticeText } from "@nanoboss/agent-acp";
 import type { ProcedureUiEvent } from "../../procedure-engine/src/context/shared.ts";
 import type { ProcedureMemoryCard } from "../../../src/core/memory-cards.ts";
-import { normalizeAgentTokenUsage } from "../../agent-acp/src/token-usage.ts";
 import {
   summarizeToolCallStart,
   summarizeToolCallUpdate,

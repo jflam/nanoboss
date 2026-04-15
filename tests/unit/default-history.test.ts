@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { createAgentSession } from "@nanoboss/agent-acp";
 import { NanobossService } from "@nanoboss/app-runtime";
 import { ProcedureRegistry } from "@nanoboss/procedure-catalog";
-import type { DownstreamAgentConfig } from "../../src/core/types.ts";
+import type { DownstreamAgentConfig } from "@nanoboss/procedure-sdk";
 
 function createMockConfig(
   cwd: string,

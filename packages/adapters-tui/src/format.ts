@@ -1,4 +1,4 @@
-import { getAgentTokenUsagePercent } from "../../agent-acp/src/token-usage.ts";
+import { getAgentTokenUsagePercent } from "@nanoboss/agent-acp";
 import type { AgentTokenUsage } from "../../../src/core/types.ts";
 
 export function formatToolTraceLine(depth: number, text: string): string {

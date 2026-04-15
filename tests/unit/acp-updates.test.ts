@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { collectTextSessionUpdates, parseAssistantNoticeText } from "../../src/agent/acp-updates.ts";
+import { collectTextSessionUpdates, parseAssistantNoticeText } from "@nanoboss/agent-acp";
 
 describe("acp-updates", () => {
   test("recognizes assistant notices", () => {

@@ -2,7 +2,7 @@ import type {
   AgentTokenSnapshot,
   AgentTokenUsage,
   DownstreamAgentConfig,
-} from "../../../src/core/types.ts";
+} from "./types.ts";
 
 export function normalizeAgentTokenUsage(
   snapshot: AgentTokenSnapshot | undefined,

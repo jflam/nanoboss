@@ -11,7 +11,7 @@ import {
   parseCopilotLogMetrics,
   parseCopilotSessionState,
   parseDescendantPidsFromPsOutput,
-} from "../../src/agent/token-metrics.ts";
+} from "@nanoboss/agent-acp";
 
 test("collectTokenSnapshot uses ACP usage_update for codex", async () => {
   const snapshot = await collectTokenSnapshot({

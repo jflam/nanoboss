@@ -9,6 +9,7 @@
   "dependencies": {
     "@agentclientprotocol/sdk": "^0.17.1",
     "@nanoboss/contracts": "workspace:*",
-    "@nanoboss/procedure-sdk": "workspace:*"
+    "@nanoboss/procedure-sdk": "workspace:*",
+    "@nanoboss/store": "workspace:*"
   }
 }

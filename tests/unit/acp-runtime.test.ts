@@ -1,7 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
-import { describeBlockedNanobossAccess } from "../../src/agent/acp-runtime.ts";
-import { getAgentTranscriptDir, getNanobossHome } from "../../src/core/config.ts";
+import {
+  describeBlockedNanobossAccess,
+  getAgentTranscriptDir,
+  getNanobossHome,
+} from "@nanoboss/agent-acp";
 
 describe("describeBlockedNanobossAccess", () => {
   test("blocks direct reads from the global agent transcript directory", () => {

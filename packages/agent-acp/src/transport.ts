@@ -1,23 +1,22 @@
 import type * as acp from "@agentclientprotocol/sdk";
 
 import { collectTextSessionUpdates, parseAssistantNoticeText, summarizeAgentOutput } from "./updates.ts";
-import { parseProcedureUiMarker } from "../../../src/core/ui-cli.ts";
+import { RunCancelledError, defaultCancellationMessage } from "./cancellation.ts";
+import { resolveDefaultDownstreamAgentConfig } from "./config.ts";
 import {
   createTextPromptInput,
   hasPromptInputImages,
   promptInputDisplayText,
   promptInputToAcpBlocks,
   summarizePromptInputForAcpLog,
-} from "../../../src/core/prompt.ts";
+} from "./prompt.ts";
+import { toPublicRunResult } from "./run-result.ts";
 import {
   applyAcpSessionConfig,
   closeAcpConnection,
   openAcpConnection,
 } from "./runtime.ts";
 import { buildAgentRuntimeSessionRuntime } from "./runtime-capability.ts";
-import { RunCancelledError, defaultCancellationMessage } from "../../../src/core/cancellation.ts";
-import { resolveDownstreamAgentConfig } from "../../../src/core/config.ts";
-import { toPublicRunResult } from "../../../src/core/run-result.ts";
 import { SessionStore } from "@nanoboss/store";
 import { collectTokenSnapshot, enrichToolCallUpdateWithTokenUsage } from "./token-metrics.ts";
 import type {
@@ -27,7 +26,8 @@ import type {
   CallAgentTransport,
   KernelValue,
   TypeDescriptor,
-} from "../../../src/core/types.ts";
+} from "./types.ts";
+import { parseProcedureUiMarker } from "./ui-marker.ts";
 
 export const MAX_PARSE_RETRIES = 2;
 
@@ -355,7 +355,7 @@ async function runAcpPrompt(
     throw new RunCancelledError(defaultCancellationMessage("abort"), "abort");
   }
 
-  const config = options.config ?? resolveDownstreamAgentConfig();
+  const config = options.config ?? resolveDefaultDownstreamAgentConfig();
   const state = await openAcpConnection(config);
   const updates: acp.SessionUpdate[] = [];
   let lastTokenSnapshot: AgentTokenSnapshot | undefined;
