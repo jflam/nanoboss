@@ -150,6 +150,17 @@ describe("procedure disk loader", () => {
     }
   });
 
+  test("procedure-catalog declares the runtime build dependencies used by its typia plugin", () => {
+    const packageJson = JSON.parse(
+      readFileSync(join(process.cwd(), "packages", "procedure-catalog", "package.json"), "utf8"),
+    ) as {
+      dependencies?: Record<string, string>;
+    };
+
+    expect(packageJson.dependencies?.["@typia/transform"]).toBeDefined();
+    expect(packageJson.dependencies?.typescript).toBeDefined();
+  });
+
   test("persists generated procedures into an explicit procedure root", async () => {
     const procedureRoot = mkdtempSync(join(tmpdir(), "nab-profile-procedures-"));
 
