@@ -35,7 +35,7 @@ Used in two places:
 
 Relevant files:
 - nanoboss ACP server:
-  - `src/core/acp-server.ts`
+  - `@nanoboss/adapters-acp-server`
   - `cli.ts`
 - downstream ACP client/runtime:
   - `src/agent/acp-runtime.ts`
@@ -62,7 +62,7 @@ flowchart TD
   U[User] -->|local terminal| CLI[CLI\ncli.ts]
   U -->|HTTP requests| HTTPClient[HTTP client / UI\nsrc/http/client.ts]
 
-  CLI -->|stdio ACP| ACPServer[nanoboss ACP server\nsrc/core/acp-server.ts]
+  CLI -->|stdio ACP| ACPServer[nanoboss ACP server\n@nanoboss/adapters-acp-server]
   HTTPClient -->|HTTP + SSE| HTTPServer[nanoboss HTTP/SSE server\nsrc/http/server.ts]
 
   ACPServer --> Service[NanobossService\nsrc/core/service.ts]
@@ -106,7 +106,7 @@ sequenceDiagram
 
 Relevant files:
 - `cli.ts`
-- `src/core/acp-server.ts`
+- `@nanoboss/adapters-acp-server`
 - `src/core/service.ts`
 
 ---

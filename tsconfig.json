@@ -11,6 +11,9 @@
     "verbatimModuleSyntax": true,
     "baseUrl": ".",
     "paths": {
+      "@nanoboss/adapters-acp-server": [
+        "./packages/adapters-acp-server/src/index.ts"
+      ],
       "@nanoboss/adapters-mcp": [
         "./packages/adapters-mcp/src/index.ts"
       ],

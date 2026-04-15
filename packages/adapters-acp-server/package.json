@@ -1,0 +1,13 @@
+{
+  "name": "@nanoboss/adapters-acp-server",
+  "version": "0.0.0",
+  "type": "module",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@agentclientprotocol/sdk": "^0.17.1",
+    "@nanoboss/app-runtime": "workspace:*"
+  }
+}

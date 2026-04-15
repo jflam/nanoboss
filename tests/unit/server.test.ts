@@ -4,9 +4,14 @@ import {
   buildTopLevelSessionMeta,
   extractDefaultAgentSelection,
   extractNanobossSessionId,
-} from "../../src/core/acp-server.ts";
+  runAcpServerCommand,
+} from "@nanoboss/adapters-acp-server";
 
 describe("top-level ACP session diagnostics", () => {
+  test("exports the ACP server command through the package boundary", () => {
+    expect(runAcpServerCommand).toBeFunction();
+  });
+
   test("reports the global MCP inspection surface", () => {
     expect(buildTopLevelSessionMeta()).toEqual({
       nanoboss: {
