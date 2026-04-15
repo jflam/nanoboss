@@ -1,0 +1,17 @@
+{
+  "name": "@nanoboss/app-runtime",
+  "version": "0.0.0",
+  "type": "module",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@agentclientprotocol/sdk": "^0.17.1",
+    "@nanoboss/agent-acp": "workspace:*",
+    "@nanoboss/procedure-catalog": "workspace:*",
+    "@nanoboss/procedure-engine": "workspace:*",
+    "@nanoboss/procedure-sdk": "workspace:*",
+    "@nanoboss/store": "workspace:*"
+  }
+}

@@ -1,9 +1,9 @@
 import { getBuildCommit, getBuildLabel } from "../core/build-info.ts";
 import { DEFAULT_HTTP_SERVER_PORT } from "../core/defaults.ts";
 import { createTextPromptInput, hasPromptInputContent, parsePromptInputPayload } from "../core/prompt.ts";
+import { NanobossService } from "@nanoboss/app-runtime";
 import { requireValue } from "../util/argv.ts";
 import type { FrontendEventEnvelope } from "./frontend-events.ts";
-import { NanobossService } from "../core/service.ts";
 import type { DownstreamAgentSelection, PromptInput } from "../core/types.ts";
 import { getWorkspaceIdentity } from "../core/workspace-identity.ts";
 

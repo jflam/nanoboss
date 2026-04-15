@@ -8,8 +8,8 @@ const MOCK_AGENT_PATH = join(process.cwd(), "tests/fixtures/mock-agent.ts");
 const SELF_COMMAND_PATH = join(process.cwd(), "dist", "nanoboss");
 const BUILD_HOOK_TIMEOUT_MS = 30_000;
 
+import { NanobossService } from "@nanoboss/app-runtime";
 import { ProcedureRegistry } from "@nanoboss/procedure-catalog";
-import { NanobossService } from "../../src/core/service.ts";
 import type { DownstreamAgentConfig } from "../../src/core/types.ts";
 
 const tempDirs: string[] = [];

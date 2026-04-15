@@ -4,8 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { createAgentSession } from "@nanoboss/agent-acp";
+import { NanobossService } from "@nanoboss/app-runtime";
 import { ProcedureRegistry } from "@nanoboss/procedure-catalog";
-import { NanobossService } from "../../src/core/service.ts";
 import type { DownstreamAgentConfig } from "../../src/core/types.ts";
 
 function createMockConfig(

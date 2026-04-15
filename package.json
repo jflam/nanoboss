@@ -23,6 +23,7 @@
   },
   "dependencies": {
     "@nanoboss/agent-acp": "workspace:*",
+    "@nanoboss/app-runtime": "workspace:*",
     "@nanoboss/contracts": "workspace:*",
     "@nanoboss/procedure-engine": "workspace:*",
     "@nanoboss/procedure-catalog": "workspace:*",

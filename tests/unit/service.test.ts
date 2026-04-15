@@ -4,6 +4,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFil
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createAgentSession } from "@nanoboss/agent-acp";
+import { extractProcedureDispatchResult, NanobossService } from "@nanoboss/app-runtime";
 
 const MOCK_AGENT_PATH = join(process.cwd(), "tests/fixtures/mock-agent.ts");
 const SELF_COMMAND_PATH = join(process.cwd(), "dist", "nanoboss");
@@ -15,7 +16,6 @@ import { createTextPromptInput, promptInputDisplayText } from "../../src/core/pr
 import { ProcedureRegistry } from "@nanoboss/procedure-catalog";
 import type { FrontendEventEnvelope, ReplayableFrontendEvent } from "../../src/http/frontend-events.ts";
 import { SessionStore } from "@nanoboss/store";
-import { extractProcedureDispatchResult, NanobossService } from "../../src/core/service.ts";
 
 interface InternalSessionState {
   store: SessionStore;
