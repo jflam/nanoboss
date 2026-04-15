@@ -15,7 +15,7 @@ import {
 } from "../../src/core/prompt.ts";
 import { jsonType, type AgentSession, type DownstreamAgentConfig, type ProcedureApi, type PromptInput } from "../../src/core/types.ts";
 import { ProcedureRegistry } from "../../src/procedure/registry.ts";
-import { SessionStore } from "../../src/session/index.ts";
+import { SessionStore } from "@nanoboss/store";
 
 interface MathResult {
   result: number;

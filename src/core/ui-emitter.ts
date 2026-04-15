@@ -4,7 +4,7 @@ import type { RunLogger } from "./logger.ts";
 import type { SessionUpdateEmitter } from "./context-shared.ts";
 import { formatProcedureStatusText } from "./ui-cli.ts";
 import type { UiApi, UiCardParams, UiStatusParams } from "./ui-api.ts";
-import type { SessionStore } from "../session/index.ts";
+import type { SessionStore } from "@nanoboss/store";
 
 const NOTICE_LABELS = {
   info: "Info",

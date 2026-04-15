@@ -1,4 +1,4 @@
-import type { StoredRunResult } from "../session/store.ts";
+import type { StoredRunResult } from "@nanoboss/store";
 import { inferDataShape } from "./data-shape.ts";
 import type {
   AgentTokenUsage,

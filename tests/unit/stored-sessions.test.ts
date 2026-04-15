@@ -8,7 +8,7 @@ import {
   listStoredSessions,
   readStoredSessionMetadata,
   writeStoredSessionMetadata,
-} from "../../src/session/repository.ts";
+} from "@nanoboss/store";
 
 let tempHome: string | undefined;
 

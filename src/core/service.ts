@@ -35,11 +35,9 @@ import {
 } from "../http/frontend-events.ts";
 import {
   SessionStore,
-} from "../session/index.ts";
-import {
   readStoredSessionMetadata,
   writeStoredSessionMetadata,
-} from "../session/repository.ts";
+} from "@nanoboss/store";
 import type { SessionMetadata } from "./contracts.ts";
 import { startProcedureDispatchProgressBridge } from "../procedure/dispatch-progress.ts";
 import {

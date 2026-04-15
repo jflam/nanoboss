@@ -6,7 +6,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 
 import { runResumeCommand, type StoredSessionSelectionResult } from "../../resume.ts";
 import { resolveWorkspaceKey } from "../../src/core/workspace-identity.ts";
-import { writeStoredSessionMetadata } from "../../src/session/repository.ts";
+import { writeStoredSessionMetadata } from "@nanoboss/store";
 
 let tempHome: string | undefined;
 

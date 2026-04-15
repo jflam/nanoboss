@@ -1,4 +1,4 @@
-import type { SessionStore } from "../session/index.ts";
+import type { SessionStore } from "@nanoboss/store";
 import type { CreateAgentSession } from "../agent/acp-session.ts";
 import { RunCancelledError, defaultCancellationMessage } from "./cancellation.ts";
 import { resolveDownstreamAgentConfig } from "./config.ts";

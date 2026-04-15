@@ -14,11 +14,11 @@ import {
   ProcedureDispatchJobManager,
 } from "../procedure/dispatch-jobs.ts";
 import { ProcedureRegistry, projectProcedureMetadata } from "../procedure/registry.ts";
-import { SessionStore } from "../session/index.ts";
 import {
+  SessionStore,
   readCurrentWorkspaceSessionMetadata,
   readStoredSessionMetadata,
-} from "../session/repository.ts";
+} from "@nanoboss/store";
 import type {
   ListRunsArgs,
   ProcedureListResult,

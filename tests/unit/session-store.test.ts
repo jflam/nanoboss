@@ -4,7 +4,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 
 import type { ReplayableFrontendEvent } from "../../src/http/frontend-events.ts";
 import type { PromptInput } from "../../src/core/types.ts";
-import { SessionStore } from "../../src/session/index.ts";
+import { SessionStore } from "@nanoboss/store";
 
 const tempDirs: string[] = [];
 

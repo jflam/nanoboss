@@ -4,7 +4,7 @@ import { collectTextSessionUpdates, summarizeAgentOutput } from "../agent/acp-up
 import { invokeAgent } from "../agent/call-agent.ts";
 import { normalizeAgentTokenUsage } from "../agent/token-usage.ts";
 import { promptInputDisplayText } from "./prompt.ts";
-import type { SessionStore } from "../session/index.ts";
+import type { SessionStore } from "@nanoboss/store";
 import { RunCancelledError, defaultCancellationMessage, normalizeRunCancelledError } from "./cancellation.ts";
 import { resolveDownstreamAgentConfig, toDownstreamAgentSelection } from "./config.ts";
 import { formatErrorMessage } from "./error-format.ts";

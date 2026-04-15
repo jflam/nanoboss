@@ -10,7 +10,7 @@ import {
 import { createRef } from "../../src/core/types.ts";
 import { ProcedureRegistry } from "../../src/procedure/registry.ts";
 import { createNanobossRuntimeService } from "../../src/runtime/service.ts";
-import { SessionStore } from "../../src/session/index.ts";
+import { SessionStore } from "@nanoboss/store";
 
 const tempDirs: string[] = [];
 const SELF_COMMAND_PATH = join(process.cwd(), "dist", "nanoboss");

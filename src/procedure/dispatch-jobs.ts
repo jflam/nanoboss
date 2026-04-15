@@ -25,7 +25,7 @@ import {
 } from "./runner.ts";
 import { runResultFromRunRecord } from "../core/run-result.ts";
 import { ProcedureRegistry } from "./registry.ts";
-import { SessionStore } from "../session/index.ts";
+import { SessionStore } from "@nanoboss/store";
 import { resolveSelfCommand } from "../core/self-command.ts";
 import type {
   DownstreamAgentSelection,

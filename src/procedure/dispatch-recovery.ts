@@ -5,7 +5,7 @@ import {
 } from "../core/cancellation.ts";
 import { createTextPromptInput } from "../core/prompt.ts";
 import { runResultFromRunRecord } from "../core/run-result.ts";
-import type { SessionStore } from "../session/index.ts";
+import type { SessionStore } from "@nanoboss/store";
 import { inferDataShape } from "../core/data-shape.ts";
 import type { AgentSession, AgentTokenUsage, DownstreamAgentConfig, Ref, RunRecord, RunResult } from "@nanoboss/contracts";
 import { createRef } from "@nanoboss/contracts";

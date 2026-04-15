@@ -11,7 +11,7 @@ import type {
   StateApi,
   StateRunsApi,
 } from "./types.ts";
-import type { SessionStore } from "../session/index.ts";
+import type { SessionStore } from "@nanoboss/store";
 import { publicKernelValueFromStored } from "./types.ts";
 
 export class CommandRefs implements RefsApi {

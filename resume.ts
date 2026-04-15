@@ -6,7 +6,7 @@ import { parseResumeOptions } from "./src/options/resume.ts";
 import {
   listStoredSessions,
   readCurrentWorkspaceSessionMetadata,
-} from "./src/session/repository.ts";
+} from "@nanoboss/store";
 
 export type StoredSessionSelectionResult =
   | { kind: "selected"; session: SessionMetadata }

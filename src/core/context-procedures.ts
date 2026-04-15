@@ -1,6 +1,5 @@
-import { normalizeProcedureResult } from "../session/index.ts";
+import { normalizeProcedureResult, type SessionStore } from "@nanoboss/store";
 import { createTextPromptInput, promptInputDisplayText } from "./prompt.ts";
-import type { SessionStore } from "../session/index.ts";
 import { formatErrorMessage } from "./error-format.ts";
 import type { RunLogger } from "./logger.ts";
 import { toPublicRunResult } from "./run-result.ts";

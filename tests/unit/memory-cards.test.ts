@@ -6,7 +6,7 @@ import {
   collectUnsyncedProcedureMemoryCards,
   renderProcedureMemoryCardsSection,
 } from "../../src/core/memory-cards.ts";
-import { SessionStore } from "../../src/session/index.ts";
+import { SessionStore } from "@nanoboss/store";
 
 const tempDirs: string[] = [];
 

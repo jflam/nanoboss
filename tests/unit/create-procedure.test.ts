@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import type { ProcedureApi, ProcedureRegistryLike } from "@nanoboss/contracts";
 import { createCreateProcedure } from "../../src/procedure/create.ts";
-import { normalizeProcedureResult } from "../../src/session/index.ts";
+import { normalizeProcedureResult } from "@nanoboss/store";
 
 describe("create procedure", () => {
   test("reports invalid generated procedure names without obscuring the cause", async () => {

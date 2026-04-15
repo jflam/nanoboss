@@ -18,7 +18,7 @@ import { buildAgentRuntimeSessionRuntime } from "./runtime-capability.ts";
 import { RunCancelledError, defaultCancellationMessage } from "../core/cancellation.ts";
 import { resolveDownstreamAgentConfig } from "../core/config.ts";
 import { toPublicRunResult } from "../core/run-result.ts";
-import { SessionStore } from "../session/index.ts";
+import { SessionStore } from "@nanoboss/store";
 import { collectTokenSnapshot, enrichToolCallUpdateWithTokenUsage } from "./token-metrics.ts";
 import type {
   AgentRunResult,

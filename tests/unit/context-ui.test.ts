@@ -7,7 +7,7 @@ import { CommandContextImpl } from "../../src/core/context.ts";
 import type { ProcedureUiEvent } from "../../src/core/context-shared.ts";
 import { RunLogger } from "../../src/core/logger.ts";
 import { ProcedureRegistry } from "../../src/procedure/registry.ts";
-import { SessionStore } from "../../src/session/index.ts";
+import { SessionStore } from "@nanoboss/store";
 
 const tempDirs: string[] = [];
 

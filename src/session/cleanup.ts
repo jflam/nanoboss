@@ -1,9 +1,9 @@
 import { existsSync, readFileSync, readdirSync, rmSync, statSync } from "node:fs";
 import { join } from "node:path";
 
+import { readStoredSessionMetadata } from "@nanoboss/store";
 import { getNanobossHome } from "../core/config.ts";
 import { formatErrorMessage } from "../core/error-format.ts";
-import { readStoredSessionMetadata } from "./repository.ts";
 
 export type SessionCleanupReason =
   | "empty_dir"

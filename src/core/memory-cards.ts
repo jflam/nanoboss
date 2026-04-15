@@ -1,5 +1,5 @@
 import { inferDataShape, stringifyCompactShape } from "./data-shape.ts";
-import type { SessionStore } from "../session/index.ts";
+import type { SessionStore } from "@nanoboss/store";
 import type { JsonValue, Ref, RunRef } from "./types.ts";
 import { createRef } from "./types.ts";
 import { summarizeText } from "../util/text.ts";

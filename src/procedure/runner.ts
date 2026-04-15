@@ -15,7 +15,7 @@ import {
 import {
   type SessionStore,
   normalizeProcedureResult,
-} from "../session/index.ts";
+} from "@nanoboss/store";
 import { toDownstreamAgentSelection } from "../core/config.ts";
 import { appendTimingTraceEvent, type RunTimingTrace } from "../core/timing-trace.ts";
 import { summarizeText } from "../util/text.ts";

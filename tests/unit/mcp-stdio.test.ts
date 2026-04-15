@@ -5,8 +5,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { join } from "node:path";
 
 import { resolveSelfCommand } from "../../src/core/self-command.ts";
-import { SessionStore } from "../../src/session/index.ts";
-import { writeStoredSessionMetadata } from "../../src/session/repository.ts";
+import { SessionStore, writeStoredSessionMetadata } from "@nanoboss/store";
 
 const tempDirs: string[] = [];
 

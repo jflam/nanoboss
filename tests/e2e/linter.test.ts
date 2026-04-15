@@ -6,7 +6,7 @@ import { afterEach, expect, test } from "bun:test";
 import { CommandContextImpl, type SessionUpdateEmitter } from "../../src/core/context.ts";
 import { RunLogger } from "../../src/core/logger.ts";
 import { ProcedureRegistry } from "../../src/procedure/registry.ts";
-import { SessionStore } from "../../src/session/index.ts";
+import { SessionStore } from "@nanoboss/store";
 import { describeE2E } from "./helpers.ts";
 
 const repoRoot = process.cwd();
