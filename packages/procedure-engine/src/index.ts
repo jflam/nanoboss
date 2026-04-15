@@ -11,6 +11,7 @@ import {
   syncRecoveredProcedureResultIntoDefaultConversation as syncRecoveredProcedureResultIntoDefaultConversationInternal,
   waitForRecoveredProcedureDispatchRun,
 } from "./dispatch/recovery.ts";
+import type { PreparedDefaultPrompt, ProcedureUiEvent, SessionUpdateEmitter } from "./context/shared.ts";
 import type {
   AgentTokenSnapshot,
   AgentTokenUsage,
@@ -40,6 +41,12 @@ export {
   runProcedureDispatchWorkerCommand,
 } from "./dispatch/jobs.ts";
 
+export {
+  buildProcedureDispatchProgressPath,
+  ProcedureDispatchProgressEmitter,
+  startProcedureDispatchProgressBridge,
+} from "./dispatch/progress.ts";
+
 export type {
   ProcedureDispatchJob,
   ProcedureDispatchJobStatus,
@@ -56,6 +63,13 @@ export {
   TopLevelProcedureCancelledError,
   TopLevelProcedureExecutionError,
 };
+
+export type { PreparedDefaultPrompt, ProcedureUiEvent, SessionUpdateEmitter };
+
+export { CommandContextImpl } from "./context/context.ts";
+export { UiApiImpl } from "./context/ui-api.ts";
+export { RunLogger } from "./logger.ts";
+export { formatProcedureStatusText } from "./ui-events.ts";
 
 export interface ProcedureEngineEmitter {
   emit(update: unknown): void;

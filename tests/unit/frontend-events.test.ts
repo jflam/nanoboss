@@ -1,7 +1,5 @@
 import { describe, expect, test } from "bun:test";
 
-import type { ProcedureUiEvent } from "../../src/core/context-shared.ts";
-import { formatProcedureStatusText } from "../../src/core/ui-cli.ts";
 import {
   mapProcedureUiEventToFrontendEvent,
   mapSessionUpdateToFrontendEvents,
@@ -9,6 +7,7 @@ import {
   toReplayableFrontendEvent,
   toFrontendCommands,
 } from "@nanoboss/adapters-http";
+import { formatProcedureStatusText, type ProcedureUiEvent } from "@nanoboss/procedure-engine";
 
 describe("frontend-events", () => {
   const statusEvent = {

@@ -4,7 +4,7 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { ProcedureDispatchProgressEmitter } from "../../src/procedure/dispatch-progress.ts";
+import { ProcedureDispatchProgressEmitter } from "@nanoboss/procedure-engine";
 
 describe("dispatch-progress", () => {
   test("forwards nested tool updates with full fidelity", () => {

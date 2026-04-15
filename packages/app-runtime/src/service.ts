@@ -10,8 +10,6 @@ import { buildMcpProcedureDispatchPrompt } from "../../../src/core/agent-runtime
 import { getBuildLabel } from "../../../src/core/build-info.ts";
 import { RunCancelledError, defaultCancellationMessage, normalizeRunCancelledError } from "../../../src/core/cancellation.ts";
 import { resolveDownstreamAgentConfig, toDownstreamAgentSelection } from "../../../src/core/config.ts";
-import { type SessionUpdateEmitter } from "../../procedure-engine/src/context/context.ts";
-import type { ProcedureUiEvent } from "../../procedure-engine/src/context/shared.ts";
 import { formatErrorMessage } from "../../../src/core/error-format.ts";
 import {
   createTextPromptInput,
@@ -45,16 +43,18 @@ import {
 } from "@nanoboss/store";
 import {
   ProcedureDispatchJobManager,
+  type ProcedureUiEvent,
   type ProcedureDispatchStatusResult,
   procedureDispatchResultFromRecoveredRun,
   resumeProcedure,
   runProcedure,
+  type SessionUpdateEmitter,
+  startProcedureDispatchProgressBridge,
   TopLevelProcedureCancelledError,
   TopLevelProcedureExecutionError,
   waitForRecoveredProcedureDispatchRun,
 } from "@nanoboss/procedure-engine";
 import type { SessionMetadata } from "../../../src/core/contracts.ts";
-import { startProcedureDispatchProgressBridge } from "../../procedure-engine/src/dispatch/progress.ts";
 import {
   buildRunCancelledEvent,
   buildRunCompletedEvent,

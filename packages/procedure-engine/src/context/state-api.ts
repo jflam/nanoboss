@@ -1,18 +1,19 @@
+import type { SessionStore } from "@nanoboss/store";
 import type {
   KernelValue,
   Ref,
-  RunListOptions,
   RefsApi,
   RunAncestorsOptions,
   RunDescendantsOptions,
-  RunRef,
+  RunListOptions,
   RunRecord,
+  RunRef,
   RunSummary,
   StateApi,
   StateRunsApi,
-} from "../../../../src/core/types.ts";
-import type { SessionStore } from "@nanoboss/store";
-import { publicKernelValueFromStored } from "../../../../src/core/types.ts";
+} from "@nanoboss/procedure-sdk";
+
+import { publicKernelValueFromStored } from "../stored-kernel.ts";
 
 export class CommandRefs implements RefsApi {
   constructor(

@@ -3,9 +3,8 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { CommandContextImpl } from "../../src/core/context.ts";
-import { RunLogger } from "../../src/core/logger.ts";
 import { ProcedureRegistry } from "@nanoboss/procedure-catalog";
+import { CommandContextImpl, RunLogger } from "@nanoboss/procedure-engine";
 import { SessionStore } from "@nanoboss/store";
 import type { DownstreamAgentConfig, DownstreamAgentSelection, ProcedureApi } from "@nanoboss/procedure-sdk";
 

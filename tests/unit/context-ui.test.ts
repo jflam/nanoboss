@@ -3,10 +3,8 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { CommandContextImpl } from "../../src/core/context.ts";
-import type { ProcedureUiEvent } from "../../src/core/context-shared.ts";
-import { RunLogger } from "../../src/core/logger.ts";
 import { ProcedureRegistry } from "@nanoboss/procedure-catalog";
+import { CommandContextImpl, type ProcedureUiEvent, RunLogger } from "@nanoboss/procedure-engine";
 import { SessionStore } from "@nanoboss/store";
 
 const tempDirs: string[] = [];

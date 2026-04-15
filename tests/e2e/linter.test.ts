@@ -3,9 +3,8 @@ import { cpSync, mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, expect, test } from "bun:test";
 
-import { CommandContextImpl, type SessionUpdateEmitter } from "../../src/core/context.ts";
-import { RunLogger } from "../../src/core/logger.ts";
 import { ProcedureRegistry } from "@nanoboss/procedure-catalog";
+import { CommandContextImpl, RunLogger, type SessionUpdateEmitter } from "@nanoboss/procedure-engine";
 import { SessionStore } from "@nanoboss/store";
 import { describeE2E } from "./helpers.ts";
 

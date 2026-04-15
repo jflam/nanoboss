@@ -1,24 +1,9 @@
 import { CommandContextImpl, type PreparedDefaultPrompt, type SessionUpdateEmitter } from "./context/context.ts";
 import {
-  RunCancelledError,
-  type RunCancellationReason,
-  normalizeRunCancelledError,
-} from "../../../src/core/cancellation.ts";
-import { RunLogger } from "../../../src/core/logger.ts";
-import { formatErrorMessage } from "../../../src/core/error-format.ts";
-import { runResultFromRunRecord } from "../../../src/core/run-result.ts";
-import {
-  promptInputDisplayText,
-  promptInputToPlainText,
-} from "../../../src/core/prompt.ts";
-import {
   type SessionStore,
   normalizeProcedureResult,
 } from "@nanoboss/store";
-import { toDownstreamAgentSelection } from "../../../src/core/config.ts";
-import { appendTimingTraceEvent, type RunTimingTrace } from "../../../src/core/timing-trace.ts";
-import { summarizeText } from "../../../src/util/text.ts";
-import type { AgentSession } from "../../../src/core/types.ts";
+import type { AgentSession } from "@nanoboss/agent-acp";
 import type {
   AgentTokenUsage,
   DownstreamAgentConfig,
@@ -32,6 +17,19 @@ import type {
   ProcedureRegistryLike,
   RunResult,
 } from "@nanoboss/procedure-sdk";
+
+import { toDownstreamAgentSelection } from "./agent-config.ts";
+import {
+  RunCancelledError,
+  type RunCancellationReason,
+  normalizeRunCancelledError,
+} from "./cancellation.ts";
+import { formatErrorMessage } from "./error-format.ts";
+import { RunLogger } from "./logger.ts";
+import { promptInputDisplayText, promptInputToPlainText } from "./prompt.ts";
+import { runResultFromRunRecord } from "./run-result.ts";
+import { summarizeText } from "./text.ts";
+import { appendTimingTraceEvent, type RunTimingTrace } from "./timing-trace.ts";
 
 export interface ProcedureRunnerEmitter extends SessionUpdateEmitter {
   readonly currentTokenUsage?: AgentTokenUsage;

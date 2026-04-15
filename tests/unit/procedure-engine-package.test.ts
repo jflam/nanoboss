@@ -3,7 +3,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import type { DownstreamAgentConfig } from "@nanoboss/contracts";
+import { createRef, type DownstreamAgentConfig, type RunRecord, type RunRef } from "@nanoboss/contracts";
 import {
   findRecoveredProcedureDispatchRun,
   procedureDispatchResultFromRecoveredRun,
@@ -53,6 +53,128 @@ function createStore(name: string): SessionStore {
     cwd: rootDir,
     rootDir,
   });
+}
+
+function createFakeStore(): {
+  store: Parameters<typeof runProcedure>[0]["store"];
+  getRun(run: RunRef): RunRecord;
+} {
+  type RunDraft = {
+    run: RunRef;
+    procedure: string;
+    input: string;
+    meta: {
+      createdAt: string;
+      parentRunId?: string;
+      kind: "top_level" | "procedure" | "agent";
+      dispatchCorrelationId?: string;
+      promptImages?: unknown;
+      defaultAgentSelection?: DownstreamAgentConfig["provider"] extends never ? never : unknown;
+    };
+    streamChunks: string[];
+  };
+
+  const records = new Map<string, RunRecord>();
+  const store = {
+    sessionId: crypto.randomUUID(),
+    cwd: process.cwd(),
+    rootDir: process.cwd(),
+    persistPromptImages() {
+      return undefined;
+    },
+    startRun(params: {
+      procedure: string;
+      input: string;
+      kind: "top_level" | "procedure" | "agent";
+      parentRunId?: string;
+      dispatchCorrelationId?: string;
+      promptImages?: unknown;
+    }): RunDraft {
+      return {
+        run: {
+          sessionId: this.sessionId,
+          runId: crypto.randomUUID(),
+        },
+        procedure: params.procedure,
+        input: params.input,
+        meta: {
+          createdAt: new Date().toISOString(),
+          parentRunId: params.parentRunId,
+          kind: params.kind,
+          dispatchCorrelationId: params.dispatchCorrelationId,
+          promptImages: params.promptImages,
+        },
+        streamChunks: [],
+      };
+    },
+    appendStream(draft: RunDraft, text: string) {
+      draft.streamChunks.push(text);
+    },
+    completeRun(
+      draft: RunDraft,
+      result: {
+        data?: unknown;
+        display?: string;
+        summary?: string;
+        memory?: string;
+        pause?: unknown;
+        explicitDataSchema?: object;
+      },
+      options: {
+        stream?: string;
+        raw?: string;
+        meta?: { defaultAgentSelection?: unknown };
+      } = {},
+    ) {
+      const record: RunRecord = {
+        run: draft.run,
+        kind: draft.meta.kind,
+        procedure: draft.procedure,
+        input: draft.input,
+        output: {
+          ...(result.data !== undefined ? { data: result.data as never } : {}),
+          ...(result.display !== undefined ? { display: result.display } : {}),
+          ...((draft.streamChunks.join("") || options.stream) ? { stream: draft.streamChunks.join("") || options.stream } : {}),
+          ...(result.summary !== undefined ? { summary: result.summary } : {}),
+          ...(result.memory !== undefined ? { memory: result.memory } : {}),
+          ...(result.pause !== undefined ? { pause: result.pause as never } : {}),
+          ...(result.explicitDataSchema !== undefined ? { explicitDataSchema: result.explicitDataSchema } : {}),
+        },
+        meta: {
+          createdAt: draft.meta.createdAt,
+          parentRunId: draft.meta.parentRunId,
+          dispatchCorrelationId: draft.meta.dispatchCorrelationId,
+          defaultAgentSelection: options.meta?.defaultAgentSelection as RunRecord["meta"]["defaultAgentSelection"],
+          promptImages: undefined,
+        },
+      };
+      records.set(record.run.runId, record);
+      return {
+        run: draft.run,
+        data: result.data,
+        dataRef: result.data !== undefined ? createRef(draft.run, "output.data") : undefined,
+        displayRef: result.display !== undefined ? createRef(draft.run, "output.display") : undefined,
+        streamRef: record.output.stream !== undefined ? createRef(draft.run, "output.stream") : undefined,
+        pause: result.pause,
+        pauseRef: result.pause !== undefined ? createRef(draft.run, "output.pause") : undefined,
+        summary: result.summary,
+        rawRef: options.raw !== undefined ? createRef(draft.run, "output.display") : undefined,
+      };
+    },
+    getRun(run: RunRef): RunRecord {
+      const record = records.get(run.runId);
+      if (!record) {
+        throw new Error(`Unknown fake run: ${run.runId}`);
+      }
+      return record;
+    },
+    discardPendingPromptImages() {},
+  };
+
+  return {
+    store: store as unknown as Parameters<typeof runProcedure>[0]["store"],
+    getRun: (run) => store.getRun(run),
+  };
 }
 
 function createEmitter() {
@@ -219,5 +341,59 @@ describe("procedure-engine package", () => {
       ...buildRunParams(store, registry, cancellable, "stop"),
       softStopSignal: controller.signal,
     })).rejects.toBeInstanceOf(TopLevelProcedureCancelledError);
+  });
+
+  test("uses a fake default agent session through the package boundary", async () => {
+    const { store, getRun } = createFakeStore();
+    const prompts: string[] = [];
+    const fakeAgentSession = {
+      sessionId: "fake-default-session",
+      async getCurrentTokenSnapshot() {
+        return {
+          source: "acp_prompt_response" as const,
+          sessionId: "fake-default-session",
+          totalTokens: 5,
+        };
+      },
+      async prompt(prompt: string | { parts: Array<{ type: "text"; text: string }> }) {
+        prompts.push(typeof prompt === "string" ? prompt : prompt.parts.map((part) => part.text).join(""));
+        return {
+          raw: "default-agent-reply",
+          durationMs: 0,
+          updates: [],
+        };
+      },
+      updateConfig() {},
+      close() {},
+    };
+    const usesDefaultSession: Procedure = {
+      name: "default-agent",
+      description: "Uses the provided default agent session",
+      async execute(_prompt, ctx) {
+        const result = await ctx.agent.run("reuse the default session", {
+          session: "default",
+          stream: false,
+        });
+        return {
+          data: {
+            reply: result.data,
+            sessionId: (await ctx.session.getDefaultAgentTokenSnapshot())?.sessionId,
+          },
+        };
+      },
+    };
+    const registry = createRegistry([usesDefaultSession]);
+
+    const result = await runProcedure({
+      ...buildRunParams(store, registry, usesDefaultSession, "go"),
+      agentSession: fakeAgentSession,
+      prepareDefaultPrompt: (promptInput) => ({ promptInput }),
+    });
+
+    expect(prompts).toEqual(["reuse the default session"]);
+    expect(getRun(result.run).output.data).toEqual({
+      reply: "default-agent-reply",
+      sessionId: "fake-default-session",
+    });
   });
 });

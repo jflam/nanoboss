@@ -1,18 +1,12 @@
 import type { SessionStore } from "@nanoboss/store";
-import type { CreateAgentSession } from "@nanoboss/agent-acp";
-import { RunCancelledError, defaultCancellationMessage } from "../../../../src/core/cancellation.ts";
-import { resolveDownstreamAgentConfig } from "../../../../src/core/config.ts";
+import type { AgentSession, CreateAgentSession } from "@nanoboss/agent-acp";
 import { AgentInvocationApiImpl, AgentRunRecorder } from "./agent-api.ts";
 import { type PreparedDefaultPrompt, type SessionUpdateEmitter } from "./shared.ts";
 import { ProcedureInvocationApiImpl, type ChildContextBindingParams } from "./procedure-api.ts";
 import { ContextSessionApiImpl } from "./session-api.ts";
 import { CommandState } from "./state-api.ts";
-import { type UiApi } from "../../../../src/core/ui-api.ts";
-import { UiApiImpl } from "../../../app-runtime/src/runtime-events.ts";
-import type { RunLogger } from "../../../../src/core/logger.ts";
-import { normalizeProcedurePromptInput } from "../../../../src/core/prompt.ts";
-import type { RunTimingTrace } from "../../../../src/core/timing-trace.ts";
 import type {
+  AgentInvocationApi,
   DownstreamAgentConfig,
   DownstreamAgentSelection,
   PromptInput,
@@ -22,11 +16,15 @@ import type {
   ProcedureRegistryLike,
   SessionApi,
   StateApi,
+  UiApi,
 } from "@nanoboss/procedure-sdk";
-import type {
-  AgentSession,
-  AgentInvocationApi,
-} from "../../../../src/core/types.ts";
+
+import { resolveDownstreamAgentConfig } from "../agent-config.ts";
+import { RunCancelledError, defaultCancellationMessage } from "../cancellation.ts";
+import type { RunLogger } from "../logger.ts";
+import { normalizeProcedurePromptInput } from "../prompt.ts";
+import type { RunTimingTrace } from "../timing-trace.ts";
+import { UiApiImpl } from "./ui-api.ts";
 
 type ActiveRun = ReturnType<SessionStore["startRun"]>;
 

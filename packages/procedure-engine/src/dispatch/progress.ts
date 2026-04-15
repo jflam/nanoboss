@@ -5,7 +5,8 @@ import { dirname, join } from "node:path";
 
 import type { ProcedureUiEvent, SessionUpdateEmitter } from "../context/context.ts";
 import type { AgentTokenUsage } from "@nanoboss/contracts";
-import { toProcedureUiSessionUpdate } from "../../../../src/core/ui-cli.ts";
+
+import { toProcedureUiSessionUpdate } from "../ui-events.ts";
 
 const PROCEDURE_DISPATCH_PROGRESS_DIR = "procedure-dispatch-progress";
 

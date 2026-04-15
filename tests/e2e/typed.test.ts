@@ -4,8 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import typia from "typia";
 
-import { CommandContextImpl } from "../../src/core/context.ts";
-import { RunLogger } from "../../src/core/logger.ts";
+import { CommandContextImpl, RunLogger } from "@nanoboss/procedure-engine";
 import { jsonType, type ProcedureApi } from "@nanoboss/procedure-sdk";
 import { ProcedureRegistry } from "@nanoboss/procedure-catalog";
 import { SessionStore } from "@nanoboss/store";

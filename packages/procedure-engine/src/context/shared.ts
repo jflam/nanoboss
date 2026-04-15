@@ -1,7 +1,6 @@
 import type * as acp from "@agentclientprotocol/sdk";
 
-import type { PromptInput } from "../../../../src/core/types.ts";
-import type { UiCardParams, UiStatusParams } from "../../../../src/core/types.ts";
+import type { PromptInput, UiCardParams, UiStatusParams } from "@nanoboss/procedure-sdk";
 
 export type ProcedureUiEvent =
   | {

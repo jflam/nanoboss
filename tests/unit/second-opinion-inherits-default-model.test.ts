@@ -3,9 +3,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, test } from "bun:test";
 
-import { CommandContextImpl } from "../../src/core/context.ts";
-import { RunLogger } from "../../src/core/logger.ts";
 import { ProcedureRegistry } from "@nanoboss/procedure-catalog";
+import { CommandContextImpl, RunLogger } from "@nanoboss/procedure-engine";
 import { SessionStore } from "@nanoboss/store";
 import type { DownstreamAgentConfig } from "../../src/core/types.ts";
 

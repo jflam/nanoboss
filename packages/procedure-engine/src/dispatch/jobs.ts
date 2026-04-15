@@ -10,9 +10,6 @@ import {
 } from "node:fs";
 import { join } from "node:path";
 
-import { defaultCancellationMessage } from "../../../../src/core/cancellation.ts";
-import { resolveDownstreamAgentConfig } from "../../../../src/core/config.ts";
-import { appendTimingTraceEvent, createRunTimingTrace } from "../../../../src/core/timing-trace.ts";
 import { findRecoveredProcedureDispatchRun } from "./recovery.ts";
 import {
   ProcedureDispatchProgressEmitter,
@@ -23,10 +20,8 @@ import {
   TopLevelProcedureExecutionError,
   executeTopLevelProcedure,
 } from "../top-level-runner.ts";
-import { runResultFromRunRecord } from "../../../../src/core/run-result.ts";
 import { ProcedureRegistry } from "@nanoboss/procedure-catalog";
 import { SessionStore } from "@nanoboss/store";
-import { resolveSelfCommand } from "../../../../src/core/self-command.ts";
 import type {
   DownstreamAgentSelection,
   RunRecord,
@@ -36,7 +31,13 @@ import type {
   ProcedureRegistryLike,
   RunResult,
 } from "@nanoboss/procedure-sdk";
-import { requireValue } from "../../../../src/util/argv.ts";
+
+import { resolveDownstreamAgentConfig } from "../agent-config.ts";
+import { requireValue } from "../argv.ts";
+import { defaultCancellationMessage } from "../cancellation.ts";
+import { runResultFromRunRecord } from "../run-result.ts";
+import { resolveSelfCommand } from "../self-command.ts";
+import { appendTimingTraceEvent, createRunTimingTrace } from "../timing-trace.ts";
 
 const PROCEDURE_DISPATCH_JOBS_DIR = "procedure-dispatch-jobs";
 const PROCEDURE_DISPATCH_CANCELS_DIR = "procedure-dispatch-cancels";

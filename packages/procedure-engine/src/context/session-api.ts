@@ -1,18 +1,23 @@
-import { createAgentSession, normalizeAgentTokenUsage, type CreateAgentSession } from "@nanoboss/agent-acp";
-import { createTextPromptInput } from "../../../../src/core/prompt.ts";
-import { resolveDownstreamAgentConfig } from "../../../../src/core/config.ts";
-import type { PreparedDefaultPrompt } from "./shared.ts";
+import {
+  createAgentSession,
+  normalizeAgentTokenUsage,
+  type AgentSession,
+  type CallAgentTransport,
+  type CreateAgentSession,
+} from "@nanoboss/agent-acp";
 import type {
-  AgentSession,
   AgentSessionMode,
-  CallAgentTransport,
   DownstreamAgentConfig,
   DownstreamAgentSelection,
   PromptInput,
   ProcedureSessionMode,
   SessionApi,
-} from "../../../../src/core/types.ts";
-import type { RunTimingTrace } from "../../../../src/core/timing-trace.ts";
+} from "@nanoboss/procedure-sdk";
+
+import { resolveDownstreamAgentConfig } from "../agent-config.ts";
+import { createTextPromptInput } from "../prompt.ts";
+import type { RunTimingTrace } from "../timing-trace.ts";
+import type { PreparedDefaultPrompt } from "./shared.ts";
 
 interface SessionBindingSource {
   agentSession?: AgentSession;
