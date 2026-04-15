@@ -93,6 +93,63 @@ describe("procedure disk loader", () => {
     expect(existsSync(join(workspaceRoot, "node_modules"))).toBe(false);
   });
 
+  test("overlays runtime packages into an existing workspace node_modules", async () => {
+    const previousHome = process.env.HOME;
+    const runtimeHome = mkdtempSync(join(tmpdir(), "nab-runtime-home-"));
+    process.env.HOME = runtimeHome;
+
+    try {
+      const runtimeNodeModulesDir = join(runtimeHome, ".nanoboss", "runtime", "node_modules", "@nanoboss", "runtime-only");
+      mkdirSync(runtimeNodeModulesDir, { recursive: true });
+      writeFileSync(
+        join(runtimeNodeModulesDir, "package.json"),
+        JSON.stringify({
+          name: "@nanoboss/runtime-only",
+          type: "module",
+          exports: "./index.ts",
+        }),
+        "utf8",
+      );
+      writeFileSync(
+        join(runtimeNodeModulesDir, "index.ts"),
+        "export function describeProcedure(): string { return \"runtime-only procedure\"; }\n",
+        "utf8",
+      );
+
+      const workspaceRoot = mkdtempSync(join(tmpdir(), "nab-workspace-runtime-overlay-"));
+      const proceduresDir = join(workspaceRoot, ".nanoboss", "procedures");
+      mkdirSync(join(workspaceRoot, "node_modules"), { recursive: true });
+      mkdirSync(proceduresDir, { recursive: true });
+      writeFileSync(
+        join(proceduresDir, "runtime-overlay.ts"),
+        [
+          "import { describeProcedure } from \"@nanoboss/runtime-only\";",
+          "",
+          "export default {",
+          "  name: \"runtime-overlay\",",
+          "  description: describeProcedure(),",
+          "  async execute() {",
+          "    return {};",
+          "  },",
+          "};",
+          "",
+        ].join("\n"),
+        "utf8",
+      );
+
+      const procedure = await loadProcedureFromPath(join(proceduresDir, "runtime-overlay.ts"));
+
+      expect(procedure.name).toBe("runtime-overlay");
+      expect(procedure.description).toBe("runtime-only procedure");
+    } finally {
+      if (previousHome === undefined) {
+        delete process.env.HOME;
+      } else {
+        process.env.HOME = previousHome;
+      }
+    }
+  });
+
   test("persists generated procedures into an explicit procedure root", async () => {
     const procedureRoot = mkdtempSync(join(tmpdir(), "nab-profile-procedures-"));
 

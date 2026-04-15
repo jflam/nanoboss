@@ -8,9 +8,11 @@ import {
   cpSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
   statSync,
+  symlinkSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -49,11 +51,16 @@ if (!result.success) {
   const target = join(installDir, "nanoboss");
   const typiaRuntimeNodeModulesTarget = join(getProcedureRuntimeDir(), "node_modules");
   const procedureRuntimeSourceTarget = join(getProcedureRuntimeDir(), "src");
+  const procedureRuntimePackagesTarget = join(getProcedureRuntimeDir(), "packages");
   const sizeReport = await collectBuildSizeReport(buildCommit);
 
   mkdirSync(dirname(outfile), { recursive: true });
   mkdirSync(installDir, { recursive: true });
-  installProcedureRuntimeAssets(typiaRuntimeNodeModulesTarget, procedureRuntimeSourceTarget);
+  installProcedureRuntimeAssets(
+    typiaRuntimeNodeModulesTarget,
+    procedureRuntimeSourceTarget,
+    procedureRuntimePackagesTarget,
+  );
   copyFileSync(outfile, target);
   chmodSync(target, 0o755);
 
@@ -62,6 +69,7 @@ if (!result.success) {
   console.log(`Installed nanoboss to ${target}`);
   console.log(`Installed procedure runtime packages to ${typiaRuntimeNodeModulesTarget}`);
   console.log(`Installed procedure runtime source to ${procedureRuntimeSourceTarget}`);
+  console.log(`Installed procedure runtime workspace packages to ${procedureRuntimePackagesTarget}`);
 
   try {
     accessSync(installDir, constants.W_OK | constants.X_OK);
@@ -264,14 +272,68 @@ function summarizeBuildLogs(logs: Bun.BuildOutput["logs"]): string {
   return messages.join(" | ");
 }
 
-function installProcedureRuntimeAssets(targetNodeModulesDir: string, targetSourceDir: string): void {
+function installProcedureRuntimeAssets(
+  targetNodeModulesDir: string,
+  targetSourceDir: string,
+  targetPackagesDir: string,
+): void {
   rmSync(targetNodeModulesDir, { recursive: true, force: true });
   mkdirSync(targetNodeModulesDir, { recursive: true });
   rmSync(targetSourceDir, { recursive: true, force: true });
   cpSync(join(process.cwd(), "src"), targetSourceDir, { recursive: true });
+  rmSync(targetPackagesDir, { recursive: true, force: true });
+  cpSync(join(process.cwd(), "packages"), targetPackagesDir, { recursive: true });
 
   const copiedPackages = new Set<string>();
+  installWorkspaceRuntimePackages(targetNodeModulesDir, targetPackagesDir, copiedPackages);
   copyPackageClosure("typia", targetNodeModulesDir, copiedPackages);
+}
+
+function installWorkspaceRuntimePackages(
+  targetNodeModulesDir: string,
+  targetPackagesDir: string,
+  copiedPackages: Set<string>,
+): void {
+  for (const entry of readdirSync(targetPackagesDir, { withFileTypes: true })) {
+    if (!entry.isDirectory()) {
+      continue;
+    }
+
+    const packageDir = entry.name;
+    const packageJsonPath = join(targetPackagesDir, packageDir, "package.json");
+    try {
+      const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf8")) as {
+        name?: string;
+        dependencies?: Record<string, string>;
+        optionalDependencies?: Record<string, string>;
+      };
+      const packageName = packageJson.name?.trim();
+      if (!packageName) {
+        continue;
+      }
+
+      const targetPackageDir = join(targetNodeModulesDir, ...packageName.split("/"));
+      mkdirSync(dirname(targetPackageDir), { recursive: true });
+      symlinkRuntimePackage(join(targetPackagesDir, packageDir), targetPackageDir);
+
+      for (const dependencyName of Object.keys({
+        ...packageJson.dependencies,
+        ...packageJson.optionalDependencies,
+      })) {
+        if (dependencyName.startsWith("@nanoboss/")) {
+          continue;
+        }
+        copyPackageClosure(dependencyName, targetNodeModulesDir, copiedPackages);
+      }
+    } catch {
+      continue;
+    }
+  }
+}
+
+function symlinkRuntimePackage(sourceDir: string, targetDir: string): void {
+  rmSync(targetDir, { recursive: true, force: true });
+  symlinkSync(sourceDir, targetDir, "dir");
 }
 
 function copyPackageClosure(

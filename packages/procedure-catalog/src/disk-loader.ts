@@ -345,18 +345,13 @@ async function withProcedureBuildNodeModules<T>(workspaceRoot: string, run: () =
   const packagesPath = join(workspaceRoot, "packages");
   const runtimeSourcePath = resolveProcedureBuildSourcePath();
   const runtimePackagesPath = resolveProcedureBuildPackagesPath();
-  if (existsSync(nodeModulesPath)) {
-    return await withOptionalTemporarySymlink(srcPath, runtimeSourcePath, async () =>
-      await withOptionalTemporarySymlink(packagesPath, runtimePackagesPath, run)
-    );
-  }
+  const runtimeNodeModulesPaths = resolveProcedureBuildNodeModulesPaths();
 
-  const runtimeNodeModulesPath = resolveProcedureBuildNodeModulesPath();
-  return await withTemporarySymlink(nodeModulesPath, runtimeNodeModulesPath, async () => {
-    return await withOptionalTemporarySymlink(srcPath, runtimeSourcePath, async () =>
+  return await withTemporaryNodeModulesOverlays(nodeModulesPath, runtimeNodeModulesPaths, async () =>
+    await withOptionalTemporarySymlink(srcPath, runtimeSourcePath, async () =>
       await withOptionalTemporarySymlink(packagesPath, runtimePackagesPath, run)
-    );
-  });
+    )
+  );
 }
 
 function resolveProcedureBuildRoot(path: string): string {
@@ -379,15 +374,14 @@ function resolveProcedureBuildRoot(path: string): string {
   }
 }
 
-function resolveProcedureBuildNodeModulesPath(): string {
+function resolveProcedureBuildNodeModulesPaths(): string[] {
   const sourceNodeModulesPath = resolveSourceCheckoutPath("node_modules");
-  if (existsSync(sourceNodeModulesPath)) {
-    return sourceNodeModulesPath;
-  }
-
   const installedRuntimeNodeModulesPath = join(getProcedureRuntimeDir(), "node_modules");
-  if (existsSync(installedRuntimeNodeModulesPath)) {
-    return installedRuntimeNodeModulesPath;
+  const paths = [sourceNodeModulesPath, installedRuntimeNodeModulesPath]
+    .filter((path, index, array) => existsSync(path) && array.indexOf(path) === index);
+
+  if (paths.length > 0) {
+    return paths;
   }
 
   throw new Error(
@@ -407,7 +401,12 @@ function resolveProcedureBuildSourcePath(): string | undefined {
 
 function resolveProcedureBuildPackagesPath(): string | undefined {
   const sourcePackagesPath = resolveSourceCheckoutPath("packages");
-  return existsSync(sourcePackagesPath) ? sourcePackagesPath : undefined;
+  if (existsSync(sourcePackagesPath)) {
+    return sourcePackagesPath;
+  }
+
+  const installedRuntimePackagesPath = join(getProcedureRuntimeDir(), "packages");
+  return existsSync(installedRuntimePackagesPath) ? installedRuntimePackagesPath : undefined;
 }
 
 function resolveSourceCheckoutPath(...segments: string[]): string {
@@ -441,6 +440,81 @@ async function withTemporarySymlink<T>(targetPath: string, sourcePath: string, r
       rmSync(targetPath, { recursive: true, force: true });
     }
   }
+}
+
+async function withTemporaryNodeModulesOverlays<T>(
+  targetNodeModulesPath: string,
+  sourceNodeModulesPaths: string[],
+  run: () => Promise<T>,
+): Promise<T> {
+  let createdNodeModulesDir = false;
+  if (!existsSync(targetNodeModulesPath)) {
+    mkdirSync(targetNodeModulesPath, { recursive: true });
+    createdNodeModulesDir = true;
+  }
+
+  const createdPaths = sourceNodeModulesPaths.flatMap((sourceNodeModulesPath) =>
+    linkMissingNodeModulesEntries(targetNodeModulesPath, sourceNodeModulesPath)
+  );
+
+  try {
+    return await run();
+  } finally {
+    for (const createdPath of createdPaths.reverse()) {
+      if (existsSync(createdPath) && isSymlinkPath(createdPath)) {
+        rmSync(createdPath, { recursive: true, force: true });
+      }
+    }
+
+    if (createdNodeModulesDir && existsSync(targetNodeModulesPath)) {
+      try {
+        if (readdirSync(targetNodeModulesPath).length === 0) {
+          rmSync(targetNodeModulesPath, { recursive: true, force: true });
+        }
+      } catch {
+        // Ignore cleanup errors in the temporary overlay path.
+      }
+    }
+  }
+}
+
+function linkMissingNodeModulesEntries(targetDir: string, sourceDir: string): string[] {
+  if (!existsSync(sourceDir)) {
+    return [];
+  }
+
+  const createdPaths: string[] = [];
+  const entries = readdirSync(sourceDir, { withFileTypes: true })
+    .sort((left, right) => left.name.localeCompare(right.name));
+
+  for (const entry of entries) {
+    const sourcePath = join(sourceDir, entry.name);
+    const targetPath = join(targetDir, entry.name);
+
+    if (entry.isDirectory() && entry.name.startsWith("@")) {
+      if (!existsSync(targetPath)) {
+        symlinkSync(sourcePath, targetPath, "dir");
+        createdPaths.push(targetPath);
+        continue;
+      }
+
+      if (!lstatSync(targetPath).isDirectory()) {
+        continue;
+      }
+
+      createdPaths.push(...linkMissingNodeModulesEntries(targetPath, sourcePath));
+      continue;
+    }
+
+    if (existsSync(targetPath)) {
+      continue;
+    }
+
+    symlinkSync(sourcePath, targetPath, entry.isDirectory() ? "dir" : "file");
+    createdPaths.push(targetPath);
+  }
+
+  return createdPaths;
 }
 
 async function withOptionalTemporarySymlink<T>(
