@@ -1,12 +1,12 @@
 import { promptForStoredSessionSelection } from "./src/tui/overlays/session-picker.ts";
+import type { SessionMetadata } from "./src/core/contracts.ts";
 import { createNanobossTuiTheme } from "./src/tui/theme.ts";
 import { assertInteractiveTty, runTuiCli } from "./src/tui/run.ts";
 import { parseResumeOptions } from "./src/options/resume.ts";
 import {
-  listSessionSummaries,
-  readCurrentSessionMetadata,
-  type SessionMetadata,
-} from "./src/session/index.ts";
+  listStoredSessions,
+  readCurrentWorkspaceSessionMetadata,
+} from "./src/session/repository.ts";
 
 export type StoredSessionSelectionResult =
   | { kind: "selected"; session: SessionMetadata }
@@ -64,12 +64,12 @@ export async function runResumeCommand(
 }
 
 function resolveExplicitSession(sessionId: string): SessionMetadata | undefined {
-  return listSessionSummaries().find((session) => session.session.sessionId === sessionId);
+  return listStoredSessions().find((session) => session.session.sessionId === sessionId);
 }
 
 function resolveDefaultSession(cwd: string): SessionMetadata | undefined {
-  const sessions = listSessionSummaries();
-  const currentSessionId = readCurrentSessionMetadata(cwd)?.session.sessionId;
+  const sessions = listStoredSessions();
+  const currentSessionId = readCurrentWorkspaceSessionMetadata(cwd)?.session.sessionId;
   if (currentSessionId) {
     const current = sessions.find((session) => session.session.sessionId === currentSessionId);
     if (current) {
@@ -81,7 +81,7 @@ function resolveDefaultSession(cwd: string): SessionMetadata | undefined {
 }
 
 async function selectStoredSession(cwd: string): Promise<StoredSessionSelectionResult> {
-  const sessions = orderSessions(cwd, listSessionSummaries());
+  const sessions = orderSessions(cwd, listStoredSessions());
   if (sessions.length === 0) {
     return { kind: "empty" };
   }

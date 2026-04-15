@@ -522,7 +522,7 @@
               <div class="arrow">↔</div>
               <div class="node"><strong>Global MCP</strong><span>One <code>nanoboss</code> MCP server exposes durable session inspection and async dispatch tools.</span></div>
               <div class="arrow">↔</div>
-              <div class="node"><strong>Durable store</strong><span>Cells, refs, session metadata, replay events, and repo-local workflow artifacts.</span></div>
+              <div class="node"><strong>Durable store</strong><span>Runs, refs, session metadata, replay events, and repo-local workflow artifacts.</span></div>
             </div>
           </div>
         </div>
@@ -530,7 +530,7 @@
           <h3>Why this matters</h3>
           <ul class="bullets">
             <li><strong>Plain text is just the default command path.</strong> The real product surface is the procedure system.</li>
-            <li><strong>State is first-class.</strong> The system persists intermediate work as inspectable cells/refs rather than relying only on model memory.</li>
+            <li><strong>State is first-class.</strong> The system persists intermediate work as inspectable runs/refs rather than relying only on model memory.</li>
             <li><strong>Composition is explicit.</strong> Procedures can nest, share or isolate conversation state, and recover async dispatches.</li>
             <li><strong>Frontends are thin.</strong> The TUI is sophisticated, but the architectural center of gravity is still the service + session store.</li>
           </ul>
@@ -574,7 +574,7 @@
             <div class="flow-row">
               <div class="node"><strong>MCP</strong><span>agent calls global <code>nanoboss</code> server over stdio</span></div>
               <div class="arrow">↔</div>
-              <div class="node"><strong>Session inspection</strong><span>cells, refs, schemas, top-level runs, async procedure dispatch</span></div>
+              <div class="node"><strong>Session inspection</strong><span>runs, refs, schemas, top-level runs, async procedure dispatch</span></div>
               <div class="arrow">↔</div>
               <div class="node"><strong>SessionStore</strong><span>durable JSON state</span></div>
             </div>
@@ -612,17 +612,17 @@
           <div class="tree">~/.nanoboss/
   sessions/&lt;sessionId&gt;/
     session.json
-    cells/
-      &lt;timestamp&gt;-&lt;cellId&gt;.json
+    run records/
+      &lt;timestamp&gt;-&lt;runId&gt;.json
     procedure-dispatch-jobs/
     procedure-dispatch-progress/
 
-cell kinds:
+run kinds:
   top_level  → user-visible command runs
   procedure  → nested procedure calls
   agent      → downstream agent invocations
 
-cell.output may contain:
+run.output may contain:
   data
   display
   stream
@@ -632,7 +632,7 @@ cell.output may contain:
   replayEvents
   explicitDataSchema</div>
           <ul class="bullets">
-            <li><strong>Value refs</strong> point into durable cell payloads, so procedures and MCP tools can pass precise references instead of copying blobs.</li>
+            <li><strong>Refs</strong> point into durable run payloads, so procedures and MCP tools can pass precise references instead of copying blobs.</li>
             <li><strong>Replay events</strong> let the TUI restore prior runs with transcript/tool-card fidelity.</li>
             <li><strong>Session metadata</strong> is canonical in <code>session.json</code>; <code>current-sessions.json</code> is a workspace cache used for lookup/resume.</li>
           </ul>
@@ -641,9 +641,9 @@ cell.output may contain:
           <h3>Why it is architecturally important</h3>
           <ul class="bullets">
             <li>It breaks the usual “agent state only exists in chat context” trap.</li>
-            <li>It enables post-hoc provenance: agents can answer “how did you reach that?” by querying durable cells/refs over MCP.</li>
+            <li>It enables post-hoc provenance: agents can answer “how did you reach that?” by querying durable runs/refs over MCP.</li>
             <li>It supports nested composition without overloading the parent chat transcript.</li>
-            <li>It cleanly separates <strong>discovery summaries</strong> (memory cards) from <strong>authoritative stored state</strong> (cells/refs).</li>
+            <li>It cleanly separates <strong>discovery summaries</strong> (memory cards) from <strong>authoritative stored state</strong> (runs/refs).</li>
           </ul>
           <div class="callout ok">This is the repository’s sharpest systems idea: durable, inspectable state is treated as a product feature, not just an implementation detail.</div>
           <div class="chips">
@@ -1040,7 +1040,7 @@ modified: src/tui/controller.ts
           <div class="panel rows">
             <h3>What is best in class</h3>
             <ul class="bullets">
-              <li>stateful provenance via cells/refs</li>
+              <li>stateful provenance via runs/refs</li>
               <li>session-binding API design</li>
               <li>workflow-oriented procedure surface</li>
               <li>operator ergonomics</li>

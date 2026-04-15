@@ -13,10 +13,9 @@ import { parseDownstreamAgentSelection } from "../core/downstream-agent-selectio
 import { resolveWorkspaceKey } from "../core/workspace-identity.ts";
 import type {
   ContinuationUi,
-  DownstreamAgentSelection,
   KernelValue,
   PendingContinuation,
-  SessionRef,
+  SessionMetadata,
   Simplify2CheckpointContinuationUiAction,
   Simplify2FocusPickerContinuationUi,
   Simplify2FocusPickerContinuationUiAction,
@@ -27,24 +26,11 @@ import { createSessionRef } from "../core/types.ts";
 const SESSION_METADATA_FILE = "session.json";
 const CURRENT_SESSION_INDEX_FILE = "current-sessions.json";
 
-export interface SessionMetadata {
-  session: SessionRef;
-  cwd: string;
-  rootDir: string;
-  createdAt: string;
-  updatedAt: string;
-  initialPrompt?: string;
-  lastPrompt?: string;
-  defaultAgentSelection?: DownstreamAgentSelection;
-  defaultAgentSessionId?: string;
-  pendingContinuation?: PendingContinuation;
-}
-
 function getSessionMetadataPath(sessionId: string, rootDir?: string): string {
   return join(rootDir ?? getSessionDir(sessionId), SESSION_METADATA_FILE);
 }
 
-export function writeSessionMetadata(metadata: SessionMetadata): SessionMetadata {
+export function writeStoredSessionMetadata(metadata: SessionMetadata): SessionMetadata {
   mkdirSync(metadata.rootDir, { recursive: true });
   writeFileSync(
     getSessionMetadataPath(metadata.session.sessionId, metadata.rootDir),
@@ -57,7 +43,7 @@ export function writeSessionMetadata(metadata: SessionMetadata): SessionMetadata
   return metadata;
 }
 
-export function readSessionMetadata(sessionId: string, rootDir?: string): SessionMetadata | undefined {
+export function readStoredSessionMetadata(sessionId: string, rootDir?: string): SessionMetadata | undefined {
   const path = getSessionMetadataPath(sessionId, rootDir);
   if (!existsSync(path)) {
     return undefined;
@@ -80,7 +66,7 @@ export function readSessionMetadata(sessionId: string, rootDir?: string): Sessio
   return metadata;
 }
 
-export function listSessionSummaries(): SessionMetadata[] {
+export function listStoredSessions(): SessionMetadata[] {
   const sessionsDir = join(getNanobossHome(), "sessions");
   if (!existsSync(sessionsDir)) {
     return [];
@@ -88,18 +74,19 @@ export function listSessionSummaries(): SessionMetadata[] {
 
   return readdirSync(sessionsDir, { withFileTypes: true })
     .filter((entry) => entry.isDirectory())
-    .map((entry) => readSessionMetadata(entry.name, join(sessionsDir, entry.name)))
+    .map((entry) => readStoredSessionMetadata(entry.name, join(sessionsDir, entry.name)))
     .filter((entry): entry is SessionMetadata => entry !== undefined)
     .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
 }
 
-export function readCurrentSessionMetadata(cwd: string): SessionMetadata | undefined {
+export function readCurrentWorkspaceSessionMetadata(cwd: string): SessionMetadata | undefined {
   const cached = readCurrentWorkspaceMetadata(cwd);
   if (!cached) {
     return undefined;
   }
 
-  return readSessionMetadata(cached.session.sessionId, cached.rootDir) ?? readSessionMetadata(cached.session.sessionId);
+  return readStoredSessionMetadata(cached.session.sessionId, cached.rootDir)
+    ?? readStoredSessionMetadata(cached.session.sessionId);
 }
 
 function getCurrentSessionMetadataIndexPath(): string {

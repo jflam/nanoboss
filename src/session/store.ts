@@ -12,12 +12,6 @@ import {
   createValueRef,
   valueRefFromRef,
 } from "./store-refs.ts";
-import {
-  runRecordFromCellRecord,
-  runSummaryFromCellSummary,
-  type CellRecord,
-  type CellSummary,
-} from "./store-records.ts";
 import type {
   Continuation,
   DownstreamAgentSelection,
@@ -38,7 +32,7 @@ import type {
   RunRef,
   RunSummary,
 } from "../core/types.ts";
-import { createRef, createRunRef } from "../core/types.ts";
+import { createRef, createRunRef, publicKernelValueFromStored } from "../core/types.ts";
 
 interface RunDraft {
   run: RunRef;
@@ -57,6 +51,45 @@ interface RunDraft {
 
 type CellRef = ReturnType<typeof createCellRef>;
 type ValueRef = ReturnType<typeof createValueRef>;
+
+interface CellRecord {
+  cellId: string;
+  procedure: string;
+  input: string;
+  output: {
+    data?: KernelValue;
+    display?: string;
+    stream?: string;
+    summary?: string;
+    memory?: string;
+    pause?: Continuation;
+    explicitDataSchema?: object;
+    replayEvents?: PersistedFrontendEvent[];
+  };
+  meta: {
+    createdAt: string;
+    parentCellId?: string;
+    kind: RunKind;
+    dispatchCorrelationId?: string;
+    defaultAgentSelection?: DownstreamAgentSelection;
+    promptImages?: PromptImageSummary[];
+  };
+}
+
+interface CellSummary {
+  cell: CellRef;
+  procedure: string;
+  kind: RunKind;
+  parentCellId?: string;
+  summary?: string;
+  memory?: string;
+  dataRef?: ValueRef;
+  displayRef?: ValueRef;
+  streamRef?: ValueRef;
+  dataShape?: ReturnType<typeof inferDataShape>;
+  explicitDataSchema?: object;
+  createdAt: string;
+}
 
 interface RecentOptions {
   procedure?: string;
@@ -274,7 +307,7 @@ export class SessionStore {
 
     this.cells.set(cellRef.cellId, updated);
     writeJsonFileAtomicSync(filePath, updated);
-    return runRecordFromCellRecord(this.sessionId, updated);
+    return toRunRecord(this.sessionId, updated);
   }
 
   readRef(ref: Ref): unknown {
@@ -284,7 +317,7 @@ export class SessionStore {
   }
 
   getRun(runRef: RunRef): RunRecord {
-    return runRecordFromCellRecord(this.sessionId, this.readCell(cellRefFromRunRef(runRef)));
+    return toRunRecord(this.sessionId, this.readCell(cellRefFromRunRef(runRef)));
   }
 
   statRef(ref: Ref): RefStat {
@@ -318,15 +351,15 @@ export class SessionStore {
         limit: options.limit,
       });
 
-    return summaries.map(runSummaryFromCellSummary);
+    return summaries.map(toRunSummary);
   }
 
   getRunAncestors(runRef: RunRef, options: RunAncestorsOptions = {}): RunSummary[] {
-    return this.listRunAncestorSummaries(cellRefFromRunRef(runRef), options).map(runSummaryFromCellSummary);
+    return this.listRunAncestorSummaries(cellRefFromRunRef(runRef), options).map(toRunSummary);
   }
 
   getRunDescendants(runRef: RunRef, options: RunDescendantsOptions = {}): RunSummary[] {
-    return this.listRunDescendantSummaries(cellRefFromRunRef(runRef), options).map(runSummaryFromCellSummary);
+    return this.listRunDescendantSummaries(cellRefFromRunRef(runRef), options).map(toRunSummary);
   }
 
   private listRecentCellSummaries(options: RecentOptions = {}): CellSummary[] {
@@ -762,6 +795,58 @@ function matchesCell(record: CellRecord, options: Pick<RunFilterOptions, "kind" 
   }
 
   return true;
+}
+
+function toRunRecord(sessionId: string, record: CellRecord): RunRecord {
+  return {
+    run: {
+      sessionId,
+      runId: record.cellId,
+    },
+    kind: record.meta.kind,
+    procedure: record.procedure,
+    input: record.input,
+    output: {
+      data: publicKernelValueFromStored(record.output.data),
+      display: record.output.display,
+      stream: record.output.stream,
+      summary: record.output.summary,
+      memory: record.output.memory,
+      pause: record.output.pause ? publicKernelValueFromStored(record.output.pause) as Continuation : undefined,
+      explicitDataSchema: record.output.explicitDataSchema,
+      replayEvents: record.output.replayEvents,
+    },
+    meta: {
+      createdAt: record.meta.createdAt,
+      parentRunId: record.meta.parentCellId,
+      dispatchCorrelationId: record.meta.dispatchCorrelationId,
+      defaultAgentSelection: record.meta.defaultAgentSelection,
+      promptImages: record.meta.promptImages,
+    },
+  };
+}
+
+function toRunSummary(summary: CellSummary): RunSummary {
+  return {
+    run: createRunRef(summary.cell.sessionId, summary.cell.cellId),
+    procedure: summary.procedure,
+    kind: summary.kind,
+    parentRunId: summary.parentCellId,
+    summary: summary.summary,
+    memory: summary.memory,
+    dataRef: summary.dataRef
+      ? createRef(createRunRef(summary.dataRef.cell.sessionId, summary.dataRef.cell.cellId), summary.dataRef.path)
+      : undefined,
+    displayRef: summary.displayRef
+      ? createRef(createRunRef(summary.displayRef.cell.sessionId, summary.displayRef.cell.cellId), summary.displayRef.path)
+      : undefined,
+    streamRef: summary.streamRef
+      ? createRef(createRunRef(summary.streamRef.cell.sessionId, summary.streamRef.cell.cellId), summary.streamRef.path)
+      : undefined,
+    dataShape: summary.dataShape,
+    explicitDataSchema: summary.explicitDataSchema,
+    createdAt: summary.createdAt,
+  };
 }
 
 function normalizeLimit(value: number | undefined): number | undefined {

@@ -31,6 +31,8 @@ export interface SessionMetadata {
   rootDir: string;
   createdAt: string;
   updatedAt: string;
+  initialPrompt?: string;
+  lastPrompt?: string;
   defaultAgentSelection?: DownstreamAgentSelection;
   defaultAgentSessionId?: string;
   pendingContinuation?: PendingContinuation;

@@ -1,4 +1,4 @@
-import type { SessionMetadata } from "./index.ts";
+import type { SessionMetadata } from "../core/contracts.ts";
 import { summarizeText } from "../util/text.ts";
 
 export function formatSessionLine(session: SessionMetadata, cwd: string): string {

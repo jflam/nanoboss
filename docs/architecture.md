@@ -157,7 +157,7 @@ Both session modes share the same prompt-building, named-ref injection, and type
 
 For procedure authors, the namespace split is:
 
-- `ctx.state`: durable stored cells, structural traversal, and refs
+- `ctx.state`: durable stored runs, structural traversal, and refs
 - `ctx.session`: live default-agent control and token usage for the current binding
 
 ```mermaid
@@ -204,7 +204,7 @@ sequenceDiagram
   MCP-->>Agent: nanoboss MCP tool definitions
 
   Agent->>MCP: tools/call procedure_dispatch_start / list_runs / get_run / read_ref ...
-  MCP->>Store: read cells / refs or start async dispatch jobs
+  MCP->>Store: read runs / refs or start async dispatch jobs
   Store-->>MCP: durable session data
   MCP-->>Agent: MCP tool result
 ```

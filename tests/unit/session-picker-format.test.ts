@@ -4,7 +4,7 @@ import {
   formatSessionInitialPrompt,
   formatSessionLine,
 } from "../../src/session/picker-format.ts";
-import type { SessionMetadata } from "../../src/session/index.ts";
+import type { SessionMetadata } from "../../src/core/contracts.ts";
 
 function session(overrides: Partial<SessionMetadata> = {}): SessionMetadata {
   return {

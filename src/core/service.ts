@@ -35,10 +35,12 @@ import {
 } from "../http/frontend-events.ts";
 import {
   SessionStore,
-  readSessionMetadata,
-  type SessionMetadata,
-  writeSessionMetadata,
 } from "../session/index.ts";
+import {
+  readStoredSessionMetadata,
+  writeStoredSessionMetadata,
+} from "../session/repository.ts";
+import type { SessionMetadata } from "./contracts.ts";
 import { startProcedureDispatchProgressBridge } from "../procedure/dispatch-progress.ts";
 import {
   procedureDispatchResultFromRecoveredRun,
@@ -247,7 +249,7 @@ export class NanobossService {
       return this.buildSessionDescriptor(params.sessionId, existing);
     }
 
-    const stored = readSessionMetadata(params.sessionId);
+    const stored = readStoredSessionMetadata(params.sessionId);
     const cwd = stored?.cwd || params.cwd;
     if (!cwd) {
       throw new Error(`Unknown session: ${params.sessionId}`);
@@ -393,11 +395,11 @@ export class NanobossService {
     session: SessionState,
     options: { prompt?: string; preserveDefaultAcpSessionId?: boolean } = {},
   ): SessionMetadata {
-    const existing = readSessionMetadata(session.store.sessionId, session.store.rootDir);
+    const existing = readStoredSessionMetadata(session.store.sessionId, session.store.rootDir);
     const defaultAgentSessionId = session.defaultAgentSession.sessionId
       ?? (options.preserveDefaultAcpSessionId === false ? undefined : existing?.defaultAgentSessionId);
 
-    return writeSessionMetadata({
+    return writeStoredSessionMetadata({
       session: { sessionId: session.store.sessionId },
       cwd: session.cwd,
       rootDir: session.store.rootDir,

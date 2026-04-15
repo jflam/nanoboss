@@ -5,10 +5,6 @@ import {
   createRunRef,
   createSessionRef,
 } from "../../src/core/contracts.ts";
-import {
-  runRecordFromCellRecord,
-  runSummaryFromCellSummary,
-} from "../../src/session/store-records.ts";
 
 describe("core contracts", () => {
   test("uses canonical run, ref, and session shapes directly", () => {
@@ -66,9 +62,12 @@ describe("core contracts", () => {
     });
   });
 
-  test("maps run records and summaries onto the canonical run family", () => {
-    const cellRecord = {
-      cellId: "cell-1",
+  test("uses canonical run record and summary shapes directly", () => {
+    const run = createRunRef("session-1", "run-1");
+
+    expect({
+      run,
+      kind: "procedure" as const,
       procedure: "review",
       input: "inspect this patch",
       output: {
@@ -83,65 +82,52 @@ describe("core contracts", () => {
       },
       meta: {
         createdAt: "2026-04-13T10:00:00.000Z",
-        parentCellId: "cell-0",
-        kind: "procedure" as const,
+        parentRunId: "run-0",
         dispatchCorrelationId: "dispatch-1",
       },
-    };
-
-    const runRecord = runRecordFromCellRecord("session-1", cellRecord);
-    expect(runRecord).toEqual({
-      run: { sessionId: "session-1", runId: "cell-1" },
+    }).toEqual({
+      run: { sessionId: "session-1", runId: "run-1" },
       kind: "procedure",
       procedure: "review",
       input: "inspect this patch",
       output: {
         data: { verdict: "sound" },
         display: "Looks good",
-        stream: undefined,
         summary: "Patch reviewed",
         memory: "User wanted a risk review",
         pause: {
           question: "Continue?",
           state: { step: 1 },
         },
-        explicitDataSchema: undefined,
-        replayEvents: undefined,
       },
       meta: {
         createdAt: "2026-04-13T10:00:00.000Z",
-        parentRunId: "cell-0",
+        parentRunId: "run-0",
         dispatchCorrelationId: "dispatch-1",
-        defaultAgentSelection: undefined,
-        promptImages: undefined,
       },
     });
-    const summary = {
-      cell: { sessionId: "session-1", cellId: "cell-1" },
+
+    expect({
+      run,
       procedure: "review",
       kind: "procedure" as const,
-      parentCellId: "cell-0",
+      parentRunId: "run-0",
       summary: "Patch reviewed",
       memory: "User wanted a risk review",
-      dataRef: { cell: { sessionId: "session-1", cellId: "cell-1" }, path: "output.data" },
-      displayRef: { cell: { sessionId: "session-1", cellId: "cell-1" }, path: "output.display" },
-      streamRef: undefined,
+      dataRef: createRef(run, "output.data"),
+      displayRef: createRef(run, "output.display"),
       dataShape: { verdict: "sound" },
       explicitDataSchema: { type: "object" },
       createdAt: "2026-04-13T10:00:00.000Z",
-    };
-
-    const runSummary = runSummaryFromCellSummary(summary);
-    expect(runSummary).toEqual({
-      run: { sessionId: "session-1", runId: "cell-1" },
+    }).toEqual({
+      run: { sessionId: "session-1", runId: "run-1" },
       procedure: "review",
       kind: "procedure",
-      parentRunId: "cell-0",
+      parentRunId: "run-0",
       summary: "Patch reviewed",
       memory: "User wanted a risk review",
-      dataRef: { run: { sessionId: "session-1", runId: "cell-1" }, path: "output.data" },
-      displayRef: { run: { sessionId: "session-1", runId: "cell-1" }, path: "output.display" },
-      streamRef: undefined,
+      dataRef: { run: { sessionId: "session-1", runId: "run-1" }, path: "output.data" },
+      displayRef: { run: { sessionId: "session-1", runId: "run-1" }, path: "output.display" },
       dataShape: { verdict: "sound" },
       explicitDataSchema: { type: "object" },
       createdAt: "2026-04-13T10:00:00.000Z",

@@ -14,7 +14,11 @@ import {
   ProcedureDispatchJobManager,
 } from "../procedure/dispatch-jobs.ts";
 import { ProcedureRegistry, projectProcedureMetadata } from "../procedure/registry.ts";
-import { SessionStore, readCurrentSessionMetadata, readSessionMetadata } from "../session/index.ts";
+import { SessionStore } from "../session/index.ts";
+import {
+  readCurrentWorkspaceSessionMetadata,
+  readStoredSessionMetadata,
+} from "../session/repository.ts";
 import type {
   ListRunsArgs,
   ProcedureListResult,
@@ -169,7 +173,7 @@ export class NanobossRuntimeService {
   private resolveEffectiveContext(sessionIdOverride?: string): { sessionId?: string; cwd: string; rootDir?: string } {
     const explicitSessionId = sessionIdOverride ?? this.params.sessionId;
     if (explicitSessionId) {
-      const metadata = readSessionMetadata(explicitSessionId);
+      const metadata = readStoredSessionMetadata(explicitSessionId);
       if (metadata) {
         return {
           sessionId: metadata.session.sessionId,
@@ -186,7 +190,7 @@ export class NanobossRuntimeService {
     }
 
     if (this.params.allowCurrentSessionFallback) {
-      const current = readCurrentSessionMetadata(this.params.cwd);
+      const current = readCurrentWorkspaceSessionMetadata(this.params.cwd);
       if (current) {
         return {
           sessionId: current.session.sessionId,

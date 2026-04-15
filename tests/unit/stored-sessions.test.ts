@@ -5,10 +5,10 @@ import { join } from "node:path";
 import { afterEach, describe, expect, test } from "bun:test";
 
 import {
-  listSessionSummaries,
-  readSessionMetadata,
-  writeSessionMetadata,
-} from "../../src/session/index.ts";
+  listStoredSessions,
+  readStoredSessionMetadata,
+  writeStoredSessionMetadata,
+} from "../../src/session/repository.ts";
 
 let tempHome: string | undefined;
 
@@ -26,14 +26,14 @@ describe("session persistence", () => {
     process.env.HOME = tempHome;
 
     try {
-      writeSessionMetadata({
+      writeStoredSessionMetadata({
         session: { sessionId: "session-older" },
         cwd: "/repo",
         rootDir: join(tempHome, ".nanoboss", "sessions", "session-older"),
         createdAt: "2026-04-01T09:00:00.000Z",
         updatedAt: "2026-04-01T10:00:00.000Z",
       });
-      writeSessionMetadata({
+      writeStoredSessionMetadata({
         session: { sessionId: "session-123" },
         cwd: "/repo",
         rootDir: join(tempHome, ".nanoboss", "sessions", "session-123"),
@@ -43,7 +43,7 @@ describe("session persistence", () => {
         defaultAgentSessionId: "acp-123",
       });
 
-      const sessions = listSessionSummaries();
+      const sessions = listStoredSessions();
       expect(sessions).toHaveLength(2);
       expect(sessions.map((session) => session.session.sessionId)).toEqual([
         "session-123",
@@ -82,7 +82,7 @@ describe("session persistence", () => {
       }, null, 2)}\n`, "utf8");
       writeFileSync(join(sessionRoot, "cells"), "not-a-directory\n", "utf8");
 
-      const sessions = listSessionSummaries();
+      const sessions = listStoredSessions();
       expect(sessions).toHaveLength(1);
       expect(sessions[0]).toMatchObject({
         session: { sessionId: "session-fast" },
@@ -132,7 +132,7 @@ describe("session persistence", () => {
         },
       }, null, 2)}\n`, "utf8");
 
-      const sessions = listSessionSummaries();
+      const sessions = listStoredSessions();
       expect(sessions).toHaveLength(2);
       expect(sessions.find((session) => session.session.sessionId === "session-valid")?.defaultAgentSelection).toEqual({
         provider: "codex",
@@ -179,7 +179,7 @@ describe("session persistence", () => {
         },
       }, null, 2)}\n`);
 
-      expect(listSessionSummaries()).toEqual([]);
+      expect(listStoredSessions()).toEqual([]);
     } finally {
       if (originalHome === undefined) {
         delete process.env.HOME;
@@ -199,8 +199,8 @@ describe("session persistence", () => {
       mkdirSync(sessionRoot, { recursive: true });
       writeFileSync(join(sessionRoot, "session.json"), "{bad json\n", "utf8");
 
-      expect(() => readSessionMetadata("session-bad", sessionRoot)).toThrow("Failed to parse session metadata");
-      expect(() => listSessionSummaries()).toThrow("Failed to parse session metadata");
+      expect(() => readStoredSessionMetadata("session-bad", sessionRoot)).toThrow("Failed to parse session metadata");
+      expect(() => listStoredSessions()).toThrow("Failed to parse session metadata");
     } finally {
       if (originalHome === undefined) {
         delete process.env.HOME;

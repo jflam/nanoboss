@@ -5,7 +5,8 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { join } from "node:path";
 
 import { resolveSelfCommand } from "../../src/core/self-command.ts";
-import { SessionStore, writeSessionMetadata } from "../../src/session/index.ts";
+import { SessionStore } from "../../src/session/index.ts";
+import { writeStoredSessionMetadata } from "../../src/session/repository.ts";
 
 const tempDirs: string[] = [];
 
@@ -43,7 +44,7 @@ describe("global nanoboss MCP stdio transport", () => {
       display: "review display",
       summary: "review summary",
     });
-    writeSessionMetadata({
+    writeStoredSessionMetadata({
       session: { sessionId },
       cwd: process.cwd(),
       rootDir,
