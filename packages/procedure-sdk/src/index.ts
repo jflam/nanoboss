@@ -139,6 +139,28 @@ export interface RunResult<T extends KernelValue = KernelValue> {
   rawRef?: Ref;
 }
 
+export function expectData<T extends KernelValue>(
+  result: RunResult<T>,
+  message = "Missing result data",
+): T {
+  if (result.data === undefined) {
+    throw new Error(message);
+  }
+
+  return result.data;
+}
+
+export function expectDataRef<T extends KernelValue>(
+  result: RunResult<T>,
+  message = "Missing result data ref",
+): Ref {
+  if (!result.dataRef) {
+    throw new Error(message);
+  }
+
+  return result.dataRef;
+}
+
 export interface AgentRunResult<T extends KernelValue = KernelValue> extends RunResult<T> {
   durationMs: number;
   raw: string;

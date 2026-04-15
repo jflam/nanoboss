@@ -1,40 +1,16 @@
 import { resolve } from "node:path";
 
-import autoresearchProcedure from "../../../procedures/autoresearch/index.ts";
-import autoresearchContinueProcedure from "../../../procedures/autoresearch/continue.ts";
-import autoresearchClearProcedure from "../../../procedures/autoresearch/clear.ts";
-import autoresearchFinalizeProcedure from "../../../procedures/autoresearch/finalize.ts";
-import autoresearchStartProcedure from "../../../procedures/autoresearch/start.ts";
-import autoresearchStatusProcedure from "../../../procedures/autoresearch/status.ts";
-import defaultProcedure from "../../../procedures/default.ts";
-import kbAnswerProcedure from "../../../procedures/kb/answer.ts";
-import kbCompileConceptsProcedure from "../../../procedures/kb/compile-concepts.ts";
-import kbCompileSourceProcedure from "../../../procedures/kb/compile-source.ts";
-import kbHealthProcedure from "../../../procedures/kb/health.ts";
-import kbIngestProcedure from "../../../procedures/kb/ingest.ts";
-import kbLinkProcedure from "../../../procedures/kb/link.ts";
-import kbRenderProcedure from "../../../procedures/kb/render.ts";
-import kbRefreshProcedure from "../../../procedures/kb/refresh.ts";
-import linterProcedure from "../../../procedures/linter.ts";
-import modelProcedure from "../../../procedures/model.ts";
-import nanobossCommitProcedure from "../../../procedures/nanoboss/commit.ts";
-import nanobossPreCommitChecksProcedure from "../../../procedures/nanoboss/pre-commit-checks.ts";
-import secondOpinionProcedure from "../../../procedures/second-opinion.ts";
-import simplifyProcedure from "../../../procedures/simplify.ts";
-import simplify2Procedure from "../../../procedures/simplify2.ts";
-import tokensProcedure from "../../../procedures/tokens.ts";
-
 import {
   resolvePersistProcedureRoot,
   resolveProfileProcedureRoot,
   resolveWorkspaceProcedureRoots,
-} from "../../../src/core/procedure-paths.ts";
-import { createCreateProcedure } from "../../../src/procedure/create.ts";
+} from "./paths.ts";
 import {
   discoverDiskProcedures,
   loadProcedureFromPath as loadDiskProcedureFromPath,
   persistProcedureSource,
 } from "./disk-loader.ts";
+import { loadBuiltinProcedures } from "./builtins.ts";
 import type {
   Procedure,
   ProcedureMetadata,
@@ -52,32 +28,6 @@ interface LoadableProcedureMetadata extends ProcedureMetadata {
     supportsResume: true;
   };
 }
-
-const BUILTIN_PROCEDURES: Procedure[] = [
-  defaultProcedure,
-  autoresearchProcedure,
-  autoresearchStartProcedure,
-  autoresearchContinueProcedure,
-  autoresearchStatusProcedure,
-  autoresearchClearProcedure,
-  autoresearchFinalizeProcedure,
-  kbIngestProcedure,
-  kbCompileSourceProcedure,
-  kbCompileConceptsProcedure,
-  kbLinkProcedure,
-  kbRenderProcedure,
-  kbHealthProcedure,
-  kbRefreshProcedure,
-  kbAnswerProcedure,
-  linterProcedure,
-  modelProcedure,
-  nanobossPreCommitChecksProcedure,
-  nanobossCommitProcedure,
-  simplifyProcedure,
-  simplify2Procedure,
-  tokensProcedure,
-  secondOpinionProcedure,
-];
 
 export class ProcedureRegistry implements ProcedureRegistryLike {
   private readonly procedures = new Map<string, Procedure>();
@@ -106,16 +56,7 @@ export class ProcedureRegistry implements ProcedureRegistryLike {
   }
 
   loadBuiltins(): void {
-    for (const procedure of BUILTIN_PROCEDURES) {
-      this.assertProcedure(procedure);
-      this.registerLoadableProcedure(toLoadableProcedureMetadata(procedure), () => procedure);
-    }
-
-    if (!this.procedures.has("create")) {
-      const procedure = createCreateProcedure(this);
-      this.assertProcedure(procedure);
-      this.registerLoadableProcedure(toLoadableProcedureMetadata(procedure), () => procedure);
-    }
+    loadBuiltinProcedures(this);
   }
 
   async loadFromDisk(): Promise<void> {

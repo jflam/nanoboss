@@ -9,3 +9,7 @@ export {
   loadProcedureFromPath,
   persistProcedureSource,
 } from "./disk-loader.ts";
+
+export {
+  CREATE_PROCEDURE_METADATA,
+} from "./builtins.ts";

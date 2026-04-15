@@ -16,13 +16,13 @@ import { tmpdir } from "node:os";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
-import { getProcedureRuntimeDir } from "../../../src/core/config.ts";
 import type {
   Procedure,
   ProcedureExecutionMode,
   ProcedureMetadata,
 } from "@nanoboss/procedure-sdk";
 import { resolveProcedureEntryRelativePath } from "./names.ts";
+import { getProcedureRuntimeDir } from "./paths.ts";
 import { createTypiaBunPlugin } from "./typia-bun-plugin.ts";
 
 interface DiskProcedureDefinition extends ProcedureMetadata {

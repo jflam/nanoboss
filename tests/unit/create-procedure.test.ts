@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { createCreateProcedure } from "../../procedures/create.ts";
 import type { ProcedureApi, ProcedureRegistryLike } from "@nanoboss/procedure-sdk";
-import { createCreateProcedure } from "../../src/procedure/create.ts";
 import { normalizeProcedureResult } from "@nanoboss/store";
 
 describe("create procedure", () => {
@@ -68,6 +68,7 @@ describe("create procedure", () => {
     expect(generatedPrompt).toContain("The procedure API provides:");
     expect(generatedPrompt).toContain(".nanoboss/procedures/<name>.ts");
     expect(generatedPrompt).toContain('@nanoboss/procedure-sdk');
+    expect(generatedPrompt).toContain("Do not import from root `src/` paths.");
     expect(generatedPrompt).toContain("Return exactly one JSON object matching the requested schema.");
     expect(generatedPrompt).not.toContain("CommandContext");
     expect(generatedOptions).toEqual({ stream: false });
@@ -120,7 +121,7 @@ describe("create procedure", () => {
     })));
 
     expect(persistedSource).toContain('import type { ProcedureApi } from "@nanoboss/procedure-sdk";');
-    expect(persistedSource).toContain('import { expectData } from "../../src/core/run-result.ts";');
+    expect(persistedSource).toContain('import { expectData } from "@nanoboss/procedure-sdk";');
     expect(persistedSource).toContain('name: "review"');
     expect(loadedPath).toBe(persistedPath);
     expect(registeredName).toBe("review");
