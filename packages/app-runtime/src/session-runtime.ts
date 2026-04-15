@@ -1,4 +1,5 @@
 import { createAgentSession } from "@nanoboss/agent-acp";
+import { formatAgentBanner } from "@nanoboss/procedure-sdk";
 import {
   SessionStore,
   readStoredSessionMetadata,
@@ -8,7 +9,6 @@ import {
 import { getBuildLabel } from "../../../src/core/build-info.ts";
 import type { SessionMetadata } from "../../../src/core/contracts.ts";
 import { toDownstreamAgentSelection } from "../../../src/core/config.ts";
-import { formatAgentBanner } from "../../../src/core/runtime-banner.ts";
 import type {
   AgentSession,
   DownstreamAgentConfig,
