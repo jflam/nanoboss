@@ -53,13 +53,13 @@ export async function callAgent<T = string>(
     sessionId: crypto.randomUUID(),
     cwd,
   });
-  const cell = store.startCell({
+  const run = store.startRun({
     procedure: "callAgent",
     input: displayPrompt,
     kind: "agent",
     promptImages: options.promptInput ? store.persistPromptImages(options.promptInput) : undefined,
   });
-  const finalized = store.finalizeCell(cell, {
+  const finalized = store.completeRun(run, {
     data: result.data as T & KernelValue,
     display: result.raw,
     summary: summarizeAgentOutput(result.data, result.raw),

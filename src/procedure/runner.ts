@@ -85,7 +85,7 @@ export async function executeTopLevelProcedure(params: {
   const promptInput = params.promptInput;
   const displayPrompt = promptInput ? promptInputDisplayText(promptInput) : params.prompt;
   const plainTextPrompt = promptInput ? promptInputToPlainText(promptInput) : params.prompt;
-  const rootCell = params.store.startCell({
+  const rootRun = params.store.startRun({
     procedure: params.procedure.name,
     input: displayPrompt,
     kind: "top_level",
@@ -104,7 +104,7 @@ export async function executeTopLevelProcedure(params: {
     spanId: rootSpanId,
     emitter: params.emitter,
     store: params.store,
-    cell: rootCell,
+    run: rootRun,
     promptInput,
     signal: params.signal,
     softStopSignal: params.softStopSignal,
@@ -133,10 +133,10 @@ export async function executeTopLevelProcedure(params: {
     const result = normalizeProcedureResult(rawResult);
     const afterSelection = toDownstreamAgentSelection(params.getDefaultAgentConfig());
     const changedSelection = sameSelection(beforeSelection, afterSelection) ? undefined : afterSelection;
-    const finalized = params.store.finalizeCell(rootCell, result, {
+    const finalized = params.store.completeRun(rootRun, result, {
       meta: changedSelection ? { defaultAgentSelection: changedSelection } : undefined,
     });
-    const run = params.store.readRun(finalized.run);
+    const run = params.store.getRun(finalized.run);
 
     logger.write({
       spanId: rootSpanId,
@@ -165,7 +165,7 @@ export async function executeTopLevelProcedure(params: {
         error: cancelled.message,
       });
 
-      const finalized = params.store.finalizeCell(rootCell, {
+      const finalized = params.store.completeRun(rootRun, {
         display: cancelled.message,
         summary: summarizeText(cancelled.message),
       });
@@ -188,7 +188,7 @@ export async function executeTopLevelProcedure(params: {
     });
 
     await params.onError?.(ctx, errorText);
-    const finalized = params.store.finalizeCell(rootCell, {
+    const finalized = params.store.completeRun(rootRun, {
       summary: summarizeText(errorText),
     });
     throw new TopLevelProcedureExecutionError(message, finalized.run);

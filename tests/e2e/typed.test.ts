@@ -120,7 +120,7 @@ function createContext(): CommandContextImpl {
       async flush() {},
     },
     store,
-    cell: store.startCell({
+    run: store.startRun({
       procedure: "typed-e2e",
       input: "typed-e2e",
       kind: "top_level",

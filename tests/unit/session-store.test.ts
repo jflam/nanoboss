@@ -26,7 +26,7 @@ function expectDefined<T>(value: T | undefined, message: string): T {
 }
 
 describe("SessionStore", () => {
-  test("loads persisted cells from disk", () => {
+  test("loads persisted runs from disk", () => {
     const rootDir = mkdtempSync(join(process.cwd(), ".tmp-session-store-"));
     tempDirs.push(rootDir);
 
@@ -35,12 +35,12 @@ describe("SessionStore", () => {
       cwd: process.cwd(),
       rootDir,
     });
-    const cell = original.startCell({
+    const run = original.startRun({
       procedure: "demo",
       input: "hello",
       kind: "top_level",
     });
-    const result = original.finalizeCell(cell, {
+    const result = original.completeRun(run, {
       data: {
         count: 3,
         text: "hi",
@@ -73,7 +73,7 @@ describe("SessionStore", () => {
       text: "hi",
     });
 
-    const recent = reloaded.recent({ limit: 1 });
+    const recent = reloaded.listRuns({ scope: "recent", limit: 1 });
     const latest = recent[0];
     expect(latest?.procedure).toBe("demo");
     expect(latest?.kind).toBe("top_level");
@@ -104,53 +104,53 @@ describe("SessionStore", () => {
       rootDir,
     });
 
-    const reviewCell = original.startCell({
+    const reviewRun = original.startRun({
       procedure: "second-opinion",
       input: "review the patch",
       kind: "top_level",
     });
-    reviewCell.meta.createdAt = "2026-04-01T10:00:00.000Z";
-    const childProcedureCell = original.startCell({
+    reviewRun.meta.createdAt = "2026-04-01T10:00:00.000Z";
+    const childProcedureRun = original.startRun({
       procedure: "review-plan",
       input: "inspect the diff",
       kind: "procedure",
-      parentCellId: reviewCell.cell.cellId,
+      parentRunId: reviewRun.run.runId,
     });
-    childProcedureCell.meta.createdAt = "2026-04-01T10:00:01.000Z";
-    const nestedAgentCell = original.startCell({
+    childProcedureRun.meta.createdAt = "2026-04-01T10:00:01.000Z";
+    const nestedAgentRun = original.startRun({
       procedure: "callAgent",
       input: "critique the patch",
       kind: "agent",
-      parentCellId: childProcedureCell.cell.cellId,
+      parentRunId: childProcedureRun.run.runId,
     });
-    nestedAgentCell.meta.createdAt = "2026-04-01T10:00:02.000Z";
-    const siblingAgentCell = original.startCell({
+    nestedAgentRun.meta.createdAt = "2026-04-01T10:00:02.000Z";
+    const siblingAgentRun = original.startRun({
       procedure: "callAgent",
       input: "summarize the patch",
       kind: "agent",
-      parentCellId: reviewCell.cell.cellId,
+      parentRunId: reviewRun.run.runId,
     });
-    siblingAgentCell.meta.createdAt = "2026-04-01T10:00:03.000Z";
+    siblingAgentRun.meta.createdAt = "2026-04-01T10:00:03.000Z";
 
-    const nestedAgent = original.finalizeCell(nestedAgentCell, {
+    const nestedAgent = original.completeRun(nestedAgentRun, {
       data: {
         verdict: "mixed",
       },
       display: "critique",
       summary: "critique summary",
     });
-    const childProcedure = original.finalizeCell(childProcedureCell, {
+    const childProcedure = original.completeRun(childProcedureRun, {
       data: {
         critique: expectDefined(nestedAgent.dataRef, "Expected nested agent dataRef"),
       },
       display: "plan",
       summary: "plan summary",
     });
-    const siblingAgent = original.finalizeCell(siblingAgentCell, {
+    const siblingAgent = original.completeRun(siblingAgentRun, {
       display: "summary",
       summary: "summary agent",
     });
-    const review = original.finalizeCell(reviewCell, {
+    const review = original.completeRun(reviewRun, {
       data: {
         plan: expectDefined(childProcedure.dataRef, "Expected child procedure dataRef"),
       },
@@ -158,15 +158,15 @@ describe("SessionStore", () => {
       summary: "review summary",
     });
 
-    original.finalizeCell(
+    original.completeRun(
       (() => {
-        const linterCell = original.startCell({
+        const linterRun = original.startRun({
           procedure: "linter",
           input: "lint the repo",
           kind: "top_level",
         });
-        linterCell.meta.createdAt = "2026-04-01T10:00:04.000Z";
-        return linterCell;
+        linterRun.meta.createdAt = "2026-04-01T10:00:04.000Z";
+        return linterRun;
       })(),
       {
         display: "lint",
@@ -180,45 +180,45 @@ describe("SessionStore", () => {
       rootDir,
     });
 
-    expect(reloaded.ancestors(nestedAgent.cell).map((item) => item.cell.cellId)).toEqual([
-      childProcedure.cell.cellId,
-      review.cell.cellId,
+    expect(reloaded.getRunAncestors(nestedAgent.run).map((item) => item.run.runId)).toEqual([
+      childProcedure.run.runId,
+      review.run.runId,
     ]);
-    expect(reloaded.ancestors(nestedAgent.cell, { limit: 1 }).map((item) => item.cell.cellId)).toEqual([
-      childProcedure.cell.cellId,
+    expect(reloaded.getRunAncestors(nestedAgent.run, { limit: 1 }).map((item) => item.run.runId)).toEqual([
+      childProcedure.run.runId,
     ]);
     expect(
-      reloaded.ancestors(nestedAgent.cell, { includeSelf: true, limit: 2 }).map((item) => item.cell.cellId),
+      reloaded.getRunAncestors(nestedAgent.run, { includeSelf: true, limit: 2 }).map((item) => item.run.runId),
     ).toEqual([
-      nestedAgent.cell.cellId,
-      childProcedure.cell.cellId,
+      nestedAgent.run.runId,
+      childProcedure.run.runId,
     ]);
-    expect(reloaded.descendants(review.cell).map((item) => item.cell.cellId)).toEqual([
-      childProcedure.cell.cellId,
-      nestedAgent.cell.cellId,
-      siblingAgent.cell.cellId,
+    expect(reloaded.getRunDescendants(review.run).map((item) => item.run.runId)).toEqual([
+      childProcedure.run.runId,
+      nestedAgent.run.runId,
+      siblingAgent.run.runId,
     ]);
-    expect(reloaded.descendants(review.cell, { kind: "agent" }).map((item) => item.cell.cellId)).toEqual([
-      nestedAgent.cell.cellId,
-      siblingAgent.cell.cellId,
+    expect(reloaded.getRunDescendants(review.run, { kind: "agent" }).map((item) => item.run.runId)).toEqual([
+      nestedAgent.run.runId,
+      siblingAgent.run.runId,
     ]);
-    expect(reloaded.descendants(review.cell, { maxDepth: 1 }).map((item) => item.cell.cellId)).toEqual([
-      childProcedure.cell.cellId,
-      siblingAgent.cell.cellId,
+    expect(reloaded.getRunDescendants(review.run, { maxDepth: 1 }).map((item) => item.run.runId)).toEqual([
+      childProcedure.run.runId,
+      siblingAgent.run.runId,
     ]);
-    expect(reloaded.descendants(review.cell, { kind: "agent", maxDepth: 1 }).map((item) => item.cell.cellId)).toEqual([
-      siblingAgent.cell.cellId,
+    expect(reloaded.getRunDescendants(review.run, { kind: "agent", maxDepth: 1 }).map((item) => item.run.runId)).toEqual([
+      siblingAgent.run.runId,
     ]);
-    expect(reloaded.latest({ procedure: "callAgent" })?.cell.cellId).toBe(siblingAgent.cell.cellId);
-    expect(reloaded.parent(nestedAgent.cell)?.cell.cellId).toBe(childProcedure.cell.cellId);
-    expect(reloaded.children(review.cell).map((item) => item.cell.cellId)).toEqual([
-      childProcedure.cell.cellId,
-      siblingAgent.cell.cellId,
+    expect(reloaded.listRuns({ scope: "recent", procedure: "callAgent", limit: 1 })[0]?.run.runId).toBe(siblingAgent.run.runId);
+    expect(reloaded.getRunAncestors(nestedAgent.run, { limit: 1 })[0]?.run.runId).toBe(childProcedure.run.runId);
+    expect(reloaded.getRunDescendants(review.run, { maxDepth: 1 }).map((item) => item.run.runId)).toEqual([
+      childProcedure.run.runId,
+      siblingAgent.run.runId,
     ]);
-    expect(reloaded.children(review.cell, { kind: "agent" }).map((item) => item.cell.cellId)).toEqual([
-      siblingAgent.cell.cellId,
+    expect(reloaded.getRunDescendants(review.run, { kind: "agent", maxDepth: 1 }).map((item) => item.run.runId)).toEqual([
+      siblingAgent.run.runId,
     ]);
-    expect(reloaded.topLevelRuns().map((item) => item.procedure)).toEqual([
+    expect(reloaded.listRuns().map((item) => item.procedure)).toEqual([
       "linter",
       "second-opinion",
     ]);
@@ -234,7 +234,7 @@ describe("SessionStore", () => {
       rootDir,
     });
 
-    const cell = original.startCell({
+    const run = original.startRun({
       procedure: "demo",
       input: "hello",
       kind: "top_level",
@@ -253,14 +253,14 @@ describe("SessionStore", () => {
         completedAt: "2026-04-01T10:00:00.000Z",
         run: {
           sessionId: "session-replay",
-          runId: cell.cell.cellId,
+          runId: run.run.runId,
         },
         summary: "done",
         display: "hello\n",
       },
     ];
 
-    original.finalizeCell(cell, {
+    original.completeRun(run, {
       display: "hello\n",
       summary: "done",
     }, {
@@ -273,12 +273,12 @@ describe("SessionStore", () => {
       rootDir,
     });
 
-    const stored = reloaded.topLevelRuns({ limit: 1 })[0];
+    const stored = reloaded.listRuns({ limit: 1 })[0];
     if (!stored) {
       throw new Error("Missing stored top-level run");
     }
 
-    expect(reloaded.readCell(stored.cell).output.replayEvents).toEqual(replayEvents);
+    expect(reloaded.getRun(stored.run).output.replayEvents).toEqual(replayEvents);
   });
 
   test("persists prompt image attachments under the session root and stores durable metadata", () => {
@@ -329,13 +329,13 @@ describe("SessionStore", () => {
     expect(existsSync(attachmentFile)).toBe(false);
     expect(readdirSync(join(rootDir, "attachments")).filter((entry) => entry.endsWith(".tmp"))).toHaveLength(1);
 
-    const cell = store.startCell({
+    const run = store.startRun({
       procedure: "default",
       input: "look [Image 1: PNG 10x10 3B]",
       kind: "top_level",
       promptImages,
     });
-    const finalized = store.finalizeCell(cell, {
+    const finalized = store.completeRun(run, {
       display: "noted\n",
       summary: "noted",
     });
@@ -349,7 +349,7 @@ describe("SessionStore", () => {
     expect(existsSync(attachmentFile)).toBe(true);
     expect(readFileSync(attachmentFile).toString("base64")).toBe("YWJj");
     expect(readdirSync(join(rootDir, "attachments")).filter((entry) => entry.endsWith(".tmp"))).toHaveLength(0);
-    expect(reloaded.readCell(finalized.cell).meta.promptImages).toEqual(promptImages);
+    expect(reloaded.getRun(finalized.run).meta.promptImages).toEqual(promptImages);
   });
 
   test("promotes staged prompt image attachments when a persisted cell is loaded after a crash window", () => {
@@ -384,16 +384,16 @@ describe("SessionStore", () => {
     expect(existsSync(stagedFile)).toBe(true);
     expect(existsSync(attachmentFile)).toBe(false);
 
-    const draft = store.startCell({
+    const draft = store.startRun({
       procedure: "default",
       input: "recover [Image 1: PNG 10x10 3B]",
       kind: "top_level",
       promptImages,
     });
     writeFileSync(
-      join(rootDir, "cells", `123-${draft.cell.cellId}.json`),
+      join(rootDir, "cells", `123-${draft.run.runId}.json`),
       `${JSON.stringify({
-        cellId: draft.cell.cellId,
+        cellId: draft.run.runId,
         procedure: draft.procedure,
         input: draft.input,
         output: {
@@ -414,7 +414,7 @@ describe("SessionStore", () => {
     expect(existsSync(stagedFile)).toBe(false);
     expect(existsSync(attachmentFile)).toBe(true);
     expect(readFileSync(attachmentFile).toString("base64")).toBe("YWJj");
-    expect(reloaded.topLevelRuns({ limit: 1 })[0]?.procedure).toBe("default");
+    expect(reloaded.listRuns({ limit: 1 })[0]?.procedure).toBe("default");
   });
 
   test("removes stale staged attachment temp files when a store is reloaded", () => {
@@ -438,7 +438,7 @@ describe("SessionStore", () => {
       rootDir,
     });
 
-    expect(store.topLevelRuns()).toEqual([]);
+    expect(store.listRuns()).toEqual([]);
     expect(existsSync(staleTempPath)).toBe(false);
     expect(existsSync(liveAttachmentPath)).toBe(true);
   });

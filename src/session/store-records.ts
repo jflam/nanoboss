@@ -1,4 +1,3 @@
-import type { CellRef, ValueRef } from "./store-refs.ts";
 import {
   refFromValueRef,
   runRefFromCellRef,
@@ -15,6 +14,16 @@ import type {
   RunSummary,
 } from "../core/types.ts";
 import { publicKernelValueFromStored } from "../core/types.ts";
+
+type CellRef = {
+  sessionId: string;
+  cellId: string;
+};
+
+type ValueRef = {
+  cell: CellRef;
+  path: string;
+};
 
 export interface CellRecord {
   cellId: string;

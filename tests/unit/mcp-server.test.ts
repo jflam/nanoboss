@@ -73,35 +73,35 @@ function seedSession(rootDir: string) {
     rootDir,
   });
 
-  const reviewCell = store.startCell({
+  const reviewCell = store.startRun({
     procedure: "second-opinion",
     input: "review the code",
     kind: "top_level",
   });
   reviewCell.meta.createdAt = "2026-04-01T10:00:00.000Z";
-  const planCell = store.startCell({
+  const planCell = store.startRun({
     procedure: "review-plan",
     input: "collect the main issues",
     kind: "procedure",
-    parentCellId: reviewCell.cell.cellId,
+    parentRunId: reviewCell.run.runId,
   });
   planCell.meta.createdAt = "2026-04-01T10:00:01.000Z";
-  const critiqueCell = store.startCell({
+  const critiqueCell = store.startRun({
     procedure: "callAgent",
     input: "critique the code",
     kind: "agent",
-    parentCellId: planCell.cell.cellId,
+    parentRunId: planCell.run.runId,
   });
   critiqueCell.meta.createdAt = "2026-04-01T10:00:02.000Z";
-  const summaryCell = store.startCell({
+  const summaryCell = store.startRun({
     procedure: "callAgent",
     input: "summarize the review",
     kind: "agent",
-    parentCellId: reviewCell.cell.cellId,
+    parentRunId: reviewCell.run.runId,
   });
   summaryCell.meta.createdAt = "2026-04-01T10:00:03.000Z";
 
-  const critiqueResult = store.finalizeCell(critiqueCell, {
+  const critiqueResult = store.completeRun(critiqueCell, {
     data: {
       verdict: "mixed",
       issues: ["missing evidence"],
@@ -109,7 +109,7 @@ function seedSession(rootDir: string) {
     display: "critique display",
     summary: "critique summary",
   });
-  const planResult = store.finalizeCell(planCell, {
+  const planResult = store.completeRun(planCell, {
     data: {
       critique: expectDefined(critiqueResult.dataRef, "Expected critique dataRef"),
       steps: ["inspect diff", "check tests"],
@@ -117,14 +117,14 @@ function seedSession(rootDir: string) {
     display: "plan display",
     summary: "plan summary",
   });
-  const summaryResult = store.finalizeCell(summaryCell, {
+  const summaryResult = store.completeRun(summaryCell, {
     data: {
       outline: "review outline",
     },
     display: "summary display",
     summary: "summary summary",
   });
-  const reviewResult = store.finalizeCell(reviewCell, {
+  const reviewResult = store.completeRun(reviewCell, {
     data: {
       subject: "review the code",
       plan: expectDefined(planResult.dataRef, "Expected plan dataRef"),
@@ -145,9 +145,9 @@ function seedSession(rootDir: string) {
     },
   });
 
-  store.finalizeCell(
+  store.completeRun(
     (() => {
-      const linterCell = store.startCell({
+      const linterCell = store.startRun({
         procedure: "linter",
         input: "lint the repo",
         kind: "top_level",

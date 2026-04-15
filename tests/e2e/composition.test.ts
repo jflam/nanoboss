@@ -93,7 +93,7 @@ describeE2E("ctx.procedures.run composition (real agent)", () => {
           async flush() {},
         },
         store,
-        cell: store.startCell({
+        run: store.startRun({
           procedure: "quadruple",
           input: "5",
           kind: "top_level",

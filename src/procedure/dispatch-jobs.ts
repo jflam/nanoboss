@@ -456,7 +456,7 @@ export class ProcedureDispatchJobManager {
 
   private tryReadStoredRunRecord(run: RunRef) {
     try {
-      return this.createStore().readRun(run);
+      return this.createStore().getRun(run);
     } catch {
       return undefined;
     }
@@ -694,7 +694,7 @@ function isProcessAlive(pid: number): boolean {
   }
 }
 
-function looksLikeProcedureFailureRecord(record: ReturnType<SessionStore["readRun"]>): boolean {
+function looksLikeProcedureFailureRecord(record: ReturnType<SessionStore["getRun"]>): boolean {
   return (
     record.output.data === undefined &&
     record.output.display === undefined &&

@@ -1,5 +1,4 @@
 import type { StoredRunResult } from "../session/store.ts";
-import { refFromValueRef } from "../session/store-refs.ts";
 import { inferDataShape } from "./data-shape.ts";
 import type {
   AgentTokenUsage,
@@ -39,13 +38,13 @@ export function toPublicRunResult<T extends KernelValue>(
   return {
     run: result.run,
     data: result.data,
-    dataRef: result.dataRef ? refFromValueRef(result.dataRef) : undefined,
-    displayRef: result.displayRef ? refFromValueRef(result.displayRef) : undefined,
-    streamRef: result.streamRef ? refFromValueRef(result.streamRef) : undefined,
+    dataRef: result.dataRef,
+    displayRef: result.displayRef,
+    streamRef: result.streamRef,
     pause: result.pause,
-    pauseRef: result.pauseRef ? refFromValueRef(result.pauseRef) : undefined,
+    pauseRef: result.pauseRef,
     summary: result.summary,
-    rawRef: result.rawRef ? refFromValueRef(result.rawRef) : undefined,
+    rawRef: result.rawRef,
   };
 }
 

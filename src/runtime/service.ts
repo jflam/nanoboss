@@ -1,6 +1,5 @@
 import { inferDataShape } from "../core/data-shape.ts";
 import { shouldLoadDiskCommands } from "../core/runtime-mode.ts";
-import { valueRefFromRef } from "../session/store-refs.ts";
 import type {
   DownstreamAgentSelection,
   KernelValue,
@@ -30,50 +29,44 @@ export class NanobossRuntimeService {
 
   listRuns(args: ListRunsArgs = {}) {
     const store = this.createStore(args.sessionId);
-    return args.scope === "recent"
-      ? store.recentRuns({ procedure: args.procedure, limit: args.limit })
-      : store.topLevelRunSummaries({ procedure: args.procedure, limit: args.limit });
+    return store.listRuns(args);
   }
 
   getRun(runRef: RunRef) {
-    return this.createStoreForRunRef(runRef).readRun(runRef);
+    return this.createStoreForRunRef(runRef).getRun(runRef);
   }
 
   getRunAncestors(
     runRef: RunRef,
     args: { includeSelf?: boolean; limit?: number } = {},
   ) {
-    return this.createStoreForRunRef(runRef).ancestorRuns(runRef, args);
+    return this.createStoreForRunRef(runRef).getRunAncestors(runRef, args);
   }
 
   getRunDescendants(
     runRef: RunRef,
     args: RunDescendantsOptions = {},
   ) {
-    return this.createStoreForRunRef(runRef).descendantRuns(runRef, args);
+    return this.createStoreForRunRef(runRef).getRunDescendants(runRef, args);
   }
 
   readRef(ref: Ref): unknown {
-    const valueRef = valueRefFromRef(ref);
-    return publicKernelValueFromStored(this.createStoreForRef(ref).readRef(valueRef) as KernelValue);
+    return publicKernelValueFromStored(this.createStoreForRef(ref).readRef(ref) as KernelValue);
   }
 
   statRef(ref: Ref) {
-    const valueRef = valueRefFromRef(ref);
-    return this.createStoreForRef(ref).statRef(valueRef);
+    return this.createStoreForRef(ref).statRef(ref);
   }
 
   refWriteToFile(ref: Ref, path: string): { path: string } {
-    const valueRef = valueRefFromRef(ref);
     const store = this.createStoreForRef(ref);
-    store.writeRefToFile(valueRef, path, store.cwd);
+    store.writeRefToFile(ref, path, store.cwd);
     return { path };
   }
 
   getRefSchema(ref: Ref): RuntimeSchemaResult {
-    const valueRef = valueRefFromRef(ref);
     const store = this.createStoreForRef(ref);
-    const value = store.readRef(valueRef);
+    const value = store.readRef(ref);
     return {
       target: ref,
       dataShape: inferDataShape(value),
@@ -82,7 +75,7 @@ export class NanobossRuntimeService {
 
   getRunSchema(runRef: RunRef): RuntimeSchemaResult {
     const store = this.createStoreForRunRef(runRef);
-    const run = store.readRun(runRef);
+    const run = store.getRun(runRef);
     return {
       target: runRef,
       dataShape: inferDataShape(run.output.data),

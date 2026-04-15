@@ -10,9 +10,7 @@ import {
   cellRefFromRunRef,
   createCellRef,
   createValueRef,
-  runRefFromCellRef,
-  type CellRef,
-  type ValueRef,
+  valueRefFromRef,
 } from "./store-refs.ts";
 import {
   runRecordFromCellRecord,
@@ -29,6 +27,7 @@ import type {
   PromptImageSummary,
   PromptInput,
   ProcedureResult,
+  Ref,
   RefStat,
   RunAncestorsOptions,
   RunDescendantsOptions,
@@ -39,16 +38,15 @@ import type {
   RunRef,
   RunSummary,
 } from "../core/types.ts";
+import { createRef, createRunRef } from "../core/types.ts";
 
-type TopLevelRunsOptions = Omit<RunListOptions, "scope">;
-
-interface CellDraft {
-  cell: CellRef;
+interface RunDraft {
+  run: RunRef;
   procedure: string;
   input: string;
   meta: {
     createdAt: string;
-    parentCellId?: string;
+    parentRunId?: string;
     kind: RunKind;
     dispatchCorrelationId?: string;
     defaultAgentSelection?: DownstreamAgentSelection;
@@ -57,13 +55,16 @@ interface CellDraft {
   streamChunks: string[];
 }
 
+type CellRef = ReturnType<typeof createCellRef>;
+type ValueRef = ReturnType<typeof createValueRef>;
+
 interface RecentOptions {
   procedure?: string;
   limit?: number;
   excludeCellId?: string;
 }
 
-interface FinalizeCellOptions {
+interface CompleteRunOptions {
   display?: string;
   stream?: string;
   summary?: string;
@@ -74,15 +75,14 @@ interface FinalizeCellOptions {
 
 export interface StoredRunResult<T extends KernelValue = KernelValue> {
   run: RunRef;
-  cell: CellRef;
   data?: T;
-  dataRef?: ValueRef;
-  displayRef?: ValueRef;
-  streamRef?: ValueRef;
+  dataRef?: Ref;
+  displayRef?: Ref;
+  streamRef?: Ref;
   pause?: Continuation;
-  pauseRef?: ValueRef;
+  pauseRef?: Ref;
   summary?: string;
-  rawRef?: ValueRef;
+  rawRef?: Ref;
 }
 
 const STALE_ATTACHMENT_TEMP_MAX_AGE_MS = 24 * 60 * 60 * 1000;
@@ -136,21 +136,21 @@ export class SessionStore {
     return images.map((image) => this.persistPromptImage(image));
   }
 
-  startCell(params: {
+  startRun(params: {
     procedure: string;
     input: string;
     kind: RunKind;
-    parentCellId?: string;
+    parentRunId?: string;
     dispatchCorrelationId?: string;
     promptImages?: CellRecord["meta"]["promptImages"];
-  }): CellDraft {
+  }): RunDraft {
     return {
-      cell: createCellRef(this.sessionId, crypto.randomUUID()),
+      run: createRunRef(this.sessionId, crypto.randomUUID()),
       procedure: params.procedure,
       input: params.input,
       meta: {
         createdAt: new Date().toISOString(),
-        parentCellId: params.parentCellId,
+        parentRunId: params.parentRunId,
         kind: params.kind,
         dispatchCorrelationId: params.dispatchCorrelationId,
         promptImages: params.promptImages,
@@ -159,14 +159,14 @@ export class SessionStore {
     };
   }
 
-  appendStream(draft: CellDraft, text: string): void {
+  appendStream(draft: RunDraft, text: string): void {
     draft.streamChunks.push(text);
   }
 
-  finalizeCell<T extends KernelValue = KernelValue>(
-    draft: CellDraft,
+  completeRun<T extends KernelValue = KernelValue>(
+    draft: RunDraft,
     result: ProcedureResult<T>,
-    options: FinalizeCellOptions = {},
+    options: CompleteRunOptions = {},
   ): StoredRunResult<T> {
     const stream = draft.streamChunks.join("") || options.stream;
     const display = result.display ?? options.display ?? options.raw;
@@ -177,9 +177,10 @@ export class SessionStore {
     );
     const memory = result.memory;
     const pause = result.pause;
+    const cell = cellRefFromRunRef(draft.run);
 
     const record: CellRecord = {
-      cellId: draft.cell.cellId,
+      cellId: draft.run.runId,
       procedure: draft.procedure,
       input: draft.input,
       output: {
@@ -197,7 +198,12 @@ export class SessionStore {
           : {}),
       },
       meta: {
-        ...draft.meta,
+        createdAt: draft.meta.createdAt,
+        parentCellId: draft.meta.parentRunId,
+        kind: draft.meta.kind,
+        dispatchCorrelationId: draft.meta.dispatchCorrelationId,
+        defaultAgentSelection: draft.meta.defaultAgentSelection,
+        promptImages: draft.meta.promptImages,
         ...options.meta,
       },
     };
@@ -214,21 +220,20 @@ export class SessionStore {
     this.storeCellRecord(record, filePath);
 
     const dataRef = record.output.data !== undefined
-      ? createValueRef(draft.cell, "output.data")
+      ? createRef(draft.run, "output.data")
       : undefined;
     const displayRef = record.output.display !== undefined
-      ? createValueRef(draft.cell, "output.display")
+      ? createRef(draft.run, "output.display")
       : undefined;
     const streamRef = record.output.stream !== undefined
-      ? createValueRef(draft.cell, "output.stream")
+      ? createRef(draft.run, "output.stream")
       : undefined;
     const pauseRef = record.output.pause !== undefined
-      ? createValueRef(draft.cell, "output.pause")
+      ? createRef(draft.run, "output.pause")
       : undefined;
 
     return {
-      run: runRefFromCellRef(draft.cell),
-      cell: draft.cell,
+      run: draft.run,
       data: result.data,
       dataRef,
       displayRef,
@@ -240,14 +245,15 @@ export class SessionStore {
     };
   }
 
-  patchCell(
-    cellRef: CellRef,
+  patchRun(
+    runRef: RunRef,
     patch: {
       output?: Partial<CellRecord["output"]>;
       meta?: Partial<CellRecord["meta"]>;
     },
-  ): CellRecord {
+  ): RunRecord {
     this.loadExistingCells();
+    const cellRef = cellRefFromRunRef(runRef);
     const existing = this.readCell(cellRef);
     const filePath = this.cellFilePaths.get(cellRef.cellId);
     if (!filePath) {
@@ -268,39 +274,62 @@ export class SessionStore {
 
     this.cells.set(cellRef.cellId, updated);
     writeJsonFileAtomicSync(filePath, updated);
-    return updated;
+    return runRecordFromCellRecord(this.sessionId, updated);
   }
 
-  readRef(valueRef: ValueRef): unknown {
+  readRef(ref: Ref): unknown {
+    const valueRef = valueRefFromRef(ref);
     const cell = this.readCell(valueRef.cell);
     return getValueAtPath(cell, valueRef.path);
   }
 
-  readRun(runRef: RunRef): RunRecord {
+  getRun(runRef: RunRef): RunRecord {
     return runRecordFromCellRecord(this.sessionId, this.readCell(cellRefFromRunRef(runRef)));
   }
 
-  statRef(valueRef: ValueRef): RefStat {
-    const value = this.readRef(valueRef);
+  statRef(ref: Ref): RefStat {
+    const value = this.readRef(ref);
     const preview = buildPreview(value);
 
     return {
-      run: runRefFromCellRef(valueRef.cell),
-      path: valueRef.path,
+      run: ref.run,
+      path: ref.path,
       type: inferType(value),
       size: Buffer.byteLength(serializeValue(value), "utf8"),
       ...(preview ? { preview } : {}),
     };
   }
 
-  writeRefToFile(valueRef: ValueRef, path: string, cwd = this.cwd): void {
-    const value = this.readRef(valueRef);
+  writeRefToFile(ref: Ref, path: string, cwd = this.cwd): void {
+    const value = this.readRef(ref);
     const targetPath = resolve(cwd, path);
     mkdirSync(dirname(targetPath), { recursive: true });
     writeFileSync(targetPath, materializeForFile(value), "utf8");
   }
 
-  recent(options: RecentOptions = {}): CellSummary[] {
+  listRuns(options: RunListOptions = {}): RunSummary[] {
+    const summaries = options.scope === "recent"
+      ? this.listRecentCellSummaries({
+        procedure: options.procedure,
+        limit: options.limit,
+      })
+      : this.listTopLevelCellSummaries({
+        procedure: options.procedure,
+        limit: options.limit,
+      });
+
+    return summaries.map(runSummaryFromCellSummary);
+  }
+
+  getRunAncestors(runRef: RunRef, options: RunAncestorsOptions = {}): RunSummary[] {
+    return this.listRunAncestorSummaries(cellRefFromRunRef(runRef), options).map(runSummaryFromCellSummary);
+  }
+
+  getRunDescendants(runRef: RunRef, options: RunDescendantsOptions = {}): RunSummary[] {
+    return this.listRunDescendantSummaries(cellRefFromRunRef(runRef), options).map(runSummaryFromCellSummary);
+  }
+
+  private listRecentCellSummaries(options: RecentOptions = {}): CellSummary[] {
     this.loadExistingCells();
     return this.collectReverseSummaries(this.order, {
       ...options,
@@ -308,46 +337,7 @@ export class SessionStore {
     });
   }
 
-  recentRuns(options: RecentOptions = {}): RunSummary[] {
-    return this.recent(options).map(runSummaryFromCellSummary);
-  }
-
-  latest(options: RecentOptions = {}): CellSummary | undefined {
-    return this.recent({
-      ...options,
-      limit: 1,
-    })[0];
-  }
-
-  latestRun(options: RecentOptions = {}): RunSummary | undefined {
-    const summary = this.latest(options);
-    return summary ? runSummaryFromCellSummary(summary) : undefined;
-  }
-
-  parent(cellRef: CellRef): CellSummary | undefined {
-    this.loadExistingCells();
-    this.readCell(cellRef);
-    const parentCellId = this.parentByCellId.get(cellRef.cellId);
-    return parentCellId ? this.toSummaryByCellId(parentCellId) : undefined;
-  }
-
-  parentRun(runRef: RunRef): RunSummary | undefined {
-    const summary = this.parent(cellRefFromRunRef(runRef));
-    return summary ? runSummaryFromCellSummary(summary) : undefined;
-  }
-
-  children(cellRef: CellRef, options: Omit<RunDescendantsOptions, "maxDepth"> = {}): CellSummary[] {
-    return this.descendants(cellRef, {
-      ...options,
-      maxDepth: 1,
-    });
-  }
-
-  childRuns(runRef: RunRef, options: Omit<RunDescendantsOptions, "maxDepth"> = {}): RunSummary[] {
-    return this.children(cellRefFromRunRef(runRef), options).map(runSummaryFromCellSummary);
-  }
-
-  ancestors(cellRef: CellRef, options: RunAncestorsOptions = {}): CellSummary[] {
+  private listRunAncestorSummaries(cellRef: CellRef, options: RunAncestorsOptions = {}): CellSummary[] {
     this.loadExistingCells();
     const cell = this.readCell(cellRef);
     const limit = normalizeLimit(options.limit);
@@ -365,11 +355,7 @@ export class SessionStore {
     return ancestors;
   }
 
-  ancestorRuns(runRef: RunRef, options: RunAncestorsOptions = {}): RunSummary[] {
-    return this.ancestors(cellRefFromRunRef(runRef), options).map(runSummaryFromCellSummary);
-  }
-
-  descendants(cellRef: CellRef, options: RunDescendantsOptions = {}): CellSummary[] {
+  private listRunDescendantSummaries(cellRef: CellRef, options: RunDescendantsOptions = {}): CellSummary[] {
     this.loadExistingCells();
     this.readCell(cellRef);
     const limit = normalizeLimit(options.limit);
@@ -422,20 +408,12 @@ export class SessionStore {
     return descendants;
   }
 
-  descendantRuns(runRef: RunRef, options: RunDescendantsOptions = {}): RunSummary[] {
-    return this.descendants(cellRefFromRunRef(runRef), options).map(runSummaryFromCellSummary);
-  }
-
-  topLevelRuns(options: TopLevelRunsOptions = {}): CellSummary[] {
+  private listTopLevelCellSummaries(options: RecentOptions = {}): CellSummary[] {
     this.loadExistingCells();
     return this.collectReverseSummaries(this.topLevelCellIds, options);
   }
 
-  topLevelRunSummaries(options: TopLevelRunsOptions = {}): RunSummary[] {
-    return this.topLevelRuns(options).map(runSummaryFromCellSummary);
-  }
-
-  readCell(cellRef: CellRef): CellRecord {
+  private readCell(cellRef: CellRef): CellRecord {
     this.loadExistingCells();
     if (cellRef.sessionId !== this.sessionId) {
       throw new Error(`Unknown session: ${cellRef.sessionId}`);
@@ -463,7 +441,7 @@ export class SessionStore {
       cell,
       procedure: record.procedure,
       kind: record.meta.kind,
-      ...(record.meta.parentCellId ? { parentCellId: record.meta.parentCellId } : {}),
+      ...(record.meta.parentCellId ? { parentRunId: record.meta.parentCellId } : {}),
       summary: record.output.summary,
       memory: record.output.memory,
       dataRef: record.output.data !== undefined ? createValueRef(cell, "output.data") : undefined,

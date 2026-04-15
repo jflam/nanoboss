@@ -331,13 +331,13 @@ describe("NanobossService", () => {
       });
 
       const sessionState = getInternalSessionState(service, session.sessionId);
-      const topLevel = sessionState.store.topLevelRuns({ limit: 1 })[0];
+      const topLevel = sessionState.store.listRuns({ limit: 1 })[0];
       expect(topLevel).toBeDefined();
       if (!topLevel) {
         throw new Error("Missing stored top-level run");
       }
 
-      const topLevelRecord = sessionState.store.readCell(topLevel.cell);
+      const topLevelRecord = sessionState.store.getRun(topLevel.run);
       const topLevelImage = topLevelRecord.meta.promptImages?.[0];
       expect(topLevelImage?.attachmentPath).toMatch(/^attachments\/.+\.png$/);
       expect(topLevelImage?.attachmentId).toMatch(/.+\.png$/);
@@ -405,7 +405,7 @@ describe("NanobossService", () => {
           service.getSessionEvents(session.sessionId)?.after(-1) ?? [],
         );
         const liveCompletedAt = liveReplay.findLast((event) => event.type === "run_completed")?.completedAt;
-        const storedRun = getInternalSessionState(service, session.sessionId).store.topLevelRuns({ limit: 1 })[0];
+        const storedRun = getInternalSessionState(service, session.sessionId).store.listRuns({ limit: 1 })[0];
 
         expect(liveReplay.some((event) => event.type === "tool_started")).toBe(true);
         expect(liveReplay.some((event) => event.type === "text_delta")).toBe(true);
@@ -419,7 +419,7 @@ describe("NanobossService", () => {
         }
 
         expect(
-          getInternalSessionState(service, session.sessionId).store.readCell(storedRun.cell).output.replayEvents,
+          getInternalSessionState(service, session.sessionId).store.getRun(storedRun.run).output.replayEvents,
         ).toEqual(liveReplay);
 
         service.destroySession(session.sessionId);
@@ -553,7 +553,7 @@ describe("NanobossService", () => {
       await service.promptSession(session.sessionId, "/probe");
 
       const events = service.getSessionEvents(session.sessionId)?.after(-1) ?? [];
-      const storedRun = getInternalSessionState(service, session.sessionId).store.topLevelRuns({ limit: 1 })[0];
+      const storedRun = getInternalSessionState(service, session.sessionId).store.listRuns({ limit: 1 })[0];
       const toolTitles = events
         .filter((event) => event.type === "tool_started")
         .map((event) => event.data.title);
@@ -565,7 +565,7 @@ describe("NanobossService", () => {
         .map((event) => event.data.text);
       const completed = events.findLast((event) => event.type === "run_completed" && event.data.procedure === "probe");
       const replayEvents = storedRun
-        ? getInternalSessionState(service, session.sessionId).store.readCell(storedRun.cell).output.replayEvents
+        ? getInternalSessionState(service, session.sessionId).store.getRun(storedRun.run).output.replayEvents
         : undefined;
       const replayedNestedRead = replayEvents?.find((event) =>
         event.type === "tool_started" && event.title === "Mock read README.md"
@@ -841,8 +841,8 @@ describe("NanobossService", () => {
         })
       | undefined;
 
-    sessionState.store.finalizeCell(
-      sessionState.store.startCell({
+    sessionState.store.completeRun(
+      sessionState.store.startRun({
         procedure: "review",
         input: "the code",
         kind: "top_level",

@@ -1,6 +1,5 @@
 import { inferDataShape, stringifyCompactShape } from "./data-shape.ts";
 import type { SessionStore } from "../session/index.ts";
-import { cellRefFromRunRef } from "../session/store-refs.ts";
 import type { JsonValue, Ref, RunRef } from "./types.ts";
 import { createRef } from "./types.ts";
 import { summarizeText } from "../util/text.ts";
@@ -24,21 +23,21 @@ export interface ProcedureMemoryCard {
 
 export function collectUnsyncedProcedureMemoryCards(
   store: SessionStore,
-  syncedCellIds: ReadonlySet<string>,
+  syncedRunIds: ReadonlySet<string>,
   options: { maxCards?: number } = {},
 ): ProcedureMemoryCard[] {
   const maxCards = options.maxCards ?? DEFAULT_MAX_CARDS;
-  const summaries = store.topLevelRuns({ limit: RECENT_SCAN_LIMIT });
+  const summaries = store.listRuns({ limit: RECENT_SCAN_LIMIT });
   const unsynced: ProcedureMemoryCard[] = [];
 
   for (const summary of summaries) {
-    if (syncedCellIds.has(summary.cell.cellId)) {
+    if (syncedRunIds.has(summary.run.runId)) {
       continue;
     }
 
     const card = materializeProcedureMemoryCard(
       store,
-      { sessionId: summary.cell.sessionId, runId: summary.cell.cellId },
+      summary.run,
       summary.dataShape,
     );
     if (!card) {
@@ -60,8 +59,7 @@ export function materializeProcedureMemoryCard(
   run: RunRef,
   dataShape?: JsonValue,
 ): ProcedureMemoryCard | undefined {
-  const cell = cellRefFromRunRef(run);
-  const record = store.readCell(cell);
+  const record = store.getRun(run);
   if (record.procedure === "default") {
     return undefined;
   }
@@ -146,8 +144,8 @@ export function renderProcedureMemoryCardLines(card: ProcedureMemoryCard): strin
 }
 
 export function hasTopLevelNonDefaultProcedureHistory(store: SessionStore): boolean {
-  return store.topLevelRuns({ limit: RECENT_SCAN_LIMIT }).some((summary) => {
-    const record = store.readCell(summary.cell);
+  return store.listRuns({ limit: RECENT_SCAN_LIMIT }).some((summary) => {
+    const record = store.getRun(summary.run);
     return record.procedure !== "default";
   });
 }

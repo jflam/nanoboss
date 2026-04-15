@@ -50,7 +50,7 @@ describeE2E("/second-opinion (real agents)", () => {
           async flush() {},
         },
         store,
-        cell: store.startCell({
+        run: store.startRun({
           procedure: "second-opinion",
           input: "What is 2 + 2? Reply with just the number.",
           kind: "top_level",

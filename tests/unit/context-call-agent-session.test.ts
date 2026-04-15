@@ -327,8 +327,8 @@ describe("procedure API session namespaces", () => {
 
   test("ctx.state owns durable run traversal while ctx.session owns live default-agent control", async () => {
     const { ctx, store } = createContext();
-    const otherTopLevel = store.finalizeCell(
-      store.startCell({
+    const otherTopLevel = store.completeRun(
+      store.startRun({
         procedure: "other-procedure",
         input: "other input",
         kind: "top_level",
@@ -422,7 +422,7 @@ function createContext(options: {
       async flush() {},
     },
     store,
-    cell: store.startCell({
+    run: store.startRun({
       procedure: "test-procedure",
       input: "test",
       kind: "top_level",

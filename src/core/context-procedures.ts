@@ -14,12 +14,12 @@ import type {
   RunResult,
 } from "./types.ts";
 
-type ActiveCell = ReturnType<SessionStore["startCell"]>;
+type ActiveRun = ReturnType<SessionStore["startRun"]>;
 
 export interface ChildContextBindingParams extends ProcedureInvocationBinding {
   procedureName: string;
   spanId: string;
-  cell: ActiveCell;
+  run: ActiveRun;
   promptInput: ReturnType<typeof createTextPromptInput>;
 }
 
@@ -30,7 +30,7 @@ interface ProcedureInvocationApiImplParams {
   sessionManager: ContextSessionApiImpl;
   assertCanStartBoundary: () => void;
   spanId: string;
-  cell: ActiveCell;
+  run: ActiveRun;
   createChildContext: (params: ChildContextBindingParams) => ProcedureApi;
 }
 
@@ -51,11 +51,11 @@ export class ProcedureInvocationApiImpl implements ProcedureInvocationApi {
     const startedAt = Date.now();
     this.params.assertCanStartBoundary();
     const promptInput = createTextPromptInput(prompt);
-    const childCell = this.params.store.startCell({
+    const childRun = this.params.store.startRun({
       procedure: name,
       input: promptInputDisplayText(promptInput),
       kind: "procedure",
-      parentCellId: this.params.cell.cell.cellId,
+      parentRunId: this.params.run.run.runId,
     });
 
     this.params.logger.write({
@@ -71,13 +71,13 @@ export class ProcedureInvocationApiImpl implements ProcedureInvocationApi {
       const childContext = this.params.createChildContext({
         procedureName: name,
         spanId: childSpanId,
-        cell: childCell,
+        run: childRun,
         promptInput,
         ...binding,
       });
       const rawResult = await procedure.execute(prompt, childContext);
       const result = normalizeProcedureResult(rawResult);
-      const finalized = this.params.store.finalizeCell(childCell, result);
+      const finalized = this.params.store.completeRun(childRun, result);
 
       this.params.logger.write({
         spanId: childSpanId,

@@ -45,7 +45,7 @@ describeE2E("/linter fixture (real agent)", () => {
         spanId: logger.newSpan(),
         emitter: createEmitter(output),
         store,
-        cell: store.startCell({
+        run: store.startRun({
           procedure: "linter",
           input: "",
           kind: "top_level",

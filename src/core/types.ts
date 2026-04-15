@@ -1,11 +1,6 @@
 import type * as acp from "@agentclientprotocol/sdk";
 import type { ReplayableFrontendEvent } from "../http/frontend-events.ts";
-import type { CellRef, ValueRef } from "../session/store-refs.ts";
 import type { RunTimingTrace } from "./timing-trace.ts";
-import {
-  refFromValueRef,
-  runRefFromCellRef,
-} from "../session/store-refs.ts";
 
 export type KernelScalar = null | boolean | number | string;
 export type JsonValue = KernelScalar | JsonValue[] | { [key: string]: JsonValue };
@@ -211,12 +206,15 @@ export function publicKernelValueFromStored(value: unknown): KernelValue | undef
     return value;
   }
 
-  if (isValueRefLike(value)) {
-    return refFromValueRef(value);
+  if (isStoredValueRefLike(value)) {
+    return {
+      run: storedRunRefFromCellRef(value.cell),
+      path: value.path,
+    };
   }
 
-  if (isCellRefLike(value)) {
-    return runRefFromCellRef(value);
+  if (isStoredCellRefLike(value)) {
+    return storedRunRefFromCellRef(value);
   }
 
   if (Array.isArray(value)) {
@@ -232,7 +230,14 @@ export function publicKernelValueFromStored(value: unknown): KernelValue | undef
   return value;
 }
 
-function isCellRefLike(value: unknown): value is CellRef {
+function storedRunRefFromCellRef(value: { sessionId: string; cellId: string }): RunRef {
+  return {
+    sessionId: value.sessionId,
+    runId: value.cellId,
+  };
+}
+
+function isStoredCellRefLike(value: unknown): value is { sessionId: string; cellId: string } {
   return (
     typeof value === "object" &&
     value !== null &&
@@ -242,12 +247,15 @@ function isCellRefLike(value: unknown): value is CellRef {
   );
 }
 
-function isValueRefLike(value: unknown): value is ValueRef {
+function isStoredValueRefLike(value: unknown): value is {
+  cell: { sessionId: string; cellId: string };
+  path: string;
+} {
   return (
     typeof value === "object" &&
     value !== null &&
     typeof (value as { path?: unknown }).path === "string" &&
-    isCellRefLike((value as { cell?: unknown }).cell)
+    isStoredCellRefLike((value as { cell?: unknown }).cell)
   );
 }
 

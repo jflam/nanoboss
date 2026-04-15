@@ -33,12 +33,12 @@ describe("global nanoboss MCP stdio transport", () => {
       cwd: process.cwd(),
       rootDir,
     });
-    const reviewCell = store.startCell({
+    const reviewCell = store.startRun({
       procedure: "second-opinion",
       input: "review the patch",
       kind: "top_level",
     });
-    store.finalizeCell(reviewCell, {
+    store.completeRun(reviewCell, {
       data: { verdict: "mixed" },
       display: "review display",
       summary: "review summary",
@@ -108,7 +108,7 @@ describe("global nanoboss MCP stdio transport", () => {
       });
       const call = await readMcpMessage(frames);
       expect(call.result?.structuredContent?.items?.[0]).toMatchObject({
-        run: { sessionId, runId: reviewCell.cell.cellId },
+        run: { sessionId, runId: reviewCell.run.runId },
         procedure: "second-opinion",
         summary: "review summary",
       });

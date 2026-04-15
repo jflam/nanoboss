@@ -104,9 +104,6 @@ describe("core contracts", () => {
         pause: {
           question: "Continue?",
           state: { step: 1 },
-          inputHint: undefined,
-          suggestedReplies: undefined,
-          ui: undefined,
         },
         explicitDataSchema: undefined,
         replayEvents: undefined,

@@ -83,7 +83,7 @@ describe("/second-opinion", () => {
           async flush() {},
         },
         store,
-        cell: store.startCell({
+        run: store.startRun({
           procedure: "second-opinion",
           input: "Explain pagination bugs.",
           kind: "top_level",

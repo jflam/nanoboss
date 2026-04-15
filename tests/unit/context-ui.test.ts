@@ -22,11 +22,11 @@ afterEach(() => {
 
 describe("CommandContextImpl UI", () => {
   test("ui.text emits the stream, log, and frontend update", () => {
-    const { ctx, cell, updates, logger } = createContext();
+    const { ctx, run, updates, logger } = createContext();
 
     ctx.ui.text("streamed text");
 
-    expect(cell.streamChunks.join("")).toBe("streamed text");
+    expect(run.streamChunks.join("")).toBe("streamed text");
     expect(updates).toEqual([
       {
         sessionUpdate: "agent_message_chunk",
@@ -43,7 +43,7 @@ describe("CommandContextImpl UI", () => {
   });
 
   test("info, warning, error, status, and card use the expected UI emission channels", () => {
-    const { ctx, cell, updates, uiEvents } = createContext();
+    const { ctx, run, updates, uiEvents } = createContext();
 
     ctx.ui.info("Heads up");
     ctx.ui.warning("Check this");
@@ -61,7 +61,7 @@ describe("CommandContextImpl UI", () => {
       markdown: "- source A\n- source B",
     });
 
-    expect(cell.streamChunks).toEqual([]);
+    expect(run.streamChunks).toEqual([]);
     expect(updates).toEqual([
       {
         sessionUpdate: "agent_message_chunk",
@@ -106,7 +106,7 @@ describe("CommandContextImpl UI", () => {
   });
 
   test("status falls back to the shared display text when structured ui events are unavailable", () => {
-    const { ctx, cell, updates, logger } = createContext({ emitUiEvent: false });
+    const { ctx, run, updates, logger } = createContext({ emitUiEvent: false });
 
     ctx.ui.status({
       phase: "research",
@@ -116,7 +116,7 @@ describe("CommandContextImpl UI", () => {
       waiting: true,
     });
 
-    expect(cell.streamChunks).toEqual(["[status] /default research 2/3 - Gathering sources (auto-approve, waiting)\n"]);
+    expect(run.streamChunks).toEqual(["[status] /default research 2/3 - Gathering sources (auto-approve, waiting)\n"]);
     expect(updates).toEqual([
       {
         sessionUpdate: "agent_message_chunk",
@@ -134,7 +134,7 @@ describe("CommandContextImpl UI", () => {
 
 function createContext(options?: { emitUiEvent?: boolean }): {
   ctx: CommandContextImpl;
-  cell: ReturnType<SessionStore["startCell"]>;
+  run: ReturnType<SessionStore["startRun"]>;
   updates: unknown[];
   uiEvents: ProcedureUiEvent[];
   logger: RunLogger;
@@ -148,7 +148,7 @@ function createContext(options?: { emitUiEvent?: boolean }): {
     sessionId: crypto.randomUUID(),
     cwd,
   });
-  const cell = store.startCell({
+  const run = store.startRun({
     procedure: "default",
     input: "hello",
     kind: "top_level",
@@ -175,8 +175,8 @@ function createContext(options?: { emitUiEvent?: boolean }): {
       async flush() {},
     },
     store,
-    cell,
+    run,
   });
 
-  return { ctx, cell, updates, uiEvents, logger };
+  return { ctx, run, updates, uiEvents, logger };
 }

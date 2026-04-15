@@ -12,7 +12,6 @@ import type {
   StateRunsApi,
 } from "./types.ts";
 import type { SessionStore } from "../session/index.ts";
-import { valueRefFromRef } from "../session/store-refs.ts";
 import { publicKernelValueFromStored } from "./types.ts";
 
 export class CommandRefs implements RefsApi {
@@ -22,49 +21,41 @@ export class CommandRefs implements RefsApi {
   ) {}
 
   async read<T>(ref: Ref): Promise<T> {
-    return publicKernelValueFromStored(this.store.readRef(valueRefFromRef(ref)) as KernelValue) as T;
+    return publicKernelValueFromStored(this.store.readRef(ref) as KernelValue) as T;
   }
 
   async stat(ref: Ref) {
-    return this.store.statRef(valueRefFromRef(ref));
+    return this.store.statRef(ref);
   }
 
   async writeToFile(ref: Ref, path: string): Promise<void> {
-    this.store.writeRefToFile(valueRefFromRef(ref), path, this.cwd);
+    this.store.writeRefToFile(ref, path, this.cwd);
   }
 }
 
 export class CommandRuns implements StateRunsApi {
   constructor(
     private readonly store: SessionStore,
-    private readonly currentCellId: string,
+    private readonly currentRunId: string,
   ) {}
 
   async list(options: RunListOptions = {}): Promise<RunSummary[]> {
-    if (options.scope === "recent") {
-      return this.store.recentRuns({
-        procedure: options.procedure,
-        limit: options.limit,
-        excludeCellId: this.currentCellId,
-      });
-    }
-
-    return this.store.topLevelRunSummaries({
-      procedure: options.procedure,
-      limit: options.limit,
-    });
+    const runs = this.store.listRuns(options);
+    return options.scope === "recent"
+      ? runs.filter((summary) => summary.run.runId !== this.currentRunId)
+      : runs;
   }
 
   async get(run: RunRef): Promise<RunRecord> {
-    return this.store.readRun(run);
+    return this.store.getRun(run);
   }
 
   async getAncestors(run: RunRef, options?: RunAncestorsOptions): Promise<RunSummary[]> {
-    return this.store.ancestorRuns(run, options);
+    return this.store.getRunAncestors(run, options);
   }
 
   async getDescendants(run: RunRef, options?: RunDescendantsOptions): Promise<RunSummary[]> {
-    return this.store.descendantRuns(run, options);
+    return this.store.getRunDescendants(run, options);
   }
 }
 
@@ -72,8 +63,8 @@ export class CommandState implements StateApi {
   readonly refs: RefsApi;
   readonly runs: StateRunsApi;
 
-  constructor(store: SessionStore, cwd: string, currentCellId: string) {
+  constructor(store: SessionStore, cwd: string, currentRunId: string) {
     this.refs = new CommandRefs(store, cwd);
-    this.runs = new CommandRuns(store, currentCellId);
+    this.runs = new CommandRuns(store, currentRunId);
   }
 }

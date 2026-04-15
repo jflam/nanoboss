@@ -1,11 +1,11 @@
 import type { Ref, RunRef } from "../core/types.ts";
 
-export interface CellRef {
+interface CellRef {
   sessionId: string;
   cellId: string;
 }
 
-export interface ValueRef {
+interface ValueRef {
   cell: CellRef;
   path: string;
 }

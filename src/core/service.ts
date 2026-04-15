@@ -75,7 +75,6 @@ import type {
   RunRef,
   RunResult,
 } from "./types.ts";
-import { cellRefFromRunRef } from "../session/store-refs.ts";
 
 interface ActiveRunState {
   runId: string;
@@ -364,12 +363,12 @@ export class NanobossService {
   }
 
   private restorePersistedSessionHistory(sessionId: string, session: SessionState): void {
-    const runs = session.store.topLevelRuns().reverse();
+    const runs = session.store.listRuns().reverse();
     for (const summary of runs) {
-      const record = session.store.readCell(summary.cell);
+      const record = session.store.getRun(summary.run);
       const replayEvents = record.output.replayEvents;
       const terminalEvent = getRestoredRunTerminalEvent(replayEvents);
-      const runId = replayEvents?.[0]?.runId ?? record.cellId;
+      const runId = replayEvents?.[0]?.runId ?? record.run.runId;
 
       session.events.publish(sessionId, {
         type: "run_restored",
@@ -377,10 +376,7 @@ export class NanobossService {
         procedure: record.procedure,
         prompt: record.input,
         completedAt: getRestoredRunEndedAt(terminalEvent) ?? record.meta.createdAt,
-        run: {
-          sessionId,
-          runId: record.cellId,
-        },
+        run: record.run,
         status: getRestoredRunStatus(terminalEvent),
         ...(replayEvents && replayEvents.length > 0
           ? {}
@@ -1202,7 +1198,7 @@ export class NanobossService {
       await emitter.flush();
       stopReplayCapture();
       if (persistedTopLevelRun && replayEvents.length > 0) {
-        session.store.patchCell(cellRefFromRunRef(persistedTopLevelRun), {
+        session.store.patchRun(persistedTopLevelRun, {
           output: {
             replayEvents,
           },

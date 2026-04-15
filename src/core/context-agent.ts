@@ -5,7 +5,6 @@ import { invokeAgent } from "../agent/call-agent.ts";
 import { normalizeAgentTokenUsage } from "../agent/token-usage.ts";
 import { promptInputDisplayText } from "./prompt.ts";
 import type { SessionStore } from "../session/index.ts";
-import { valueRefFromRef } from "../session/store-refs.ts";
 import { RunCancelledError, defaultCancellationMessage, normalizeRunCancelledError } from "./cancellation.ts";
 import { resolveDownstreamAgentConfig, toDownstreamAgentSelection } from "./config.ts";
 import { formatErrorMessage } from "./error-format.ts";
@@ -29,14 +28,14 @@ import type {
 } from "./types.ts";
 import { publicKernelValueFromStored } from "./types.ts";
 
-type ActiveCell = ReturnType<SessionStore["startCell"]>;
+type ActiveRun = ReturnType<SessionStore["startRun"]>;
 
 interface StartedAgentRun {
   childSpanId: string;
   startedAt: number;
   toolCallId?: string;
   emitToolCallEvents: boolean;
-  childCell: ActiveCell;
+  childRun: ActiveRun;
 }
 
 interface AgentRunRecorderParams {
@@ -45,7 +44,7 @@ interface AgentRunRecorderParams {
   emitter: SessionUpdateEmitter;
   procedureName: string;
   spanId: string;
-  cell: ActiveCell;
+  run: ActiveRun;
   softStopSignal?: AbortSignal;
   timingTrace?: RunTimingTrace;
 }
@@ -68,11 +67,11 @@ export class AgentRunRecorder {
       startedAt: Date.now(),
       toolCallId: params.emitToolCallEvents ? crypto.randomUUID() : undefined,
       emitToolCallEvents: params.emitToolCallEvents,
-      childCell: this.params.store.startCell({
+      childRun: this.params.store.startRun({
         procedure: "callAgent",
         input: prompt,
         kind: "agent",
-        parentCellId: this.params.cell.cell.cellId,
+        parentRunId: this.params.run.run.runId,
         promptImages: params.promptInput ? this.params.store.persistPromptImages(params.promptInput) : undefined,
       }),
     };
@@ -136,7 +135,7 @@ export class AgentRunRecorder {
       agent?: DownstreamAgentSelection;
     },
   ) {
-    const finalized = this.params.store.finalizeCell(started.childCell, {
+    const finalized = this.params.store.completeRun(started.childRun, {
       data: params.data,
       display: params.raw,
       summary: params.summary,
@@ -204,7 +203,7 @@ export class AgentRunRecorder {
       agentProvider: agent?.provider,
       agentModel: agent?.model,
     });
-    this.params.store.discardPendingPromptImages(started.childCell.meta.promptImages);
+    this.params.store.discardPendingPromptImages(started.childRun.meta.promptImages);
 
     if (started.emitToolCallEvents && started.toolCallId) {
       this.params.emitter.emit({
@@ -416,8 +415,8 @@ function resolveNamedRefs(
     Object.entries(refs).map(([name, ref]) => [
       name,
       isRef(ref)
-        ? publicKernelValueFromStored(store.readRef(valueRefFromRef(ref)) as KernelValue)
-        : store.readRun(ref),
+        ? publicKernelValueFromStored(store.readRef(ref) as KernelValue)
+        : store.getRun(ref),
     ]),
   );
 }

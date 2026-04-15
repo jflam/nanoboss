@@ -112,7 +112,7 @@ function createContext(overrides: {
       async flush() {},
     },
     store,
-    cell: store.startCell({
+    run: store.startRun({
       procedure: "default",
       input: "hello",
       kind: "top_level",

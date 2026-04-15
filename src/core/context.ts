@@ -26,7 +26,7 @@ import type {
   StateApi,
 } from "./types.ts";
 
-type ActiveCell = ReturnType<SessionStore["startCell"]>;
+type ActiveRun = ReturnType<SessionStore["startRun"]>;
 
 export type { PreparedDefaultPrompt, ProcedureUiEvent, SessionUpdateEmitter } from "./context-shared.ts";
 
@@ -39,7 +39,7 @@ interface CommandContextParams {
   spanId: string;
   emitter: SessionUpdateEmitter;
   store: SessionStore;
-  cell: ActiveCell;
+  run: ActiveRun;
   promptInput?: string | PromptInput;
   signal?: AbortSignal;
   softStopSignal?: AbortSignal;
@@ -72,7 +72,7 @@ export class CommandContextImpl implements ProcedureApi {
   private readonly signal?: AbortSignal;
   private readonly softStopSignal?: AbortSignal;
   private readonly store: SessionStore;
-  private readonly cell: ActiveCell;
+  private readonly run: ActiveRun;
   private readonly rootAgentSession?: AgentSession;
   private readonly rootGetDefaultAgentConfigValue: () => DownstreamAgentConfig;
   private readonly rootSetDefaultAgentSelectionValue: (selection: DownstreamAgentSelection) => DownstreamAgentConfig;
@@ -90,9 +90,9 @@ export class CommandContextImpl implements ProcedureApi {
     this.signal = params.signal;
     this.softStopSignal = params.softStopSignal;
     this.store = params.store;
-    this.cell = params.cell;
+    this.run = params.run;
     this.promptInput = normalizeProcedurePromptInput(
-      params.promptInput ?? params.cell.input,
+      params.promptInput ?? params.run.input,
     );
     const getDefaultAgentConfig = params.getDefaultAgentConfig
       ?? (() => resolveDownstreamAgentConfig(this.cwd));
@@ -107,7 +107,7 @@ export class CommandContextImpl implements ProcedureApi {
     this.createAgentSessionValue = params.createAgentSession;
     this.assertCanStartBoundaryValue = params.assertCanStartBoundary;
     this.timingTrace = params.timingTrace;
-    this.state = new CommandState(this.store, this.cwd, this.cell.cell.cellId);
+    this.state = new CommandState(this.store, this.cwd, this.run.run.runId);
 
     const contextSessionApi = new ContextSessionApiImpl({
       cwd: this.cwd,
@@ -133,7 +133,7 @@ export class CommandContextImpl implements ProcedureApi {
       emitter: this.emitter,
       procedureName: params.procedureName,
       spanId: params.spanId,
-      cell: this.cell,
+      run: this.run,
       softStopSignal: this.softStopSignal,
       timingTrace: this.timingTrace,
     });
@@ -156,12 +156,12 @@ export class CommandContextImpl implements ProcedureApi {
       sessionManager: contextSessionApi,
       assertCanStartBoundary: () => this.assertCanStartBoundary(),
       spanId: params.spanId,
-      cell: this.cell,
+      run: this.run,
       createChildContext: (binding) => this.createChildContext(binding),
     });
     this.ui = new UiApiImpl(
       this.store,
-      this.cell,
+      this.run,
       this.logger,
       params.spanId,
       params.procedureName,
@@ -183,7 +183,7 @@ export class CommandContextImpl implements ProcedureApi {
       spanId: binding.spanId,
       emitter: this.emitter,
       store: this.store,
-      cell: binding.cell,
+      run: binding.run,
       promptInput: binding.promptInput,
       signal: this.signal,
       softStopSignal: this.softStopSignal,

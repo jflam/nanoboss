@@ -55,9 +55,9 @@ export function findRecoveredProcedureDispatchRun(
     dispatchCorrelationId: string;
   },
 ): RunRecord | undefined {
-  const summaries = store.topLevelRunSummaries({ procedure: params.procedureName, limit: 50 });
+  const summaries = store.listRuns({ procedure: params.procedureName, limit: 50 });
   for (const summary of summaries) {
-    const run = store.readRun(summary.run);
+    const run = store.getRun(summary.run);
     if (run.meta.dispatchCorrelationId === params.dispatchCorrelationId) {
       return run;
     }
