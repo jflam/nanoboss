@@ -1,10 +1,12 @@
-import type { ToolPreviewBlock } from "../../../src/core/tool-call-preview.ts";
-import type {
-  DownstreamAgentSelection,
-  FrontendContinuation,
-  PromptInput,
-} from "../../../src/core/types.ts";
+import type { RenderedFrontendEventEnvelope } from "@nanoboss/adapters-http";
+import type { DownstreamAgentSelection, PromptInput } from "@nanoboss/contracts";
 import type { ToolCardThemeMode } from "./theme.ts";
+import type { ToolPreviewBlock } from "./tool-preview.ts";
+
+export type FrontendContinuation = Extract<
+  RenderedFrontendEventEnvelope,
+  { type: "continuation_updated" }
+>["data"]["continuation"];
 
 export interface UiPendingPrompt {
   id: string;

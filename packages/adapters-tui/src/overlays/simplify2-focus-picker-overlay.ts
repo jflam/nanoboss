@@ -7,7 +7,7 @@ import {
   type SelectItem,
   type TUI,
 } from "../pi-tui.ts";
-import type { Simplify2FocusPickerContinuationUiEntry } from "../../../../src/core/types.ts";
+import type { Simplify2FocusPickerContinuationUiEntry } from "@nanoboss/contracts";
 import type { NanobossTuiTheme } from "../theme.ts";
 
 export type Simplify2FocusPickerOverlayAction =

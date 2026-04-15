@@ -1,5 +1,9 @@
-import { buildImageTokenLabel, createTextPromptInput, normalizePromptInput } from "../../../src/core/prompt.ts";
-import type { PromptImagePart, PromptInput, PromptPart } from "../../../src/core/types.ts";
+import type { PromptImagePart, PromptInput, PromptPart } from "@nanoboss/contracts";
+import {
+  buildImageTokenLabel,
+  createTextPromptInput,
+  normalizePromptInput,
+} from "@nanoboss/procedure-sdk";
 
 export interface ComposerImageRecord extends PromptImagePart {
   imageNumber: number;

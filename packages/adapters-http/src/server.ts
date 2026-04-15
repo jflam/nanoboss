@@ -1,11 +1,16 @@
-import { getBuildCommit, getBuildLabel } from "../../../src/core/build-info.ts";
-import { DEFAULT_HTTP_SERVER_PORT } from "../../../src/core/defaults.ts";
-import { createTextPromptInput, hasPromptInputContent, parsePromptInputPayload } from "../../../src/core/prompt.ts";
 import { NanobossService } from "@nanoboss/app-runtime";
-import { requireValue } from "../../../src/util/argv.ts";
+import {
+  createTextPromptInput,
+  hasPromptInputContent,
+  parsePromptInputPayload,
+  type DownstreamAgentSelection,
+  type PromptInput,
+} from "@nanoboss/procedure-sdk";
 import type { FrontendEventEnvelope } from "./event-mapping.ts";
-import type { DownstreamAgentSelection, PromptInput } from "../../../src/core/types.ts";
-import { getWorkspaceIdentity } from "../../../src/core/workspace-identity.ts";
+import { getBuildCommit, getBuildLabel } from "./build-info.ts";
+import { getWorkspaceIdentity } from "./workspace-identity.ts";
+
+const DEFAULT_HTTP_SERVER_PORT = 6502;
 
 export interface HttpServerOptions {
   port: number;
@@ -386,4 +391,12 @@ function formatBaseUrl(host: string | undefined, port: number): string {
     ? `[${host}]`
     : (host ?? "localhost");
   return `http://${resolvedHost}:${port}`;
+}
+
+function requireValue(value: string | undefined, flag: string): string {
+  if (!value) {
+    throw new Error(`Missing value for ${flag}`);
+  }
+
+  return value;
 }

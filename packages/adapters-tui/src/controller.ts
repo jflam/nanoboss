@@ -1,8 +1,3 @@
-import { buildModelCommand } from "../../../src/core/model-command.ts";
-import { createTextPromptInput, normalizePromptInput, promptInputDisplayText } from "../../../src/core/prompt.ts";
-import { resolveDownstreamAgentConfig } from "../../../src/core/config.ts";
-import { getBuildLabel } from "../../../src/core/build-info.ts";
-import { getBuildFreshnessNotice } from "../../../src/core/build-freshness.ts";
 import {
   cancelSessionRun,
   createHttpSession,
@@ -16,9 +11,17 @@ import {
   type FrontendEventEnvelope,
   type SessionStreamHandle,
 } from "@nanoboss/adapters-http";
-import { formatAgentBanner } from "../../../src/core/runtime-banner.ts";
-import type { DownstreamAgentSelection, PromptInput } from "../../../src/core/types.ts";
+import type { DownstreamAgentSelection, PromptInput } from "@nanoboss/contracts";
+import {
+  createTextPromptInput,
+  normalizePromptInput,
+  promptInputDisplayText,
+} from "@nanoboss/procedure-sdk";
 
+import { formatAgentSelectionLabel } from "./agent-label.ts";
+import { getBuildFreshnessNotice } from "./build-freshness.ts";
+import { getBuildLabel } from "./build-info.ts";
+import { buildModelCommand } from "./model-command.ts";
 import {
   isExitRequest,
   isModelPickerRequest,
@@ -427,10 +430,9 @@ export class NanobossTuiController {
   }
 
   private applyLocalSelection(selection: DownstreamAgentSelection): void {
-    const agentLabel = formatAgentBanner(resolveDownstreamAgentConfig(this.cwd, selection));
     this.dispatch({
       type: "local_agent_selection",
-      agentLabel,
+      agentLabel: formatAgentSelectionLabel(selection),
       selection,
     });
   }
@@ -449,8 +451,10 @@ export class NanobossTuiController {
       }
 
       await persist(selection);
-      const banner = formatAgentBanner(resolveDownstreamAgentConfig(this.cwd, selection));
-      this.dispatch({ type: "local_status", text: `[model] saved ${banner} as the default for future runs` });
+      this.dispatch({
+        type: "local_status",
+        text: `[model] saved ${formatAgentSelectionLabel(selection)} as the default for future runs`,
+      });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       this.dispatch({ type: "local_status", text: `[model] failed to save default: ${message}` });

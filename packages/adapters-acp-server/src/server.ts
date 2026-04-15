@@ -1,13 +1,21 @@
 import * as acp from "@agentclientprotocol/sdk";
+import { setAgentRuntimeSessionRuntimeFactory } from "@nanoboss/agent-acp";
+import { buildGlobalMcpStdioServer } from "@nanoboss/adapters-mcp";
 import { NanobossService } from "@nanoboss/app-runtime";
+import type {
+  DownstreamAgentProvider,
+  DownstreamAgentSelection,
+  PromptInput,
+  PromptPart,
+} from "@nanoboss/contracts";
+import {
+  toProcedureUiSessionUpdate,
+  type ProcedureUiEvent,
+  type SessionUpdateEmitter,
+} from "@nanoboss/procedure-engine";
 import { Readable, Writable } from "node:stream";
 
-import { getBuildLabel } from "../../../src/core/build-info.ts";
-import type { ProcedureUiEvent, SessionUpdateEmitter } from "../../procedure-engine/src/context/context.ts";
-import { promptInputFromAcpBlocks } from "../../../src/core/prompt.ts";
-import { parseDownstreamAgentSelection } from "../../../src/core/downstream-agent-selection.ts";
-import type { DownstreamAgentSelection } from "../../../src/core/types.ts";
-import { toProcedureUiSessionUpdate } from "../../../src/core/ui-cli.ts";
+import { getBuildLabel } from "./build-info.ts";
 
 class QueuedSessionUpdateEmitter implements SessionUpdateEmitter {
   private queue = Promise.resolve();
@@ -130,6 +138,9 @@ export function extractDefaultAgentSelection(params: acp.NewSessionRequest): Dow
 
 export async function runAcpServerCommand(): Promise<void> {
   console.error(`${getBuildLabel()} acp-server ready`);
+  setAgentRuntimeSessionRuntimeFactory(() => ({
+    mcpServers: [buildGlobalMcpStdioServer()],
+  }));
   const service = await NanobossService.create();
   const stream = acp.ndJsonStream(
     Writable.toWeb(process.stdout),
@@ -140,4 +151,93 @@ export async function runAcpServerCommand(): Promise<void> {
     stream,
   );
   await connection.closed;
+}
+
+const DOWNSTREAM_AGENT_PROVIDERS: DownstreamAgentProvider[] = ["claude", "gemini", "codex", "copilot"];
+
+function parseDownstreamAgentSelection(value: unknown): DownstreamAgentSelection | undefined {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return undefined;
+  }
+
+  const record = value as Record<string, unknown>;
+  const provider = typeof record.provider === "string" && DOWNSTREAM_AGENT_PROVIDERS.includes(record.provider as DownstreamAgentProvider)
+    ? record.provider as DownstreamAgentProvider
+    : undefined;
+  if (!provider) {
+    return undefined;
+  }
+
+  const model = typeof record.model === "string" && record.model.trim().length > 0 ? record.model : undefined;
+  return model === undefined ? { provider } : { provider, model };
+}
+
+function promptInputFromAcpBlocks(blocks: acp.PromptRequest["prompt"]): PromptInput {
+  let imageIndex = 0;
+  const parts: PromptPart[] = [];
+
+  for (const block of blocks) {
+    if (block.type === "text") {
+      if (block.text.length > 0) {
+        parts.push({ type: "text", text: block.text });
+      }
+      continue;
+    }
+
+    if (block.type === "image") {
+      imageIndex += 1;
+      const byteLength = estimateBase64ByteLength(block.data);
+      parts.push({
+        type: "image",
+        token: buildImageTokenLabel(imageIndex, block.mimeType, byteLength),
+        mimeType: block.mimeType,
+        data: block.data,
+        byteLength,
+      });
+    }
+  }
+
+  return {
+    parts: normalizePromptParts(parts),
+  };
+}
+
+function normalizePromptParts(parts: PromptPart[]): PromptPart[] {
+  const normalized: PromptPart[] = [];
+
+  for (const part of parts) {
+    if (part.type === "text") {
+      if (part.text.length === 0) {
+        continue;
+      }
+
+      const previous = normalized.at(-1);
+      if (previous?.type === "text") {
+        previous.text += part.text;
+      } else {
+        normalized.push(part);
+      }
+      continue;
+    }
+
+    normalized.push(part);
+  }
+
+  return normalized.length > 0 ? normalized : [{ type: "text", text: "" }];
+}
+
+function estimateBase64ByteLength(data: string): number {
+  const trimmed = data.trim();
+  const padding = trimmed.endsWith("==") ? 2 : trimmed.endsWith("=") ? 1 : 0;
+  return Math.max(0, Math.floor(trimmed.length * 3 / 4) - padding);
+}
+
+function buildImageTokenLabel(index: number, mimeType: string, byteLength: number): string {
+  const subtype = (mimeType.split("/")[1] ?? mimeType).replace(/\+.*/, "").toUpperCase();
+  const size = byteLength >= 1024 * 1024
+    ? `${Number.isInteger(byteLength / (1024 * 1024)) ? (byteLength / (1024 * 1024)).toFixed(0) : (byteLength / (1024 * 1024)).toFixed(1)}MB`
+    : byteLength >= 1024
+      ? `${Math.round(byteLength / 1024)}KB`
+      : `${byteLength}B`;
+  return `[Image ${index}: ${subtype} ${size}]`;
 }

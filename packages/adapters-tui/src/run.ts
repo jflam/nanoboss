@@ -1,6 +1,6 @@
 import { NanobossTuiApp, type NanobossTuiAppParams } from "./app.ts";
-import type { FrontendConnectionMode } from "../../../src/options/frontend-connection.ts";
 import { startPrivateHttpServer } from "@nanoboss/adapters-http";
+import type { FrontendConnectionMode } from "./connection-mode.ts";
 
 export function canUseNanobossTui(): boolean {
   return process.stdin.isTTY && process.stdout.isTTY;

@@ -1,5 +1,5 @@
 import { Container, Spacer, Text, type Component, type TUI } from "../pi-tui.ts";
-import type { Simplify2CheckpointContinuationUiAction } from "../../../../src/core/types.ts";
+import type { Simplify2CheckpointContinuationUiAction } from "@nanoboss/contracts";
 import type { NanobossTuiTheme } from "../theme.ts";
 
 export class Simplify2ContinuationOverlay implements Component {

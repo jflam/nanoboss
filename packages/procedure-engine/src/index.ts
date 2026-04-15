@@ -69,7 +69,7 @@ export type { PreparedDefaultPrompt, ProcedureUiEvent, SessionUpdateEmitter };
 export { CommandContextImpl } from "./context/context.ts";
 export { UiApiImpl } from "./context/ui-api.ts";
 export { RunLogger } from "./logger.ts";
-export { formatProcedureStatusText } from "./ui-events.ts";
+export { formatProcedureStatusText, toProcedureUiSessionUpdate } from "./ui-events.ts";
 
 export interface ProcedureEngineEmitter {
   emit(update: unknown): void;

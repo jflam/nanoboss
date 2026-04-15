@@ -1,8 +1,6 @@
-
-import { getBuildLabel } from "../../../src/core/build-info.ts";
-import { parseRequiredDownstreamAgentSelection } from "../../../src/core/downstream-agent-selection.ts";
 import { dispatchMcpToolsMethod, type JsonRpcToolMetadata } from "./jsonrpc.ts";
 import { runStdioJsonRpcServer } from "./stdio-jsonrpc.ts";
+import { getBuildLabel } from "./build-info.ts";
 import {
   type ListRunsArgs,
   type ProcedureListResult,
@@ -12,13 +10,15 @@ import {
   type RuntimeService,
   isProcedureDispatchResult,
   isProcedureDispatchStatusResult,
-} from "../../app-runtime/src/runtime-api.ts";
+} from "@nanoboss/app-runtime";
 import type {
-  ProcedureMetadata,
   Ref,
   RunRef,
   RunKind,
-} from "../../../src/core/types.ts";
+  DownstreamAgentProvider,
+  DownstreamAgentSelection,
+} from "@nanoboss/contracts";
+import type { ProcedureMetadata } from "@nanoboss/procedure-sdk";
 
 export const MCP_PROTOCOL_VERSION = "2025-11-25";
 export const MCP_SERVER_NAME = "nanoboss";
@@ -667,4 +667,33 @@ function asOptionalNonNegativeNumber(value: unknown, name: string): number | und
   }
 
   return value;
+}
+
+const DOWNSTREAM_AGENT_PROVIDERS: DownstreamAgentProvider[] = ["claude", "gemini", "codex", "copilot"];
+
+function parseRequiredDownstreamAgentSelection(
+  value: unknown,
+  fieldName = "defaultAgentSelection",
+): DownstreamAgentSelection {
+  const record = asStrictRecord(value, fieldName);
+  const provider = asRequiredProvider(record.provider, `${fieldName}.provider`);
+  const model = record.model === undefined ? undefined : asString(record.model, `${fieldName}.model`);
+  return model === undefined ? { provider } : { provider, model };
+}
+
+function asStrictRecord(value: unknown, name: string): Record<string, unknown> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new Error(`Expected ${name} to be an object`);
+  }
+
+  return value as Record<string, unknown>;
+}
+
+function asRequiredProvider(value: unknown, name: string): DownstreamAgentProvider {
+  const provider = asString(value, name);
+  if (!DOWNSTREAM_AGENT_PROVIDERS.includes(provider as DownstreamAgentProvider)) {
+    throw new Error(`Expected ${name} to be one of ${DOWNSTREAM_AGENT_PROVIDERS.join(", ")}`);
+  }
+
+  return provider as DownstreamAgentProvider;
 }

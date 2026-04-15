@@ -1,5 +1,15 @@
-import { createTextPromptInput } from "../../../src/core/prompt.ts";
-import { writePersistedDefaultAgentSelection } from "../../../src/core/settings.ts";
+import {
+  createTextPromptInput,
+  type PromptInput,
+} from "@nanoboss/procedure-sdk";
+import type {
+  DownstreamAgentProvider,
+  DownstreamAgentSelection,
+  Simplify2CheckpointContinuationUi,
+  Simplify2CheckpointContinuationUiAction,
+  Simplify2FocusPickerContinuationUi,
+} from "@nanoboss/contracts";
+import { writePersistedDefaultAgentSelection } from "./settings.ts";
 import { createClipboardImageProvider, type ClipboardImageProvider } from "./clipboard/provider.ts";
 import {
   attachClipboardImage,
@@ -22,16 +32,7 @@ import {
   getProviderLabel,
   listKnownProviders,
   listSelectableModelOptions,
-} from "../../../src/agent/model-catalog.ts";
-import type {
-  DownstreamAgentSelection,
-  DownstreamAgentProvider,
-  FrontendContinuation,
-  PromptInput,
-  Simplify2CheckpointContinuationUi,
-  Simplify2CheckpointContinuationUiAction,
-  Simplify2FocusPickerContinuationUi,
-} from "../../../src/core/types.ts";
+} from "./model-catalog.ts";
 import {
   type AutocompleteItem,
   CombinedAutocompleteProvider,
@@ -51,6 +52,8 @@ import type { UiState } from "./state.ts";
 import { createNanobossTuiTheme, type NanobossTuiTheme } from "./theme.ts";
 import { NanobossAppView } from "./views.ts";
 import type { ClipboardImage } from "./composer.ts";
+
+type FrontendContinuation = NonNullable<UiState["pendingContinuation"]>;
 
 export interface NanobossTuiAppParams {
   cwd?: string;

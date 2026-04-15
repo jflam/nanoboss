@@ -3,8 +3,8 @@ import type { AutocompleteItem } from "./pi-tui.ts";
 import {
   isKnownAgentProvider,
   isKnownModelSelection,
-} from "../../../src/agent/model-catalog.ts";
-import type { DownstreamAgentSelection } from "../../../src/core/types.ts";
+} from "./model-catalog.ts";
+import type { DownstreamAgentSelection } from "@nanoboss/contracts";
 import type { ToolCardThemeMode } from "./theme.ts";
 
 export const LOCAL_TUI_COMMANDS = [

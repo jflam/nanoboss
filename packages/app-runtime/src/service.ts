@@ -1,9 +1,7 @@
 import type * as acp from "@agentclientprotocol/sdk";
 import {
   normalizeAgentTokenUsage,
-  setAgentRuntimeSessionRuntimeFactory,
 } from "@nanoboss/agent-acp";
-import { buildGlobalMcpStdioServer } from "@nanoboss/adapters-mcp";
 
 import { buildMcpProcedureDispatchPrompt } from "../../../src/core/agent-runtime-instructions.ts";
 import { RunCancelledError, defaultCancellationMessage, normalizeRunCancelledError } from "../../../src/core/cancellation.ts";
@@ -83,10 +81,6 @@ import type {
   RunRef,
   RunResult,
 } from "@nanoboss/procedure-sdk";
-
-setAgentRuntimeSessionRuntimeFactory(() => ({
-  mcpServers: [buildGlobalMcpStdioServer()],
-}));
 
 class CompositeSessionUpdateEmitter implements SessionUpdateEmitter {
   private streamedText = "";

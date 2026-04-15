@@ -1,10 +1,9 @@
-import type { ProcedureUiEvent } from "../../procedure-engine/src/context/shared.ts";
 import {
   type FrontendCommand,
   type RenderedFrontendEventEnvelope,
 } from "@nanoboss/adapters-http";
-import type { DownstreamAgentSelection } from "../../../src/core/types.ts";
-import { formatProcedureStatusText } from "../../../src/core/ui-cli.ts";
+import type { DownstreamAgentSelection } from "@nanoboss/contracts";
+import { formatProcedureStatusText, type ProcedureUiEvent } from "@nanoboss/procedure-engine";
 import type { ToolCardThemeMode } from "./theme.ts";
 
 import { formatTokenUsageLine } from "./format.ts";

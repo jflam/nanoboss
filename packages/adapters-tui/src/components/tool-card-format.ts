@@ -1,4 +1,3 @@
-import type { ToolPreviewBlock } from "../../../../src/core/tool-call-preview.ts";
 import {
   asRecord,
   extractPathLike,
@@ -7,10 +6,11 @@ import {
   normalizeToolInputPayload,
   normalizeToolResultPayload,
   stringifyValue,
-} from "../../../../src/core/tool-payload-normalizer.ts";
+} from "../tool-payload-normalizer.ts";
 import type { UiToolCall } from "../state.ts";
 import type { NanobossTuiTheme } from "../theme.ts";
 import { getLanguageFromPath } from "../theme.ts";
+import type { ToolPreviewBlock } from "../tool-preview.ts";
 
 const DEFAULT_COLLAPSED_LINES = 6;
 

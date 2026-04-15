@@ -1,42 +1,18 @@
-import type * as acp from "@agentclientprotocol/sdk";
 import { existsSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-export interface AgentRuntimeSessionRuntime {
-  mcpServers: NonNullable<acp.NewSessionRequest["mcpServers"]>;
+export interface SelfCommand {
+  command: string;
+  args: string[];
 }
 
-export type AgentRuntimeSessionRuntimeFactory = () => AgentRuntimeSessionRuntime;
-
-let runtimeFactory: AgentRuntimeSessionRuntimeFactory | undefined;
-
-const NANOBOSS_MCP_SERVER_NAME = "nanoboss";
-
-export function setAgentRuntimeSessionRuntimeFactory(
-  factory: AgentRuntimeSessionRuntimeFactory | undefined,
-): void {
-  runtimeFactory = factory;
+interface SelfCommandRuntime {
+  executable: string;
+  scriptPath?: string;
 }
 
-export function buildAgentRuntimeSessionRuntime(): AgentRuntimeSessionRuntime {
-  return runtimeFactory?.() ?? {
-    mcpServers: [buildDefaultNanobossMcpServer()],
-  };
-}
-
-function buildDefaultNanobossMcpServer(): NonNullable<acp.NewSessionRequest["mcpServers"]>[number] {
-  const command = resolveSelfCommand("mcp");
-  return {
-    type: "stdio",
-    name: NANOBOSS_MCP_SERVER_NAME,
-    command: command.command,
-    args: command.args,
-    env: [],
-  } as NonNullable<acp.NewSessionRequest["mcpServers"]>[number];
-}
-
-function resolveSelfCommand(subcommand: string, args: string[] = []): { command: string; args: string[] } {
+export function resolveSelfCommand(subcommand: string, args: string[] = []): SelfCommand {
   const override = process.env.NANOBOSS_SELF_COMMAND?.trim();
   if (override) {
     return {
@@ -45,8 +21,19 @@ function resolveSelfCommand(subcommand: string, args: string[] = []): { command:
     };
   }
 
-  const executable = process.execPath;
-  const scriptPath = process.argv[1];
+  return resolveSelfCommandWithRuntime(subcommand, args, {
+    executable: process.execPath,
+    scriptPath: process.argv[1],
+  });
+}
+
+export function resolveSelfCommandWithRuntime(
+  subcommand: string,
+  args: string[] = [],
+  runtime: SelfCommandRuntime,
+): SelfCommand {
+  const executable = runtime.executable;
+  const scriptPath = runtime.scriptPath;
   const nanobossScript = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "nanoboss.ts");
 
   if (shouldUseSourceEntrypoint(scriptPath, executable) || shouldUseSourceEntrypointWithoutScript(scriptPath, executable, nanobossScript)) {

@@ -270,3 +270,14 @@ export interface ProcedureApi {
   readonly session: SessionApi;
   assertNotCancelled(): void;
 }
+
+export {
+  buildImageTokenLabel,
+  createTextPromptInput,
+  hasPromptInputContent,
+  hasPromptInputImages,
+  normalizePromptInput,
+  parsePromptInputPayload,
+  promptInputAttachmentSummaries,
+  promptInputDisplayText,
+} from "./prompt-input.ts";

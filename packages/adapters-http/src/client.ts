@@ -1,6 +1,9 @@
-import { normalizePromptInput } from "../../../src/core/prompt.ts";
+import {
+  normalizePromptInput,
+  type DownstreamAgentSelection,
+  type PromptInput,
+} from "@nanoboss/procedure-sdk";
 import type { FrontendEventEnvelope } from "./event-mapping.ts";
-import type { DownstreamAgentSelection, PromptInput } from "../../../src/core/types.ts";
 
 export interface ServerHealthResponse {
   status: string;

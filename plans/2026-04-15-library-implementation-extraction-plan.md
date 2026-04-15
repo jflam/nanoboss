@@ -656,6 +656,21 @@ Acceptance criteria:
 - adapters depend on app-runtime and library public APIs only
 - no adapter owns business logic
 
+### Phase 8 slice commit note
+
+- Thin the adapters now because `@nanoboss/app-runtime` already owns the
+  runtime-neutral event model and live orchestration, so the remaining work is
+  to keep transport parsing, validation, and wrapping at the adapter edge.
+- Move MCP tool argument parsing and runtime-service mapping fully into
+  `packages/adapters-mcp`, move ACP session-request wrapping and prompt/UI
+  transport conversion into `packages/adapters-acp-server`, keep HTTP frontend
+  event naming in `packages/adapters-http`, and keep TUI connection/run
+  behavior inside `packages/adapters-tui` while replacing reverse imports with
+  public package surfaces.
+- End-state: adapters are thin serialization, validation, and transport mapping
+  layers over `@nanoboss/app-runtime` and other public package APIs, while
+  business logic and orchestration stay out of adapter implementations.
+
 ## Phase 9: clean built-in procedures and generated procedures
 
 After sdk and engine seams are real, remove root `src/` imports from

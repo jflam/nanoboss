@@ -1,6 +1,5 @@
+import type { FrontendConnectionMode } from "@nanoboss/adapters-tui";
 import { requireValue } from "../util/argv.ts";
-
-export type FrontendConnectionMode = "private" | "external";
 
 export interface FrontendConnectionOptions {
   showToolCalls: boolean;
