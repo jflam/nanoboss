@@ -399,6 +399,58 @@ describe("/execute-plan", () => {
       { name: "nanoboss/pre-commit-checks", prompt: "" },
     ]);
   });
+
+  test("resolves a punctuated plan path from the repo root when the session cwd is nested", async () => {
+    const repoRoot = createGitRepo();
+    const nestedCwd = join(repoRoot, "src");
+    writeFileSync(
+      join(repoRoot, "plans", "2026-04-15-library-implementation-extraction-plan.md"),
+      [
+        "# Library Implementation Extraction Plan",
+        "",
+        "8. Finish runtime extraction",
+        "9. Confirm next step before starting",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+    execGit(repoRoot, ["add", "."]);
+    execGit(repoRoot, ["commit", "-m", "Add library extraction plan"]);
+
+    const agentCalls: unknown[][] = [];
+    const ctx = createProcedureApi({
+      cwd: nestedCwd,
+      onAgentRun: async (...args) => {
+        agentCalls.push(args);
+        return {
+          run: runRef("selector"),
+          data: {
+            status: "complete",
+            rationale: "The requested confirmation was completed without starting new work.",
+            completionSummary: "Confirmed phase 8 and paused before phase 9.",
+            blockerQuestion: null,
+            stepId: null,
+            stepIndex: null,
+            stepTitle: null,
+            stepGoal: null,
+            stepInstructions: [],
+            successSignals: [],
+            commitContext: null,
+          },
+        };
+      },
+    });
+
+    const result = await executePlan.execute(
+      "plans/2026-04-15-library-implementation-extraction-plan.md. i think we completed phase 8 - confirm first and tell me what you will do before starting",
+      ctx,
+    );
+
+    expect(result.summary).toBe("execute-plan: complete plans/2026-04-15-library-implementation-extraction-plan.md");
+    expect(result.display).toContain("Plan complete: plans/2026-04-15-library-implementation-extraction-plan.md");
+    expect(result.display).toContain("Confirmed phase 8 and paused before phase 9.");
+    expect(agentCalls).toHaveLength(1);
+  });
 });
 
 function createProcedureApi(options: {

@@ -53,6 +53,7 @@ interface PreCommitRepairResult {
 interface ExecutePlanState {
   version: 1;
   planPath: string;
+  absolutePlanPath?: string;
   extraInstructions: string;
   autoApprove: boolean;
   continuationNotes: string[];
@@ -131,7 +132,14 @@ export default {
 
     if (!parsed.absolutePlanPath) {
       return {
-        display: `Plan file not found: ${parsed.planPath}\n`,
+        display: [
+          `Plan file not found: ${parsed.planPath}`,
+          `Session cwd: ${ctx.cwd}`,
+          ...parsed.searchRoots.length > 0
+            ? [`Searched roots: ${parsed.searchRoots.join(", ")}`]
+            : [],
+          "",
+        ].join("\n"),
         summary: `execute-plan: missing plan ${parsed.planPath}`,
       };
     }
@@ -139,6 +147,7 @@ export default {
     const state: ExecutePlanState = {
       version: 1,
       planPath: parsed.planPath,
+      absolutePlanPath: parsed.absolutePlanPath,
       extraInstructions: parsed.extraInstructions,
       autoApprove: isAutoApproveEnabled(ctx),
       continuationNotes: [],
@@ -216,7 +225,7 @@ async function orchestratePlan(
       autoApprove: state.autoApprove,
     });
 
-    const planContent = await readPlanFile(resolve(ctx.cwd, state.planPath));
+    const planContent = await readPlanFile(resolveStatePlanAbsolutePath(state, ctx.cwd));
     const decisionResult = await ctx.agent.run(
       buildStepSelectionPrompt(state, planContent),
       StepSelectionType,
@@ -428,18 +437,21 @@ async function parseExecutePlanPrompt(
   planPath?: string;
   absolutePlanPath?: string;
   extraInstructions: string;
+  searchRoots: string[];
 }> {
+  const searchRoots = resolvePlanSearchRoots(cwd);
   const trimmed = prompt.trim();
   if (!trimmed) {
     return {
       extraInstructions: "",
+      searchRoots,
     };
   }
 
   const tokens = tokenizePrompt(trimmed);
   for (let length = tokens.length; length >= 1; length -= 1) {
     const candidate = tokens.slice(0, length).join(" ").trim();
-    const resolvedPath = await resolvePlanPath(candidate, cwd);
+    const resolvedPath = await resolvePlanPath(candidate, cwd, searchRoots);
     if (!resolvedPath) {
       continue;
     }
@@ -449,6 +461,7 @@ async function parseExecutePlanPrompt(
       planPath: resolvedPath.displayPath,
       absolutePlanPath: resolvedPath.absolutePath,
       extraInstructions,
+      searchRoots,
     };
   }
 
@@ -456,32 +469,49 @@ async function parseExecutePlanPrompt(
   return {
     planPath: firstToken || undefined,
     extraInstructions: tokens.slice(1).join(" ").trim(),
+    searchRoots,
   };
 }
 
 async function resolvePlanPath(
   candidate: string,
   cwd: string,
+  searchRoots: string[],
 ): Promise<{ absolutePath: string; displayPath: string } | undefined> {
   const raw = candidate.trim();
   if (!raw) {
     return undefined;
   }
 
-  const variants = raw.endsWith(".md") ? [raw] : [raw, `${raw}.md`];
+  const variants = buildPlanPathVariants(raw);
   for (const variant of variants) {
-    const absolutePath = isAbsolute(variant) ? variant : resolve(cwd, variant);
-    if (!(await isRegularFile(absolutePath))) {
-      continue;
-    }
+    const candidatePaths = isAbsolute(variant)
+      ? [variant]
+      : searchRoots.map((root) => resolve(root, variant));
 
-    return {
-      absolutePath,
-      displayPath: toDisplayPath(absolutePath, cwd),
-    };
+    for (const absolutePath of candidatePaths) {
+      if (!(await isRegularFile(absolutePath))) {
+        continue;
+      }
+
+      return {
+        absolutePath,
+        displayPath: toDisplayPath(absolutePath, cwd, searchRoots),
+      };
+    }
   }
 
   return undefined;
+}
+
+function buildPlanPathVariants(raw: string): string[] {
+  const stripped = raw.replace(/[.,;:!?]+$/u, "");
+  const candidates = [
+    raw,
+    stripped !== raw ? stripped : undefined,
+  ].filter((value): value is string => Boolean(value));
+
+  return [...new Set(candidates.flatMap((value) => value.endsWith(".md") ? [value] : [value, `${value}.md`]))];
 }
 
 async function isRegularFile(path: string): Promise<boolean> {
@@ -754,6 +784,7 @@ function buildContinuationPause(state: ExecutePlanState) {
 function buildResultData(state: ExecutePlanState): KernelValue {
   return {
     planPath: state.planPath,
+    absolutePlanPath: state.absolutePlanPath,
     autoApprove: state.autoApprove,
     currentStepId: state.currentStepId,
     currentStepIndex: state.currentStepIndex,
@@ -814,6 +845,10 @@ function appendContinuationNote(state: ExecutePlanState, note: string): ExecuteP
     ...state,
     continuationNotes: normalizeStrings([...state.continuationNotes, trimmed]).slice(-MAX_NOTE_COUNT),
   };
+}
+
+function resolveStatePlanAbsolutePath(state: ExecutePlanState, cwd: string): string {
+  return state.absolutePlanPath ?? resolve(cwd, state.planPath);
 }
 
 function renderStepReport(record: CompletedStepRecord): string {
@@ -991,13 +1026,28 @@ function execGit(cwd: string, args: string[]): string {
   }
 }
 
-function toDisplayPath(absolutePath: string, cwd: string): string {
+function resolvePlanSearchRoots(cwd: string): string[] {
+  const repoRoot = execGit(cwd, ["rev-parse", "--show-toplevel"]).trim();
+  return [...new Set([
+    resolve(cwd),
+    repoRoot || undefined,
+  ].filter((value): value is string => Boolean(value)))];
+}
+
+function toDisplayPath(absolutePath: string, cwd: string, searchRoots: string[]): string {
   const relativePath = relative(cwd, absolutePath);
-  if (!relativePath || relativePath.startsWith("..")) {
-    return absolutePath;
+  if (relativePath && !relativePath.startsWith("..")) {
+    return relativePath;
   }
 
-  return relativePath;
+  for (const root of searchRoots) {
+    const candidate = relative(root, absolutePath);
+    if (candidate && !candidate.startsWith("..")) {
+      return candidate;
+    }
+  }
+
+  return absolutePath;
 }
 
 function singleLine(value: string): string {

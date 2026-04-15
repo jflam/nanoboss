@@ -75,6 +75,82 @@ describe("procedure disk loader", () => {
     );
   });
 
+  test("surfaces missing package diagnostics instead of a generic bundle failure", async () => {
+    const workspaceRoot = mkdtempSync(join(tmpdir(), "nab-workspace-missing-package-"));
+    const proceduresDir = join(workspaceRoot, ".nanoboss", "procedures");
+    mkdirSync(proceduresDir, { recursive: true });
+    writeFileSync(
+      join(proceduresDir, "missing-package.ts"),
+      [
+        'import missing from "definitely-missing-package";',
+        "",
+        "export default {",
+        '  name: "missing-package",',
+        '  description: "broken procedure",',
+        "  async execute() {",
+        "    return missing;",
+        "  },",
+        "};",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+
+    try {
+      await loadProcedureFromPath(join(proceduresDir, "missing-package.ts"));
+      throw new Error("expected missing-package procedure load to fail");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      expect(message).toContain('Could not resolve: "definitely-missing-package"');
+      expect(message).toContain("specifier: definitely-missing-package");
+      expect(message).not.toBe("Bundle failed");
+    }
+  });
+
+  test("loads repo-local procedures that import internal workspace packages without a workspace node_modules", async () => {
+    const previousHome = process.env.HOME;
+    const runtimeHome = mkdtempSync(join(tmpdir(), "nab-runtime-home-"));
+    const workspaceRoot = mkdtempSync(join(tmpdir(), "nab-workspace-internal-packages-"));
+    const proceduresDir = join(workspaceRoot, ".nanoboss", "procedures");
+    process.env.HOME = runtimeHome;
+
+    try {
+      mkdirSync(proceduresDir, { recursive: true });
+      writeFileSync(
+        join(proceduresDir, "workspace-alias.ts"),
+        [
+          'import { createRef } from "../../src/core/types.ts";',
+          "",
+          "export default {",
+          '  name: "workspace-alias",',
+          '  description: "workspace alias procedure",',
+          "  async execute() {",
+          '    return createRef({ sessionId: "session", runId: "run" }, "answer");',
+          "  },",
+          "};",
+          "",
+        ].join("\n"),
+        "utf8",
+      );
+
+      const procedure = await loadProcedureFromPath(join(proceduresDir, "workspace-alias.ts"));
+      const result = await procedure.execute("", {} as never);
+
+      expect(procedure.name).toBe("workspace-alias");
+      expect(result).toEqual({
+        run: { sessionId: "session", runId: "run" },
+        path: "answer",
+      });
+      expect(existsSync(join(workspaceRoot, "node_modules"))).toBe(false);
+    } finally {
+      if (previousHome === undefined) {
+        delete process.env.HOME;
+      } else {
+        process.env.HOME = previousHome;
+      }
+    }
+  });
+
   test("loads typia-based procedures for a workspace without its own node_modules", async () => {
     const workspaceRoot = mkdtempSync(join(tmpdir(), "nab-workspace-no-modules-"));
     const proceduresDir = join(workspaceRoot, "procedures");

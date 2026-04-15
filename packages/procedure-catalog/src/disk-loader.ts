@@ -103,66 +103,150 @@ function getDefaultExport(module: unknown): unknown {
 
 async function buildProcedureModule(path: string): Promise<string> {
   const resolvedWorkspaceRoot = resolveProcedureBuildRoot(path);
-  const cacheKey = buildProcedureCacheKey(path, resolvedWorkspaceRoot);
-  const cacheDir = join(getProcedureBuildCacheDir(), cacheKey);
-  const cacheModulePath = join(cacheDir, "module.js");
-  if (!existsSync(cacheModulePath)) {
-    const outdir = mkdtempSync(join(tmpdir(), "nanoboss-procedure-"));
-    try {
-      const result = await withProcedureBuildNodeModules(resolvedWorkspaceRoot, async () =>
-        await Bun.build({
-          entrypoints: [path],
-          outdir,
-          format: "esm",
-          plugins: [createTypiaBunPlugin()],
-          sourcemap: "inline",
-          target: "bun",
-        }));
+  return await withProcedureBuildNodeModules(resolvedWorkspaceRoot, async () => {
+    const cacheKey = buildProcedureCacheKey(path, resolvedWorkspaceRoot);
+    const cacheDir = join(getProcedureBuildCacheDir(), cacheKey);
+    const cacheModulePath = join(cacheDir, "module.js");
+    if (!existsSync(cacheModulePath)) {
+      const outdir = mkdtempSync(join(tmpdir(), "nanoboss-procedure-"));
+      try {
+        let result: Awaited<ReturnType<typeof Bun.build>>;
+        try {
+          result = await Bun.build({
+            entrypoints: [path],
+            outdir,
+            format: "esm",
+            plugins: [createTypiaBunPlugin()],
+            sourcemap: "inline",
+            target: "bun",
+          });
+        } catch (error) {
+          throw new Error(formatProcedureBuildFailure(path, extractBuildLogs(error)), { cause: error });
+        }
 
-      if (!result.success) {
-        throw new Error([
-          `Failed to compile procedure module: ${path}`,
-          ...formatBuildLogs(result.logs),
-        ].join("\n"));
+        if (!result.success) {
+          throw new Error(formatProcedureBuildFailure(path, result.logs), { cause: result });
+        }
+
+        const output = result.outputs[0];
+        if (!output) {
+          throw new Error(`Procedure build produced no output for ${path}`);
+        }
+
+        mkdirSync(cacheDir, { recursive: true });
+        copyFileSync(output.path, cacheModulePath);
+      } finally {
+        rmSync(outdir, { recursive: true, force: true });
       }
-
-      const output = result.outputs[0];
-      if (!output) {
-        throw new Error(`Procedure build produced no output for ${path}`);
-      }
-
-      mkdirSync(cacheDir, { recursive: true });
-      copyFileSync(output.path, cacheModulePath);
-    } finally {
-      rmSync(outdir, { recursive: true, force: true });
     }
+
+    return `${pathToFileURL(cacheModulePath).href}?v=${cacheKey}`;
+  });
+}
+
+function formatProcedureBuildFailure(path: string, logs: readonly unknown[]): string {
+  const diagnostics = formatBuildLogs(logs);
+  return [
+    `Failed to compile procedure module: ${path}`,
+    diagnostics.length > 0
+      ? diagnostics.join("\n")
+      : "Bundle failed without diagnostics from Bun.build().",
+  ].join("\n");
+}
+
+function extractBuildLogs(error: unknown): unknown[] {
+  if (
+    error instanceof AggregateError
+    && Array.isArray(error.errors)
+  ) {
+    return error.errors;
   }
 
-  return `${pathToFileURL(cacheModulePath).href}?v=${cacheKey}`;
+  if (
+    typeof error === "object"
+    && error !== null
+    && "errors" in error
+    && Array.isArray((error as { errors?: unknown[] }).errors)
+  ) {
+    return (error as { errors: unknown[] }).errors;
+  }
+
+  return [];
 }
 
 function formatBuildLogs(logs: unknown[]): string[] {
-  return logs.map((log) => {
+  return logs.map((log, index) => {
     if (typeof log === "string") {
-      return log;
+      return `Build diagnostic ${index + 1}: ${log}`;
     }
 
     if (!log || typeof log !== "object") {
-      return String(log);
+      return `Build diagnostic ${index + 1}: ${String(log)}`;
     }
 
     const message = "message" in log && typeof log.message === "string"
       ? log.message
       : JSON.stringify(log);
+    const level = "level" in log && typeof log.level === "string"
+      ? log.level
+      : undefined;
+    const code = "code" in log && typeof log.code === "string"
+      ? log.code
+      : undefined;
+    const specifier = "specifier" in log && typeof log.specifier === "string"
+      ? log.specifier
+      : undefined;
+    const importKind = "importKind" in log && typeof log.importKind === "string"
+      ? log.importKind
+      : undefined;
+    const referrer = "referrer" in log && typeof log.referrer === "string" && log.referrer.trim().length > 0
+      ? log.referrer
+      : undefined;
     const position = "position" in log && log.position && typeof log.position === "object"
       ? log.position
       : undefined;
     const location = position && "file" in position && typeof position.file === "string"
-      ? position.file
+      ? formatBuildLogLocation(position)
+      : undefined;
+    const sourceLine = position && "lineText" in position && typeof position.lineText === "string"
+      ? position.lineText.trim()
       : undefined;
 
-    return location ? `${location}: ${message}` : message;
+    const header = [
+      `Build diagnostic ${index + 1}:`,
+      level ? level : undefined,
+      code ? `[${code}]` : undefined,
+      location ? `at ${location}` : referrer ? `from ${referrer}` : undefined,
+    ].filter((value): value is string => Boolean(value)).join(" ");
+    const details = [
+      message,
+      specifier ? `specifier: ${specifier}` : undefined,
+      importKind ? `import kind: ${importKind}` : undefined,
+      sourceLine ? `source: ${sourceLine}` : undefined,
+    ].filter((value): value is string => Boolean(value));
+
+    return [header, ...details.map((line) => `  ${line}`)].join("\n");
   });
+}
+
+function formatBuildLogLocation(position: { file?: unknown; line?: unknown; column?: unknown }): string {
+  const file = typeof position.file === "string" ? position.file : undefined;
+  const line = typeof position.line === "number" && Number.isFinite(position.line) ? position.line : undefined;
+  const column = typeof position.column === "number" && Number.isFinite(position.column) ? position.column : undefined;
+
+  if (!file) {
+    return "unknown location";
+  }
+
+  if (line !== undefined && column !== undefined) {
+    return `${file}:${line}:${column}`;
+  }
+
+  if (line !== undefined) {
+    return `${file}:${line}`;
+  }
+
+  return file;
 }
 
 function getProcedureBuildCacheDir(): string {
@@ -346,10 +430,14 @@ async function withProcedureBuildNodeModules<T>(workspaceRoot: string, run: () =
   const runtimeSourcePath = resolveProcedureBuildSourcePath();
   const runtimePackagesPath = resolveProcedureBuildPackagesPath();
   const runtimeNodeModulesPaths = resolveProcedureBuildNodeModulesPaths();
+  const workspacePackageSourcePaths = [packagesPath, runtimePackagesPath]
+    .filter((path, index, array): path is string => Boolean(path) && array.indexOf(path) === index);
 
   return await withTemporaryNodeModulesOverlays(nodeModulesPath, runtimeNodeModulesPaths, async () =>
-    await withOptionalTemporarySymlink(srcPath, runtimeSourcePath, async () =>
-      await withOptionalTemporarySymlink(packagesPath, runtimePackagesPath, run)
+    await withTemporaryWorkspacePackageOverlays(nodeModulesPath, workspacePackageSourcePaths, async () =>
+      await withOptionalTemporarySymlink(srcPath, runtimeSourcePath, async () =>
+        await withOptionalTemporarySymlink(packagesPath, runtimePackagesPath, run)
+      )
     )
   );
 }
@@ -359,8 +447,13 @@ function resolveProcedureBuildRoot(path: string): string {
 
   for (let current = fileDir; ; current = dirname(current)) {
     const currentBaseName = basename(current);
-    if (currentBaseName === "packages" || currentBaseName === "procedures") {
+    if (currentBaseName === "packages") {
       return dirname(current);
+    }
+
+    if (currentBaseName === "procedures") {
+      const parent = dirname(current);
+      return basename(parent) === ".nanoboss" ? dirname(parent) : parent;
     }
 
     if (existsSync(join(current, "tsconfig.json")) || existsSync(join(current, "node_modules"))) {
@@ -478,6 +571,28 @@ async function withTemporaryNodeModulesOverlays<T>(
   }
 }
 
+async function withTemporaryWorkspacePackageOverlays<T>(
+  targetNodeModulesPath: string,
+  sourcePackagesPaths: string[],
+  run: () => Promise<T>,
+): Promise<T> {
+  const createdPaths = sourcePackagesPaths.flatMap((sourcePackagesPath) =>
+    linkMissingWorkspacePackages(targetNodeModulesPath, sourcePackagesPath)
+  );
+
+  try {
+    return await run();
+  } finally {
+    for (const createdPath of createdPaths.reverse()) {
+      if (existsSync(createdPath) && isSymlinkPath(createdPath)) {
+        rmSync(createdPath, { recursive: true, force: true });
+      }
+    }
+
+    removeEmptyAncestorDirectories(targetNodeModulesPath, createdPaths);
+  }
+}
+
 function linkMissingNodeModulesEntries(targetDir: string, sourceDir: string): string[] {
   if (!existsSync(sourceDir)) {
     return [];
@@ -515,6 +630,73 @@ function linkMissingNodeModulesEntries(targetDir: string, sourceDir: string): st
   }
 
   return createdPaths;
+}
+
+function linkMissingWorkspacePackages(targetNodeModulesDir: string, sourcePackagesDir: string): string[] {
+  if (!existsSync(sourcePackagesDir)) {
+    return [];
+  }
+
+  const createdPaths: string[] = [];
+  const entries = readdirSync(sourcePackagesDir, { withFileTypes: true })
+    .sort((left, right) => left.name.localeCompare(right.name));
+
+  for (const entry of entries) {
+    if (!entry.isDirectory()) {
+      continue;
+    }
+
+    const sourcePackageDir = join(sourcePackagesDir, entry.name);
+    const packageName = readWorkspacePackageName(sourcePackageDir);
+    if (!packageName) {
+      continue;
+    }
+
+    const targetPackageDir = join(targetNodeModulesDir, ...packageName.split("/"));
+    if (existsSync(targetPackageDir)) {
+      continue;
+    }
+
+    mkdirSync(dirname(targetPackageDir), { recursive: true });
+    symlinkSync(sourcePackageDir, targetPackageDir, "dir");
+    createdPaths.push(targetPackageDir);
+  }
+
+  return createdPaths;
+}
+
+function readWorkspacePackageName(packageDir: string): string | undefined {
+  try {
+    const packageJson = JSON.parse(readFileSync(join(packageDir, "package.json"), "utf8")) as { name?: unknown };
+    return typeof packageJson.name === "string" && packageJson.name.trim().length > 0
+      ? packageJson.name.trim()
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function removeEmptyAncestorDirectories(targetNodeModulesPath: string, createdPaths: string[]): void {
+  const candidateDirs = [...new Set(
+    createdPaths
+      .map((createdPath) => dirname(createdPath))
+      .filter((dir) => dir !== targetNodeModulesPath)
+      .sort((left, right) => right.length - left.length),
+  )];
+
+  for (const candidateDir of candidateDirs) {
+    if (!existsSync(candidateDir) || isSymlinkPath(candidateDir)) {
+      continue;
+    }
+
+    try {
+      if (readdirSync(candidateDir).length === 0) {
+        rmSync(candidateDir, { recursive: true, force: true });
+      }
+    } catch {
+      // Ignore cleanup errors in temporary package alias directories.
+    }
+  }
 }
 
 async function withOptionalTemporarySymlink<T>(
