@@ -183,8 +183,8 @@ export async function runHttpServerCommand(argv: string[] = []): Promise<ReturnT
           return error(400, parsedPrompt.error);
         }
 
-        void service.prompt(sessionId, parsedPrompt.prompt).catch((err: unknown) => {
-          console.error("prompt failed", err);
+        void service.promptSession(sessionId, parsedPrompt.prompt).catch((err: unknown) => {
+          console.error("session prompt failed", err);
         });
 
         return json({ accepted: true }, 202);

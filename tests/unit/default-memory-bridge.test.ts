@@ -142,13 +142,13 @@ describe("default session memory bridge", () => {
     const session = service.createSession({ cwd });
 
     try {
-      await service.prompt(session.sessionId, "/review the code");
+      await service.promptSession(session.sessionId, "/review the code");
 
       const storedAfterReview = await waitForStoredMockSession(mockSessionStoreDir);
       expect(storedAfterReview.mcpServers?.some((server) => server.name === "nanoboss" && server.type === "stdio")).toBe(true);
       expect(storedAfterReview.turns).toHaveLength(0);
 
-      await service.prompt(session.sessionId, "what mattered most?");
+      await service.promptSession(session.sessionId, "what mattered most?");
 
       const storedAfterFirstDefault = await waitForStoredMockSession(mockSessionStoreDir);
       const firstUserPrompt = storedAfterFirstDefault.turns[0]?.text ?? "";
@@ -160,7 +160,7 @@ describe("default session memory bridge", () => {
       expect(firstUserPrompt).not.toContain("Nanoboss internal slash-command dispatch.");
       expect(firstUserPrompt).not.toContain("full rendered review output that should stay out of the default prompt");
 
-      await service.prompt(session.sessionId, "and now?");
+      await service.promptSession(session.sessionId, "and now?");
 
       const storedAfterSecondDefault = await waitForStoredMockSession(mockSessionStoreDir);
       const secondUserPrompt = storedAfterSecondDefault.turns[2]?.text ?? "";

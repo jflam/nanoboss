@@ -214,7 +214,7 @@ describe("/default native session continuity", () => {
         const session = service.createSession({ cwd: process.cwd() });
 
         try {
-          await service.prompt(session.sessionId, "nested tool trace demo");
+          await service.promptSession(session.sessionId, "nested tool trace demo");
 
           const events = service.getSessionEvents(session.sessionId)?.after(-1) ?? [];
           const tokenUsageIndex = events.findIndex((event) =>
@@ -272,8 +272,8 @@ describe("/default native session continuity", () => {
       const session = service.createSession({ cwd: process.cwd() });
 
       try {
-        await service.prompt(session.sessionId, "what is 2+2");
-        await service.prompt(session.sessionId, "add 3 to result");
+        await service.promptSession(session.sessionId, "what is 2+2");
+        await service.promptSession(session.sessionId, "add 3 to result");
 
         const completed = (service.getSessionEvents(session.sessionId)?.after(-1) ?? [])
           .filter((event) => event.type === "run_completed");
@@ -311,7 +311,7 @@ describe("/default native session continuity", () => {
         const session = service.createSession({ cwd: process.cwd() });
 
         try {
-          await service.prompt(session.sessionId, "what is 2+2");
+          await service.promptSession(session.sessionId, "what is 2+2");
         } finally {
           service.destroySession(session.sessionId);
         }
@@ -323,7 +323,7 @@ describe("/default native session continuity", () => {
         });
 
         try {
-          await resumedService.prompt(resumed.sessionId, "add 3 to result");
+          await resumedService.promptSession(resumed.sessionId, "add 3 to result");
 
           const completed = (resumedService.getSessionEvents(resumed.sessionId)?.after(-1) ?? [])
             .filter((event) => event.type === "run_completed");

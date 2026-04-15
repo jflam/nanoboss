@@ -878,7 +878,7 @@ export class NanobossService {
     params.markRunActivity();
   }
 
-  async prompt(
+  async promptSession(
     sessionId: string,
     promptText: string | PromptInput,
     delegate?: SessionUpdateEmitter,

@@ -3,13 +3,12 @@ import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import type { DeferredProcedureMetadata } from "../../src/core/types.ts";
 import { CREATE_PROCEDURE_METADATA } from "../../src/procedure/create.ts";
 import { ProcedureRegistry, projectProcedureMetadata, toAvailableCommand } from "../../src/procedure/registry.ts";
 
 function describeProcedureMetadata(
   procedure: ReturnType<ProcedureRegistry["get"]>,
-): DeferredProcedureMetadata | undefined {
+): ReturnType<ProcedureRegistry["listMetadata"]>[number] | undefined {
   if (!procedure) {
     return undefined;
   }
@@ -19,7 +18,6 @@ function describeProcedureMetadata(
     description: procedure.description,
     inputHint: procedure.inputHint,
     executionMode: procedure.executionMode,
-    supportsResume: typeof procedure.resume === "function",
   };
 }
 
@@ -43,7 +41,7 @@ function getRegisteredProcedure(
 }
 
 function projectSingleProcedureMetadata(
-  procedure: DeferredProcedureMetadata,
+  procedure: ReturnType<ProcedureRegistry["listMetadata"]>[number],
 ): ReturnType<ProcedureRegistry["listMetadata"]>[number] {
   const [metadata] = projectProcedureMetadata([procedure]);
   if (!metadata) {
@@ -253,14 +251,12 @@ describe("ProcedureRegistry", () => {
         description: "Set or inspect the default agent/model for this session",
         inputHint: "[agent] [model]",
         executionMode: "harness" as const,
-        supportsResume: false,
       },
       {
         name: "guided",
         description: "guided command",
         inputHint: "what to do",
         executionMode: "agentSession" as const,
-        supportsResume: false,
       },
     ] as const;
 
@@ -282,6 +278,7 @@ describe("ProcedureRegistry", () => {
     for (const expected of expectedMetadata) {
       const metadata = projectSingleProcedureMetadata(expected);
       expect(describeProcedureMetadata(getRegisteredProcedure(registry, expected.name))).toEqual(expected);
+      expect(typeof getRegisteredProcedure(registry, expected.name).resume === "function").toBe(false);
       expect(findListedProcedureMetadata(registry, expected.name)).toEqual(metadata);
       expect(projectProcedureMetadata(registry.listMetadata()).find((procedure) => procedure.name === expected.name))
         .toEqual(metadata);
@@ -298,14 +295,15 @@ describe("ProcedureRegistry", () => {
       await expect(execute()).resolves.toBeDefined();
 
       expect(describeProcedureMetadata(getRegisteredProcedure(registry, expected.name))).toEqual(expected);
+      expect(typeof getRegisteredProcedure(registry, expected.name).resume === "function").toBe(false);
       expect(findListedProcedureMetadata(registry, expected.name)).toEqual(metadata);
     }
 
     expect(describeProcedureMetadata(registry.get(CREATE_PROCEDURE_METADATA.name))).toEqual({
       ...CREATE_PROCEDURE_METADATA,
       executionMode: undefined,
-      supportsResume: false,
     });
+    expect(typeof getRegisteredProcedure(registry, CREATE_PROCEDURE_METADATA.name).resume === "function").toBe(false);
   });
 
   test("listMetadata reflects loaded runtime fields after a lazy procedure is realized", async () => {
@@ -332,7 +330,6 @@ describe("ProcedureRegistry", () => {
       description: "runtime metadata procedure",
       inputHint: undefined,
       executionMode: undefined,
-      supportsResume: false,
     });
 
     await expect(registry.get("runtime-shaped")?.execute("", {} as never)).resolves.toBe("runtime");
@@ -343,7 +340,6 @@ describe("ProcedureRegistry", () => {
       description: "runtime metadata procedure",
       inputHint: "runtime only hint",
       executionMode: undefined,
-      supportsResume: false,
     });
   });
 
@@ -389,14 +385,12 @@ describe("ProcedureRegistry", () => {
         description: "default command",
         executionMode: undefined,
         inputHint: undefined,
-        supportsResume: false,
       },
       {
         name: "double",
         description: "double a number",
         executionMode: undefined,
         inputHint: "number",
-        supportsResume: false,
       },
     ]);
     expect(registry.listMetadata().find((procedure) => procedure.name === "default")).toEqual({
@@ -404,7 +398,6 @@ describe("ProcedureRegistry", () => {
       description: "default command",
       executionMode: undefined,
       inputHint: undefined,
-      supportsResume: false,
     });
     expect(projectProcedureMetadata(registry.listMetadata()).map(toAvailableCommand)).toEqual([
       {
@@ -428,28 +421,25 @@ describe("ProcedureRegistry", () => {
       throw new Error("expected default builtin procedure metadata to be describable");
     }
 
-    const expectedMetadata: [
-      DeferredProcedureMetadata,
-      DeferredProcedureMetadata,
-      DeferredProcedureMetadata,
-    ] = [
+    const expectedMetadata = [
       defaultMetadata,
       {
         ...CREATE_PROCEDURE_METADATA,
         executionMode: undefined,
-        supportsResume: false,
       },
       {
         name: "simplify",
         description: "Find and apply simplifications one opportunity at a time",
         inputHint: "Optional focus or scope",
         executionMode: "harness" as const,
-        supportsResume: true,
       },
-    ];
+    ] as const;
     for (const expected of expectedMetadata) {
       expect(describeProcedureMetadata(registry.get(expected.name))).toEqual(expected);
     }
+    expect(typeof getRegisteredProcedure(registry, "default").resume === "function").toBe(false);
+    expect(typeof getRegisteredProcedure(registry, CREATE_PROCEDURE_METADATA.name).resume === "function").toBe(false);
+    expect(typeof getRegisteredProcedure(registry, "simplify").resume === "function").toBe(true);
 
     expect(registry.get("nanoboss/commit")).toBeDefined();
     expect(registry.get("commit")).toBeUndefined();

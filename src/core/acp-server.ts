@@ -89,7 +89,7 @@ class Nanoboss implements acp.Agent {
 
   async prompt(params: acp.PromptRequest): Promise<acp.PromptResponse> {
     const emitter = new QueuedSessionUpdateEmitter(this.connection, params.sessionId);
-    await this.service.prompt(params.sessionId, promptInputFromAcpBlocks(params.prompt), emitter);
+    await this.service.promptSession(params.sessionId, promptInputFromAcpBlocks(params.prompt), emitter);
     return { stopReason: "end_turn" };
   }
 

@@ -3,10 +3,8 @@ import type { ReplayableFrontendEvent } from "../http/frontend-events.ts";
 import type { CellRef, ValueRef } from "../session/store-refs.ts";
 import type { RunTimingTrace } from "./timing-trace.ts";
 import {
-  cellRefFromRunRef,
   refFromValueRef,
   runRefFromCellRef,
-  valueRefFromRef,
 } from "../session/store-refs.ts";
 
 export type KernelScalar = null | boolean | number | string;
@@ -154,8 +152,8 @@ export interface PendingContinuation<TState extends KernelValue = KernelValue> e
 
 export type KernelValue =
   | KernelScalar
-  | CellRef
-  | ValueRef
+  | RunRef
+  | Ref
   | KernelValue[]
   | object;
 
@@ -208,7 +206,7 @@ export interface RefStat {
   preview?: string;
 }
 
-export function publicKernelValueFromStored(value: KernelValue | undefined): KernelValue | undefined {
+export function publicKernelValueFromStored(value: unknown): KernelValue | undefined {
   if (value === undefined || value === null) {
     return value;
   }
@@ -234,32 +232,6 @@ export function publicKernelValueFromStored(value: KernelValue | undefined): Ker
   return value;
 }
 
-export function storedKernelValueFromPublic(value: KernelValue | undefined): KernelValue | undefined {
-  if (value === undefined || value === null) {
-    return value;
-  }
-
-  if (isRefLike(value)) {
-    return valueRefFromRef(value);
-  }
-
-  if (isRunRefLike(value)) {
-    return cellRefFromRunRef(value);
-  }
-
-  if (Array.isArray(value)) {
-    return value.map((entry) => storedKernelValueFromPublic(entry) as KernelValue);
-  }
-
-  if (typeof value === "object") {
-    return Object.fromEntries(
-      Object.entries(value).map(([key, entry]) => [key, storedKernelValueFromPublic(entry as KernelValue)]),
-    );
-  }
-
-  return value;
-}
-
 function isCellRefLike(value: unknown): value is CellRef {
   return (
     typeof value === "object" &&
@@ -276,25 +248,6 @@ function isValueRefLike(value: unknown): value is ValueRef {
     value !== null &&
     typeof (value as { path?: unknown }).path === "string" &&
     isCellRefLike((value as { cell?: unknown }).cell)
-  );
-}
-
-function isRunRefLike(value: unknown): value is RunRef {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    typeof (value as { sessionId?: unknown }).sessionId === "string" &&
-    typeof (value as { runId?: unknown }).runId === "string" &&
-    !("path" in (value as object))
-  );
-}
-
-function isRefLike(value: unknown): value is Ref {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    typeof (value as { path?: unknown }).path === "string" &&
-    isRunRefLike((value as { run?: unknown }).run)
   );
 }
 
@@ -506,10 +459,6 @@ export interface ProcedureMetadata {
   executionMode?: ProcedureExecutionMode;
 }
 
-export interface DeferredProcedureMetadata extends ProcedureMetadata {
-  supportsResume: boolean;
-}
-
 export interface Procedure extends ProcedureMetadata {
   execute(prompt: string, ctx: ProcedureApi): Promise<ProcedureResult | string | void>;
   resume?(prompt: string, state: KernelValue, ctx: ProcedureApi): Promise<ProcedureResult | string | void>;
@@ -520,7 +469,7 @@ export interface ProcedureRegistryLike {
   register(procedure: Procedure): void;
   loadProcedureFromPath(path: string): Promise<Procedure>;
   persist(procedureName: string, source: string, cwd: string): Promise<string>;
-  listMetadata(): DeferredProcedureMetadata[];
+  listMetadata(): ProcedureMetadata[];
 }
 
 export type AgentSessionMode = "fresh" | "default";

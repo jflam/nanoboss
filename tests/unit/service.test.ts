@@ -258,7 +258,7 @@ describe("NanobossService", () => {
     const service = new NanobossService(registry);
     const session = service.createSession({ cwd: process.cwd() });
 
-    await service.prompt(session.sessionId, "what is 2+2");
+    await service.promptSession(session.sessionId, "what is 2+2");
 
     const events = service.getSessionEvents(session.sessionId)?.after(-1) ?? [];
     const textEvents = events.filter((event) => event.type === "text_delta");
@@ -274,7 +274,7 @@ describe("NanobossService", () => {
     const service = new NanobossService(registry);
     const session = service.createSession({ cwd: process.cwd() });
 
-    await service.prompt(session.sessionId, {
+    await service.promptSession(session.sessionId, {
       parts: [
         { type: "text", text: "/model " },
         {
@@ -315,7 +315,7 @@ describe("NanobossService", () => {
       const service = new NanobossService(registry);
       const session = service.createSession({ cwd: process.cwd() });
 
-      await service.prompt(session.sessionId, {
+      await service.promptSession(session.sessionId, {
         parts: [
           { type: "text", text: "describe " },
           {
@@ -362,7 +362,7 @@ describe("NanobossService", () => {
       const service = new NanobossService(registry);
       const session = service.createSession({ cwd: process.cwd() });
 
-      await service.prompt(session.sessionId, "what is 2+2");
+      await service.promptSession(session.sessionId, "what is 2+2");
 
       const events = service.getSessionEvents(session.sessionId)?.after(-1) ?? [];
       const completedIndex = events.findLastIndex((event) => event.type === "run_completed");
@@ -400,7 +400,7 @@ describe("NanobossService", () => {
       const session = service.createSession({ cwd: process.cwd() });
 
       try {
-        await service.prompt(session.sessionId, "nested tool trace demo");
+        await service.promptSession(session.sessionId, "nested tool trace demo");
         const liveReplay = normalizeReplayEvents(
           service.getSessionEvents(session.sessionId)?.after(-1) ?? [],
         );
@@ -471,7 +471,7 @@ describe("NanobossService", () => {
       const session = service.createSession({ cwd: process.cwd() });
 
       try {
-        const promptPromise = service.prompt(session.sessionId, "cooperative cancel demo");
+        const promptPromise = service.promptSession(session.sessionId, "cooperative cancel demo");
 
         await waitForCondition(() => {
           const events = service.getSessionEvents(session.sessionId)?.after(-1) ?? [];
@@ -550,7 +550,7 @@ describe("NanobossService", () => {
       const service = new NanobossService(registry);
       const session = service.createSession({ cwd });
 
-      await service.prompt(session.sessionId, "/probe");
+      await service.promptSession(session.sessionId, "/probe");
 
       const events = service.getSessionEvents(session.sessionId)?.after(-1) ?? [];
       const storedRun = getInternalSessionState(service, session.sessionId).store.topLevelRuns({ limit: 1 })[0];
@@ -618,7 +618,7 @@ describe("NanobossService", () => {
     const session = service.createSession({ cwd });
 
     try {
-      await service.prompt(session.sessionId, "/slowreview patch");
+      await service.promptSession(session.sessionId, "/slowreview patch");
 
       const events = service.getSessionEvents(session.sessionId)?.after(-1) ?? [];
       const firstProgressIndex = events.findIndex((event) => event.type === "text_delta" && event.data.text.includes("starting: patch"));
@@ -653,7 +653,7 @@ describe("NanobossService", () => {
     const session = service.createSession({ cwd });
 
     try {
-      await service.prompt(session.sessionId, "/slowreview patch");
+      await service.promptSession(session.sessionId, "/slowreview patch");
 
       const events = service.getSessionEvents(session.sessionId)?.after(-1) ?? [];
       const completed = events.findLast((event) => event.type === "run_completed" && event.data.procedure === "slowreview");
@@ -696,7 +696,7 @@ describe("NanobossService", () => {
       const session = service.createSession({ cwd });
 
       try {
-        await service.prompt(session.sessionId, "/probe");
+        await service.promptSession(session.sessionId, "/probe");
 
         const stored = readStoredMockSession(sessionStoreDir);
         const userPrompt = stored.turns.find((turn) => turn.role === "user")?.text ?? "";
@@ -754,8 +754,8 @@ describe("NanobossService", () => {
     const session = service.createSession({ cwd });
 
     try {
-      await service.prompt(session.sessionId, "/slowreview patch");
-      await service.prompt(session.sessionId, "what mattered most?");
+      await service.promptSession(session.sessionId, "/slowreview patch");
+      await service.promptSession(session.sessionId, "what mattered most?");
 
       const events = service.getSessionEvents(session.sessionId)?.after(-1) ?? [];
       const completed = events.findLast((event) => event.type === "run_completed" && event.data.procedure === "slowreview");
@@ -808,8 +808,8 @@ describe("NanobossService", () => {
     const session = service.createSession({ cwd });
 
     try {
-      await service.prompt(session.sessionId, "/review the code");
-      await service.prompt(session.sessionId, "what mattered most?");
+      await service.promptSession(session.sessionId, "/review the code");
+      await service.promptSession(session.sessionId, "what mattered most?");
 
       const events = service.getSessionEvents(session.sessionId)?.after(-1) ?? [];
       const storedCard = events.find((event) => event.type === "memory_card_stored");
@@ -901,7 +901,7 @@ describe("NanobossService", () => {
       sessionState.recentRecoverySyncAtMs = Date.now();
 
       try {
-        await service.prompt(session.sessionId, "how did you do that earlier?");
+        await service.promptSession(session.sessionId, "how did you do that earlier?");
 
         const stored = readStoredMockSession(mockSessionStoreDir);
         const userPrompt = stored.turns[0]?.text ?? "";
@@ -922,7 +922,7 @@ describe("NanobossService", () => {
       const service = new NanobossService(registry);
       const session = service.createSession({ cwd });
 
-      await service.prompt(session.sessionId, "/model copilot gpt-5.4/xhigh");
+      await service.promptSession(session.sessionId, "/model copilot gpt-5.4/xhigh");
 
       expect(service.getSession(session.sessionId)?.agentLabel).toBe("copilot/gpt-5.4/x-high");
     });
@@ -934,7 +934,7 @@ describe("NanobossService", () => {
     const service = new NanobossService(registry);
     const session = service.createSession({ cwd });
 
-    await service.prompt(session.sessionId, "/model copilot gpt-5.4/xhigh");
+    await service.promptSession(session.sessionId, "/model copilot gpt-5.4/xhigh");
 
     expect(service.getSession(session.sessionId)?.agentLabel).toBe("copilot/gpt-5.4/x-high");
     const toolTitles = (service.getSessionEvents(session.sessionId)?.after(-1) ?? [])
@@ -950,7 +950,7 @@ describe("NanobossService", () => {
     const service = new NanobossService(registry);
     const session = service.createSession({ cwd });
 
-    await service.prompt(session.sessionId, "  /model copilot gpt-5.4/xhigh");
+    await service.promptSession(session.sessionId, "  /model copilot gpt-5.4/xhigh");
 
     const started = (service.getSessionEvents(session.sessionId)?.after(-1) ?? [])
       .find((event) => event.type === "run_started");
@@ -980,7 +980,7 @@ describe("NanobossService", () => {
 
       const service = new NanobossService(registry);
       const session = service.createSession({ cwd });
-      const promptPromise = service.prompt(session.sessionId, "/review the code");
+      const promptPromise = service.promptSession(session.sessionId, "/review the code");
 
       await waitForCondition(() => {
         const events = service.getSessionEvents(session.sessionId)?.after(-1) ?? [];
@@ -1030,7 +1030,7 @@ describe("NanobossService", () => {
 
       const service = new NanobossService(registry);
       const session = service.createSession({ cwd: process.cwd() });
-      const promptPromise = service.prompt(session.sessionId, "stop after this boundary");
+      const promptPromise = service.promptSession(session.sessionId, "stop after this boundary");
 
       await waitForCondition(() => {
         const events = service.getSessionEvents(session.sessionId)?.after(-1) ?? [];
@@ -1092,7 +1092,7 @@ describe("NanobossService", () => {
 
       const service = new NanobossService(registry);
       const session = service.createSession({ cwd });
-      const promptPromise = service.prompt(session.sessionId, "/review stop this");
+      const promptPromise = service.promptSession(session.sessionId, "/review stop this");
 
       await waitForCondition(() => {
         const events = service.getSessionEvents(session.sessionId)?.after(-1) ?? [];
@@ -1131,7 +1131,7 @@ describe("NanobossService", () => {
 
     const service = new NanobossService(registry);
     const session = service.createSession({ cwd: process.cwd() });
-    const promptPromise = service.prompt(session.sessionId, "hello");
+    const promptPromise = service.promptSession(session.sessionId, "hello");
 
     await waitForCondition(() => {
       const events = service.getSessionEvents(session.sessionId)?.after(-1) ?? [];
@@ -1239,7 +1239,7 @@ describe("NanobossService", () => {
     const service = new NanobossService(registry);
     const session = service.createSession({ cwd: process.cwd() });
 
-    await service.prompt(session.sessionId, "/wizard first");
+    await service.promptSession(session.sessionId, "/wizard first");
     let events = service.getSessionEvents(session.sessionId)?.after(-1) ?? [];
     const paused = events.findLast((event) => event.type === "run_paused");
     expect(paused?.type).toBe("run_paused");
@@ -1249,7 +1249,7 @@ describe("NanobossService", () => {
     expect(paused.data.question).toContain("What should I do next");
     expect(events.some((event) => event.type === "run_completed" && event.data.procedure === "wizard")).toBe(false);
 
-    await service.prompt(session.sessionId, "focus on dead code");
+    await service.promptSession(session.sessionId, "focus on dead code");
 
     events = service.getSessionEvents(session.sessionId)?.after(-1) ?? [];
     const completed = events.findLast((event) => event.type === "run_completed" && event.data.procedure === "wizard");
@@ -1267,7 +1267,7 @@ describe("NanobossService", () => {
     const service = new NanobossService(registry);
     const session = service.createSession({ cwd: process.cwd() });
 
-    await service.prompt(session.sessionId, "/simplify2-like");
+    await service.promptSession(session.sessionId, "/simplify2-like");
 
     const events = service.getSessionEvents(session.sessionId)?.after(-1) ?? [];
     const paused = events.findLast((event) => event.type === "run_paused");
@@ -1300,9 +1300,9 @@ describe("NanobossService", () => {
     const service = new NanobossService(registry);
     const session = service.createSession({ cwd: process.cwd() });
 
-    await service.prompt(session.sessionId, "/wizard first");
-    await service.prompt(session.sessionId, "/default hello");
-    await service.prompt(session.sessionId, "resume now");
+    await service.promptSession(session.sessionId, "/wizard first");
+    await service.promptSession(session.sessionId, "/default hello");
+    await service.promptSession(session.sessionId, "resume now");
 
     const events = service.getSessionEvents(session.sessionId)?.after(-1) ?? [];
     const defaultCompleted = events.findLast((event) => event.type === "run_completed" && event.data.procedure === "default");
@@ -1330,9 +1330,9 @@ describe("NanobossService", () => {
     const service = new NanobossService(registry);
     const session = service.createSession({ cwd: process.cwd() });
 
-    await service.prompt(session.sessionId, "/wizard first");
-    await service.prompt(session.sessionId, "/dismiss");
-    await service.prompt(session.sessionId, "back to default");
+    await service.promptSession(session.sessionId, "/wizard first");
+    await service.promptSession(session.sessionId, "/dismiss");
+    await service.promptSession(session.sessionId, "back to default");
 
     const events = service.getSessionEvents(session.sessionId)?.after(-1) ?? [];
     const dismissCompleted = events.findLast((event) => event.type === "run_completed" && event.data.procedure === "dismiss");
@@ -1368,7 +1368,7 @@ describe("NanobossService", () => {
       const service = new NanobossService(registry);
       const session = service.createSession({ cwd: process.cwd() });
 
-      await service.prompt(session.sessionId, "/wizard first");
+      await service.promptSession(session.sessionId, "/wizard first");
 
       const resumedService = new NanobossService(registry);
       resumedService.resumeSession({ sessionId: session.sessionId, cwd: process.cwd() });
@@ -1381,7 +1381,7 @@ describe("NanobossService", () => {
       }
       expect(restoredPaused.data.status).toBe("paused");
 
-      await resumedService.prompt(session.sessionId, "keep going");
+      await resumedService.promptSession(session.sessionId, "keep going");
 
       const events = resumedService.getSessionEvents(session.sessionId)?.after(-1) ?? [];
       const completed = events.findLast((event) => event.type === "run_completed" && event.data.procedure === "wizard");

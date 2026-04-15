@@ -36,7 +36,6 @@ import {
   persistProcedureSource,
 } from "./disk-loader.ts";
 import type {
-  DeferredProcedureMetadata,
   Procedure,
   ProcedureMetadata,
   ProcedureRegistryLike,
@@ -46,6 +45,12 @@ interface ProcedureRegistryOptions {
   cwd?: string;
   procedureRoots?: string[];
   profileProcedureRoot?: string;
+}
+
+interface LoadableProcedureMetadata extends ProcedureMetadata {
+  continuation?: {
+    supportsResume: true;
+  };
 }
 
 const BUILTIN_PROCEDURES: Procedure[] = [
@@ -91,8 +96,8 @@ export class ProcedureRegistry implements ProcedureRegistryLike {
     return this.procedures.get(name);
   }
 
-  listMetadata(): DeferredProcedureMetadata[] {
-    return [...this.procedures.values()].map(toDeferredProcedureMetadata);
+  listMetadata(): ProcedureMetadata[] {
+    return [...this.procedures.values()].map(toProcedureMetadata);
   }
 
   register(procedure: Procedure): void {
@@ -103,13 +108,13 @@ export class ProcedureRegistry implements ProcedureRegistryLike {
   loadBuiltins(): void {
     for (const procedure of BUILTIN_PROCEDURES) {
       this.assertProcedure(procedure);
-      this.registerLoadableProcedure(toDeferredProcedureMetadata(procedure), () => procedure);
+      this.registerLoadableProcedure(toLoadableProcedureMetadata(procedure), () => procedure);
     }
 
     if (!this.procedures.has("create")) {
       const procedure = createCreateProcedure(this);
       this.assertProcedure(procedure);
-      this.registerLoadableProcedure(toDeferredProcedureMetadata(procedure), () => procedure);
+      this.registerLoadableProcedure(toLoadableProcedureMetadata(procedure), () => procedure);
     }
   }
 
@@ -146,7 +151,7 @@ export class ProcedureRegistry implements ProcedureRegistryLike {
   }
 
   private registerLoadableProcedure(
-    metadata: DeferredProcedureMetadata,
+    metadata: LoadableProcedureMetadata,
     load: () => Procedure | Promise<Procedure>,
   ): void {
     if (this.procedures.has(metadata.name)) {
@@ -187,7 +192,7 @@ export class ProcedureRegistry implements ProcedureRegistryLike {
       },
     };
 
-    if (metadata.supportsResume) {
+    if (metadata.continuation?.supportsResume) {
       procedure.resume = async (prompt, state, ctx) => {
         const loaded = await ensureLoaded();
         if (!loaded.resume) {
@@ -205,13 +210,21 @@ function uniquePaths(paths: string[]): string[] {
   return [...new Set(paths.map((path) => resolve(path)))];
 }
 
-function toDeferredProcedureMetadata(procedure: Procedure): DeferredProcedureMetadata {
+function toProcedureMetadata(procedure: Procedure | ProcedureMetadata): ProcedureMetadata {
   return {
     name: procedure.name,
     description: procedure.description,
     inputHint: procedure.inputHint,
     executionMode: procedure.executionMode,
-    supportsResume: typeof procedure.resume === "function",
+  };
+}
+
+function toLoadableProcedureMetadata(procedure: Procedure): LoadableProcedureMetadata {
+  return {
+    ...toProcedureMetadata(procedure),
+    continuation: typeof procedure.resume === "function"
+      ? { supportsResume: true }
+      : undefined,
   };
 }
 

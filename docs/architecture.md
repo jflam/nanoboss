@@ -43,7 +43,7 @@ Relevant files:
   - `src/agent/default-session.ts`
 
 ### 3. Global nanoboss MCP over stdio
-Used so downstream agents can inspect durable nanoboss session cells and refs and dispatch slash commands through one shared MCP surface.
+Used so downstream agents can inspect durable nanoboss session runs and refs and dispatch slash commands through one shared MCP surface.
 
 This is **not** ACP. It is a globally registered MCP server surfaced as `nanoboss` over stdio.
 
@@ -98,7 +98,7 @@ sequenceDiagram
   Server-->>CLI: readiness payload with baseUrl
   User->>CLI: type prompt / command
   CLI->>Server: HTTP + SSE
-  Server->>Service: createSession / prompt / cancel
+  Server->>Service: createSession / promptSession / cancel
   Service-->>Server: frontend events
   Server-->>CLI: SSE updates
   CLI-->>User: render output and tool traces
@@ -125,7 +125,7 @@ sequenceDiagram
 
   User->>Client: send prompt
   Client->>HTTP: POST /v1/sessions/:id/prompts
-  HTTP->>Service: prompt(...)
+  HTTP->>Service: promptSession(...)
   Service-->>HTTP: accept request
   Client->>HTTP: GET /v1/sessions/:id/stream
   HTTP-->>SSE: event stream
@@ -197,13 +197,13 @@ sequenceDiagram
   participant MCP as Global nanoboss MCP stdio server
   participant Store as SessionStore
 
-  Ctx->>ACP: create/load downstream ACP session
+  Ctx->>ACP: open/reuse downstream agent session
   ACP->>Agent: stdio ACP session
 
   Agent->>MCP: tools/list
   MCP-->>Agent: nanoboss MCP tool definitions
 
-  Agent->>MCP: tools/call procedure_dispatch_start / top_level_runs / cell_get / ref_read ...
+  Agent->>MCP: tools/call procedure_dispatch_start / list_runs / get_run / read_ref ...
   MCP->>Store: read cells / refs or start async dispatch jobs
   Store-->>MCP: durable session data
   MCP-->>Agent: MCP tool result
