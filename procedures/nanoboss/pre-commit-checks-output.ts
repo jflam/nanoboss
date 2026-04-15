@@ -1,5 +1,7 @@
-import { createTaggedJsonLineStream } from "../../src/procedure/tagged-json-line-stream.ts";
-import { summarizeText } from "../../src/util/text.ts";
+import {
+  createTaggedJsonLineStream,
+  summarizeText,
+} from "@nanoboss/procedure-sdk";
 import {
   extractPreCommitPhaseResults,
   parsePreCommitMarkerPayload,

@@ -5,9 +5,11 @@ import { basename, dirname, join, relative, resolve } from "node:path";
 
 import typia from "typia";
 
-import { expectData } from "../src/core/run-result.ts";
 import {
+  expectData,
+  formatErrorMessage,
   jsonType,
+  summarizeText,
   type ProcedureApi,
   type KernelValue,
   type Procedure,
@@ -16,12 +18,10 @@ import {
   type Simplify2CheckpointContinuationUi,
   type Simplify2FocusPickerContinuationUi,
 } from "@nanoboss/procedure-sdk";
-import { formatErrorMessage } from "../src/core/error-format.ts";
-import { computeRepoFingerprint } from "../src/core/repo-fingerprint.ts";
-import { resolveRepoArtifactDir, writeJsonFileAtomicSync } from "../src/util/repo-artifacts.ts";
-import { summarizeText } from "../src/util/text.ts";
 
 import { ensureGitLocalExclude, getWorktreeStatus, resolveGitRepoRoot } from "./autoresearch/git.ts";
+import { computeRepoFingerprint } from "./lib/repo-fingerprint.ts";
+import { resolveRepoArtifactDir, writeJsonFileAtomicSync } from "./lib/repo-artifacts.ts";
 
 type SimplifyMode = "explore" | "checkpoint" | "apply" | "reconcile" | "finished";
 type ObservationKind =

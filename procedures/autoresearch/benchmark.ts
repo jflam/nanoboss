@@ -1,7 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { resolve } from "node:path";
 
-import { formatErrorMessage } from "../../src/core/error-format.ts";
+import { formatErrorMessage } from "@nanoboss/procedure-sdk";
 
 import type {
   AutoresearchBenchmarkConfig,

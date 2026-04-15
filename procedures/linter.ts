@@ -2,8 +2,7 @@ import { isAbsolute, relative, resolve } from "node:path";
 
 import typia from "typia";
 
-import { expectData } from "../src/core/run-result.ts";
-import { jsonType } from "@nanoboss/procedure-sdk";
+import { expectData, jsonType } from "@nanoboss/procedure-sdk";
 import type {
   ProcedureApi,
   Procedure,

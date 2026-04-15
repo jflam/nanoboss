@@ -154,7 +154,7 @@ function formatProcedureBuildFailure(path: string, logs: readonly unknown[]): st
   ].join("\n");
 }
 
-function extractBuildLogs(error: unknown): unknown[] {
+function extractBuildLogs(error: unknown): readonly unknown[] {
   if (
     error instanceof AggregateError
     && Array.isArray(error.errors)
@@ -174,7 +174,7 @@ function extractBuildLogs(error: unknown): unknown[] {
   return [];
 }
 
-function formatBuildLogs(logs: unknown[]): string[] {
+function formatBuildLogs(logs: readonly unknown[]): string[] {
   return logs.map((log, index) => {
     if (typeof log === "string") {
       return `Build diagnostic ${index + 1}: ${log}`;

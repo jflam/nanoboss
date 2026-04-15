@@ -1,7 +1,7 @@
 import typia from "typia";
 
-import { expectData } from "../src/core/run-result.ts";
 import {
+  expectData,
   jsonType,
   type ProcedureApi,
   type KernelValue,

@@ -134,7 +134,7 @@ describe("procedure disk loader", () => {
       );
 
       const procedure = await loadProcedureFromPath(join(proceduresDir, "workspace-alias.ts"));
-      const result = await procedure.execute("", {} as never);
+      const result = await procedure.execute("", {} as never) as unknown;
 
       expect(procedure.name).toBe("workspace-alias");
       expect(result).toEqual({

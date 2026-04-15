@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { existsSync, lstatSync, mkdirSync, readFileSync, readlinkSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 
-import { formatErrorMessage } from "../../src/core/error-format.ts";
+import { formatErrorMessage } from "@nanoboss/procedure-sdk";
 
 export const PRE_COMMIT_CHECKS_COMMAND = "bun run check:precommit";
 const PRE_COMMIT_CHECKS_CMD = ["bun", "run", "check:precommit"];

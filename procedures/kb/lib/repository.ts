@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { mkdir, readdir, stat } from "node:fs/promises";
 import { basename, extname, join, relative, resolve } from "node:path";
 
-import { ensureDirectories, ensureFile, writeJsonFileAtomic } from "../../../src/util/repo-artifacts.ts";
+import { ensureDirectories, ensureFile, writeJsonFileAtomic } from "../../lib/repo-artifacts.ts";
 
 export interface KnowledgeBasePaths {
   rawDir: string;

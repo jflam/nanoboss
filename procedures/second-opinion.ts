@@ -1,8 +1,9 @@
 import typia from "typia";
 
-import { formatAgentBanner } from "../src/core/runtime-banner.ts";
-import { expectData, expectDataRef } from "../src/core/run-result.ts";
 import {
+  expectData,
+  expectDataRef,
+  formatAgentBanner,
   jsonType,
   type Procedure,
 } from "@nanoboss/procedure-sdk";

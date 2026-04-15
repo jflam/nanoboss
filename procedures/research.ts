@@ -3,8 +3,9 @@ import { join } from "node:path";
 
 import typia from "typia";
 
-import { expectData, expectDataRef } from "../src/core/run-result.ts";
 import {
+  expectData,
+  expectDataRef,
   jsonType,
   type ProcedureApi,
   type Procedure,

@@ -15,6 +15,7 @@ export {
 } from "./session-repository.ts";
 
 export { resolveWorkspaceKey } from "./paths.ts";
+export { getNanobossHome, getSessionDir } from "./paths.ts";
 
 export {
   deleteCleanupCandidates,

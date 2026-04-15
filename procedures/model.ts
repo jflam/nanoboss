@@ -5,10 +5,9 @@ import {
   isKnownModelSelection,
   listKnownProviders,
   listSelectableModelOptions,
-} from "../src/agent/model-catalog.ts";
-import { formatAgentBanner } from "../src/core/runtime-banner.ts";
+} from "./lib/model-catalog.ts";
 import { getAgentTokenUsagePercent } from "@nanoboss/agent-acp";
-import type { AgentTokenUsage, Procedure } from "@nanoboss/procedure-sdk";
+import { formatAgentBanner, type AgentTokenUsage, type Procedure } from "@nanoboss/procedure-sdk";
 
 export default {
   name: "model",

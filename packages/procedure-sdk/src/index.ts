@@ -272,6 +272,27 @@ export interface ProcedureApi {
 }
 
 export {
+  createTaggedJsonLineStream,
+  type TaggedJsonLineStream,
+  type TaggedJsonLineStreamOptions,
+} from "./tagged-json-line-stream.ts";
+
+export {
+  defaultCancellationMessage,
+  normalizeRunCancelledError,
+  RunCancelledError,
+  type RunCancellationReason,
+} from "./cancellation.ts";
+
+export {
+  formatAgentBanner,
+} from "./agent-banner.ts";
+
+export {
+  formatErrorMessage,
+} from "./error-format.ts";
+
+export {
   buildImageTokenLabel,
   createTextPromptInput,
   hasPromptInputContent,
@@ -281,3 +302,7 @@ export {
   promptInputAttachmentSummaries,
   promptInputDisplayText,
 } from "./prompt-input.ts";
+
+export {
+  summarizeText,
+} from "./text.ts";
