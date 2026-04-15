@@ -1,6 +1,6 @@
 import type * as acp from "@agentclientprotocol/sdk";
 
-import { buildGlobalMcpStdioServer } from "../mcp/registration.ts";
+import { buildGlobalMcpStdioServer } from "@nanoboss/adapters-mcp";
 
 export function buildAgentRuntimeSessionRuntime(): Pick<acp.NewSessionRequest, "mcpServers"> {
   return {

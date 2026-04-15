@@ -74,7 +74,7 @@ async function runMcpSubcommand(argv: string[]): Promise<void> {
       MCP_INSTRUCTIONS,
       MCP_SERVER_NAME,
       runMcpServer,
-    } = await import("./src/mcp/server.ts");
+    } = await import("@nanoboss/adapters-mcp");
     const { createCurrentSessionBackedNanobossRuntimeService } = await import("./src/runtime/service.ts");
     const runtime = createCurrentSessionBackedNanobossRuntimeService();
     await runMcpServer(runtime, {

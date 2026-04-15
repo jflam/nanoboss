@@ -1,4 +1,4 @@
-import { registerSupportedAgentMcp } from "../mcp/registration.ts";
+import { registerSupportedAgentMcp } from "@nanoboss/adapters-mcp";
 
 interface DoctorOptions {
   showHelp: boolean;

@@ -5,7 +5,7 @@ import { homedir } from "node:os";
 import { createInterface } from "node:readline";
 import { join } from "node:path";
 import { Readable, Writable } from "node:stream";
-import type { McpServerStdioConfig } from "../../src/mcp/registration.ts";
+import type { McpServerStdioConfig } from "@nanoboss/adapters-mcp";
 
 interface StoredTurn {
   role: "user" | "assistant";

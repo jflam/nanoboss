@@ -11,6 +11,9 @@
     "verbatimModuleSyntax": true,
     "baseUrl": ".",
     "paths": {
+      "@nanoboss/adapters-mcp": [
+        "./packages/adapters-mcp/src/index.ts"
+      ],
       "@nanoboss/adapters-http": [
         "./packages/adapters-http/src/index.ts"
       ],

@@ -6,7 +6,7 @@ import { join } from "node:path";
 import {
   callMcpTool,
   listMcpTools,
-} from "../../src/mcp/server.ts";
+} from "@nanoboss/adapters-mcp";
 import { createRef } from "../../src/core/types.ts";
 import { ProcedureRegistry } from "@nanoboss/procedure-catalog";
 import { createNanobossRuntimeService } from "../../src/runtime/service.ts";

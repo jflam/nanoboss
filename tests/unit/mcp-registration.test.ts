@@ -10,7 +10,7 @@ import {
   registerMcpCodex,
   registerMcpCopilot,
   registerMcpGemini,
-} from "../../src/mcp/registration.ts";
+} from "@nanoboss/adapters-mcp";
 import { resolveSelfCommandWithRuntime } from "../../src/core/self-command.ts";
 
 const tempDirs: string[] = [];
