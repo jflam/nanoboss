@@ -418,6 +418,94 @@ Acceptance criteria:
 - every package has a concrete file map
 - no current root file is left in "shared by default" limbo
 
+### Frozen ownership map
+
+This is the extraction source-of-truth for the current root-owned hotspots.
+Files not listed here stay root-app-owned for now; files listed here are not
+"shared" and should move to the destination package/file noted below.
+
+#### `@nanoboss/store`
+
+- `src/session/store.ts` -> `packages/store/src/session-store.ts`
+- `src/session/repository.ts` -> `packages/store/src/session-repository.ts`
+- `src/session/store-refs.ts` -> `packages/store/src/ref-store.ts`
+- `src/session/cleanup.ts` -> `packages/store/src/session-cleanup.ts`
+- `src/session/picker-format.ts` -> `packages/store/src/session-picker-format.ts`
+
+#### `@nanoboss/procedure-catalog`
+
+- `src/procedure/registry.ts` -> `packages/procedure-catalog/src/registry.ts`
+- `src/procedure/disk-loader.ts` -> `packages/procedure-catalog/src/disk-loader.ts`
+- `src/procedure/names.ts` -> `packages/procedure-catalog/src/names.ts`
+- `src/procedure/typia-bun-plugin.ts` -> `packages/procedure-catalog/src/typia-bun-plugin.ts`
+
+#### `@nanoboss/procedure-engine`
+
+- `src/procedure/runner.ts` -> `packages/procedure-engine/src/top-level-runner.ts`
+- `src/procedure/dispatch-jobs.ts` -> `packages/procedure-engine/src/dispatch/jobs.ts`
+- `src/procedure/dispatch-progress.ts` -> `packages/procedure-engine/src/dispatch/progress.ts`
+- `src/procedure/dispatch-recovery.ts` -> `packages/procedure-engine/src/dispatch/recovery.ts`
+- `src/core/context.ts` -> `packages/procedure-engine/src/context/context.ts`
+- `src/core/context-agent.ts` -> `packages/procedure-engine/src/context/agent-api.ts`
+- `src/core/context-procedures.ts` -> `packages/procedure-engine/src/context/procedure-api.ts`
+- `src/core/context-session.ts` -> `packages/procedure-engine/src/context/session-api.ts`
+- `src/core/context-state.ts` -> `packages/procedure-engine/src/context/state-api.ts`
+- `src/core/context-shared.ts` -> `packages/procedure-engine/src/context/shared.ts`
+
+#### `@nanoboss/agent-acp`
+
+- `src/agent/acp-runtime.ts` -> `packages/agent-acp/src/runtime.ts`
+- `src/agent/acp-session.ts` -> `packages/agent-acp/src/session.ts`
+- `src/agent/acp-updates.ts` -> `packages/agent-acp/src/updates.ts`
+- `src/agent/token-metrics.ts` -> `packages/agent-acp/src/token-metrics.ts`
+- `src/agent/token-usage.ts` -> `packages/agent-acp/src/token-usage.ts`
+- `src/agent/call-agent.ts` -> `packages/agent-acp/src/transport.ts`
+- `src/agent/runtime-capability.ts` -> `packages/agent-acp/src/runtime-capability.ts`
+
+#### `@nanoboss/app-runtime`
+
+- `src/core/service.ts` -> `packages/app-runtime/src/service.ts`
+- `src/runtime/service.ts` -> `packages/app-runtime/src/runtime-service.ts`
+- `src/runtime/api.ts` -> `packages/app-runtime/src/runtime-api.ts`
+- `src/core/ui-emitter.ts` -> `packages/app-runtime/src/runtime-events.ts`
+
+#### `@nanoboss/adapters-http`
+
+- `src/http/server.ts` -> `packages/adapters-http/src/server.ts`
+- `src/http/client.ts` -> `packages/adapters-http/src/client.ts`
+- `src/http/private-server.ts` -> `packages/adapters-http/src/private-server.ts`
+- `src/http/server-supervisor.ts` -> `packages/adapters-http/src/server-supervisor.ts`
+- `src/http/frontend-events.ts` -> `packages/adapters-http/src/event-mapping.ts`
+
+#### `@nanoboss/adapters-mcp`
+
+- `src/mcp/server.ts` -> `packages/adapters-mcp/src/server.ts`
+- `src/mcp/registration.ts` -> `packages/adapters-mcp/src/registration.ts`
+- `src/mcp/jsonrpc.ts` -> `packages/adapters-mcp/src/jsonrpc.ts`
+- `src/mcp/stdio-jsonrpc.ts` -> `packages/adapters-mcp/src/stdio-jsonrpc.ts`
+
+#### `@nanoboss/adapters-tui`
+
+- `src/tui/app.ts` -> `packages/adapters-tui/src/app.ts`
+- `src/tui/commands.ts` -> `packages/adapters-tui/src/commands.ts`
+- `src/tui/composer.ts` -> `packages/adapters-tui/src/composer.ts`
+- `src/tui/controller.ts` -> `packages/adapters-tui/src/controller.ts`
+- `src/tui/format.ts` -> `packages/adapters-tui/src/format.ts`
+- `src/tui/pi-tui.ts` -> `packages/adapters-tui/src/pi-tui.ts`
+- `src/tui/reducer.ts` -> `packages/adapters-tui/src/reducer.ts`
+- `src/tui/run.ts` -> `packages/adapters-tui/src/run.ts`
+- `src/tui/state.ts` -> `packages/adapters-tui/src/state.ts`
+- `src/tui/theme.ts` -> `packages/adapters-tui/src/theme.ts`
+- `src/tui/views.ts` -> `packages/adapters-tui/src/views.ts`
+- `src/tui/clipboard/**/*` -> `packages/adapters-tui/src/clipboard/**/*`
+- `src/tui/components/**/*` -> `packages/adapters-tui/src/components/**/*`
+- `src/tui/overlays/**/*` -> `packages/adapters-tui/src/overlays/**/*`
+
+#### Adjacent non-library ownership decisions frozen now
+
+- `src/core/acp-server.ts` -> `packages/adapters-acp-server/src/server.ts`
+- `src/procedure/create.ts` -> `procedures/create.ts`
+
 ## Phase 2: make package trees real before reducing behavior
 
 Create the internal file trees under `packages/*/src/` first.
