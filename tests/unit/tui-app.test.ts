@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
+import { createNanobossTuiTheme } from "@nanoboss/adapters-tui";
 import { NanobossTuiApp } from "../../src/tui/app.ts";
 import type { PromptInput } from "../../src/core/types.ts";
 import { createInitialUiState, type UiState } from "../../src/tui/state.ts";
-import { createNanobossTuiTheme } from "../../src/tui/theme.ts";
 
 class FakeEditor {
   text = "";

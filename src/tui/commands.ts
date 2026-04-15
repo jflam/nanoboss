@@ -5,7 +5,7 @@ import {
   isKnownModelSelection,
 } from "../agent/model-catalog.ts";
 import type { DownstreamAgentSelection } from "../core/types.ts";
-import type { ToolCardThemeMode } from "./state.ts";
+import type { ToolCardThemeMode } from "./theme.ts";
 
 export const LOCAL_TUI_COMMANDS = [
   { name: "/new", description: "Start a new session" },

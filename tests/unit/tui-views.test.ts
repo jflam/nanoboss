@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
 import { summarizeToolCallStart, summarizeToolCallUpdate } from "../../src/core/tool-call-preview.ts";
+import { createNanobossTuiTheme } from "@nanoboss/adapters-tui";
 import type { RenderedFrontendEventEnvelope } from "@nanoboss/adapters-http";
 import { reduceUiState } from "../../src/tui/reducer.ts";
 import { createInitialUiState } from "../../src/tui/state.ts";
-import { createNanobossTuiTheme } from "../../src/tui/theme.ts";
 import { NanobossAppView } from "../../src/tui/views.ts";
 
 function stripAnsi(text: string): string {

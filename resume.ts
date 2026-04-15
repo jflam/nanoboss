@@ -1,7 +1,10 @@
-import { promptForStoredSessionSelection } from "./src/tui/overlays/session-picker.ts";
+import {
+  assertInteractiveTty,
+  createNanobossTuiTheme,
+  promptForStoredSessionSelection,
+  runTuiCli,
+} from "@nanoboss/adapters-tui";
 import type { SessionMetadata } from "@nanoboss/contracts";
-import { createNanobossTuiTheme } from "./src/tui/theme.ts";
-import { assertInteractiveTty, runTuiCli } from "./src/tui/run.ts";
 import { parseResumeOptions } from "./src/options/resume.ts";
 import {
   listStoredSessions,

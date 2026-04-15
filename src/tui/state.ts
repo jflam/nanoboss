@@ -4,8 +4,7 @@ import type {
   FrontendContinuation,
   PromptInput,
 } from "../core/types.ts";
-
-export type ToolCardThemeMode = "dark" | "light";
+import type { ToolCardThemeMode } from "./theme.ts";
 
 export interface UiPendingPrompt {
   id: string;

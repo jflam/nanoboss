@@ -36,7 +36,7 @@ Used in two places:
 Relevant files:
 - nanoboss ACP server:
   - `@nanoboss/adapters-acp-server`
-  - `cli.ts`
+  - `@nanoboss/adapters-tui`
 - downstream ACP client/runtime:
   - `src/agent/acp-runtime.ts`
   - `src/agent/call-agent.ts`
@@ -59,7 +59,7 @@ Relevant files:
 
 ```mermaid
 flowchart TD
-  U[User] -->|local terminal| CLI[CLI\ncli.ts]
+  U[User] -->|local terminal| CLI[TUI / CLI adapter\n@nanoboss/adapters-tui]
   U -->|HTTP requests| HTTPClient[HTTP client / UI\nsrc/http/client.ts]
 
   CLI -->|stdio ACP| ACPServer[nanoboss ACP server\n@nanoboss/adapters-acp-server]
@@ -105,7 +105,7 @@ sequenceDiagram
 ```
 
 Relevant files:
-- `cli.ts`
+- `@nanoboss/adapters-tui`
 - `@nanoboss/adapters-acp-server`
 - `src/core/service.ts`
 

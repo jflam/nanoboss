@@ -14,6 +14,9 @@
       "@nanoboss/adapters-acp-server": [
         "./packages/adapters-acp-server/src/index.ts"
       ],
+      "@nanoboss/adapters-tui": [
+        "./packages/adapters-tui/src/index.ts"
+      ],
       "@nanoboss/adapters-mcp": [
         "./packages/adapters-mcp/src/index.ts"
       ],

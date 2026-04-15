@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { runTuiCli } from "../../src/tui/run.ts";
+import { runTuiCli } from "@nanoboss/adapters-tui";
 
 describe("runTuiCli", () => {
   test("stops the owned private server when app construction fails", async () => {

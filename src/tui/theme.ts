@@ -1,7 +1,8 @@
 import { highlight, supportsLanguage } from "cli-highlight";
 
 import type { EditorTheme, MarkdownTheme, SelectListTheme } from "./pi-tui.ts";
-import type { ToolCardThemeMode } from "./state.ts";
+
+export type ToolCardThemeMode = "dark" | "light";
 
 export interface NanobossTuiTheme {
   text: (text: string) => string;

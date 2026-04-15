@@ -1,5 +1,5 @@
 import { parseFrontendConnectionOptions } from "./src/options/frontend-connection.ts";
-import { assertInteractiveTty, runTuiCli } from "./src/tui/run.ts";
+import { assertInteractiveTty, runTuiCli } from "@nanoboss/adapters-tui";
 
 export async function runCliCommand(argv: string[] = []): Promise<void> {
   const options = parseFrontendConnectionOptions(argv);

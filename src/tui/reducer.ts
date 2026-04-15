@@ -5,7 +5,7 @@ import {
 } from "@nanoboss/adapters-http";
 import type { DownstreamAgentSelection } from "../core/types.ts";
 import { formatProcedureStatusText } from "../core/ui-cli.ts";
-import type { ToolCardThemeMode } from "./state.ts";
+import type { ToolCardThemeMode } from "./theme.ts";
 
 import { formatTokenUsageLine } from "./format.ts";
 import { LOCAL_TUI_COMMANDS } from "./commands.ts";
