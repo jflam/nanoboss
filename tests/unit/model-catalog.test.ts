@@ -1,4 +1,6 @@
 import { expect, test } from "bun:test";
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 
 import {
   buildReasoningModelSelection,
@@ -75,4 +77,27 @@ test("requires canonical gemini model ids", () => {
   expect(isKnownModelSelection("gemini", "gemini-2.5-pro")).toBe(true);
   expect(isKnownModelSelection("gemini", "pro")).toBe(false);
   expect(findSelectableModelOption("gemini", "flash")).toBeUndefined();
+});
+
+test("keeps the model catalog owned by the public agent-acp package", () => {
+  for (const path of [
+    "src/agent/model-catalog.ts",
+    "packages/adapters-tui/src/model-catalog.ts",
+    "procedures/lib/model-catalog.ts",
+  ]) {
+    expect(existsSync(join(process.cwd(), path))).toBe(false);
+  }
+
+  for (const path of [
+    "packages/adapters-tui/src/agent-label.ts",
+    "packages/adapters-tui/src/app.ts",
+    "packages/adapters-tui/src/commands.ts",
+    "packages/procedure-engine/src/agent-config.ts",
+    "procedures/model.ts",
+    "src/core/config.ts",
+  ]) {
+    const source = readFileSync(join(process.cwd(), path), "utf8");
+    expect(source).toContain('from "@nanoboss/agent-acp"');
+    expect(source).not.toMatch(/from ["'][^"']*model-catalog(?:\.ts)?["']/);
+  }
 });
