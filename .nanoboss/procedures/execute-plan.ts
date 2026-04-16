@@ -115,7 +115,7 @@ const ExecutePlanStateType = jsonType<ExecutePlanState>(
   typia.createValidate<ExecutePlanState>(),
 );
 
-const MAX_AUTO_APPROVE_STEPS_PER_RUN = 8;
+const MAX_AUTO_APPROVE_STEPS_PER_RUN = 80;
 const MAX_PRE_COMMIT_REPAIR_ATTEMPTS = 3;
 const MAX_NOTE_COUNT = 12;
 
