@@ -10,9 +10,8 @@ import type {
 import {
   normalizePromptInput,
   promptInputDisplayText,
+  promptInputToPlainText,
 } from "@nanoboss/procedure-sdk";
-
-import { promptInputToPlainText } from "./runtime-prompt.ts";
 
 import type { RuntimeContinuation } from "./runtime-events.ts";
 

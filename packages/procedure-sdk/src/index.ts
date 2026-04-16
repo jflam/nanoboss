@@ -301,6 +301,7 @@ export {
   parsePromptInputPayload,
   promptInputAttachmentSummaries,
   promptInputDisplayText,
+  promptInputToPlainText,
 } from "./prompt-input.ts";
 
 export {

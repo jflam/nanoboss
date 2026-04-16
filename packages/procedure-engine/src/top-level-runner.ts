@@ -17,7 +17,10 @@ import type {
   ProcedureRegistryLike,
   RunResult,
 } from "@nanoboss/procedure-sdk";
-import { promptInputDisplayText } from "@nanoboss/procedure-sdk";
+import {
+  promptInputDisplayText,
+  promptInputToPlainText,
+} from "@nanoboss/procedure-sdk";
 
 import { toDownstreamAgentSelection } from "./agent-config.ts";
 import {
@@ -27,7 +30,6 @@ import {
 } from "./cancellation.ts";
 import { formatErrorMessage } from "./error-format.ts";
 import { RunLogger } from "./logger.ts";
-import { promptInputToPlainText } from "./prompt.ts";
 import { runResultFromRunRecord } from "./run-result.ts";
 import { summarizeText } from "./text.ts";
 import { appendTimingTraceEvent, type RunTimingTrace } from "./timing-trace.ts";

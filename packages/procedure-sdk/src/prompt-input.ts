@@ -85,6 +85,12 @@ export function promptInputDisplayText(input: PromptInput): string {
     .join("");
 }
 
+export function promptInputToPlainText(input: PromptInput): string {
+  return input.parts
+    .map((part) => part.type === "text" ? part.text : "")
+    .join("");
+}
+
 export function promptInputAttachmentSummaries(input: PromptInput): PromptImageSummary[] {
   return input.parts
     .filter((part): part is PromptImagePart => part.type === "image")

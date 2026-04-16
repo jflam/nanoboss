@@ -6,6 +6,7 @@ import {
   normalizePromptInput,
   promptInputAttachmentSummaries,
   promptInputDisplayText,
+  promptInputToPlainText,
 } from "@nanoboss/procedure-sdk";
 
 export function normalizeProcedurePromptInput(input: string | PromptInput): ProcedurePromptInput {
@@ -16,10 +17,4 @@ export function normalizeProcedurePromptInput(input: string | PromptInput): Proc
     displayText: promptInputDisplayText(normalized),
     images: promptInputAttachmentSummaries(normalized),
   };
-}
-
-export function promptInputToPlainText(input: PromptInput): string {
-  return input.parts
-    .map((part) => part.type === "text" ? part.text : "")
-    .join("");
 }
