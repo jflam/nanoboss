@@ -1,8 +1,8 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+
 import { afterEach, describe, expect, test } from "bun:test";
 
-import type { ReplayableFrontendEvent } from "@nanoboss/adapters-http";
 import type { PromptInput } from "@nanoboss/contracts";
 import { SessionStore } from "@nanoboss/store";
 
@@ -239,7 +239,7 @@ describe("SessionStore", () => {
       input: "hello",
       kind: "top_level",
     });
-    const replayEvents: ReplayableFrontendEvent[] = [
+    const replayEvents = [
       {
         type: "text_delta",
         runId: "run-1",
