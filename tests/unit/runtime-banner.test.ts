@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 
-import { formatAgentBanner } from "../../src/core/runtime-banner.ts";
+import { formatAgentBanner } from "@nanoboss/procedure-sdk";
 
 test("formatAgentBanner includes model and formatted reasoning effort", () => {
   expect(formatAgentBanner({

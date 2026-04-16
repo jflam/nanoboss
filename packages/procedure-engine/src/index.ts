@@ -95,7 +95,14 @@ export {
   resolveSelfCommand,
   resolveSelfCommandWithRuntime,
 } from "./self-command.ts";
-export { formatProcedureStatusText, toProcedureUiSessionUpdate } from "./ui-events.ts";
+export {
+  createProcedureUiMarkerStream,
+  formatProcedureStatusText,
+  parseProcedureUiMarker,
+  PROCEDURE_UI_MARKER_PREFIX,
+  renderProcedureUiMarker,
+  toProcedureUiSessionUpdate,
+} from "./ui-events.ts";
 
 export interface ProcedureEngineEmitter {
   emit(update: unknown): void;

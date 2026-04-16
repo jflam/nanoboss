@@ -94,7 +94,6 @@ test("keeps the model catalog owned by the public agent-acp package", () => {
     "packages/adapters-tui/src/commands.ts",
     "packages/procedure-engine/src/agent-config.ts",
     "procedures/model.ts",
-    "src/core/config.ts",
   ]) {
     const source = readFileSync(join(process.cwd(), path), "utf8");
     expect(source).toContain('from "@nanoboss/agent-acp"');

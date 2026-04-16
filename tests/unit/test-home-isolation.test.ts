@@ -2,7 +2,7 @@ import { homedir } from "node:os";
 
 import { expect, test } from "bun:test";
 
-import { getNanobossHome } from "../../src/core/config.ts";
+import { getNanobossHome } from "@nanoboss/store";
 import { shouldSkipTypiaPreloadForEntryPoint } from "../../preload.ts";
 
 test("bun test isolates nanoboss state from the real home directory", () => {

@@ -22,7 +22,6 @@ const CANONICAL_IMPORTERS = [
   "packages/app-runtime/src/default-agent-policy.ts",
   "packages/app-runtime/src/runtime-service.ts",
   "packages/app-runtime/src/service.ts",
-  "src/core/memory-cards.ts",
   "tests/unit/error-format.test.ts",
   "tests/unit/logger.test.ts",
   "tests/unit/self-command.test.ts",

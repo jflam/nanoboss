@@ -6,7 +6,7 @@ import {
   PROCEDURE_UI_MARKER_PREFIX,
   renderProcedureUiMarker,
   toProcedureUiSessionUpdate,
-} from "../../src/core/ui-cli.ts";
+} from "@nanoboss/procedure-engine";
 
 describe("ui-cli", () => {
   test("renders and parses procedure ui markers", () => {

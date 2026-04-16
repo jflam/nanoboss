@@ -5,12 +5,12 @@ import { join } from "node:path";
 
 import { afterEach, describe, expect, test } from "bun:test";
 
-import { getSessionDir } from "../../src/core/config.ts";
 import {
   buildProcedureDispatchJobPath,
   isProcedureDispatchCancellationRequested,
   RunCancelledError,
 } from "@nanoboss/procedure-engine";
+import { getSessionDir } from "@nanoboss/store";
 import {
   executeAutoresearchClearCommand,
   executeAutoresearchCommand,

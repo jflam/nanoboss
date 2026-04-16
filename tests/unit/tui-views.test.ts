@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { summarizeToolCallStart, summarizeToolCallUpdate } from "../../src/core/tool-call-preview.ts";
+import { summarizeToolCallStart, summarizeToolCallUpdate } from "@nanoboss/app-runtime";
 import { createNanobossTuiTheme } from "@nanoboss/adapters-tui";
 import type { RenderedFrontendEventEnvelope } from "@nanoboss/adapters-http";
 import { reduceUiState } from "../../packages/adapters-tui/src/reducer.ts";

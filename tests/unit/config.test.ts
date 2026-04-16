@@ -5,11 +5,13 @@ import { join } from "node:path";
 import { afterEach, expect, test } from "bun:test";
 
 import {
-  parseAgentModelSelection,
+  parseReasoningModelSelection,
+} from "@nanoboss/agent-acp";
+import { writePersistedDefaultAgentSelection } from "@nanoboss/store";
+import {
   resolveDownstreamAgentConfig,
   toDownstreamAgentSelection,
-} from "../../src/core/config.ts";
-import { writePersistedDefaultAgentSelection } from "@nanoboss/store";
+} from "@nanoboss/procedure-engine";
 
 let tempHome: string | undefined;
 
@@ -49,9 +51,17 @@ test("resolveDownstreamAgentConfig applies shared reasoning parsing only to copi
   expect(config.model).toBe("gpt-5.4");
   expect(config.reasoningEffort).toBe("xhigh");
 
-  const codexSelection = parseAgentModelSelection("codex", "gpt-5.4/xhigh");
-  expect(codexSelection.modelId).toBe("gpt-5.4/xhigh");
-  expect(codexSelection.reasoningEffort).toBeUndefined();
+  expect(parseReasoningModelSelection("gpt-5.4/xhigh")).toEqual({
+    baseModel: "gpt-5.4",
+    reasoningEffort: "xhigh",
+  });
+
+  const codexConfig = resolveDownstreamAgentConfig("/repo", {
+    provider: "codex",
+    model: "gpt-5.4/xhigh",
+  });
+  expect(codexConfig.model).toBe("gpt-5.4/xhigh");
+  expect(codexConfig.reasoningEffort).toBeUndefined();
 });
 
 test("toDownstreamAgentSelection rebuilds copilot reasoning selections with the shared helper", () => {

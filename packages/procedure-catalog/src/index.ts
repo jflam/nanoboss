@@ -13,3 +13,7 @@ export {
 export {
   CREATE_PROCEDURE_METADATA,
 } from "./builtins.ts";
+
+export {
+  getProcedureRuntimeDir,
+} from "./paths.ts";

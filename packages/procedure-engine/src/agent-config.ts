@@ -5,6 +5,7 @@ import {
   resolveDefaultDownstreamAgentConfig,
   type ReasoningEffort,
 } from "@nanoboss/agent-acp";
+import { readPersistedDefaultAgentSelection } from "@nanoboss/store";
 import type {
   DownstreamAgentConfig,
   DownstreamAgentProvider,
@@ -21,6 +22,13 @@ export function resolveDownstreamAgentConfig(
   selection?: DownstreamAgentSelection,
 ): DownstreamAgentConfig {
   if (!selection) {
+    if (!hasExplicitEnvOverride()) {
+      const persistedSelection = readPersistedDefaultAgentSelection();
+      if (persistedSelection) {
+        return resolveDownstreamAgentConfig(cwd, persistedSelection);
+      }
+    }
+
     return resolveDefaultDownstreamAgentConfig(cwd ?? process.cwd());
   }
 
@@ -111,4 +119,12 @@ function baseAgentConfig(provider: DownstreamAgentProvider): DownstreamAgentConf
         args: ["--acp", "--allow-all-tools"],
       };
   }
+}
+
+function hasExplicitEnvOverride(): boolean {
+  return Boolean(
+    process.env.NANOBOSS_AGENT_CMD?.trim()
+      || process.env.NANOBOSS_AGENT_ARGS?.trim()
+      || process.env.NANOBOSS_AGENT_MODEL?.trim(),
+  );
 }

@@ -23,7 +23,7 @@ const HELPER_FILE_NAMES = new Set([
 ]);
 
 const CANONICAL_IMPORTERS = [
-  ["src/core/config.ts", 'from "@nanoboss/store"'],
+  ["tests/unit/autoresearch-command.test.ts", 'from "@nanoboss/store"'],
   ["packages/adapters-mcp/src/server.ts", 'from "@nanoboss/store"'],
   ["packages/adapters-tui/src/app.ts", 'from "@nanoboss/store"'],
   ["packages/procedure-engine/src/context/agent-api.ts", 'from "@nanoboss/store"'],

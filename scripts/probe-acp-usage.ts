@@ -3,8 +3,8 @@ import { spawn } from "node:child_process";
 import { Readable, Writable } from "node:stream";
 
 import { collectTokenSnapshot } from "@nanoboss/agent-acp";
-import { resolveDownstreamAgentConfig } from "../src/core/config.ts";
 import type { AgentTokenSnapshot, DownstreamAgentProvider, DownstreamAgentSelection } from "@nanoboss/procedure-sdk";
+import { resolveDownstreamAgentConfig } from "@nanoboss/procedure-engine";
 
 interface ProbeArgs {
   provider: DownstreamAgentProvider;

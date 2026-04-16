@@ -6,12 +6,12 @@ import { join } from "node:path";
 import typia from "typia";
 
 import { createAgentSession, type AgentSession, type CreateAgentSessionParams } from "@nanoboss/agent-acp";
-import { resolveDownstreamAgentConfig } from "../../src/core/config.ts";
 import {
   normalizePromptInput,
   promptInputDisplayText,
 } from "@nanoboss/procedure-sdk";
 import { CommandContextImpl, RunLogger } from "@nanoboss/procedure-engine";
+import { resolveDownstreamAgentConfig } from "@nanoboss/procedure-engine";
 import { jsonType, type DownstreamAgentConfig, type ProcedureApi, type PromptInput } from "@nanoboss/procedure-sdk";
 import { ProcedureRegistry } from "@nanoboss/procedure-catalog";
 import { SessionStore } from "@nanoboss/store";
