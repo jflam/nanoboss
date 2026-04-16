@@ -23,7 +23,7 @@ const CANONICAL_IMPORT_EXPECTATIONS = [
   ["src/commands/http.ts", 'from "@nanoboss/adapters-http"'],
   ["packages/procedure-sdk/tests/tagged-json-line-stream.test.ts", 'from "@nanoboss/procedure-sdk"'],
   ["packages/procedure-sdk/tests/text.test.ts", 'from "@nanoboss/procedure-sdk"'],
-  ["tests/unit/tui-controller.test.ts", 'from "@nanoboss/adapters-tui"'],
+  ["packages/adapters-tui/tests/tui-controller.test.ts", 'from "@nanoboss/adapters-tui"'],
   ["tests/unit/mcp-server.test.ts", 'from "@nanoboss/app-runtime"'],
 ] as const;
 

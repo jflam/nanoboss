@@ -1,11 +1,12 @@
 import { describe, expect, test } from "bun:test";
 
-import { summarizeToolCallStart, summarizeToolCallUpdate } from "@nanoboss/app-runtime";
-import { createNanobossTuiTheme } from "@nanoboss/adapters-tui";
 import type { RenderedFrontendEventEnvelope } from "@nanoboss/adapters-http";
-import { reduceUiState } from "../../packages/adapters-tui/src/reducer.ts";
-import { createInitialUiState } from "../../packages/adapters-tui/src/state.ts";
-import { NanobossAppView } from "../../packages/adapters-tui/src/views.ts";
+import {
+  createInitialUiState,
+  createNanobossTuiTheme,
+  NanobossAppView,
+  reduceUiState,
+} from "@nanoboss/adapters-tui";
 
 function stripAnsi(text: string): string {
   const esc = String.fromCharCode(27);
@@ -381,8 +382,16 @@ describe("NanobossAppView", () => {
       isWrapper: false,
       rawInput,
       rawOutput,
-      ...summarizeToolCallStart({ title: "Read File", kind: "read" }, rawInput),
-      ...summarizeToolCallUpdate({ title: "Read File", kind: "read" }, rawOutput),
+      callPreview: {
+        header: "read src/mcp/jsonrpc.ts:12",
+      },
+      resultPreview: {
+        bodyLines: [
+          "export const hello = 1;",
+          "export const world = 2;",
+        ],
+      },
+      durationMs: 12,
     };
 
     const baseState = {
