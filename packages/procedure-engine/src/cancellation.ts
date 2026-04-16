@@ -39,7 +39,10 @@ export function normalizeRunCancelledError(
 function isRunCancelledErrorLike(error: unknown): error is Error & {
   reason?: RunCancellationReason;
 } {
-  if (!(error instanceof Error) || error.name !== "RunCancelledError") {
+  if (
+    !(error instanceof Error) ||
+    (error.name !== "RunCancelledError" && error.name !== "TopLevelProcedureCancelledError")
+  ) {
     return false;
   }
 
