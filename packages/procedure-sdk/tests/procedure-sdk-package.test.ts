@@ -1,5 +1,4 @@
 import { expect, test } from "bun:test";
-import typia from "typia";
 
 import { jsonType, type Procedure, type ProcedureApi, type ProcedureResult } from "@nanoboss/procedure-sdk";
 
@@ -8,8 +7,18 @@ interface ExampleData {
 }
 
 const ExampleDataType = jsonType<ExampleData>(
-  typia.json.schema<ExampleData>(),
-  typia.createValidate<ExampleData>(),
+  {
+    type: "object",
+    properties: {
+      answer: { type: "string" },
+    },
+    required: ["answer"],
+  },
+  (input): input is ExampleData =>
+    typeof input === "object" &&
+    input !== null &&
+    "answer" in input &&
+    typeof input.answer === "string",
 );
 
 test("procedure-sdk supports consumer-style procedure imports", () => {

@@ -21,8 +21,8 @@ const DELETED_ROOT_HELPER_PATHS = [
 const CANONICAL_IMPORT_EXPECTATIONS = [
   ["nanoboss.ts", 'import("@nanoboss/app-runtime")'],
   ["src/commands/http.ts", 'from "@nanoboss/adapters-http"'],
-  ["tests/unit/tagged-json-line-stream.test.ts", 'from "@nanoboss/procedure-sdk"'],
-  ["tests/unit/text.test.ts", 'from "@nanoboss/procedure-sdk"'],
+  ["packages/procedure-sdk/tests/tagged-json-line-stream.test.ts", 'from "@nanoboss/procedure-sdk"'],
+  ["packages/procedure-sdk/tests/text.test.ts", 'from "@nanoboss/procedure-sdk"'],
   ["tests/unit/tui-controller.test.ts", 'from "@nanoboss/adapters-tui"'],
   ["tests/unit/mcp-server.test.ts", 'from "@nanoboss/app-runtime"'],
 ] as const;

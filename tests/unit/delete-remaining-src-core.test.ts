@@ -7,7 +7,7 @@ const CANONICAL_IMPORT_EXPECTATIONS = [
   ["scripts/probe-acp-usage.ts", 'from "@nanoboss/procedure-engine"'],
   ["tests/unit/config.test.ts", 'from "@nanoboss/procedure-engine"'],
   ["tests/unit/memory-cards.test.ts", 'from "@nanoboss/app-runtime"'],
-  ["tests/unit/runtime-banner.test.ts", 'from "@nanoboss/procedure-sdk"'],
+  ["packages/procedure-sdk/tests/runtime-banner.test.ts", 'from "@nanoboss/procedure-sdk"'],
   ["tests/unit/test-home-isolation.test.ts", 'from "@nanoboss/store"'],
   ["tests/unit/ui-cli.test.ts", 'from "@nanoboss/procedure-engine"'],
 ] as const;
