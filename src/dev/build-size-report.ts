@@ -1,7 +1,7 @@
 import { TraceMap, decodedMappings } from "@jridgewell/trace-mapping";
 import type { SourceMapInput } from "@jridgewell/trace-mapping";
-import { fileURLToPath } from "node:url";
 import { relative, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 export interface SourceByteAttribution {
   sourceBytes: Map<string, number>;
@@ -98,6 +98,7 @@ export function attributeSourceMapBytes(
       unmappedBytes += bytes;
       return;
     }
+
     const resolvedSource = traceMap.resolvedSources[sourceIndex];
     const sourcePath = typeof resolvedSource === "string"
       ? normalizeSourcePath(resolvedSource)

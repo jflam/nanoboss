@@ -4,7 +4,7 @@ import {
   evaluateBuildFreshness,
   isBuildRelevantRepoPath,
   parseGitStatusPaths,
-} from "../../src/core/build-freshness.ts";
+} from "../../src/app-support/build-freshness.ts";
 
 describe("build freshness", () => {
   test("detects commit mismatch between working tree and installed CLI", () => {

@@ -26,7 +26,7 @@ import {
   formatByteSize,
   summarizeBundledSources,
   type SizeGroup,
-} from "./src/core/build-size-report.ts";
+} from "./src/dev/build-size-report.ts";
 
 const outfile = "./dist/nanoboss";
 const buildCommit = resolveBuildCommit();
