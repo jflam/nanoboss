@@ -1,5 +1,5 @@
-import { describe, expect, test } from "bun:test";
-import { mkdtempSync } from "node:fs";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -23,6 +23,29 @@ const DEFAULT_AGENT_CONFIG: DownstreamAgentConfig = {
   command: "mock-agent",
   args: [],
 };
+const tempDirs: string[] = [];
+let originalHome: string | undefined;
+
+beforeEach(() => {
+  originalHome = process.env.HOME;
+  process.env.HOME = mkdtempSync(join(tmpdir(), "nab-procedure-engine-home-"));
+  tempDirs.push(process.env.HOME);
+});
+
+afterEach(() => {
+  if (originalHome === undefined) {
+    Reflect.deleteProperty(process.env, "HOME");
+  } else {
+    process.env.HOME = originalHome;
+  }
+
+  while (tempDirs.length > 0) {
+    const path = tempDirs.pop();
+    if (path) {
+      rmSync(path, { recursive: true, force: true });
+    }
+  }
+});
 
 function createRegistry(procedures: Procedure[]): ProcedureRegistryLike {
   const byName = new Map(procedures.map((procedure) => [procedure.name, procedure]));
@@ -48,6 +71,7 @@ function createRegistry(procedures: Procedure[]): ProcedureRegistryLike {
 
 function createStore(name: string): SessionStore {
   const rootDir = mkdtempSync(join(tmpdir(), `${name}-`));
+  tempDirs.push(rootDir);
   return new SessionStore({
     sessionId: crypto.randomUUID(),
     cwd: rootDir,

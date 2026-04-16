@@ -138,13 +138,18 @@ function createContext(options?: { emitUiEvent?: boolean }): {
   logger: RunLogger;
 } {
   const cwd = mkdtempSync(join(tmpdir(), "nab-context-ui-"));
+  const logDir = mkdtempSync(join(tmpdir(), "nab-context-ui-log-"));
+  const storeRootDir = mkdtempSync(join(tmpdir(), "nab-context-ui-store-"));
   tempDirs.push(cwd);
+  tempDirs.push(logDir);
+  tempDirs.push(storeRootDir);
 
   const registry = new ProcedureRegistry({ procedureRoots: [join(cwd, ".nanoboss", "procedures")] });
-  const logger = new RunLogger(crypto.randomUUID(), mkdtempSync(join(tmpdir(), "nab-context-ui-log-")));
+  const logger = new RunLogger(crypto.randomUUID(), logDir);
   const store = new SessionStore({
     sessionId: crypto.randomUUID(),
     cwd,
+    rootDir: storeRootDir,
   });
   const run = store.startRun({
     procedure: "default",

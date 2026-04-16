@@ -22,9 +22,9 @@ const CANONICAL_IMPORTERS = [
   "packages/app-runtime/src/default-agent-policy.ts",
   "packages/app-runtime/src/runtime-service.ts",
   "packages/app-runtime/src/service.ts",
-  "tests/unit/error-format.test.ts",
-  "tests/unit/logger.test.ts",
-  "tests/unit/self-command.test.ts",
+  "packages/procedure-engine/tests/error-format.test.ts",
+  "packages/procedure-engine/tests/logger.test.ts",
+  "packages/procedure-engine/tests/self-command.test.ts",
 ] as const;
 
 const ROOT_TS_FILES = [

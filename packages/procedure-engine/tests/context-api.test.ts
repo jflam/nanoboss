@@ -91,13 +91,18 @@ function createContext(overrides: {
   setDefaultAgentSelection?: (selection: DownstreamAgentSelection) => DownstreamAgentConfig;
 } = {}): CommandContextImpl {
   const cwd = mkdtempSync(join(tmpdir(), "nab-context-api-"));
+  const logDir = mkdtempSync(join(tmpdir(), "nab-context-api-log-"));
+  const storeRootDir = mkdtempSync(join(tmpdir(), "nab-context-api-store-"));
   tempDirs.push(cwd);
+  tempDirs.push(logDir);
+  tempDirs.push(storeRootDir);
 
   const registry = new ProcedureRegistry({ procedureRoots: [join(cwd, ".nanoboss", "procedures")] });
-  const logger = new RunLogger();
+  const logger = new RunLogger(crypto.randomUUID(), logDir);
   const store = new SessionStore({
     sessionId: crypto.randomUUID(),
     cwd,
+    rootDir: storeRootDir,
   });
 
   return new CommandContextImpl({

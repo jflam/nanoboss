@@ -708,12 +708,6 @@
       </header>
       <div class="content">
         <div class="quote">The point is not to ship <strong>one universal agent loop</strong>. The point is to give developers a runtime where they can encode their own workflow semantics, their own boundaries, and their own notion of what “good agent behavior” means.</div>
-        <div class="stat-grid">
-          <div class="stat"><div class="n">3</div><div class="l">protocol roles</div></div>
-          <div class="stat"><div class="n">5</div><div class="l">author APIs on ctx</div></div>
-          <div class="stat"><div class="n">1</div><div class="l">durable run graph</div></div>
-          <div class="stat"><div class="n">2026-04-13</div><div class="l">active refactor plan</div></div>
-        </div>
       </div>
       <aside class="speaker-notes">
         <h3>Talk Arc</h3>
@@ -727,7 +721,7 @@
         <div class="small">Press <span class="mono">n</span> again to hide notes.</div>
       </aside>
       <footer class="footer">
-        <div>Snapshot for talk prep: April 14, 2026.</div>
+        <div>Snapshot for talk prep: April 16, 2026.</div>
         <div class="refs">Evidence: README.md · docs/architecture.md · src/core/service.ts</div>
       </footer>
     </section>
@@ -1002,7 +996,6 @@
               <tr><td>Runtime inspection</td><td>MCP over stdio</td><td>Gives every agent the same durable tool surface for runs, refs, and dispatch.</td></tr>
             </tbody>
           </table>
-          <div class="callout ice">This is a key point for the talk: nanoboss does not worship one protocol. It picks the best protocol for each role.</div>
         </div>
       </div>
       <aside class="speaker-notes">
@@ -1011,6 +1004,7 @@
           <li>Explain the mixed stack as intentional specialization by role.</li>
           <li>Users talk over HTTP/SSE or CLI, agents over ACP, runtime inspection over MCP.</li>
           <li>The architecture mirrors the larger thesis: do not force one abstraction everywhere.</li>
+          <li>Key line: nanoboss does not worship one protocol. It picks the best protocol for each role.</li>
         </ul>
       </aside>
       <footer class="footer">
@@ -1022,7 +1016,7 @@
     <section class="slide" data-title="Run Graph">
       <header>
         <div class="eyebrow">7 · durable state</div>
-        <h2>The real runtime artifact is not the chat transcript. It is the session-backed run graph.</h2>
+        <h2>The run graph is persistent external memory, not just a transcript</h2>
       </header>
       <div class="content grid-2">
         <div class="panel rows">
@@ -1034,15 +1028,15 @@
     child run: agent call (default conversation)
   top-level run: /kb/refresh
   top-level run: /second-opinion</div>
-          <div class="callout">Each node is persisted by <span class="mono">SessionStore</span>, with summaries, display text, stream text, refs, replay events, and parent linkage.</div>
+          <div class="callout">Each node is persisted by <span class="mono">SessionStore</span>, with summaries, display text, stream text, refs, replay events, and parent linkage. Everything is written down so it can be retrieved later even if it is not in model context right now.</div>
         </div>
         <div class="panel rows">
-          <h3>What this buys you</h3>
+          <h3>Why this matters</h3>
           <ul class="bullets">
+            <li>Similar in spirit to Recursive Language Models: treat prior work as an external environment the model can revisit, not something that must always fit in active context.</li>
             <li>Agents and procedures can traverse ancestors and descendants, not just “the last message.”</li>
-            <li>Structured outputs can stay durable and small through refs instead of being recopied into prompts.</li>
-            <li>Async procedure dispatch can recover because the underlying run exists independently of one client session.</li>
-            <li>Continuations are first-class because pause state is stored with the run, not hidden in UI state.</li>
+            <li>You only pay token cost when you retrieve specific runs or refs.</li>
+            <li>Async dispatch, recovery, and continuation all work because the underlying state is durably written down.</li>
           </ul>
           <div class="chip-row">
             <div class="chip amber">top_level</div>
@@ -1058,13 +1052,13 @@
         <h3>Run Graph Notes</h3>
         <ul class="bullets">
           <li>Say plainly: the durable artifact is the run graph, not just the transcript.</li>
-          <li>This is what enables provenance, traversal, and recovery.</li>
-          <li>Refs matter because they keep the system durable and non-copy-heavy.</li>
+          <li>This idea is close to Recursive Language Models: keep the environment external and revisitable.</li>
+          <li>Refs matter because they keep the system durable, retrievable, and non-copy-heavy.</li>
         </ul>
       </aside>
       <footer class="footer">
-        <div>nanoboss stores work as execution structure, not only as conversation text.</div>
-        <div class="refs">Evidence: src/session/store.ts · src/core/types.ts · src/core/context-state.ts</div>
+        <div>nanoboss stores work as persistent external memory, not only as conversation text.</div>
+        <div class="refs">Evidence: src/session/store.ts · src/core/types.ts · src/core/context-state.ts · Zhang/Kraska/Khattab, Recursive Language Models (2025)</div>
       </footer>
     </section>
 
@@ -1135,7 +1129,7 @@
     <section class="slide" data-title="Routing">
       <header>
         <div class="eyebrow">9 · control semantics</div>
-        <h2>nanoboss does not just execute commands. It routes plain text, continuations, and harness modes deliberately.</h2>
+        <h2>Deterministic execution needs deterministic invocation</h2>
       </header>
       <div class="content grid-2">
         <div class="panel rows">
@@ -1176,29 +1170,28 @@
     <section class="slide" data-title="Procedure Supply Chain">
       <header>
         <div class="eyebrow">10 · extension model</div>
-        <h2>Custom workflows are loaded like software, not pasted like prompts</h2>
+        <h2>Procedures are closer to shell scripts than prompts</h2>
       </header>
       <div class="content grid-2">
         <div class="panel rows">
-          <h3>How procedures enter the system</h3>
-          <div class="flow">
-            <div class="flow-row">
-              <div class="node"><strong>Built-ins</strong><span>Imported directly in <span class="mono">src/procedure/registry.ts</span>.</span></div>
-              <div class="arrow">&rarr;</div>
-              <div class="node"><strong>Workspace disk procedures</strong><span><span class="mono">./.nanoboss/procedures</span> for repo-specific workflows.</span></div>
-              <div class="arrow">&rarr;</div>
-              <div class="node"><strong>Profile procedures</strong><span><span class="mono">~/.nanoboss/procedures</span> for personal cross-repo tools.</span></div>
-            </div>
-          </div>
-          <div class="callout ice"><span class="mono">/create</span> is important strategically: nanoboss treats procedure authoring as a runtime capability, not a side quest.</div>
+          <h3>Operating-system shell analogy</h3>
+          <ul class="bullets">
+            <li>Built-in procedures are like shell builtins.</li>
+            <li>Disk-loaded procedures are like executable scripts on your path.</li>
+            <li>Procedure packages are like shell scripts that compose smaller commands into a reusable workflow.</li>
+            <li>Runs and refs are the durable artifacts those scripts leave behind.</li>
+          </ul>
+          <div class="callout ice">That is why nanoboss feels more like a programmable shell for agent workflows than a prompt surface with a few commands attached.</div>
         </div>
         <div class="panel rows">
-          <h3>What makes the supply chain feel like software</h3>
+          <h3>Why this matters in practice</h3>
           <ul class="bullets">
+            <li>Built-ins are imported directly in <span class="mono">src/procedure/registry.ts</span>.</li>
+            <li>Workspace procedures live under <span class="mono">./.nanoboss/procedures</span>; personal ones under <span class="mono">~/.nanoboss/procedures</span>.</li>
             <li>Disk procedures are discovered recursively by static metadata, no manifest required.</li>
             <li>Procedure modules are compiled with Bun, cached by source-graph hash, and lazy-loaded.</li>
             <li>Helpers can live alongside entrypoints, so workflows can become packages, not giant single files.</li>
-            <li>The repo and profile procedure roots make custom workflows naturally local or reusable.</li>
+            <li><span class="mono">/create</span> matters because authoring workflows becomes part of the runtime itself.</li>
           </ul>
           <div class="code">discoverDiskProcedures(...)
 loadProcedureFromPath(...)
@@ -1210,8 +1203,8 @@ createCreateProcedure(...)</div>
         <h3>Supply Chain Notes</h3>
         <ul class="bullets">
           <li>The point here is that custom workflows behave like software, not prompt snippets.</li>
+          <li>The shell analogy is useful because it explains composition, reuse, and artifacts intuitively.</li>
           <li>Call out repo-local and profile-level procedures as the path to organizational specialization.</li>
-          <li>/create matters because authoring workflows becomes part of the runtime itself.</li>
         </ul>
       </aside>
       <footer class="footer">
@@ -1254,8 +1247,12 @@ createCreateProcedure(...)</div>
           </ul>
         </div>
         <div class="panel">
-          <h3>Talk line to emphasize</h3>
-          <div class="lead">These are not "the same agent with different prompts." They are different workflow machines built on a shared runtime.</div>
+          <h3>Why this slide matters</h3>
+          <ul class="bullets">
+            <li>These procedures are structurally different, not cosmetically different.</li>
+            <li><span class="mono">/simplify2</span> is the best example for this talk because it uses checkpointing to resist self-reinforcing entropy.</li>
+            <li>The others show that the same runtime can support very different workflow shapes without collapsing back into one universal loop.</li>
+          </ul>
         </div>
       </div>
       <aside class="speaker-notes">
@@ -1264,6 +1261,7 @@ createCreateProcedure(...)</div>
           <li>Use this slide to prove these are distinct workflow machines, not one agent with different prompts.</li>
           <li>Spend most time on simplify2 because it best matches the checkpoint and entropy thesis.</li>
           <li>Then gesture quickly at autoresearch, KB, and commit as other workflow shapes.</li>
+          <li>Talk line: these are not the same agent with different prompts, they are different workflow machines built on one runtime.</li>
         </ul>
       </aside>
       <footer class="footer">
@@ -1275,40 +1273,41 @@ createCreateProcedure(...)</div>
     <section class="slide" data-title="MCP and Agents">
       <header>
         <div class="eyebrow">12 · agent-facing runtime</div>
-        <h2>The downstream agent is not trapped in the prompt. It gets a controlled runtime via MCP.</h2>
+        <h2>The downstream agent can inspect the durable run graph to answer questions the prompt no longer contains</h2>
       </header>
       <div class="content grid-2">
         <div class="panel rows">
-          <h3>What the agent can do through the global nanoboss MCP server</h3>
+          <h3>The primary value</h3>
           <ul class="bullets">
-            <li>List procedures and inspect one procedure's metadata.</li>
-            <li>Start an async procedure dispatch and wait for completion.</li>
             <li>List top-level or recent runs for a session.</li>
-            <li>Read exact runs, ancestors, descendants, refs, and schemas.</li>
+            <li>Traverse exact runs, ancestors, descendants, refs, and schemas.</li>
+            <li>Recover prior work from durable state instead of pretending everything still lives in one prompt.</li>
+            <li>Answer user questions about earlier work without re-running the whole workflow.</li>
           </ul>
-          <div class="callout good">This is a powerful architectural move: agents can reason over durable workflow state without scraping files or relying on hidden prompt context.</div>
+          <div class="callout good">This closes the loop on the run graph: the model can use durable session memory as an inspection surface. The eventual extension is cross-session retrieval, not just current-session lookup.</div>
         </div>
         <div class="panel rows">
-          <h3>Why that matters for custom harnesses</h3>
+          <h3>Why that matters</h3>
           <div class="code">Agent session runtime
   mounts global nanoboss MCP
-  -> agent calls procedure_dispatch_start
-  -> nanoboss background worker executes procedure
-  -> durable run is written to SessionStore
-  -> agent calls procedure_dispatch_wait / get_run / read_ref</div>
-          <div class="small">Nanoboss is effectively giving the model a stable API for the workflow runtime itself.</div>
+  -> user asks about earlier work
+  -> agent lists runs and traverses the run graph
+  -> agent reads the exact ref it needs
+  -> agent answers from durable state</div>
+          <div class="small">Dynamic procedure dispatch is useful, but secondary. The deeper win is that the model can inspect persistent external memory on demand. You only pay token cost when it reads the specific run or ref it needs.</div>
         </div>
       </div>
       <aside class="speaker-notes">
         <h3>MCP Notes</h3>
         <ul class="bullets">
-          <li>The model is not trapped inside prompt text; it gets a runtime API.</li>
+          <li>The model is not trapped inside prompt text; it gets a runtime inspection API.</li>
           <li>This reduces hidden context and file scraping.</li>
-          <li>Say this is how agents reason over durable workflow state rather than hallucinated memory.</li>
+          <li>Emphasize retrieval over orchestration here. Dynamic dispatch exists, but it is not the core point of this slide.</li>
+          <li>Say this is how agents reason over the run graph rather than hallucinated memory.</li>
         </ul>
       </aside>
       <footer class="footer">
-        <div>The prompt becomes thinner because the runtime becomes richer.</div>
+        <div>The prompt becomes thinner because the run graph becomes retrievable.</div>
         <div class="refs">Evidence: src/mcp/server.ts · src/runtime/service.ts · src/procedure/dispatch-jobs.ts · src/agent/runtime-capability.ts</div>
       </footer>
     </section>
@@ -1316,93 +1315,94 @@ createCreateProcedure(...)</div>
     <section class="slide" data-title="Org Consequence">
       <header>
         <div class="eyebrow">13 · organizational consequence</div>
-        <h2>Once workflows are encoded explicitly, the org naturally splits into designing them and operating them</h2>
+        <h2>Workflow authorship becomes an organizational primitive</h2>
       </header>
       <div class="content grid-2">
         <div class="panel rows">
-          <h3>The architect function</h3>
+          <h3>Pang's split</h3>
           <ul class="bullets">
-            <li>Designs procedures, system boundaries, tests, triage loops, and approval points.</li>
-            <li>Defines what “good” looks like for the agents.</li>
-            <li>Critiques plans before complexity becomes durable.</li>
-            <li>Owns the workflow semantics, not just the code output.</li>
+            <li>A smaller architect function designs procedures, system boundaries, tests, triage loops, and approval points.</li>
+            <li>A broader operator function works inside those authored workflows.</li>
+            <li>The key move is shifting human value from typing toward workflow criticism and validation.</li>
           </ul>
         </div>
         <div class="panel rows">
-          <h3>The operator function</h3>
+          <h3>Ramp's Glass idea</h3>
           <ul class="bullets">
-            <li>Works effectively inside authored workflows.</li>
-            <li>Investigates, validates, reviews, approves, refines UI, and handles bounded tasks.</li>
-            <li>Lets AI assign and execute work where the structure is already known.</li>
-            <li>Focuses human attention where judgment is still needed, not where typing used to be needed.</li>
+            <li>Workflow design does not have to stay centralized in one tiny architect class.</li>
+            <li>You can also crowdsource workflows: many people discover, refine, and contribute the patterns that agents should reuse.</li>
+            <li>That suggests workflow authorship itself becomes a reusable asset the org can accumulate.</li>
           </ul>
         </div>
         <div class="panel" style="grid-column: 1 / -1;">
-          <h3>Why it belongs here</h3>
-          <div class="lead">This is not the premise of the talk. It is the consequence. Once you understand nanoboss procedures as judgment-bearing workflow code, Pang's architect/operator split starts to feel natural instead of theoretical.</div>
+          <h3>Common point</h3>
+          <div class="lead">Whether workflow design is concentrated in a few architects or sourced from many operators, the important thing is that workflows themselves become first-class artifacts. Nanoboss procedures give those artifacts a runtime home.</div>
         </div>
       </div>
       <aside class="speaker-notes">
         <h3>Org Consequence Notes</h3>
         <ul class="bullets">
           <li>Now Pang fits, because the audience already understands procedures and checkpoints.</li>
-          <li>Present this as an implication of the architecture, not as labor-market futurism.</li>
-          <li>Architects design workflows; operators work effectively inside them.</li>
+          <li>Use Ramp as the counterweight: workflows can also be crowdsourced and accumulated.</li>
+          <li>The common idea is that workflow authorship becomes an organizational capability.</li>
         </ul>
       </aside>
       <footer class="footer">
         <div>This is the organizational consequence of explicit workflow design, not the starting assumption.</div>
-        <div class="refs">Peter Pang, “The New Engineering Org” post · integrated after the technical model is established</div>
+        <div class="refs">https://x.com/intuitiveml/status/2043545596699750791 · https://x.com/buchan_sm/status/2044524727679566156</div>
       </footer>
     </section>
 
     <section class="slide" data-title="Refactor Direction">
       <header>
         <div class="eyebrow">14 · medium-complexity software</div>
-        <h2>nanoboss is also a testing ground for how medium-complexity software should be structured</h2>
+        <h2>Case study: deterministic refactoring through goal-driven replanning</h2>
       </header>
       <div class="content grid-2">
         <div class="panel rows">
-          <h3>Current refactor thesis</h3>
-          <div class="callout">The active plan is not "split folders into packages." It is "simplify the ontology first, then extract libraries around the canonical concepts."</div>
+          <h3>What <span class="mono">/execute-plan</span> actually does</h3>
           <div class="callout ice">Nanoboss sits in a useful middle zone: roughly 22k lines of app code and about the same again in tests. Not small, not huge. Big enough that naming and boundaries matter, small enough that you can still refactor the whole thing coherently.</div>
-          <table class="table">
-            <thead><tr><th>Concept family</th><th>Why it matters</th></tr></thead>
-            <tbody>
-              <tr><td>Run</td><td>Collapse cell/run/result vocabulary into one execution concept.</td></tr>
-              <tr><td>Session</td><td>Clarify live session state vs durable metadata.</td></tr>
-              <tr><td>Continuation</td><td>Unify pause, pending continuation, suggestions, and UI affordances.</td></tr>
-              <tr><td>Procedure</td><td>Stabilize the authoring abstraction.</td></tr>
-              <tr><td>Agent Session</td><td>Expose continuity as a runtime concept, hide ACP specifics inside transport code.</td></tr>
-            </tbody>
-          </table>
+          <ul class="bullets">
+            <li>It refuses to start on a dirty workspace because one-step commits stop being meaningful if the repo is already mixed.</li>
+            <li>It asks the model to select exactly one next actionable step from the markdown plan, using completed-step history and operator notes as live context.</li>
+            <li>It executes that one step in a fresh isolated worker session rather than one giant persistent conversation.</li>
+            <li>If the step completes, it runs pre-commit checks, attempts targeted repair if needed, then creates a commit for just that step.</li>
+          </ul>
         </div>
         <div class="panel rows">
-          <h3>Target library shape</h3>
-          <div class="chip-row">
-            <div class="chip amber">@nanoboss/contracts</div>
-            <div class="chip amber">@nanoboss/store</div>
-            <div class="chip amber">@nanoboss/procedure-sdk</div>
-            <div class="chip amber">@nanoboss/procedure-catalog</div>
-            <div class="chip amber">@nanoboss/procedure-engine</div>
-            <div class="chip ice">@nanoboss/agent-acp</div>
-            <div class="chip ice">@nanoboss/app-runtime</div>
-            <div class="chip ice">@nanoboss/adapters-*</div>
-          </div>
-          <div class="lead">This matters to the talk because it reinforces the same philosophy: do not build around accidental protocol or storage terms; build around the real nouns developers need. Nanoboss is not only a testbed for agent workflow ideas. It is a testbed for how medium-complexity software should simplify itself around canonical concepts and cleaner boundaries.</div>
+          <h3>Where the model gets agency</h3>
+          <div class="quote">“Plans are useless. Planning is invaluable.”</div>
+          <ul class="bullets">
+            <li>The plan file still matters, but as a source of goals, constraints, and ordering hints, not as a brittle script of future edits.</li>
+            <li>The model replans locally each iteration against the current codebase, completed steps, and new operator guidance.</li>
+            <li>Follow-up questions reuse the implementation context from the just-finished step instead of starting over from scratch.</li>
+            <li>The deterministic part is the loop shape: select one step, execute, validate, commit, pause, continue.</li>
+          </ul>
+          <div class="code">Loop shape
+  select next step
+  -> execute in isolated worker
+  -> run pre-commit checks
+  -> targeted repair loop if needed
+  -> commit one clean step
+  -> pause for Q&A or continue</div>
+        </div>
+        <div class="panel" style="grid-column: 1 / -1;">
+          <h3>Why this slide matters</h3>
+          <div class="lead">This is the strongest case study in the deck: nanoboss is not only a runtime for agent workflows. It is also a proving ground for a better planning model. Plans provide direction; the model does local planning at execution time. That combination is what made the library-extraction refactor possible over hours while still yielding concise, targeted commits that are easy for humans to review.</div>
         </div>
       </div>
       <aside class="speaker-notes">
-        <h3>Refactor Notes</h3>
+        <h3>Case Study Notes</h3>
         <ul class="bullets">
-          <li>Frame this as nanoboss being a research vehicle for medium-complexity software design under agent pressure.</li>
-          <li>The ontology cleanup mirrors the same judgment-boundary philosophy.</li>
-          <li>Do not get lost in package names; focus on cleaner canonical concepts.</li>
+          <li>This is now a completed case study, not a future-looking refactor proposal slide.</li>
+          <li>The key subtlety: /execute-plan still uses plans, but it uses them as goals and constraints, not a rigid future script.</li>
+          <li>Call out the one-step loop, the dirty-workspace guard, the isolated worker session, the pre-commit repair loop, and the one-step commit.</li>
+          <li>That is what makes the output reviewable even when the refactor runs for hours.</li>
         </ul>
       </aside>
       <footer class="footer">
-        <div>This is the "nanoboss as research vehicle" part of the story, broader than agent runtime design alone.</div>
-        <div class="refs">Evidence: plans/2026-04-13-library-refactor-plan.md · plans/2026-04-13-nanoboss-nouns-verbs-inventory.md</div>
+        <div>This is nanoboss as a deterministic refactoring case study, and as a case study in planning over goals rather than scripts.</div>
+        <div class="refs">Evidence: .nanoboss/procedures/execute-plan.ts · plans/2026-04-13-library-refactor-plan.md · plans/2026-04-15-library-implementation-extraction-plan.md</div>
       </footer>
     </section>
 
@@ -1420,11 +1420,10 @@ createCreateProcedure(...)</div>
             <li>Sessions, runs, refs, and continuations give those procedures durable structure.</li>
             <li>ACP and MCP are not the product. They are transport choices inside the runtime.</li>
             <li>Better agent systems put humans at the exact points where structural judgment matters.</li>
-            <li>The active refactor is trying to make those runtime concepts cleaner, more portable, and more library-like.</li>
+            <li>The refactoring case study shows these concepts can drive deterministic, reviewable execution over hours, not just short interactive loops.</li>
             <li>The lightsaber metaphor works because nanoboss is about crafted workflow identity, not generic agent theater.</li>
           </ul>
         </div>
-        <div class="callout ice">If you want one line for the presentation: nanoboss treats agentic workflow as software architecture, not as a prompt preset, and uses procedures to place human judgment exactly where it matters.</div>
       </div>
       <aside class="speaker-notes">
         <h3>Close Notes</h3>
@@ -1432,11 +1431,12 @@ createCreateProcedure(...)</div>
           <li>Return to the lightsaber metaphor.</li>
           <li>Restate the strongest line: nanoboss lets you encode where human judgment belongs.</li>
           <li>End on architecture, not hype.</li>
+          <li>One-line close: nanoboss treats agentic workflow as software architecture, not as a prompt preset, and uses procedures to place human judgment exactly where it matters.</li>
         </ul>
       </aside>
       <footer class="footer">
         <div>Presentation file: <span class="mono">docs/nanoboss-lightsaber-presentation.html</span></div>
-        <div class="refs">Built from repo sources on April 14, 2026.</div>
+        <div class="refs">Built from repo sources on April 16, 2026.</div>
       </footer>
     </section>
   </main>
