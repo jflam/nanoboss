@@ -1,22 +1,48 @@
 # nanoboss
 
-To install dependencies:
+Nanoboss is a procedure-oriented runtime for agent workflows. Instead of
+centering one generic inner agent loop, it lets workflow code decide
+continuity, checkpoints, validation, recovery, and what counts as "done".
+
+## Prerequisites
+
+You need all of the following before nanoboss will be useful:
+
+- [Bun](https://bun.sh/) installed locally
+- this repo checked out if you are running from source
+- at least one supported downstream agent stack installed
+- that agent authenticated with its own CLI before you start nanoboss
+
+Nanoboss does **not** perform provider login for you. `nanoboss doctor` checks
+installation and transport readiness, and `nanoboss doctor --register`
+configures MCP. Neither command authenticates Claude, Codex, Gemini, or
+Copilot on your behalf.
+
+### Supported downstream agents
+
+| Provider | What nanoboss launches | Extra requirement | Auth note |
+|---|---|---|---|
+| Copilot | `copilot --acp --allow-all-tools` | none beyond the Copilot CLI | complete the Copilot CLI sign-in flow first |
+| Gemini | `gemini --acp` | none beyond the Gemini CLI | complete the Gemini CLI auth flow first |
+| Claude | `claude-code-acp` | install the Claude CLI and the Zed ACP broker package `@zed-industries/claude-code-acp` | authenticate the Claude CLI first |
+| Codex | `codex-acp` | install the Codex CLI and the Zed ACP broker package `@zed-industries/codex-acp` | authenticate the Codex CLI first |
+
+If you want Claude or Codex as downstream agents, install the ACP broker
+commands globally so `claude-code-acp` / `codex-acp` are on your `PATH`:
+
+```bash
+npm install -g @zed-industries/claude-code-acp @zed-industries/codex-acp
+```
+
+## Install dependencies
+
+From the repo root:
 
 ```bash
 bun install
 ```
 
-## Unified entrypoint
-
-Everything now goes through a single `nanoboss` entrypoint.
-
-During development:
-
-```bash
-bun run nanoboss --help
-```
-
-## Build the `nanoboss` binary
+## Build and install the `nanoboss` binary
 
 The build command is:
 
@@ -24,13 +50,13 @@ The build command is:
 bun run build
 ```
 
-This compiles the standalone `nanoboss` binary and installs it onto your `PATH`.
-The build output also reports the final emitted binary size plus an estimated
-breakdown of the embedded bundle versus the Bun runtime, including top bundled
-app areas and dependencies.
+This compiles the standalone `nanoboss` binary and installs it onto your
+`PATH`. The build output also reports the final emitted binary size plus an
+estimated breakdown of the embedded bundle versus the Bun runtime, including
+top bundled app areas and dependencies.
 
-By default the build installs `nanoboss` into the first suitable user-owned PATH
-location, preferring `~/.local/bin`, then `~/bin`, then `~/.bun/bin`.
+By default the build installs `nanoboss` into the first suitable user-owned
+PATH location, preferring `~/.local/bin`, then `~/bin`, then `~/.bun/bin`.
 
 It also leaves the compiled artifact at:
 
@@ -47,6 +73,162 @@ NANOBOSS_INSTALL_DIR=~/bin bun run build
 Each build embeds the current git commit hash. On startup, the server and CLI
 print a banner like `nanoboss-<commit>`.
 
+During source-tree development you can also run nanoboss without building:
+
+```bash
+bun run nanoboss --help
+```
+
+## First-time setup
+
+The shortest reliable setup flow is:
+
+1. Install repo dependencies with `bun install`.
+2. Build nanoboss with `bun run build` if you want an installed `nanoboss`
+   binary. For source-tree development, `bun run nanoboss ...` is fine.
+3. Install and authenticate at least one downstream agent CLI.
+4. Run the doctor command to inspect what nanoboss can currently see:
+
+   ```bash
+   nanoboss doctor
+   ```
+
+   or from source:
+
+   ```bash
+   bun run nanoboss doctor
+   ```
+
+5. Register the global `nanoboss` MCP server for supported agents:
+
+   ```bash
+   nanoboss doctor --register
+   ```
+
+   or from source:
+
+   ```bash
+   bun run nanoboss doctor --register
+   ```
+
+6. Start the CLI:
+
+   ```bash
+   nanoboss cli
+   ```
+
+   or from source:
+
+   ```bash
+   bun run nanoboss cli
+   ```
+
+7. Use `/model` inside the CLI to inspect or change the default provider/model.
+
+### What `doctor` and `doctor --register` actually do
+
+`nanoboss doctor` prints a table showing:
+
+- which agent CLIs are installed
+- whether their ACP path is usable
+- whether the standard MCP setup path is available
+
+Typical output looks like:
+
+```text
+Agents                    ACP                     Global MCP
+  Claude Code              zed ACP broker ...      [setup] nanoboss doctor --register
+  Codex                    zed ACP broker ...      [setup] nanoboss doctor --register
+  Gemini CLI               native ...              [setup] nanoboss doctor --register
+  Copilot CLI              native ...              [setup] nanoboss doctor --register
+```
+
+`nanoboss doctor --register` configures one globally registered stdio MCP
+server named `nanoboss` and repairs stale or broken registrations. It covers:
+
+- Claude Code via `claude mcp add`
+- Codex via `codex mcp add`
+- Gemini CLI by writing `~/.gemini/settings.json`
+- Copilot CLI by writing `~/.copilot/mcp-config.json`
+
+This is the standard way to make durable nanoboss session tools available to
+downstream agents. Run it again whenever you:
+
+- switch from source-tree execution to an installed binary
+- rebuild/reinstall nanoboss and want agents to point at the latest command
+- suspect your MCP registration is stale or broken
+
+The registered command depends on how you invoke registration:
+
+- if you run `nanoboss doctor --register`, agents will call the installed
+  `nanoboss` binary
+- if you run `bun run nanoboss doctor --register`, agents will call the source
+  checkout through Bun
+
+## Choosing and configuring the downstream agent
+
+If you do nothing, nanoboss defaults to Copilot:
+
+```text
+copilot --acp --allow-all-tools
+```
+
+You can choose the default agent in three ways:
+
+1. Interactively in the TTY CLI with `/model`
+2. Explicitly in a session with `/model <provider> <model>`
+3. Through environment variables
+
+Examples:
+
+```bash
+/model
+/model gemini
+/model gemini gemini-2.5-pro
+/model copilot gpt-5.4/xhigh
+```
+
+Environment-variable overrides:
+
+```bash
+NANOBOSS_AGENT_CMD=gemini \
+NANOBOSS_AGENT_ARGS='["--acp"]' \
+bun run nanoboss cli
+```
+
+```bash
+NANOBOSS_AGENT_CMD=claude-code-acp \
+NANOBOSS_AGENT_ARGS='[]' \
+bun run nanoboss cli
+```
+
+```bash
+NANOBOSS_AGENT_CMD=codex-acp \
+NANOBOSS_AGENT_ARGS='[]' \
+bun run nanoboss cli
+```
+
+To set a default model for the startup banner and downstream agent config, use:
+
+```bash
+NANOBOSS_AGENT_MODEL=gpt-5.4/xhigh
+```
+
+With that set, the CLI banner looks like:
+
+```text
+nanoboss-<commit> copilot/gpt-5.4/x-high
+```
+
+If no explicit environment override is present, nanoboss can also reuse the
+persisted default selection saved by the TTY `/model` picker in:
+
+```text
+~/.nanoboss/settings.json
+```
+
+## Procedure loading
+
 At startup, nanoboss loads built-in procedure packages from `./packages` in the
 source tree and also loads additional disk procedures from these locations by
 default:
@@ -55,8 +237,8 @@ default:
 - `~/.nanoboss/procedures`
 
 Those procedure roots contain entrypoint files such as
-`.nanoboss/procedures/review.ts` or `.nanoboss/procedures/kb/answer.ts`;
-nanoboss recursively discovers `.ts` files that export a default procedure, so
+`.nanoboss/procedures/review.ts` or `.nanoboss/procedures/kb/answer.ts`.
+Nanoboss recursively discovers `.ts` files that export a default procedure, so
 helper modules can live alongside procedure entrypoints without being
 registered as slash commands.
 
@@ -69,7 +251,7 @@ The profile directory is the default place for user-defined procedures. When
 Unscoped procedures persist as `procedures/<name>.ts`; scoped procedures persist
 as `procedures/<package>/<leaf>.ts`.
 
-Built-in procedures are exposed as slash commands and now also include the
+Built-in procedures are exposed as slash commands and include the
 knowledge-base workflow:
 
 - `/kb/ingest`
@@ -86,6 +268,10 @@ If you need to disable runtime disk command loading, set:
 ```bash
 NANOBOSS_LOAD_DISK_COMMANDS=0
 ```
+
+## Unified entrypoint
+
+Everything goes through a single `nanoboss` entrypoint.
 
 ## Architecture
 
