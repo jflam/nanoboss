@@ -4,14 +4,15 @@ import type {
   CommandCallProcedureOptions,
   KernelValue,
   ProcedureApi,
+  PromptInput,
   ProcedureInvocationApi,
   ProcedureRegistryLike,
   RunResult,
 } from "@nanoboss/procedure-sdk";
+import { createTextPromptInput, promptInputDisplayText } from "@nanoboss/procedure-sdk";
 
 import { formatErrorMessage } from "../error-format.ts";
 import type { RunLogger } from "../logger.ts";
-import { createTextPromptInput, promptInputDisplayText } from "../prompt.ts";
 import { toPublicRunResult } from "../run-result.ts";
 
 type ActiveRun = ReturnType<SessionStore["startRun"]>;
@@ -20,7 +21,7 @@ export interface ChildContextBindingParams extends ProcedureInvocationBinding {
   procedureName: string;
   spanId: string;
   run: ActiveRun;
-  promptInput: ReturnType<typeof createTextPromptInput>;
+  promptInput: PromptInput;
 }
 
 interface ProcedureInvocationApiImplParams {

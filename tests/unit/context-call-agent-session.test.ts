@@ -5,13 +5,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import typia from "typia";
 
-import { createAgentSession, type CreateAgentSessionParams } from "@nanoboss/agent-acp";
+import { createAgentSession, type AgentSession, type CreateAgentSessionParams } from "@nanoboss/agent-acp";
 import { resolveDownstreamAgentConfig } from "../../src/core/config.ts";
 import {
   normalizePromptInput,
   promptInputDisplayText,
-} from "../../src/core/prompt.ts";
-import type { AgentSession } from "../../src/core/types.ts";
+} from "@nanoboss/procedure-sdk";
 import { CommandContextImpl, RunLogger } from "@nanoboss/procedure-engine";
 import { jsonType, type DownstreamAgentConfig, type ProcedureApi, type PromptInput } from "@nanoboss/procedure-sdk";
 import { ProcedureRegistry } from "@nanoboss/procedure-catalog";

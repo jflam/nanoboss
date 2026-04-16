@@ -3,10 +3,12 @@ import { describe, expect, test } from "bun:test";
 import {
   normalizePromptInput,
   promptInputDisplayText,
+} from "@nanoboss/procedure-sdk";
+import {
   promptInputFromAcpBlocks,
   promptInputToAcpBlocks,
   summarizePromptInputForAcpLog,
-} from "../../src/core/prompt.ts";
+} from "@nanoboss/agent-acp";
 import {
   attachClipboardImage,
   buildPromptInputFromComposer,

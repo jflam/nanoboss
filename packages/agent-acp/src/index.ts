@@ -1,6 +1,11 @@
 export { getAgentTranscriptDir, getNanobossHome, resolveDefaultDownstreamAgentConfig } from "./config.ts";
 export { createAgentSession } from "./session.ts";
 export {
+  promptInputFromAcpBlocks,
+  promptInputToAcpBlocks,
+  summarizePromptInputForAcpLog,
+} from "./prompt.ts";
+export {
   buildPrompt,
   callAgent,
   invokeAgent,

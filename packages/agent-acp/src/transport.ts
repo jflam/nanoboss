@@ -1,12 +1,14 @@
 import type * as acp from "@agentclientprotocol/sdk";
+import {
+  createTextPromptInput,
+  hasPromptInputImages,
+  promptInputDisplayText,
+} from "@nanoboss/procedure-sdk";
 
 import { collectTextSessionUpdates, parseAssistantNoticeText, summarizeAgentOutput } from "./updates.ts";
 import { RunCancelledError, defaultCancellationMessage } from "./cancellation.ts";
 import { resolveDefaultDownstreamAgentConfig } from "./config.ts";
 import {
-  createTextPromptInput,
-  hasPromptInputImages,
-  promptInputDisplayText,
   promptInputToAcpBlocks,
   summarizePromptInputForAcpLog,
 } from "./prompt.ts";

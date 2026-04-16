@@ -1,12 +1,13 @@
 import * as acp from "@agentclientprotocol/sdk";
-import { setAgentRuntimeSessionRuntimeFactory } from "@nanoboss/agent-acp";
+import {
+  promptInputFromAcpBlocks,
+  setAgentRuntimeSessionRuntimeFactory,
+} from "@nanoboss/agent-acp";
 import { buildGlobalMcpStdioServer } from "@nanoboss/adapters-mcp";
 import { NanobossService } from "@nanoboss/app-runtime";
 import type {
   DownstreamAgentProvider,
   DownstreamAgentSelection,
-  PromptInput,
-  PromptPart,
 } from "@nanoboss/contracts";
 import {
   toProcedureUiSessionUpdate,
@@ -170,74 +171,4 @@ function parseDownstreamAgentSelection(value: unknown): DownstreamAgentSelection
 
   const model = typeof record.model === "string" && record.model.trim().length > 0 ? record.model : undefined;
   return model === undefined ? { provider } : { provider, model };
-}
-
-function promptInputFromAcpBlocks(blocks: acp.PromptRequest["prompt"]): PromptInput {
-  let imageIndex = 0;
-  const parts: PromptPart[] = [];
-
-  for (const block of blocks) {
-    if (block.type === "text") {
-      if (block.text.length > 0) {
-        parts.push({ type: "text", text: block.text });
-      }
-      continue;
-    }
-
-    if (block.type === "image") {
-      imageIndex += 1;
-      const byteLength = estimateBase64ByteLength(block.data);
-      parts.push({
-        type: "image",
-        token: buildImageTokenLabel(imageIndex, block.mimeType, byteLength),
-        mimeType: block.mimeType,
-        data: block.data,
-        byteLength,
-      });
-    }
-  }
-
-  return {
-    parts: normalizePromptParts(parts),
-  };
-}
-
-function normalizePromptParts(parts: PromptPart[]): PromptPart[] {
-  const normalized: PromptPart[] = [];
-
-  for (const part of parts) {
-    if (part.type === "text") {
-      if (part.text.length === 0) {
-        continue;
-      }
-
-      const previous = normalized.at(-1);
-      if (previous?.type === "text") {
-        previous.text += part.text;
-      } else {
-        normalized.push(part);
-      }
-      continue;
-    }
-
-    normalized.push(part);
-  }
-
-  return normalized.length > 0 ? normalized : [{ type: "text", text: "" }];
-}
-
-function estimateBase64ByteLength(data: string): number {
-  const trimmed = data.trim();
-  const padding = trimmed.endsWith("==") ? 2 : trimmed.endsWith("=") ? 1 : 0;
-  return Math.max(0, Math.floor(trimmed.length * 3 / 4) - padding);
-}
-
-function buildImageTokenLabel(index: number, mimeType: string, byteLength: number): string {
-  const subtype = (mimeType.split("/")[1] ?? mimeType).replace(/\+.*/, "").toUpperCase();
-  const size = byteLength >= 1024 * 1024
-    ? `${Number.isInteger(byteLength / (1024 * 1024)) ? (byteLength / (1024 * 1024)).toFixed(0) : (byteLength / (1024 * 1024)).toFixed(1)}MB`
-    : byteLength >= 1024
-      ? `${Math.round(byteLength / 1024)}KB`
-      : `${byteLength}B`;
-  return `[Image ${index}: ${subtype} ${size}]`;
 }

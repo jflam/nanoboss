@@ -1,27 +1,10 @@
 import type * as acp from "@agentclientprotocol/sdk";
 
+import {
+  buildImageTokenLabel,
+  normalizePromptInput,
+} from "@nanoboss/procedure-sdk";
 import type { PromptInput } from "@nanoboss/contracts";
-
-export function createTextPromptInput(text: string): PromptInput {
-  return {
-    parts: [
-      {
-        type: "text",
-        text,
-      },
-    ],
-  };
-}
-
-export function hasPromptInputImages(input: PromptInput): boolean {
-  return input.parts.some((part) => part.type === "image");
-}
-
-export function promptInputDisplayText(input: PromptInput): string {
-  return input.parts
-    .map((part) => part.type === "text" ? part.text : part.token)
-    .join("");
-}
 
 export function promptInputToAcpBlocks(input: PromptInput): acp.ContentBlock[] {
   const blocks: acp.ContentBlock[] = [];
@@ -45,6 +28,39 @@ export function promptInputToAcpBlocks(input: PromptInput): acp.ContentBlock[] {
   }
 
   return blocks;
+}
+
+export function promptInputFromAcpBlocks(blocks: acp.PromptRequest["prompt"]): PromptInput {
+  let imageIndex = 0;
+  const parts: PromptInput["parts"] = [];
+
+  for (const block of blocks) {
+    if (block.type === "text") {
+      parts.push({
+        type: "text",
+        text: block.text,
+      });
+      continue;
+    }
+
+    if (block.type === "image") {
+      imageIndex += 1;
+      const byteLength = estimateBase64ByteLength(block.data);
+      parts.push({
+        type: "image",
+        token: buildImageTokenLabel({
+          index: imageIndex,
+          mimeType: block.mimeType,
+          byteLength,
+        }),
+        mimeType: block.mimeType,
+        data: block.data,
+        byteLength,
+      });
+    }
+  }
+
+  return normalizePromptInput({ parts });
 }
 
 export function summarizePromptInputForAcpLog(input: PromptInput): Array<
@@ -75,4 +91,10 @@ export function summarizePromptInputForAcpLog(input: PromptInput): Array<
       byteLength: part.byteLength,
     };
   });
+}
+
+function estimateBase64ByteLength(data: string): number {
+  const trimmed = data.trim();
+  const padding = trimmed.endsWith("==") ? 2 : trimmed.endsWith("=") ? 1 : 0;
+  return Math.max(0, Math.floor(trimmed.length * 3 / 4) - padding);
 }

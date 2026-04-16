@@ -3,16 +3,15 @@ import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createAgentSession } from "@nanoboss/agent-acp";
+import { createAgentSession, type AgentSession } from "@nanoboss/agent-acp";
 import { extractProcedureDispatchResult, NanobossService } from "@nanoboss/app-runtime";
 
 const MOCK_AGENT_PATH = join(process.cwd(), "tests/fixtures/mock-agent.ts");
 const SELF_COMMAND_PATH = join(process.cwd(), "dist", "nanoboss");
 const BUILD_HOOK_TIMEOUT_MS = 30_000;
 
-import type { AgentSession } from "../../src/core/types.ts";
 import type { Procedure, PromptInput } from "@nanoboss/procedure-sdk";
-import { createTextPromptInput, promptInputDisplayText } from "../../src/core/prompt.ts";
+import { createTextPromptInput, promptInputDisplayText } from "@nanoboss/procedure-sdk";
 import { ProcedureRegistry } from "@nanoboss/procedure-catalog";
 import {
   isReplayableFrontendEvent,

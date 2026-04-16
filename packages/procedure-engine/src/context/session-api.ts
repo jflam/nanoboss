@@ -13,9 +13,9 @@ import type {
   ProcedureSessionMode,
   SessionApi,
 } from "@nanoboss/procedure-sdk";
+import { createTextPromptInput } from "@nanoboss/procedure-sdk";
 
 import { resolveDownstreamAgentConfig } from "../agent-config.ts";
-import { createTextPromptInput } from "../prompt.ts";
 import type { RunTimingTrace } from "../timing-trace.ts";
 import type { PreparedDefaultPrompt } from "./shared.ts";
 
