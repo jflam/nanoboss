@@ -18,7 +18,7 @@ import {
   normalizeSelectedTests,
   upsertCompactTestCacheEntry,
   writeCompactTestCache,
-} from "../src/util/compact-test-cache.ts";
+} from "../procedures/nanoboss/compact-test-cache.ts";
 
 interface CompactTestRunResult {
   rawOutput: string;

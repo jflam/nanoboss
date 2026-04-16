@@ -2,10 +2,20 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
-import { computeRepoFingerprint } from "../core/repo-fingerprint.ts";
-import type { CompactTestReport } from "./compact-test.ts";
+import { computeRepoFingerprint } from "../lib/repo-fingerprint.ts";
 
 const TEST_CLEAN_CACHE_RELATIVE_PATH = ".nanoboss/test-clean.json";
+
+export type CompactTestStatus = "." | "F" | "S";
+
+export interface CompactTestReport {
+  statuses: CompactTestStatus[];
+  total: number;
+  passed: number;
+  skipped: number;
+  failed: number;
+  timeSeconds?: number;
+}
 
 export interface CompactTestCacheEntry {
   repoFingerprint: string;

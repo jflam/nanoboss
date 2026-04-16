@@ -15,7 +15,7 @@ import {
   loadCompactTestCache,
   upsertCompactTestCacheEntry,
   writeCompactTestCache,
-} from "../../src/util/compact-test-cache.ts";
+} from "../../procedures/nanoboss/compact-test-cache.ts";
 
 describe("compact test output", () => {
   test("parses pass skip and fail markers from junit xml", () => {

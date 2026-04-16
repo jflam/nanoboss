@@ -3,7 +3,7 @@ import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { computeRepoFingerprint } from "../../src/core/repo-fingerprint.ts";
+import { computeRepoFingerprint } from "../../procedures/lib/repo-fingerprint.ts";
 
 describe("repo fingerprint", () => {
   test("returns the same fingerprint for unchanged contents", () => {

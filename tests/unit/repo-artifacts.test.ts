@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "n
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { ensureFile, writeJsonFileAtomic, writeTextFileAtomicSync } from "../../src/util/repo-artifacts.ts";
+import { ensureFile, writeJsonFileAtomic, writeTextFileAtomicSync } from "../../procedures/lib/repo-artifacts.ts";
 
 const tempDirs: string[] = [];
 
