@@ -39,7 +39,7 @@ const CANONICAL_IMPORTERS = [
   "procedures/lib/repo-fingerprint.ts",
   "src/app-support/build-freshness.ts",
   "tests/unit/current-session.test.ts",
-  "tests/unit/http-server-supervisor.test.ts",
+  "packages/adapters-http/tests/http-server-supervisor.test.ts",
   "packages/app-support/tests/install-path.test.ts",
   "tests/unit/resume.test.ts",
 ] as const;
