@@ -36,6 +36,21 @@ export {
   getAgentTokenUsagePercent,
   normalizeAgentTokenUsage,
 } from "./token-usage.ts";
+export {
+  buildReasoningModelSelection,
+  findSelectableModelOption,
+  getAgentCatalog,
+  getProviderLabel,
+  isKnownAgentProvider,
+  isKnownModelSelection,
+  isReasoningEffort,
+  listKnownProviders,
+  listSelectableModelOptions,
+  parseReasoningModelSelection,
+  REASONING_EFFORT_DESCRIPTIONS,
+  REASONING_EFFORT_LABELS,
+  REASONING_EFFORTS,
+} from "./model-catalog.ts";
 
 export type {
   CreateAgentSession,
@@ -56,3 +71,9 @@ export type {
   PromptInput,
   TypeDescriptor,
 } from "./types.ts";
+export type {
+  AgentCatalogEntry,
+  CatalogModelEntry,
+  ReasoningEffort,
+  SelectableModelOption,
+} from "./model-catalog.ts";

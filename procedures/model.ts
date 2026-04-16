@@ -1,12 +1,12 @@
 import {
   findSelectableModelOption,
   getProviderLabel,
+  getAgentTokenUsagePercent,
   isKnownAgentProvider,
   isKnownModelSelection,
   listKnownProviders,
   listSelectableModelOptions,
-} from "./lib/model-catalog.ts";
-import { getAgentTokenUsagePercent } from "@nanoboss/agent-acp";
+} from "@nanoboss/agent-acp";
 import { formatAgentBanner, type AgentTokenUsage, type Procedure } from "@nanoboss/procedure-sdk";
 
 export default {

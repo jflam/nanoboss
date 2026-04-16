@@ -32,7 +32,7 @@ import {
   getProviderLabel,
   listKnownProviders,
   listSelectableModelOptions,
-} from "./model-catalog.ts";
+} from "@nanoboss/agent-acp";
 import {
   type AutocompleteItem,
   CombinedAutocompleteProvider,

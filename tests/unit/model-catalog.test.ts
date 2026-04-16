@@ -8,7 +8,7 @@ import {
   listKnownProviders,
   listSelectableModelOptions,
   parseReasoningModelSelection,
-} from "../../src/agent/model-catalog.ts";
+} from "@nanoboss/agent-acp";
 
 test("lists the known downstream agents", () => {
   expect(listKnownProviders()).toEqual(["claude", "gemini", "codex", "copilot"]);

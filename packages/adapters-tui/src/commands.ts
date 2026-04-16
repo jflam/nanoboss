@@ -3,7 +3,7 @@ import type { AutocompleteItem } from "./pi-tui.ts";
 import {
   isKnownAgentProvider,
   isKnownModelSelection,
-} from "./model-catalog.ts";
+} from "@nanoboss/agent-acp";
 import type { DownstreamAgentSelection } from "@nanoboss/contracts";
 import type { ToolCardThemeMode } from "./theme.ts";
 

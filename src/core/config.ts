@@ -6,7 +6,7 @@ import {
   isReasoningEffort,
   parseReasoningModelSelection,
   type ReasoningEffort,
-} from "../agent/model-catalog.ts";
+} from "@nanoboss/agent-acp";
 import { readPersistedDefaultAgentSelection } from "./settings.ts";
 import type { DownstreamAgentConfig, DownstreamAgentProvider, DownstreamAgentSelection } from "./types.ts";
 

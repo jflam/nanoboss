@@ -1,4 +1,4 @@
-import type { DownstreamAgentProvider } from "../core/types.ts";
+import type { DownstreamAgentProvider } from "@nanoboss/contracts";
 
 export const REASONING_EFFORTS = ["low", "medium", "high", "xhigh"] as const;
 

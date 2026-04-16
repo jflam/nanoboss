@@ -2,12 +2,10 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 
 import type { DownstreamAgentConfig, DownstreamAgentProvider } from "@nanoboss/procedure-sdk";
+import { parseReasoningModelSelection, type ReasoningEffort } from "./model-catalog.ts";
 
 const DEFAULT_AGENT_COMMAND = "copilot";
 const DEFAULT_AGENT_ARGS = ["--acp", "--allow-all-tools"];
-const REASONING_EFFORTS = ["low", "medium", "high", "xhigh"] as const;
-
-type ReasoningEffort = (typeof REASONING_EFFORTS)[number];
 
 interface ParsedModelSelection {
   modelId: string;
@@ -74,35 +72,6 @@ function inferProviderFromCommand(command: string): DownstreamAgentProvider | un
       return undefined;
   }
 }
-
-function parseReasoningModelSelection(selection: string | null | undefined): {
-  baseModel: string | null;
-  reasoningEffort?: ReasoningEffort;
-} {
-  if (!selection) {
-    return { baseModel: null };
-  }
-
-  const slashIndex = selection.lastIndexOf("/");
-  if (slashIndex <= 0) {
-    return { baseModel: selection };
-  }
-
-  const candidate = selection.slice(slashIndex + 1);
-  if (!isReasoningEffort(candidate)) {
-    return { baseModel: selection };
-  }
-
-  return {
-    baseModel: selection.slice(0, slashIndex),
-    reasoningEffort: candidate,
-  };
-}
-
-function isReasoningEffort(value: string): value is ReasoningEffort {
-  return REASONING_EFFORTS.includes(value as ReasoningEffort);
-}
-
 function parseArgs(value: string | undefined): string[] | undefined {
   if (!value?.trim()) {
     return undefined;

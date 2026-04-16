@@ -1,6 +1,6 @@
 import type { DownstreamAgentSelection } from "@nanoboss/contracts";
 
-import { parseReasoningModelSelection } from "./model-catalog.ts";
+import { parseReasoningModelSelection } from "@nanoboss/agent-acp";
 
 export function formatAgentSelectionLabel(selection: DownstreamAgentSelection): string {
   const model = selection.model?.trim();
