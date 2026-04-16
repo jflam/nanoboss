@@ -4,6 +4,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import { createRef, createRunRef } from "@nanoboss/contracts";
 import executePlan from "../../.nanoboss/procedures/execute-plan.ts";
 import {
   type CommandCallProcedureOptions,
@@ -13,7 +14,6 @@ import {
   type RunRef,
   type RunResult,
 } from "@nanoboss/procedure-sdk";
-import { createRef, createRunRef } from "../../src/core/types.ts";
 
 const tempDirs: string[] = [];
 

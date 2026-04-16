@@ -1,5 +1,5 @@
 import { resolveDownstreamAgentConfig } from "./config.ts";
-import type { DownstreamAgentConfig } from "./types.ts";
+import type { DownstreamAgentConfig } from "@nanoboss/contracts";
 
 export function formatAgentBanner(config: DownstreamAgentConfig): string {
   const provider = config.provider ?? config.command;

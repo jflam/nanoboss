@@ -106,7 +106,7 @@ describe("create procedure", () => {
           name: "review",
           source: [
             'import type { ProcedureApi } from "@nanoboss/contracts";',
-            "import { expectData } from \"../src/core/run-result.ts\";",
+            'import { expectData } from "../src/core/run-result.ts";',
             "",
             "export default {",
             "  name: \"wrong-name\",",

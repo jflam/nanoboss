@@ -1,4 +1,4 @@
-import type { DownstreamAgentSelection } from "./types.ts";
+import type { DownstreamAgentSelection } from "@nanoboss/contracts";
 
 export function buildMcpProcedureDispatchPrompt(
   sessionId: string,

@@ -59,6 +59,19 @@ export function inferDataShape(value: unknown, depth = 0): JsonValue {
   return typeof value;
 }
 
+export function stringifyCompactShape(value: JsonValue | undefined, maxLength = 240): string | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  const serialized = JSON.stringify(value);
+  if (serialized.length <= maxLength) {
+    return serialized;
+  }
+
+  return `${serialized.slice(0, maxLength - 3)}...`;
+}
+
 function inferStringShape(value: string): string {
   const trimmed = value.trim();
   if (

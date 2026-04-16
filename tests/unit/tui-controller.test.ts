@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
+import type { DownstreamAgentSelection, PromptInput } from "@nanoboss/contracts";
 import type { FrontendCommand, FrontendEventEnvelope } from "@nanoboss/adapters-http";
 import { NanobossTuiController, type SessionResponse } from "../../src/tui/controller.ts";
-import type { DownstreamAgentSelection, PromptInput } from "../../src/core/types.ts";
 
 interface FakeStreamRecord {
   sessionId: string;

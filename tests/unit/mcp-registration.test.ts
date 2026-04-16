@@ -11,7 +11,7 @@ import {
   registerMcpCopilot,
   registerMcpGemini,
 } from "@nanoboss/adapters-mcp";
-import { resolveSelfCommandWithRuntime } from "../../src/core/self-command.ts";
+import { resolveSelfCommandWithRuntime } from "@nanoboss/procedure-engine";
 
 const tempDirs: string[] = [];
 

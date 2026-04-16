@@ -1,4 +1,4 @@
-import type { DownstreamAgentProvider, DownstreamAgentSelection } from "./types.ts";
+import type { DownstreamAgentProvider, DownstreamAgentSelection } from "@nanoboss/contracts";
 
 const DOWNSTREAM_AGENT_PROVIDERS: DownstreamAgentProvider[] = ["claude", "gemini", "codex", "copilot"];
 

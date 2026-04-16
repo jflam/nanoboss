@@ -1,7 +1,11 @@
-import { inferDataShape, stringifyCompactShape } from "./data-shape.ts";
+import {
+  createRef,
+  type JsonValue,
+  type Ref,
+  type RunRef,
+} from "@nanoboss/contracts";
+import { inferDataShape, stringifyCompactShape } from "@nanoboss/procedure-engine";
 import type { SessionStore } from "@nanoboss/store";
-import type { JsonValue, Ref, RunRef } from "./types.ts";
-import { createRef } from "./types.ts";
 import { summarizeText } from "../util/text.ts";
 
 const DEFAULT_MAX_CARDS = 3;

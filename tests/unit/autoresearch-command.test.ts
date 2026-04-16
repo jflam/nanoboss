@@ -5,11 +5,11 @@ import { join } from "node:path";
 
 import { afterEach, describe, expect, test } from "bun:test";
 
-import { RunCancelledError } from "../../src/core/cancellation.ts";
 import { getSessionDir } from "../../src/core/config.ts";
 import {
   buildProcedureDispatchJobPath,
   isProcedureDispatchCancellationRequested,
+  RunCancelledError,
 } from "@nanoboss/procedure-engine";
 import {
   executeAutoresearchClearCommand,

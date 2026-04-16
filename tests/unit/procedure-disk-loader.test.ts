@@ -119,7 +119,7 @@ describe("procedure disk loader", () => {
       writeFileSync(
         join(proceduresDir, "workspace-alias.ts"),
         [
-          'import { createRef } from "../../src/core/types.ts";',
+          'import { createRef } from "@nanoboss/contracts";',
           "",
           "export default {",
           '  name: "workspace-alias",',

@@ -89,7 +89,12 @@ export {
 } from "./timing-trace.ts";
 export {
   inferDataShape,
+  stringifyCompactShape,
 } from "./data-shape.ts";
+export {
+  resolveSelfCommand,
+  resolveSelfCommandWithRuntime,
+} from "./self-command.ts";
 export { formatProcedureStatusText, toProcedureUiSessionUpdate } from "./ui-events.ts";
 
 export interface ProcedureEngineEmitter {

@@ -27,7 +27,7 @@ export function resolveSelfCommand(subcommand: string, args: string[] = []): Sel
   });
 }
 
-function resolveSelfCommandWithRuntime(
+export function resolveSelfCommandWithRuntime(
   subcommand: string,
   args: string[] = [],
   runtime: SelfCommandRuntime,

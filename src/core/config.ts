@@ -7,8 +7,12 @@ import {
   parseReasoningModelSelection,
   type ReasoningEffort,
 } from "@nanoboss/agent-acp";
+import type {
+  DownstreamAgentConfig,
+  DownstreamAgentProvider,
+  DownstreamAgentSelection,
+} from "@nanoboss/contracts";
 import { readPersistedDefaultAgentSelection } from "./settings.ts";
-import type { DownstreamAgentConfig, DownstreamAgentProvider, DownstreamAgentSelection } from "./types.ts";
 
 const DEFAULT_AGENT_COMMAND = "copilot";
 const DEFAULT_AGENT_ARGS = ["--acp", "--allow-all-tools"];

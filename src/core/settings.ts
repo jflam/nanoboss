@@ -1,10 +1,10 @@
+import type { DownstreamAgentSelection } from "@nanoboss/contracts";
+import { formatErrorMessage } from "@nanoboss/procedure-engine";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
 import { parseRequiredDownstreamAgentSelection } from "./downstream-agent-selection.ts";
-import { formatErrorMessage } from "./error-format.ts";
-import type { DownstreamAgentSelection } from "./types.ts";
 
 export interface NanobossSettings {
   defaultAgentSelection?: DownstreamAgentSelection;

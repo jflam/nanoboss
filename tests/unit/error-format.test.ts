@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 
-import { formatErrorMessage } from "../../src/core/error-format.ts";
+import { formatErrorMessage } from "@nanoboss/procedure-engine";
 
 test("formats JSON-RPC style error objects using their message", () => {
   expect(formatErrorMessage({

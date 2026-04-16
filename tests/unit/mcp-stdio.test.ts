@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { afterEach, describe, expect, test } from "bun:test";
 import { join } from "node:path";
 
-import { resolveSelfCommand } from "../../src/core/self-command.ts";
+import { resolveSelfCommand } from "@nanoboss/procedure-engine";
 import { SessionStore, writeStoredSessionMetadata } from "@nanoboss/store";
 
 const tempDirs: string[] = [];

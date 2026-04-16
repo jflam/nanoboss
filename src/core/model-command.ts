@@ -1,4 +1,4 @@
-import type { DownstreamAgentProvider } from "./types.ts";
+import type { DownstreamAgentProvider } from "@nanoboss/contracts";
 
 export function buildModelCommand(
   provider: DownstreamAgentProvider,

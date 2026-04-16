@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { RunLogger } from "../../src/core/logger.ts";
+import { RunLogger } from "@nanoboss/procedure-engine";
 
 describe("RunLogger", () => {
   test("writes JSONL to the configured file path", () => {

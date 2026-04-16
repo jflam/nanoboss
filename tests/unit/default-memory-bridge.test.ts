@@ -10,7 +10,7 @@ const BUILD_HOOK_TIMEOUT_MS = 30_000;
 
 import { NanobossService } from "@nanoboss/app-runtime";
 import { ProcedureRegistry } from "@nanoboss/procedure-catalog";
-import type { DownstreamAgentConfig } from "../../src/core/types.ts";
+import type { DownstreamAgentConfig } from "@nanoboss/contracts";
 
 const tempDirs: string[] = [];
 let originalSelfCommand = process.env.NANOBOSS_SELF_COMMAND;

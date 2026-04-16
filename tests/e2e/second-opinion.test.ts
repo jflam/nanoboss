@@ -1,9 +1,9 @@
 import { expect, test } from "bun:test";
 
+import type { Ref } from "@nanoboss/contracts";
 import { ProcedureRegistry } from "@nanoboss/procedure-catalog";
 import { CommandContextImpl, RunLogger } from "@nanoboss/procedure-engine";
 import { SessionStore } from "@nanoboss/store";
-import type { Ref } from "../../src/core/types.ts";
 import { describeE2E } from "./helpers.ts";
 
 interface SecondOpinionData {

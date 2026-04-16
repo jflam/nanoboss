@@ -3,4 +3,4 @@ export type {
   UiCardKind,
   UiCardParams,
   UiStatusParams,
-} from "./types.ts";
+} from "@nanoboss/procedure-sdk";
