@@ -33,7 +33,7 @@ export function createPreCommitOutputStreamer(verbose: boolean): {
       }
     },
     renderTextLine(line, options) {
-      if (!verbose && state.currentPhase !== "test") {
+      if (!verbose && !isTestPhase(state.currentPhase)) {
         return undefined;
       }
       return options.complete ? `${line}\n` : line;
@@ -81,7 +81,7 @@ export function renderPreCommitFailureDigest(result: ResolvedPreCommitChecksResu
   }
 
   const failedPhase = phaseResults.find((phaseResult) => phaseResult.status === "failed");
-  const details = failedPhase?.phase === "typecheck"
+  const details = isTypecheckPhase(failedPhase?.phase)
     ? renderTypeScriptFailureDetails(result.combinedOutput)
     : compactFailureExcerpt(stripPreCommitMarkers(result.combinedOutput));
 
@@ -265,4 +265,12 @@ function renderPhaseStatus(status: PreCommitPhaseStatus, exitCode?: number): str
     case "not_run":
       return "not run";
   }
+}
+
+function isTestPhase(phase: PreCommitPhaseName | undefined): boolean {
+  return phase === "test" || phase === "test:packages";
+}
+
+function isTypecheckPhase(phase: PreCommitPhaseName | undefined): boolean {
+  return phase === "typecheck" || phase === "typecheck:packages";
 }

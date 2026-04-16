@@ -24,8 +24,16 @@ const phases: Array<{
     argv: ["bun", "run", "--silent", "typecheck"],
   },
   {
+    phase: "typecheck:packages",
+    argv: ["bun", "run", "--silent", "typecheck:packages"],
+  },
+  {
     phase: "knip",
     argv: ["bun", "run", "--silent", "knip"],
+  },
+  {
+    phase: "test:packages",
+    argv: ["bun", "run", "--silent", "test:packages"],
   },
   {
     phase: "test",
@@ -52,7 +60,7 @@ for (let index = 0; index < phases.length; index += 1) {
     phase: current.phase,
   });
 
-  const streamLive = current.phase === "test";
+  const streamLive = current.phase === "test" || current.phase === "test:packages";
   const child = spawn(command, args, {
     cwd: process.cwd(),
     env: {

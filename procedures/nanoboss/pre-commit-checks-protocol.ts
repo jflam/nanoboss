@@ -1,6 +1,12 @@
 export const PRE_COMMIT_MARKER_PREFIX = "[[nanoboss-precommit]] ";
 
-export type PreCommitPhaseName = "lint" | "typecheck" | "knip" | "test";
+export type PreCommitPhaseName =
+  | "lint"
+  | "typecheck"
+  | "typecheck:packages"
+  | "knip"
+  | "test:packages"
+  | "test";
 export type PreCommitPhaseStatus = "passed" | "failed" | "not_run";
 
 export interface PreCommitPhaseResult {
@@ -115,7 +121,12 @@ function normalizePreCommitPhaseResult(value: unknown): PreCommitPhaseResult[] {
 }
 
 function isPreCommitPhaseName(value: unknown): value is PreCommitPhaseName {
-  return value === "lint" || value === "typecheck" || value === "knip" || value === "test";
+  return value === "lint"
+    || value === "typecheck"
+    || value === "typecheck:packages"
+    || value === "knip"
+    || value === "test:packages"
+    || value === "test";
 }
 
 function isPreCommitPhaseStatus(value: unknown): value is PreCommitPhaseStatus {

@@ -422,7 +422,7 @@ describe("nanoboss/pre-commit-checks procedure", () => {
           stdout: "",
           stderr: "typecheck failed\n",
           combinedOutput: [
-            '[[nanoboss-precommit]] {"type":"run_result","phases":[{"phase":"lint","status":"passed","exitCode":0},{"phase":"typecheck","status":"failed","exitCode":2},{"phase":"knip","status":"not_run"},{"phase":"test","status":"not_run"}]}',
+            '[[nanoboss-precommit]] {"type":"run_result","phases":[{"phase":"lint","status":"passed","exitCode":0},{"phase":"typecheck","status":"failed","exitCode":2},{"phase":"typecheck:packages","status":"not_run"},{"phase":"knip","status":"not_run"},{"phase":"test:packages","status":"not_run"},{"phase":"test","status":"not_run"}]}',
             "procedures/example.ts(12,3): error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'string'.",
           ].join("\n"),
           summary: "failed",
@@ -473,7 +473,7 @@ describe("nanoboss/pre-commit-checks procedure", () => {
           stdout: "",
           stderr: "typecheck failed\n",
           combinedOutput: [
-            '[[nanoboss-precommit]] {"type":"run_result","phases":[{"phase":"lint","status":"passed","exitCode":0},{"phase":"typecheck","status":"failed","exitCode":2},{"phase":"knip","status":"not_run"},{"phase":"test","status":"not_run"}]}',
+            '[[nanoboss-precommit]] {"type":"run_result","phases":[{"phase":"lint","status":"passed","exitCode":0},{"phase":"typecheck","status":"failed","exitCode":2},{"phase":"typecheck:packages","status":"not_run"},{"phase":"knip","status":"not_run"},{"phase":"test:packages","status":"not_run"},{"phase":"test","status":"not_run"}]}',
             "procedures/example.ts(12,3): error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'string'.",
           ].join("\n"),
           summary: "failed",
@@ -499,7 +499,9 @@ describe("nanoboss/pre-commit-checks procedure", () => {
     expect(result.display).toContain("Validation summary:");
     expect(result.display).toContain("- lint: passed");
     expect(result.display).toContain("- typecheck: failed (exit 2)");
+    expect(result.display).toContain("- typecheck:packages: not run");
     expect(result.display).toContain("- knip: not run");
+    expect(result.display).toContain("- test:packages: not run");
     expect(result.display).toContain("- test: not run");
     expect(result.pause.question).toContain("Do you want me to try fixing these automatically?");
   });

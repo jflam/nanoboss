@@ -242,3 +242,50 @@ Typed downstream agent outputs should use `jsonType(...)` from `@nanoboss/proced
 inputs, for example `jsonType<Result>(typia.json.schema<Result>(), typia.createValidate<Result>())`,
 instead of handwritten schema/validator descriptors. Bun preload for the typia transform is configured
 in `bunfig.toml`.
+
+## Package Development
+
+Each workspace package can be developed in isolation from its own directory:
+
+```bash
+cd packages/<name> && bun test
+cd packages/<name> && bun run typecheck
+```
+
+From the repo root, `bun run test:packages` and `bun run typecheck:packages`
+fan those commands out across every package. `bun run check:precommit` now runs
+both package fan-out commands alongside the existing root lint, typecheck,
+knip, and root test checks.
+
+Cross-package imports are governed by the `ALLOWED_LAYERING` table in
+`tests/unit/package-dependency-direction.test.ts`. That test enforces two
+rules:
+
+- every `@nanoboss/*` import used by a package must be declared in that
+  package's `dependencies`
+- every declared workspace dependency must appear in that package's allowed
+  layering entry
+
+Current allowed layering:
+
+```text
+contracts             -> (none)
+app-support           -> (none)
+procedure-sdk         -> contracts
+store                 -> app-support, contracts, procedure-sdk
+agent-acp             -> contracts, procedure-sdk, store
+procedure-catalog     -> app-support, procedure-sdk
+procedure-engine      -> agent-acp, contracts, procedure-catalog, procedure-sdk, store
+app-runtime           -> agent-acp, app-support, contracts, procedure-catalog, procedure-engine, procedure-sdk, store
+adapters-mcp          -> app-runtime, app-support, contracts, procedure-sdk, store
+adapters-http         -> agent-acp, app-runtime, app-support, procedure-sdk
+adapters-tui          -> adapters-http, agent-acp, app-support, contracts, procedure-engine, procedure-sdk, store
+adapters-acp-server   -> agent-acp, adapters-mcp, app-runtime, app-support, contracts, procedure-engine
+```
+
+To add a new `@nanoboss/*` dependency edge, update both the consuming
+package's `dependencies` in `packages/<name>/package.json` and that package's
+entry in `ALLOWED_LAYERING`, then run
+`bun run test:unit tests/unit/package-dependency-direction.test.ts` or
+`bun run check:precommit`
+to prove the new edge is intentional and still acyclic.
