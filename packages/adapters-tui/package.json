@@ -9,6 +9,7 @@
   "dependencies": {
     "@nanoboss/agent-acp": "workspace:*",
     "@nanoboss/adapters-http": "workspace:*",
+    "@nanoboss/app-support": "workspace:*",
     "@nanoboss/contracts": "workspace:*",
     "@nanoboss/procedure-engine": "workspace:*",
     "@nanoboss/procedure-sdk": "workspace:*"

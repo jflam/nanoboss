@@ -10,6 +10,7 @@
     "@agentclientprotocol/sdk": "^0.17.1",
     "@nanoboss/agent-acp": "workspace:*",
     "@nanoboss/adapters-mcp": "workspace:*",
+    "@nanoboss/app-support": "workspace:*",
     "@nanoboss/app-runtime": "workspace:*",
     "@nanoboss/contracts": "workspace:*",
     "@nanoboss/procedure-engine": "workspace:*"

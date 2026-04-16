@@ -7,6 +7,7 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
+    "@nanoboss/app-support": "workspace:*",
     "@nanoboss/procedure-sdk": "workspace:*",
     "@typia/transform": "^12.0.1",
     "typescript": "~5.9.3"

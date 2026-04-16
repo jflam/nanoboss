@@ -4,7 +4,7 @@ import {
   resolvePersistProcedureRoot,
   resolveProfileProcedureRoot,
   resolveWorkspaceProcedureRoots,
-} from "./paths.ts";
+} from "@nanoboss/app-support";
 import {
   discoverDiskProcedures,
   loadProcedureFromPath as loadDiskProcedureFromPath,

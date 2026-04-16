@@ -26,6 +26,9 @@
       "@nanoboss/agent-acp": [
         "./packages/agent-acp/src/index.ts"
       ],
+      "@nanoboss/app-support": [
+        "./packages/app-support/src/index.ts"
+      ],
       "@nanoboss/app-runtime": [
         "./packages/app-runtime/src/index.ts"
       ],

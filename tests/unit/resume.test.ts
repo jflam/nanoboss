@@ -3,9 +3,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { afterEach, describe, expect, test } from "bun:test";
+import { resolveWorkspaceKey } from "@nanoboss/app-support";
 
 import { runResumeCommand, type StoredSessionSelectionResult } from "../../resume.ts";
-import { resolveWorkspaceKey } from "../../src/core/workspace-identity.ts";
 import { writeStoredSessionMetadata } from "@nanoboss/store";
 
 let tempHome: string | undefined;

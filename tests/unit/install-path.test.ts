@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { resolveNanobossInstallDir, splitPath } from "../../src/core/install-path.ts";
+import { resolveNanobossInstallDir, splitPath } from "@nanoboss/app-support";
 
 describe("install-path", () => {
   test("prefers ~/.local/bin when it is on PATH", () => {

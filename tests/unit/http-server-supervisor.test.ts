@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { getWorkspaceIdentity } from "../../src/core/workspace-identity.ts";
+import { getWorkspaceIdentity } from "@nanoboss/app-support";
 import { describeWorkspaceMismatch, matchesServerBuild } from "@nanoboss/adapters-http";
 
 describe("http server supervisor", () => {

@@ -1,8 +1,8 @@
-import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { homedir } from "node:os";
 import { join, resolve } from "node:path";
+
+import { detectRepoRoot, resolveWorkspaceProcedureRoots } from "./procedure-paths.ts";
 
 export interface WorkspaceIdentity {
   cwd: string;
@@ -25,7 +25,11 @@ export function getWorkspaceIdentity(cwd: string): WorkspaceIdentity {
   };
 }
 
-function computeProceduresFingerprint(procedureRoots: string[]): string {
+export function resolveWorkspaceKey(cwd: string): string {
+  return getWorkspaceIdentity(cwd).workspaceKey;
+}
+
+export function computeProceduresFingerprint(procedureRoots: string[]): string {
   const hash = createHash("sha256");
 
   for (const procedureRoot of uniquePaths(procedureRoots)) {
@@ -45,36 +49,6 @@ function computeProceduresFingerprint(procedureRoots: string[]): string {
   }
 
   return hash.digest("hex").slice(0, 12);
-}
-
-function detectRepoRoot(cwd: string): string | undefined {
-  try {
-    const root = execFileSync("git", ["rev-parse", "--show-toplevel"], {
-      cwd,
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "ignore"],
-    }).trim();
-    return root ? resolve(root) : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-function resolveWorkspaceProcedureRoots(cwd: string): string[] {
-  return uniquePaths([
-    resolveLocalProcedureRoot(cwd),
-    join(process.env.HOME?.trim() || homedir(), ".nanoboss", "procedures"),
-  ]);
-}
-
-function resolveLocalProcedureRoot(cwd: string): string {
-  const resolvedCwd = resolve(cwd);
-  const cwdProcedureRoot = join(resolvedCwd, ".nanoboss", "procedures");
-  if (existsSync(cwdProcedureRoot)) {
-    return cwdProcedureRoot;
-  }
-
-  return join(detectRepoRoot(resolvedCwd) ?? resolvedCwd, ".nanoboss", "procedures");
 }
 
 function listTypeScriptFiles(rootDir: string, prefix = ""): string[] {

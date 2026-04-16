@@ -12,6 +12,7 @@ import {
   type SessionStreamHandle,
 } from "@nanoboss/adapters-http";
 import type { DownstreamAgentSelection, PromptInput } from "@nanoboss/contracts";
+import { getBuildLabel } from "@nanoboss/app-support";
 import {
   createTextPromptInput,
   normalizePromptInput,
@@ -20,7 +21,6 @@ import {
 
 import { formatAgentSelectionLabel } from "./agent-label.ts";
 import { getBuildFreshnessNotice } from "./build-freshness.ts";
-import { getBuildLabel } from "./build-info.ts";
 import { buildModelCommand } from "./model-command.ts";
 import {
   isExitRequest,

@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
 
-import { getBuildCommit, getBuildLabel } from "./build-info.ts";
+import { getBuildCommit, getBuildLabel } from "@nanoboss/app-support";
 
 interface RepoBuildState {
   commit: string;

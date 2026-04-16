@@ -1,5 +1,10 @@
 import { NanobossService } from "@nanoboss/app-runtime";
 import {
+  getBuildCommit,
+  getBuildLabel,
+  getWorkspaceIdentity,
+} from "@nanoboss/app-support";
+import {
   createTextPromptInput,
   hasPromptInputContent,
   parsePromptInputPayload,
@@ -7,8 +12,6 @@ import {
   type PromptInput,
 } from "@nanoboss/procedure-sdk";
 import type { FrontendEventEnvelope } from "./event-mapping.ts";
-import { getBuildCommit, getBuildLabel } from "./build-info.ts";
-import { getWorkspaceIdentity } from "./workspace-identity.ts";
 
 const DEFAULT_HTTP_SERVER_PORT = 6502;
 

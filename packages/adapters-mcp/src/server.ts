@@ -1,6 +1,6 @@
+import { getBuildLabel } from "@nanoboss/app-support";
 import { dispatchMcpToolsMethod, type JsonRpcToolMetadata } from "./jsonrpc.ts";
 import { runStdioJsonRpcServer } from "./stdio-jsonrpc.ts";
-import { getBuildLabel } from "./build-info.ts";
 import {
   type ListRunsArgs,
   type ProcedureListResult,

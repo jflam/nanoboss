@@ -28,6 +28,7 @@
     "@nanoboss/adapters-mcp": "workspace:*",
     "@nanoboss/adapters-http": "workspace:*",
     "@nanoboss/agent-acp": "workspace:*",
+    "@nanoboss/app-support": "workspace:*",
     "@nanoboss/app-runtime": "workspace:*",
     "@nanoboss/contracts": "workspace:*",
     "@nanoboss/procedure-engine": "workspace:*",

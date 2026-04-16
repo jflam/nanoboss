@@ -1,4 +1,5 @@
 import * as acp from "@agentclientprotocol/sdk";
+import { getBuildLabel } from "@nanoboss/app-support";
 import {
   promptInputFromAcpBlocks,
   setAgentRuntimeSessionRuntimeFactory,
@@ -15,8 +16,6 @@ import {
   type SessionUpdateEmitter,
 } from "@nanoboss/procedure-engine";
 import { Readable, Writable } from "node:stream";
-
-import { getBuildLabel } from "./build-info.ts";
 
 class QueuedSessionUpdateEmitter implements SessionUpdateEmitter {
   private queue = Promise.resolve();

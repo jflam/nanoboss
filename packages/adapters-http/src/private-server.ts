@@ -1,8 +1,8 @@
+import { getBuildLabel } from "@nanoboss/app-support";
 import { spawn, type ChildProcess } from "node:child_process";
 import { once } from "node:events";
 
 import { requestServerShutdown } from "./client.ts";
-import { getBuildLabel } from "./build-info.ts";
 import { resolveSelfCommand } from "./self-command.ts";
 
 const SERVER_START_TIMEOUT_MS = Number(process.env.NANOBOSS_SERVER_START_TIMEOUT_MS ?? "10000");

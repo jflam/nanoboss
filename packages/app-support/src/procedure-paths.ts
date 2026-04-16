@@ -1,8 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
+import { homedir } from "node:os";
 import { join, resolve } from "node:path";
-
-import { getNanobossHome } from "./config.ts";
 
 export function detectRepoRoot(cwd: string): string | undefined {
   try {
@@ -51,6 +50,10 @@ function resolveLocalProcedureRoot(cwd: string): string {
   }
 
   return join(detectRepoRoot(resolvedCwd) ?? resolvedCwd, ".nanoboss", "procedures");
+}
+
+function getNanobossHome(): string {
+  return join(process.env.HOME?.trim() || homedir(), ".nanoboss");
 }
 
 function uniquePaths(paths: string[]): string[] {

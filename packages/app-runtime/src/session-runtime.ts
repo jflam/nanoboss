@@ -1,4 +1,5 @@
 import { createAgentSession, type AgentSession } from "@nanoboss/agent-acp";
+import { getBuildLabel } from "@nanoboss/app-support";
 import type {
   DownstreamAgentConfig,
   DownstreamAgentSelection,
@@ -14,7 +15,6 @@ import {
 import { toDownstreamAgentSelection } from "@nanoboss/procedure-engine";
 
 import { shouldPrewarmDefaultAgentSession } from "./default-agent-policy.ts";
-import { getBuildLabel } from "./build-info.ts";
 import { SessionEventLog, type RuntimeCommand } from "./runtime-events.ts";
 import type { ActiveRunState } from "./active-run.ts";
 

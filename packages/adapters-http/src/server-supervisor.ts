@@ -1,6 +1,10 @@
+import {
+  getBuildCommit,
+  getBuildLabel,
+  getWorkspaceIdentity,
+  type WorkspaceIdentity,
+} from "@nanoboss/app-support";
 import { getServerHealth, type ServerHealthResponse } from "./client.ts";
-import { getBuildCommit, getBuildLabel } from "./build-info.ts";
-import { getWorkspaceIdentity, type WorkspaceIdentity } from "./workspace-identity.ts";
 
 export async function ensureMatchingHttpServer(
   baseUrl: string,

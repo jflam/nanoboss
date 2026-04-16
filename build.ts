@@ -1,4 +1,5 @@
 import UnpluginTypia from "@ryoppippi/unplugin-typia/bun";
+import { resolveNanobossInstallDir } from "@nanoboss/app-support";
 import { execFileSync } from "node:child_process";
 import {
   accessSync,
@@ -26,7 +27,6 @@ import {
   summarizeBundledSources,
   type SizeGroup,
 } from "./src/core/build-size-report.ts";
-import { resolveNanobossInstallDir } from "./src/core/install-path.ts";
 
 const outfile = "./dist/nanoboss";
 const buildCommit = resolveBuildCommit();
