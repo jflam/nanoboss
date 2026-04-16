@@ -1,12 +1,14 @@
 import { getBuildLabel } from "@nanoboss/app-support";
 import { spawn, type ChildProcess } from "node:child_process";
 import { once } from "node:events";
+import { createServer } from "node:net";
 
 import { requestServerShutdown } from "./client.ts";
 import { resolveSelfCommand } from "./self-command.ts";
 
 const SERVER_START_TIMEOUT_MS = Number(process.env.NANOBOSS_SERVER_START_TIMEOUT_MS ?? "10000");
 const SERVER_STOP_TIMEOUT_MS = Number(process.env.NANOBOSS_SERVER_STOP_TIMEOUT_MS ?? "5000");
+const SERVER_START_MAX_ATTEMPTS = 3;
 const READY_PREFIX = "NANOBOSS_SERVER_READY ";
 const MAX_CAPTURED_OUTPUT_CHARS = 16_000;
 
@@ -26,17 +28,105 @@ export interface StartedPrivateHttpServer {
 export async function startPrivateHttpServer(params: {
   cwd: string;
 }): Promise<StartedPrivateHttpServer> {
+  let lastError: Error | undefined;
+
+  for (let attempt = 1; attempt <= SERVER_START_MAX_ATTEMPTS; attempt += 1) {
+    const port = await reserveLoopbackPort();
+
+    try {
+      return await startPrivateHttpServerOnPort(params.cwd, port);
+    } catch (error) {
+      if (!(error instanceof Error) || !error.message.includes("EADDRINUSE") || attempt === SERVER_START_MAX_ATTEMPTS) {
+        throw error;
+      }
+      lastError = error;
+    }
+  }
+
+  throw lastError ?? new Error("Failed to start private nanoboss HTTP server");
+}
+
+function appendCapturedOutput(current: string, next: string): string {
+  const combined = current + next;
+  return combined.length <= MAX_CAPTURED_OUTPUT_CHARS
+    ? combined
+    : combined.slice(combined.length - MAX_CAPTURED_OUTPUT_CHARS);
+}
+
+function formatStartupError(message: string, stdout: string, stderr: string): string {
+  const output = [
+    stdout.trim() ? `stdout:\n${stdout.trimEnd()}` : undefined,
+    stderr.trim() ? `stderr:\n${stderr.trimEnd()}` : undefined,
+  ].filter((value): value is string => value !== undefined);
+
+  return output.length > 0
+    ? `${message}\n\n${output.join("\n\n")}`
+    : message;
+}
+
+async function waitForExit(child: ChildProcess, timeoutMs: number): Promise<boolean> {
+  if (child.exitCode !== null) {
+    return true;
+  }
+
+  return await new Promise<boolean>((resolve) => {
+    const timeout = setTimeout(() => {
+      cleanup();
+      resolve(false);
+    }, timeoutMs);
+
+    const handleExit = () => {
+      cleanup();
+      resolve(true);
+    };
+
+    const cleanup = () => {
+      clearTimeout(timeout);
+      child.off("exit", handleExit);
+    };
+
+    child.on("exit", handleExit);
+  });
+}
+
+async function reserveLoopbackPort(): Promise<number> {
+  const server = createServer();
+  await new Promise<void>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", () => resolve());
+  });
+
+  const address = server.address();
+  if (!address || typeof address === "string") {
+    server.close();
+    throw new Error("Failed to reserve a loopback port");
+  }
+
+  await new Promise<void>((resolve, reject) => {
+    server.close((error) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+      resolve();
+    });
+  });
+
+  return address.port;
+}
+
+async function startPrivateHttpServerOnPort(cwd: string, port: number): Promise<StartedPrivateHttpServer> {
   const command = resolveSelfCommand("http", [
     "--host",
     "127.0.0.1",
     "--port",
-    "0",
+    String(port),
     "--mode",
     "private",
     "--ready-signal",
   ]);
   const child = spawn(command.command, command.args, {
-    cwd: params.cwd,
+    cwd,
     env: process.env,
     stdio: ["ignore", "pipe", "pipe"],
   });
@@ -148,47 +238,4 @@ export async function startPrivateHttpServer(params: {
       await once(child, "exit");
     },
   };
-}
-
-function appendCapturedOutput(current: string, next: string): string {
-  const combined = current + next;
-  return combined.length <= MAX_CAPTURED_OUTPUT_CHARS
-    ? combined
-    : combined.slice(combined.length - MAX_CAPTURED_OUTPUT_CHARS);
-}
-
-function formatStartupError(message: string, stdout: string, stderr: string): string {
-  const output = [
-    stdout.trim() ? `stdout:\n${stdout.trimEnd()}` : undefined,
-    stderr.trim() ? `stderr:\n${stderr.trimEnd()}` : undefined,
-  ].filter((value): value is string => value !== undefined);
-
-  return output.length > 0
-    ? `${message}\n\n${output.join("\n\n")}`
-    : message;
-}
-
-async function waitForExit(child: ChildProcess, timeoutMs: number): Promise<boolean> {
-  if (child.exitCode !== null) {
-    return true;
-  }
-
-  return await new Promise<boolean>((resolve) => {
-    const timeout = setTimeout(() => {
-      cleanup();
-      resolve(false);
-    }, timeoutMs);
-
-    const handleExit = () => {
-      cleanup();
-      resolve(true);
-    };
-
-    const cleanup = () => {
-      clearTimeout(timeout);
-      child.off("exit", handleExit);
-    };
-
-    child.on("exit", handleExit);
-  });
 }
