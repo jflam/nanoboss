@@ -1,7 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
-import { DEFAULT_HTTP_SERVER_PORT } from "../../src/core/defaults.ts";
-import { parseHttpServerOptions } from "@nanoboss/adapters-http";
+import {
+  DEFAULT_HTTP_SERVER_PORT,
+  parseHttpServerOptions,
+} from "../../src/commands/http-options.ts";
 
 describe("parseHttpServerOptions", () => {
   test("defaults to the standard nanoboss HTTP port", () => {
