@@ -4,7 +4,7 @@ import {
   normalizeProcedureName,
   resolveProcedureEntryRelativePath,
   resolveProcedureImportPrefix,
-} from "../../packages/procedure-catalog/src/names.ts";
+} from "@nanoboss/procedure-catalog";
 
 describe("procedure name helpers", () => {
   test("normalizes slash-delimited procedure names", () => {

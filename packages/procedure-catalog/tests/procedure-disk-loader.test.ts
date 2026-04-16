@@ -1,13 +1,40 @@
-import { describe, expect, test } from "bun:test";
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { loadProcedureFromPath, persistProcedureSource } from "@nanoboss/procedure-catalog";
 
+const REPO_ROOT = fileURLToPath(new URL("../../../", import.meta.url));
+const tempDirs: string[] = [];
+
+let originalHome: string | undefined;
+
+beforeEach(() => {
+  originalHome = process.env.HOME;
+  process.env.HOME = mkdtempSync(join(tmpdir(), "nab-test-home-"));
+  tempDirs.push(process.env.HOME);
+});
+
+afterEach(() => {
+  if (originalHome === undefined) {
+    delete process.env.HOME;
+  } else {
+    process.env.HOME = originalHome;
+  }
+
+  while (tempDirs.length > 0) {
+    const path = tempDirs.pop();
+    if (path) {
+      rmSync(path, { recursive: true, force: true });
+    }
+  }
+});
+
 describe("procedure disk loader", () => {
   test("loads typia-based procedures through the runtime build pipeline", async () => {
-    const procedure = await loadProcedureFromPath(join(process.cwd(), "procedures", "second-opinion.ts"));
+    const procedure = await loadProcedureFromPath(join(REPO_ROOT, "procedures", "second-opinion.ts"));
 
     expect(procedure.name).toBe("second-opinion");
     expect(procedure.description).toContain("Codex");
@@ -155,11 +182,11 @@ describe("procedure disk loader", () => {
     const workspaceRoot = mkdtempSync(join(tmpdir(), "nab-workspace-no-modules-"));
     const proceduresDir = join(workspaceRoot, "procedures");
     mkdirSync(proceduresDir, { recursive: true });
-    symlinkSync(join(process.cwd(), "src"), join(workspaceRoot, "src"), "dir");
-    writeFileSync(join(workspaceRoot, "tsconfig.json"), readFileSync(join(process.cwd(), "tsconfig.json"), "utf8"), "utf8");
+    symlinkSync(join(REPO_ROOT, "src"), join(workspaceRoot, "src"), "dir");
+    writeFileSync(join(workspaceRoot, "tsconfig.json"), readFileSync(join(REPO_ROOT, "tsconfig.json"), "utf8"), "utf8");
     writeFileSync(
       join(proceduresDir, "second-opinion.ts"),
-      readFileSync(join(process.cwd(), "procedures", "second-opinion.ts"), "utf8"),
+      readFileSync(join(REPO_ROOT, "procedures", "second-opinion.ts"), "utf8"),
       "utf8",
     );
 
@@ -228,7 +255,7 @@ describe("procedure disk loader", () => {
 
   test("procedure-catalog declares the runtime build dependencies used by its typia plugin", () => {
     const packageJson = JSON.parse(
-      readFileSync(join(process.cwd(), "packages", "procedure-catalog", "package.json"), "utf8"),
+      readFileSync(join(REPO_ROOT, "packages", "procedure-catalog", "package.json"), "utf8"),
     ) as {
       dependencies?: Record<string, string>;
     };

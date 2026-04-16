@@ -17,3 +17,9 @@ export {
 export {
   getProcedureRuntimeDir,
 } from "./paths.ts";
+
+export {
+  normalizeProcedureName,
+  resolveProcedureEntryRelativePath,
+  resolveProcedureImportPrefix,
+} from "./names.ts";
