@@ -6,6 +6,9 @@
   "exports": {
     ".": "./src/index.ts"
   },
+  "scripts": {
+    "test": "bun test"
+  },
   "dependencies": {
     "@agentclientprotocol/sdk": "^0.17.1",
     "@nanoboss/contracts": "workspace:*",

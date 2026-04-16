@@ -149,6 +149,18 @@ test("deleted root shims stay removed and root entrypoints use canonical package
   }
 });
 
+test("packages keep baseline manifest and tsconfig parity", () => {
+  for (const packageRoot of listPackageRoots()) {
+    expect(existsSync(join(packageRoot, "tsconfig.json"))).toBe(true);
+
+    const packageJson = JSON.parse(readFileSync(join(packageRoot, "package.json"), "utf8")) as {
+      scripts?: { test?: unknown };
+    };
+
+    expect(typeof packageJson.scripts?.test).toBe("string");
+  }
+});
+
 function listTypeScriptFilesIn(root: string): string[] {
   if (!existsSync(root)) {
     return [];
@@ -180,6 +192,13 @@ function listRootAppTypeScriptFiles(): string[] {
       .filter((path) => existsSync(path)),
     ...listTypeScriptFilesIn(join(process.cwd(), "src")),
   ].sort((left, right) => relative(process.cwd(), left).localeCompare(relative(process.cwd(), right)));
+}
+
+function listPackageRoots(): string[] {
+  return readdirSync(join(process.cwd(), "packages"), { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => join(process.cwd(), "packages", entry.name))
+    .sort((left, right) => relative(process.cwd(), left).localeCompare(relative(process.cwd(), right)));
 }
 
 function createDeletedRootImportPattern(

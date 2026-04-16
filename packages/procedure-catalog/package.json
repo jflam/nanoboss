@@ -6,6 +6,9 @@
   "exports": {
     ".": "./src/index.ts"
   },
+  "scripts": {
+    "test": "bun test"
+  },
   "dependencies": {
     "@nanoboss/app-support": "workspace:*",
     "@nanoboss/procedure-sdk": "workspace:*",
