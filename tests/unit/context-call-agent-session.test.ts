@@ -259,6 +259,70 @@ describe("procedure API session namespaces", () => {
     expect(prompts).toEqual(["reuse the bound session"]);
   });
 
+  test("nested procedure agent runs stay attached to the invoking run and expose stored updates", async () => {
+    const { conversation, ctx, registry, store } = createContext();
+    const updates: acp.SessionUpdate[] = [
+      {
+        sessionUpdate: "usage_update",
+        size: 8192,
+        used: 321,
+      },
+      {
+        sessionUpdate: "agent_message_chunk",
+        content: {
+          type: "text",
+          text: "nested reply",
+        },
+      },
+    ];
+
+    Reflect.set(conversation as object, "persistedSessionId", "default-session-nested-lineage");
+    Reflect.set(
+      conversation as object,
+      "prompt",
+      async () => ({
+        raw: "nested reply",
+        updates,
+        durationMs: 0,
+      }),
+    );
+
+    registry.register({
+      name: "child",
+      description: "test child procedure",
+      async execute(prompt, childCtx) {
+        const reply = await childCtx.agent.run(prompt, {
+          session: "default",
+          stream: true,
+        });
+        return {
+          data: reply.data,
+        };
+      },
+    });
+
+    const result = await ctx.procedures.run("child", "prove nested lineage");
+
+    expect(result.data).toBe("nested reply");
+
+    const descendants = await ctx.state.runs.getDescendants(result.run);
+    expect(descendants).toHaveLength(1);
+    const childSummary = descendants[0];
+    expect(childSummary).toMatchObject({
+      procedure: "callAgent",
+      kind: "agent",
+      parentRunId: result.run.runId,
+    });
+    expect(childSummary?.run.sessionId).toBe(store.sessionId);
+    if (!childSummary) {
+      throw new Error("Expected stored child run");
+    }
+
+    const childRun = await ctx.state.runs.get(childSummary.run);
+    expect(childRun.output.agentUpdates).toEqual(updates);
+    expect(childRun.output.stream).toBe("nested reply");
+  });
+
   test("ctx.procedures.run with session fresh gives the child a private default binding", async () => {
     const promptedSessions: AgentSession[] = [];
     let rootSession: AgentSession | undefined;

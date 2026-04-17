@@ -7,6 +7,7 @@ import { createAgentSession } from "@nanoboss/agent-acp";
 import { NanobossService } from "@nanoboss/app-runtime";
 import { ProcedureRegistry } from "@nanoboss/procedure-catalog";
 import type { DownstreamAgentConfig } from "@nanoboss/procedure-sdk";
+import { SessionStore } from "@nanoboss/store";
 
 function createMockConfig(
   cwd: string,
@@ -36,6 +37,25 @@ function createMockConfig(
     provider: options.provider,
     model: options.model,
   };
+}
+
+function getInternalSessionStore(service: NanobossService, sessionId: string): SessionStore {
+  const sessions: unknown = Reflect.get(service as object, "sessions");
+  if (!(sessions instanceof Map)) {
+    throw new Error("Missing internal session map");
+  }
+
+  const sessionState: unknown = (sessions as Map<unknown, unknown>).get(sessionId);
+  if (
+    typeof sessionState !== "object"
+    || sessionState === null
+    || !("store" in sessionState)
+    || !(sessionState.store instanceof SessionStore)
+  ) {
+    throw new Error("Missing internal session state");
+  }
+
+  return sessionState.store;
 }
 
 describe("/default native session continuity", () => {
@@ -277,10 +297,34 @@ describe("/default native session continuity", () => {
 
         const completed = (service.getSessionEvents(session.sessionId)?.after(-1) ?? [])
           .filter((event) => event.type === "run_completed");
+        const store = getInternalSessionStore(service, session.sessionId);
+        const defaultRuns = store.listRuns({ procedure: "default", limit: 2 });
 
         expect(completed).toHaveLength(2);
         expect(completed[0]?.data.display).toBe("4");
         expect(completed[1]?.data.display).toBe("7");
+        expect(defaultRuns).toHaveLength(2);
+
+        for (const runSummary of defaultRuns) {
+          const descendants = store.getRunDescendants(runSummary.run, { maxDepth: 1 });
+          expect(descendants).toHaveLength(1);
+          const childSummary = descendants[0];
+          expect(childSummary).toMatchObject({
+            procedure: "callAgent",
+            kind: "agent",
+            parentRunId: runSummary.run.runId,
+          });
+          if (!childSummary) {
+            throw new Error("Expected stored child run");
+          }
+
+          const childRun = store.getRun(childSummary.run);
+          expect(childRun.output.agentUpdates?.map((update) =>
+            typeof update === "object" && update !== null && "sessionUpdate" in update
+              ? Reflect.get(update, "sessionUpdate")
+              : undefined
+          )).toEqual(["usage_update", "agent_message_chunk"]);
+        }
       } finally {
         service.destroySession(session.sessionId);
       }
