@@ -291,6 +291,70 @@ describe("SessionStore", () => {
     expect(reloaded.getRun(stored.run).output.replayEvents).toEqual(replayEvents);
   });
 
+  test("round-trips persisted agent updates separately from replay events", () => {
+    const rootDir = mkdtempSync(join(process.cwd(), ".tmp-session-store-"));
+    tempDirs.push(rootDir);
+
+    const original = new SessionStore({
+      sessionId: "session-agent-updates",
+      cwd: process.cwd(),
+      rootDir,
+    });
+
+    const run = original.startRun({
+      procedure: "callAgent",
+      input: "inspect provenance",
+      kind: "agent",
+    });
+    const agentUpdates = [
+      {
+        sessionUpdate: "agent_message_chunk",
+        content: {
+          type: "text",
+          text: "hello",
+        },
+      },
+      {
+        sessionUpdate: "agent_message",
+        message: {
+          role: "assistant",
+          parts: [
+            {
+              type: "text",
+              text: "done",
+            },
+          ],
+        },
+      },
+    ];
+    const replayEvents = [
+      {
+        type: "text_delta",
+        runId: "run-1",
+        text: "frontend replay",
+        stream: "agent" as const,
+      },
+    ];
+
+    const stored = original.completeRun(run, {
+      display: "done",
+      summary: "call summary",
+    }, {
+      agentUpdates,
+      replayEvents,
+    });
+
+    const reloaded = new SessionStore({
+      sessionId: "session-agent-updates",
+      cwd: process.cwd(),
+      rootDir,
+    });
+
+    const reloadedRun = reloaded.getRun(stored.run);
+    expect(reloadedRun.output.agentUpdates).toEqual(agentUpdates);
+    expect(reloadedRun.output.replayEvents).toEqual(replayEvents);
+  });
+
   test("persists prompt image attachments under the session root and stores durable metadata", () => {
     const rootDir = mkdtempSync(join(process.cwd(), ".tmp-session-store-"));
     tempDirs.push(rootDir);

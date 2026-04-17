@@ -168,6 +168,7 @@ export interface RunRecord {
     memory?: string;
     pause?: Continuation;
     explicitDataSchema?: object;
+    agentUpdates?: unknown[];
     replayEvents?: unknown[];
   };
   meta: {

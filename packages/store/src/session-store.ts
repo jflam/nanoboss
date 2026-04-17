@@ -64,6 +64,7 @@ interface CellRecord {
     memory?: string;
     pause?: Continuation;
     explicitDataSchema?: object;
+    agentUpdates?: unknown[];
     replayEvents?: unknown[];
   };
   meta: {
@@ -102,6 +103,7 @@ interface CompleteRunOptions {
   stream?: string;
   summary?: string;
   raw?: string;
+  agentUpdates?: unknown[];
   replayEvents?: unknown[];
   meta?: Partial<CellRecord["meta"]>;
 }
@@ -119,7 +121,8 @@ export interface StoredRunResult<T extends KernelValue = KernelValue> {
 }
 
 interface StoredRunRecord extends RunRecord {
-  output: Omit<RunRecord["output"], "replayEvents"> & {
+  output: Omit<RunRecord["output"], "agentUpdates" | "replayEvents"> & {
+    agentUpdates?: unknown[];
     replayEvents?: unknown[];
   };
 }
@@ -229,6 +232,9 @@ export class SessionStore {
         ...(summary !== undefined && summary.length > 0 ? { summary } : {}),
         ...(memory !== undefined && memory.length > 0 ? { memory } : {}),
         ...(pause !== undefined ? { pause } : {}),
+        ...(options.agentUpdates !== undefined
+          ? { agentUpdates: options.agentUpdates }
+          : {}),
         ...(options.replayEvents && options.replayEvents.length > 0
           ? { replayEvents: options.replayEvents }
           : {}),
@@ -822,6 +828,7 @@ function toRunRecord(sessionId: string, record: CellRecord): StoredRunRecord {
       memory: record.output.memory,
       pause: publicContinuationFromStored(record.output.pause),
       explicitDataSchema: record.output.explicitDataSchema,
+      agentUpdates: record.output.agentUpdates,
       replayEvents: record.output.replayEvents,
     },
     meta: {

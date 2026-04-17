@@ -144,6 +144,7 @@ export class AgentRunRecorder {
       display: params.raw,
       summary: params.summary,
     }, {
+      agentUpdates: params.updates,
       stream: params.streamText ? collectTextSessionUpdates(params.updates) : undefined,
       raw: params.raw,
     });
