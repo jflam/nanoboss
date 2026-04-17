@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { join } from "node:path";
 import {
   PRE_COMMIT_MARKER_PREFIX,
   type PreCommitPhaseName as PhaseName,
@@ -14,6 +15,7 @@ import {
 const phases: Array<{
   phase: PhaseName;
   argv: string[];
+  cwd?: string;
 }> = [
   {
     phase: "lint",
@@ -30,6 +32,16 @@ const phases: Array<{
   {
     phase: "knip",
     argv: ["bun", "run", "--silent", "knip"],
+  },
+  {
+    phase: "procedure-sdk:build",
+    argv: ["bun", "run", "--silent", "build"],
+    cwd: "packages/procedure-sdk",
+  },
+  {
+    phase: "procedure-sdk:test:hermetic",
+    argv: ["bun", "run", "--silent", "test:hermetic"],
+    cwd: "packages/procedure-sdk",
   },
   {
     phase: "test:packages",
@@ -60,9 +72,11 @@ for (let index = 0; index < phases.length; index += 1) {
     phase: current.phase,
   });
 
-  const streamLive = current.phase === "test" || current.phase === "test:packages";
+  const streamLive = current.phase === "test"
+    || current.phase === "test:packages"
+    || current.phase === "procedure-sdk:test:hermetic";
   const child = spawn(command, args, {
-    cwd: process.cwd(),
+    cwd: current.cwd ? join(process.cwd(), current.cwd) : process.cwd(),
     env: {
       ...process.env,
       NO_COLOR: "1",

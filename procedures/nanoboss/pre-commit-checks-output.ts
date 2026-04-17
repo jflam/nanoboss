@@ -84,12 +84,14 @@ export function renderPreCommitFailureDigest(result: ResolvedPreCommitChecksResu
   const details = isTypecheckPhase(failedPhase?.phase)
     ? renderTypeScriptFailureDetails(result.combinedOutput)
     : compactFailureExcerpt(stripPreCommitMarkers(result.combinedOutput));
+  const reproLine = renderPhaseReproLine(failedPhase?.phase);
 
   return [
     "Validation summary:",
     ...phaseResults.map((phaseResult) =>
       `- ${phaseResult.phase}: ${renderPhaseStatus(phaseResult.status, phaseResult.exitCode)}`),
     ...(details.length > 0 ? [details] : []),
+    ...(reproLine ? [reproLine] : []),
     FAILURE_HELP_LINE,
   ].join("\n");
 }
@@ -188,6 +190,17 @@ function renderTypeScriptFailureDetails(output: string): string {
   ].join("\n");
 }
 
+function renderPhaseReproLine(phase: PreCommitPhaseName | undefined): string | undefined {
+  switch (phase) {
+    case "procedure-sdk:build":
+      return "Reproduce locally with `cd packages/procedure-sdk && bun run build`.";
+    case "procedure-sdk:test:hermetic":
+      return "Reproduce locally with `cd packages/procedure-sdk && bun run test:hermetic`.";
+    default:
+      return undefined;
+  }
+}
+
 function compactFailureExcerpt(output: string): string {
   return output
     .split(/\r?\n/)
@@ -268,9 +281,14 @@ function renderPhaseStatus(status: PreCommitPhaseStatus, exitCode?: number): str
 }
 
 function isTestPhase(phase: PreCommitPhaseName | undefined): boolean {
-  return phase === "test" || phase === "test:packages";
+  return phase === "test"
+    || phase === "test:packages"
+    || phase === "procedure-sdk:test:hermetic";
 }
 
 function isTypecheckPhase(phase: PreCommitPhaseName | undefined): boolean {
-  return phase === "typecheck" || phase === "typecheck:packages";
+  return phase === "typecheck"
+    || phase === "typecheck:packages"
+    || phase === "procedure-sdk:build"
+    || phase === "procedure-sdk:test:hermetic";
 }

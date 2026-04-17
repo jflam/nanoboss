@@ -438,12 +438,16 @@ Each workspace package can be developed in isolation from its own directory:
 ```bash
 cd packages/<name> && bun test
 cd packages/<name> && bun run typecheck
+cd packages/procedure-sdk && bun run build
+cd packages/procedure-sdk && bun run test:hermetic
 ```
 
 From the repo root, `bun run test:packages` and `bun run typecheck:packages`
 fan those commands out across every package. `bun run check:precommit` now runs
 both package fan-out commands alongside the existing root lint, typecheck,
-knip, and root test checks.
+knip, root test checks, and the sealed `procedure-sdk` package boundary checks
+for `cd packages/procedure-sdk && bun run build` and
+`cd packages/procedure-sdk && bun run test:hermetic`.
 
 Use these commands when you want specific scopes:
 

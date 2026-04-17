@@ -5,6 +5,8 @@ export type PreCommitPhaseName =
   | "typecheck"
   | "typecheck:packages"
   | "knip"
+  | "procedure-sdk:build"
+  | "procedure-sdk:test:hermetic"
   | "test:packages"
   | "test";
 export type PreCommitPhaseStatus = "passed" | "failed" | "not_run";
@@ -125,6 +127,8 @@ function isPreCommitPhaseName(value: unknown): value is PreCommitPhaseName {
     || value === "typecheck"
     || value === "typecheck:packages"
     || value === "knip"
+    || value === "procedure-sdk:build"
+    || value === "procedure-sdk:test:hermetic"
     || value === "test:packages"
     || value === "test";
 }

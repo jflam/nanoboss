@@ -422,7 +422,7 @@ describe("nanoboss/pre-commit-checks procedure", () => {
           stdout: "",
           stderr: "typecheck failed\n",
           combinedOutput: [
-            '[[nanoboss-precommit]] {"type":"run_result","phases":[{"phase":"lint","status":"passed","exitCode":0},{"phase":"typecheck","status":"failed","exitCode":2},{"phase":"typecheck:packages","status":"not_run"},{"phase":"knip","status":"not_run"},{"phase":"test:packages","status":"not_run"},{"phase":"test","status":"not_run"}]}',
+            '[[nanoboss-precommit]] {"type":"run_result","phases":[{"phase":"lint","status":"passed","exitCode":0},{"phase":"typecheck","status":"failed","exitCode":2},{"phase":"typecheck:packages","status":"not_run"},{"phase":"knip","status":"not_run"},{"phase":"procedure-sdk:build","status":"not_run"},{"phase":"procedure-sdk:test:hermetic","status":"not_run"},{"phase":"test:packages","status":"not_run"},{"phase":"test","status":"not_run"}]}',
             "procedures/example.ts(12,3): error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'string'.",
           ].join("\n"),
           summary: "failed",
@@ -473,7 +473,7 @@ describe("nanoboss/pre-commit-checks procedure", () => {
           stdout: "",
           stderr: "typecheck failed\n",
           combinedOutput: [
-            '[[nanoboss-precommit]] {"type":"run_result","phases":[{"phase":"lint","status":"passed","exitCode":0},{"phase":"typecheck","status":"failed","exitCode":2},{"phase":"typecheck:packages","status":"not_run"},{"phase":"knip","status":"not_run"},{"phase":"test:packages","status":"not_run"},{"phase":"test","status":"not_run"}]}',
+            '[[nanoboss-precommit]] {"type":"run_result","phases":[{"phase":"lint","status":"passed","exitCode":0},{"phase":"typecheck","status":"failed","exitCode":2},{"phase":"typecheck:packages","status":"not_run"},{"phase":"knip","status":"not_run"},{"phase":"procedure-sdk:build","status":"not_run"},{"phase":"procedure-sdk:test:hermetic","status":"not_run"},{"phase":"test:packages","status":"not_run"},{"phase":"test","status":"not_run"}]}',
             "procedures/example.ts(12,3): error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'string'.",
           ].join("\n"),
           summary: "failed",
@@ -501,9 +501,45 @@ describe("nanoboss/pre-commit-checks procedure", () => {
     expect(result.display).toContain("- typecheck: failed (exit 2)");
     expect(result.display).toContain("- typecheck:packages: not run");
     expect(result.display).toContain("- knip: not run");
+    expect(result.display).toContain("- procedure-sdk:build: not run");
+    expect(result.display).toContain("- procedure-sdk:test:hermetic: not run");
     expect(result.display).toContain("- test:packages: not run");
     expect(result.display).toContain("- test: not run");
     expect(result.pause.question).toContain("Do you want me to try fixing these automatically?");
+  });
+
+  test("procedure-sdk package boundary failures point to package-local reproduction", async () => {
+    const procedure = createPreCommitChecksProcedure({
+      async resolveChecks() {
+        return {
+          command: PRE_COMMIT_CHECKS_COMMAND,
+          cacheHit: false,
+          runReason: "cold_cache",
+          exitCode: 1,
+          passed: false,
+          workspaceStateFingerprint: "workspace",
+          runtimeFingerprint: "runtime",
+          createdAt: "2026-04-09T00:00:00.000Z",
+          stdout: "",
+          stderr: "consumer fixture failed\n",
+          combinedOutput: [
+            '[[nanoboss-precommit]] {"type":"run_result","phases":[{"phase":"lint","status":"passed","exitCode":0},{"phase":"typecheck","status":"passed","exitCode":0},{"phase":"typecheck:packages","status":"passed","exitCode":0},{"phase":"knip","status":"passed","exitCode":0},{"phase":"procedure-sdk:build","status":"passed","exitCode":0},{"phase":"procedure-sdk:test:hermetic","status":"failed","exitCode":1},{"phase":"test:packages","status":"not_run"},{"phase":"test","status":"not_run"}]}',
+            "packages/procedure-sdk/test-fixtures/consumer/index.ts(22,7): error TS2322: Type 'number' is not assignable to type 'string'.",
+          ].join("\n"),
+          summary: "failed",
+          durationMs: 5,
+        };
+      },
+    });
+
+    const result = await procedure.execute("manual-approve", createMockContext({ cwd: "/repo" }));
+
+    if (typeof result === "string" || !result?.pause) {
+      throw new Error("Expected paused procedure result");
+    }
+    expect(result.display).toContain("- procedure-sdk:build: passed");
+    expect(result.display).toContain("- procedure-sdk:test:hermetic: failed (exit 1)");
+    expect(result.display).toContain("Reproduce locally with `cd packages/procedure-sdk && bun run test:hermetic`.");
   });
 
   test("resume can run one automated fix pass and rerun checks", async () => {
