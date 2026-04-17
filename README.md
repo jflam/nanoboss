@@ -366,7 +366,8 @@ bun run test
 ```
 
 This runs a compact wrapper around the unit test suite and emits `.` for pass, `S` for skip, and `F` for fail,
-then prints detailed failure output only when tests fail.
+then prints detailed failure output only when tests fail. It targets the root `tests/unit` suite only; it does
+not run package-local tests under `packages/*/tests`.
 
 Run unit tests only:
 
@@ -382,7 +383,8 @@ Run every test file with raw `bun test` discovery:
 bun run test:raw
 ```
 
-This includes unit and e2e tests.
+This includes root unit tests, root e2e tests, and package-local tests discovered under `packages/*/tests`.
+Running literal `bun test` at the repo root has the same discovery behavior.
 
 Run end-to-end tests with the default gating behavior:
 
@@ -442,6 +444,15 @@ From the repo root, `bun run test:packages` and `bun run typecheck:packages`
 fan those commands out across every package. `bun run check:precommit` now runs
 both package fan-out commands alongside the existing root lint, typecheck,
 knip, and root test checks.
+
+Use these commands when you want specific scopes:
+
+- `bun run test`
+  Root compact unit suite only.
+- `bun run test:raw` or `bun test`
+  All discoverable Bun tests in the repo, including package tests.
+- `bun run test:packages`
+  Each package's declared `test` script, run package-by-package.
 
 Cross-package imports are governed by the `ALLOWED_LAYERING` table in
 `tests/unit/package-dependency-direction.test.ts`. That test enforces two

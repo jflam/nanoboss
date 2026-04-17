@@ -480,7 +480,7 @@ export class SessionStore {
       cell,
       procedure: record.procedure,
       kind: record.meta.kind,
-      ...(record.meta.parentCellId ? { parentRunId: record.meta.parentCellId } : {}),
+      ...(record.meta.parentCellId ? { parentCellId: record.meta.parentCellId } : {}),
       summary: record.output.summary,
       memory: record.output.memory,
       dataRef: record.output.data !== undefined ? createValueRef(cell, "output.data") : undefined,
@@ -702,7 +702,7 @@ export class SessionStore {
   }
 
   private promotePendingPromptImages(promptImages: CellRecord["meta"]["promptImages"]): void {
-    const promotions: Array<{ attachmentPath: string; filePath: string; tempPath: string }> = [];
+    const promotions = new Map<string, { attachmentPath: string; filePath: string; tempPath: string }>();
 
     for (const image of promptImages ?? []) {
       const attachmentPath = image.attachmentPath;
@@ -721,18 +721,20 @@ export class SessionStore {
         throw new Error(`Missing staged prompt image attachment: ${attachmentPath}`);
       }
 
-      promotions.push({ attachmentPath, filePath, tempPath });
+      promotions.set(attachmentPath, { attachmentPath, filePath, tempPath });
     }
 
-    const promoted: typeof promotions = [];
+    const uniquePromotions = [...promotions.values()];
+    const promoted = new Map<string, { attachmentPath: string; filePath: string; tempPath: string }>();
     try {
-      for (const promotion of promotions) {
+      for (const promotion of uniquePromotions) {
         renameSync(promotion.tempPath, promotion.filePath);
-        promoted.push(promotion);
+        promoted.set(promotion.attachmentPath, promotion);
       }
     } catch (error) {
-      for (let index = promoted.length - 1; index >= 0; index -= 1) {
-        const promotion = promoted[index];
+      const promotedEntries = [...promoted.values()];
+      for (let index = promotedEntries.length - 1; index >= 0; index -= 1) {
+        const promotion = promotedEntries[index];
         if (promotion && existsSync(promotion.filePath) && !existsSync(promotion.tempPath)) {
           renameSync(promotion.filePath, promotion.tempPath);
         }
@@ -740,7 +742,7 @@ export class SessionStore {
       throw error;
     }
 
-    for (const promotion of promotions) {
+    for (const promotion of uniquePromotions) {
       this.pendingAttachmentStages.delete(promotion.attachmentPath);
     }
   }

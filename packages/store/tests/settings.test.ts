@@ -4,7 +4,11 @@ import { join } from "node:path";
 
 import { afterEach, describe, expect, test } from "bun:test";
 
-import { readNanobossSettings } from "@nanoboss/store";
+import {
+  readNanobossSettings,
+  readPersistedDefaultAgentSelection,
+  writePersistedDefaultAgentSelection,
+} from "@nanoboss/store";
 
 let tempHome: string | undefined;
 
@@ -16,6 +20,36 @@ afterEach(() => {
 });
 
 describe("readNanobossSettings", () => {
+  test("round-trips the persisted default agent selection", () => {
+    const originalHome = process.env.HOME;
+    tempHome = mkdtempSync(join(tmpdir(), "nanoboss-settings-"));
+    process.env.HOME = tempHome;
+
+    try {
+      writePersistedDefaultAgentSelection({
+        provider: "codex",
+        model: "gpt-5.4/high",
+      });
+
+      expect(readPersistedDefaultAgentSelection()).toEqual({
+        provider: "codex",
+        model: "gpt-5.4/high",
+      });
+      expect(readNanobossSettings()).toMatchObject({
+        defaultAgentSelection: {
+          provider: "codex",
+          model: "gpt-5.4/high",
+        },
+      });
+    } finally {
+      if (originalHome === undefined) {
+        delete process.env.HOME;
+      } else {
+        process.env.HOME = originalHome;
+      }
+    }
+  });
+
   test("throws when settings.json contains malformed JSON", () => {
     const originalHome = process.env.HOME;
     tempHome = mkdtempSync(join(tmpdir(), "nanoboss-settings-"));

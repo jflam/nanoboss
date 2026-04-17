@@ -209,6 +209,16 @@ describe("SessionStore", () => {
     expect(reloaded.getRunDescendants(review.run, { kind: "agent", maxDepth: 1 }).map((item) => item.run.runId)).toEqual([
       siblingAgent.run.runId,
     ]);
+    expect(reloaded.getRunDescendants(review.run).map((item) => item.parentRunId)).toEqual([
+      review.run.runId,
+      childProcedure.run.runId,
+      review.run.runId,
+    ]);
+    expect(reloaded.listRuns({ scope: "recent", limit: 3 }).map((item) => item.parentRunId)).toEqual([
+      undefined,
+      review.run.runId,
+      childProcedure.run.runId,
+    ]);
     expect(reloaded.listRuns({ scope: "recent", procedure: "callAgent", limit: 1 })[0]?.run.runId).toBe(siblingAgent.run.runId);
     expect(reloaded.getRunAncestors(nestedAgent.run, { limit: 1 })[0]?.run.runId).toBe(childProcedure.run.runId);
     expect(reloaded.getRunDescendants(review.run, { maxDepth: 1 }).map((item) => item.run.runId)).toEqual([
@@ -415,6 +425,63 @@ describe("SessionStore", () => {
     expect(existsSync(attachmentFile)).toBe(true);
     expect(readFileSync(attachmentFile).toString("base64")).toBe("YWJj");
     expect(reloaded.listRuns({ limit: 1 })[0]?.procedure).toBe("default");
+  });
+
+  test("deduplicates prompt image promotions when one prompt references the same attachment twice", () => {
+    const rootDir = mkdtempSync(join(process.cwd(), ".tmp-session-store-"));
+    tempDirs.push(rootDir);
+
+    const store = new SessionStore({
+      sessionId: "session-duplicate-attachments",
+      cwd: process.cwd(),
+      rootDir,
+    });
+    const promptInput: PromptInput = {
+      parts: [
+        { type: "text", text: "compare " },
+        {
+          type: "image",
+          token: "[Image 1: PNG 10x10 3B]",
+          mimeType: "image/png",
+          data: "YWJj",
+          width: 10,
+          height: 10,
+          byteLength: 3,
+        },
+        { type: "text", text: " and " },
+        {
+          type: "image",
+          token: "[Image 2: PNG 10x10 3B]",
+          mimeType: "image/png",
+          data: "YWJj",
+          width: 10,
+          height: 10,
+          byteLength: 3,
+        },
+      ],
+    };
+
+    const promptImages = expectDefined(store.persistPromptImages(promptInput), "Expected prompt images");
+    expect(promptImages).toHaveLength(2);
+    expect(promptImages[0]?.attachmentPath).toBe(promptImages[1]?.attachmentPath);
+
+    const run = store.startRun({
+      procedure: "default",
+      input: "compare [Image 1: PNG 10x10 3B] and [Image 2: PNG 10x10 3B]",
+      kind: "top_level",
+      promptImages,
+    });
+    const finalized = store.completeRun(run, {
+      display: "done\n",
+      summary: "done",
+    });
+
+    const attachmentPath = expectDefined(promptImages[0]?.attachmentPath, "Expected attachment path");
+    const attachmentFile = join(rootDir, attachmentPath);
+
+    expect(existsSync(attachmentFile)).toBe(true);
+    expect(readFileSync(attachmentFile).toString("base64")).toBe("YWJj");
+    expect(store.getRun(finalized.run).meta.promptImages).toEqual(promptImages);
   });
 
   test("removes stale staged attachment temp files when a store is reloaded", () => {
