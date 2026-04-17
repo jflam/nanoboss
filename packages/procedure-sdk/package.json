@@ -14,8 +14,9 @@
   "scripts": {
     "build": "rm -rf dist && tsc -p tsconfig.build.json --pretty false && cp -R dist/packages/procedure-sdk/src/. dist/ && rm -rf dist/packages",
     "test": "bun test",
+    "test:hermetic": "bun run build && bun run test && bun run typecheck:consumer",
     "typecheck": "tsc -p tsconfig.json --noEmit --pretty false",
-    "typecheck:consumer": "bun x tsc -p test-fixtures/consumer/tsconfig.json --noEmit --pretty false"
+    "typecheck:consumer": "cd test-fixtures/consumer && bun run typecheck"
   },
   "dependencies": {
     "@nanoboss/contracts": "workspace:*"
