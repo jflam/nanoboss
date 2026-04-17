@@ -3,6 +3,12 @@
     "target": "ESNext",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
+    "baseUrl": ".",
+    "paths": {
+      "@nanoboss/procedure-sdk": [
+        "../.."
+      ]
+    },
     "strict": true,
     "skipLibCheck": true,
     "noEmit": true,

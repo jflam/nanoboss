@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   RunCancelledError,
+  defaultCancellationMessage,
   expectData,
   expectDataRef,
   formatErrorMessage,
@@ -51,6 +52,26 @@ describe("result and failure helpers", () => {
     expect(normalizedAbort).toBeInstanceOf(RunCancelledError);
     expect(normalizedAbort?.reason).toBe("abort");
     expect(normalizedAbort?.message).toBe("Cancelled.");
+  });
+
+  test("normalizeRunCancelledError preserves sdk cancellations and falls back to default messages only for recognized reasons", () => {
+    const existing = new RunCancelledError("Stopped manually.", "soft_stop");
+    expect(normalizeRunCancelledError(existing)).toBe(existing);
+
+    const foreignWithoutMessage = Object.assign(new Error(""), {
+      name: "RunCancelledError",
+    });
+    const normalizedFallback = normalizeRunCancelledError(foreignWithoutMessage, "soft_stop");
+
+    expect(normalizedFallback).toBeInstanceOf(RunCancelledError);
+    expect(normalizedFallback?.reason).toBe("soft_stop");
+    expect(normalizedFallback?.message).toBe(defaultCancellationMessage("soft_stop"));
+
+    const invalidForeignReason = Object.assign(new Error("weird"), {
+      name: "RunCancelledError",
+      reason: "timeout",
+    });
+    expect(normalizeRunCancelledError(invalidForeignReason)).toBeUndefined();
   });
 
   test("formatErrorMessage extracts useful text from structured failures", () => {

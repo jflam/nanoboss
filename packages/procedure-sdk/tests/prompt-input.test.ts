@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   createTextPromptInput,
+  normalizePromptInput,
   parsePromptInputPayload,
   promptInputAttachmentSummaries,
   promptInputDisplayText,
@@ -89,6 +90,75 @@ describe("prompt input helpers", () => {
           type: "text",
           text: "plain prompt",
         },
+      ],
+    });
+  });
+
+  test("normalizePromptInput merges adjacent text, drops empty text parts, and preserves image placement", () => {
+    expect(normalizePromptInput({
+      parts: [
+        { type: "text", text: "" },
+        { type: "text", text: "alpha" },
+        { type: "text", text: " beta" },
+        {
+          type: "image",
+          token: "[Image 1: PNG]",
+          mimeType: "image/png",
+          data: "YWJj",
+        },
+        { type: "text", text: "" },
+        { type: "text", text: " gamma" },
+      ],
+    })).toEqual({
+      parts: [
+        { type: "text", text: "alpha beta" },
+        {
+          type: "image",
+          token: "[Image 1: PNG]",
+          mimeType: "image/png",
+          data: "YWJj",
+        },
+        { type: "text", text: " gamma" },
+      ],
+    });
+
+    expect(normalizePromptInput({
+      parts: [
+        { type: "text", text: "" },
+        { type: "text", text: "" },
+      ],
+    })).toEqual({
+      parts: [
+        { type: "text", text: "" },
+      ],
+    });
+  });
+
+  test("parsePromptInputPayload applies the same normalization rules used for author-facing prompt input", () => {
+    expect(parsePromptInputPayload({
+      parts: [
+        { type: "text", text: "" },
+        { type: "text", text: "alpha" },
+        { type: "text", text: " beta" },
+        {
+          type: "image",
+          token: "[Image 1: PNG]",
+          mimeType: "image/png",
+          data: "YWJj",
+        },
+        { type: "text", text: "" },
+        { type: "text", text: " gamma" },
+      ],
+    })).toEqual({
+      parts: [
+        { type: "text", text: "alpha beta" },
+        {
+          type: "image",
+          token: "[Image 1: PNG]",
+          mimeType: "image/png",
+          data: "YWJj",
+        },
+        { type: "text", text: " gamma" },
       ],
     });
   });
