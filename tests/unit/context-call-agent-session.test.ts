@@ -221,6 +221,42 @@ describe("procedure API session namespaces", () => {
     expect(childRun.output.stream).toContain("partial");
   });
 
+  test("typed ctx.agent.run returns and persists the explicit data schema", async () => {
+    const { conversation, ctx, store } = createContext();
+
+    Reflect.set(conversation as object, "persistedSessionId", "default-session-typed-schema");
+    Reflect.set(
+      conversation as object,
+      "prompt",
+      async () => ({
+        raw: "{\"result\":7}",
+        updates: [],
+        durationMs: 0,
+      }),
+    );
+
+    const result = await ctx.agent.run("Return {\"result\":7}.", MathResultType, {
+      session: "default",
+      stream: false,
+    });
+
+    expect(result.data).toEqual({ result: 7 });
+    expect(result.display).toBe("{\"result\":7}");
+    expect(result.explicitDataSchema).toEqual(MathResultType.schema);
+    expect(result.dataShape).toEqual({
+      result: "number",
+    });
+
+    const childSummary = store.listRuns({ scope: "recent", procedure: "callAgent", limit: 1 })[0];
+    if (!childSummary) {
+      throw new Error("Expected stored child run");
+    }
+
+    const childRun = store.getRun(childSummary.run);
+    expect(childRun.output.explicitDataSchema).toEqual(MathResultType.schema);
+    expect(childRun.output.display).toBe("{\"result\":7}");
+  });
+
   test("ctx.procedures.run inherits the current default-session binding by default", async () => {
     const { conversation, ctx, registry } = createContext();
     const prompts: string[] = [];

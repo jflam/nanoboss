@@ -61,14 +61,27 @@ export function parsePromptInputPayload(value: unknown): PromptInput | undefined
         return undefined;
       }
 
+      const width = parseOptionalIntegerField((rawPart as { width?: unknown }).width, {
+        min: 1,
+      });
+      const height = parseOptionalIntegerField((rawPart as { height?: unknown }).height, {
+        min: 1,
+      });
+      const byteLength = parseOptionalIntegerField((rawPart as { byteLength?: unknown }).byteLength, {
+        min: 0,
+      });
+      if (!width.ok || !height.ok || !byteLength.ok) {
+        return undefined;
+      }
+
       parts.push({
         type: "image",
         token,
         mimeType,
         data,
-        width: asOptionalNumber((rawPart as { width?: unknown }).width),
-        height: asOptionalNumber((rawPart as { height?: unknown }).height),
-        byteLength: asOptionalNumber((rawPart as { byteLength?: unknown }).byteLength),
+        width: width.value,
+        height: height.value,
+        byteLength: byteLength.value,
       });
       continue;
     }
@@ -173,6 +186,22 @@ function formatByteLength(byteLength: number): string {
   return `${byteLength}B`;
 }
 
-function asOptionalNumber(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+function parseOptionalIntegerField(
+  value: unknown,
+  options: { min: number },
+): { ok: true; value: number | undefined } | { ok: false } {
+  if (value === undefined) {
+    return { ok: true, value: undefined };
+  }
+
+  if (
+    typeof value !== "number" ||
+    !Number.isFinite(value) ||
+    !Number.isInteger(value) ||
+    value < options.min
+  ) {
+    return { ok: false };
+  }
+
+  return { ok: true, value };
 }

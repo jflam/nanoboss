@@ -112,11 +112,15 @@ export interface StoredRunResult<T extends KernelValue = KernelValue> {
   run: RunRef;
   data?: T;
   dataRef?: Ref;
+  display?: string;
   displayRef?: Ref;
   streamRef?: Ref;
+  memory?: string;
   pause?: Continuation;
   pauseRef?: Ref;
   summary?: string;
+  dataShape?: ReturnType<typeof inferDataShape>;
+  explicitDataSchema?: object;
   rawRef?: Ref;
 }
 
@@ -281,11 +285,15 @@ export class SessionStore {
       run: draft.run,
       data: result.data,
       dataRef,
+      display: record.output.display,
       displayRef,
       streamRef,
+      memory: record.output.memory,
       pause: record.output.pause,
       pauseRef,
       summary: record.output.summary,
+      dataShape: record.output.data !== undefined ? inferDataShape(record.output.data) : undefined,
+      explicitDataSchema: record.output.explicitDataSchema,
       rawRef: options.raw !== undefined ? displayRef : undefined,
     };
   }

@@ -135,6 +135,7 @@ export class AgentRunRecorder {
       logFile?: string;
       summary?: string;
       streamText: boolean;
+      explicitDataSchema?: object;
       rawOutputExtra?: Record<string, unknown>;
       agent?: DownstreamAgentSelection;
     },
@@ -143,6 +144,7 @@ export class AgentRunRecorder {
       data: params.data,
       display: params.raw,
       summary: params.summary,
+      explicitDataSchema: params.explicitDataSchema,
     }, {
       agentUpdates: params.updates,
       stream: params.streamText ? collectTextSessionUpdates(params.updates) : undefined,
@@ -332,6 +334,7 @@ export class AgentInvocationApiImpl implements AgentInvocationApi {
           ? summarizeText(result.raw)
           : summarizeAgentOutput(result.data, result.raw),
         streamText: options?.stream !== false,
+        explicitDataSchema: descriptor?.schema,
         rawOutputExtra: useDefaultSession
           ? {
               sessionId: this.params.sessionManager.getDefaultAgentSessionId(),

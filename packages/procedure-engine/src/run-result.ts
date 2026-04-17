@@ -17,11 +17,15 @@ export function toPublicRunResult<T extends KernelValue>(
     run: result.run,
     data: result.data,
     dataRef: result.dataRef,
+    display: result.display,
     displayRef: result.displayRef,
     streamRef: result.streamRef,
+    memory: result.memory,
     pause: result.pause,
     pauseRef: result.pauseRef,
     summary: result.summary,
+    dataShape: result.dataShape,
+    explicitDataSchema: result.explicitDataSchema,
     rawRef: result.rawRef,
   };
 }

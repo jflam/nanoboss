@@ -271,6 +271,57 @@ describe("procedure-engine package", () => {
     expect(childRun.output.data).toEqual({ value: "child-result" });
   });
 
+  test("nested procedure results retain display and explicit schema across the sdk boundary", async () => {
+    const store = createStore("nab-procedure-engine-child-result-shape");
+    const childSchema = {
+      type: "object",
+      properties: {
+        answer: { type: "string" },
+      },
+      required: ["answer"],
+      additionalProperties: false,
+    };
+    const child: Procedure = {
+      name: "child",
+      description: "Nested child procedure",
+      async execute() {
+        return {
+          data: { answer: "child-result" },
+          display: "child display",
+          summary: "child summary",
+          explicitDataSchema: childSchema,
+        };
+      },
+    };
+    const parent: Procedure = {
+      name: "parent",
+      description: "Parent procedure",
+      async execute(_prompt: string, ctx: ProcedureApi) {
+        const childResult = await ctx.procedures.run<{ answer: string }>("child", "nested prompt");
+        return {
+          data: {
+            childDisplay: childResult.display,
+            childSchema: childResult.explicitDataSchema,
+            childShape: childResult.dataShape,
+          },
+          summary: "parent summary",
+        };
+      },
+    };
+    const registry = createRegistry([parent, child]);
+
+    const result = await runProcedure(buildRunParams(store, registry, parent, "run parent"));
+
+    const parentRun = store.getRun(result.run);
+    expect(parentRun.output.data).toEqual({
+      childDisplay: "child display",
+      childSchema,
+      childShape: {
+        answer: "child-result",
+      },
+    });
+  });
+
   test("supports pause and resume through the package boundary", async () => {
     const store = createStore("nab-procedure-engine-resume");
     const pauseable: Procedure = {
