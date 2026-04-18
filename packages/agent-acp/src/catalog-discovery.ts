@@ -18,13 +18,52 @@ import type { DownstreamAgentConfig } from "./types.ts";
 
 export interface DiscoverAgentCatalogOptions {
   config?: Partial<Pick<DownstreamAgentConfig, "args" | "command" | "cwd" | "env">>;
+  forceRefresh?: boolean;
 }
+
+const AGENT_CATALOG_DISCOVERY_CACHE_TTL_MS = 5_000;
+
+interface CachedAgentCatalogValue {
+  kind: "value";
+  catalog: AgentCatalogEntry;
+  expiresAt: number;
+}
+
+interface CachedAgentCatalogPromise {
+  kind: "promise";
+  promise: Promise<AgentCatalogEntry>;
+  fallback?: CachedAgentCatalogValue;
+}
+
+type CachedAgentCatalogEntry = CachedAgentCatalogValue | CachedAgentCatalogPromise;
+
+const discoveredAgentCatalogCache = new Map<string, CachedAgentCatalogEntry>();
 
 export async function discoverAgentCatalog(
   provider: DownstreamAgentProvider,
   options: DiscoverAgentCatalogOptions = {},
 ): Promise<AgentCatalogEntry> {
+  const now = Date.now();
   const config = resolveAgentCatalogDiscoveryConfig(provider, options);
+  const cacheKey = createAgentCatalogDiscoveryCacheKey(provider, config);
+
+  if (!options.forceRefresh) {
+    const cached = getCachedAgentCatalog(cacheKey, now);
+    if (cached) {
+      return cached;
+    }
+  }
+
+  const fallback = getCachedAgentCatalogValue(cacheKey, now);
+  const discovery = discoverAgentCatalogUncached(provider, config);
+
+  return storePendingAgentCatalogDiscovery(cacheKey, discovery, fallback);
+}
+
+async function discoverAgentCatalogUncached(
+  provider: DownstreamAgentProvider,
+  config: DownstreamAgentConfig,
+): Promise<AgentCatalogEntry> {
   const state = await openAcpConnection(config);
   let sessionId: acp.SessionId | undefined;
   let catalog: AgentCatalogEntry | undefined;
@@ -62,6 +101,112 @@ export async function discoverAgentCatalog(
   }
 
   return catalog;
+}
+
+function createAgentCatalogDiscoveryCacheKey(
+  provider: DownstreamAgentProvider,
+  config: DownstreamAgentConfig,
+): string {
+  return JSON.stringify({
+    provider,
+    command: config.command,
+    args: config.args,
+    cwd: config.cwd ?? null,
+    envShape: describeAgentCatalogDiscoveryEnvShape(config.env),
+  });
+}
+
+function describeAgentCatalogDiscoveryEnvShape(
+  env: DownstreamAgentConfig["env"],
+): Array<[name: string, state: "empty" | "set"]> | undefined {
+  if (!env) {
+    return undefined;
+  }
+
+  return Object.entries(env)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([name, value]) => [name, value.trim() ? "set" : "empty"]);
+}
+
+function getCachedAgentCatalog(
+  cacheKey: string,
+  now: number,
+): AgentCatalogEntry | Promise<AgentCatalogEntry> | undefined {
+  const entry = discoveredAgentCatalogCache.get(cacheKey);
+  if (!entry) {
+    return undefined;
+  }
+
+  if (entry.kind === "promise") {
+    return entry.promise;
+  }
+
+  if (entry.expiresAt > now) {
+    return entry.catalog;
+  }
+
+  discoveredAgentCatalogCache.delete(cacheKey);
+  return undefined;
+}
+
+function getCachedAgentCatalogValue(
+  cacheKey: string,
+  now: number,
+): CachedAgentCatalogValue | undefined {
+  const entry = discoveredAgentCatalogCache.get(cacheKey);
+  if (!entry || entry.kind !== "value") {
+    return undefined;
+  }
+
+  if (entry.expiresAt > now) {
+    return entry;
+  }
+
+  discoveredAgentCatalogCache.delete(cacheKey);
+  return undefined;
+}
+
+function storePendingAgentCatalogDiscovery(
+  cacheKey: string,
+  discovery: Promise<AgentCatalogEntry>,
+  fallback: CachedAgentCatalogValue | undefined,
+): Promise<AgentCatalogEntry> {
+  const pendingEntry: CachedAgentCatalogPromise = {
+    kind: "promise",
+    promise: discovery,
+    fallback,
+  };
+
+  discoveredAgentCatalogCache.set(cacheKey, pendingEntry);
+
+  const pendingPromise = discovery.then(
+    (catalog) => {
+      const current = discoveredAgentCatalogCache.get(cacheKey);
+      if (current?.kind === "promise" && current.promise === pendingPromise) {
+        discoveredAgentCatalogCache.set(cacheKey, {
+          kind: "value",
+          catalog,
+          expiresAt: Date.now() + AGENT_CATALOG_DISCOVERY_CACHE_TTL_MS,
+        });
+      }
+      return catalog;
+    },
+    (error) => {
+      const current = discoveredAgentCatalogCache.get(cacheKey);
+      if (current?.kind === "promise" && current.promise === pendingPromise) {
+        if (current.fallback && current.fallback.expiresAt > Date.now()) {
+          discoveredAgentCatalogCache.set(cacheKey, current.fallback);
+        } else {
+          discoveredAgentCatalogCache.delete(cacheKey);
+        }
+      }
+      throw error;
+    },
+  );
+
+  pendingEntry.promise = pendingPromise;
+  discoveredAgentCatalogCache.set(cacheKey, pendingEntry);
+  return pendingPromise;
 }
 
 function resolveAgentCatalogDiscoveryConfig(

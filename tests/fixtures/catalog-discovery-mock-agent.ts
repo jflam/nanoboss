@@ -5,6 +5,7 @@ import { Readable, Writable } from "node:stream";
 
 const LOG_PATH = process.env.DISCOVERY_AGENT_LOG?.trim() || undefined;
 const PROVIDER = process.env.DISCOVERY_AGENT_PROVIDER?.trim() || "copilot";
+const FAIL_PHASE = process.env.DISCOVERY_AGENT_FAIL?.trim() || undefined;
 
 class CatalogDiscoveryMockAgent implements acp.Agent {
   private readonly sessions = new Map<string, { currentModel?: string }>();
@@ -25,6 +26,7 @@ class CatalogDiscoveryMockAgent implements acp.Agent {
   }
 
   async newSession(_params: acp.NewSessionRequest): Promise<acp.NewSessionResponse> {
+    maybeFail("new-session");
     const sessionId = crypto.randomUUID();
     this.sessions.set(sessionId, { currentModel: getInitialModel() });
     writeLog({ kind: "new_session", sessionId });
@@ -39,6 +41,7 @@ class CatalogDiscoveryMockAgent implements acp.Agent {
   async setSessionConfigOption(
     params: acp.SetSessionConfigOptionRequest,
   ): Promise<acp.SetSessionConfigOptionResponse> {
+    maybeFail("set-config");
     this.assertSession(params.sessionId);
     const value = "value" in params && typeof params.value === "string" ? params.value : undefined;
     if (params.configId === "model" && value) {
@@ -80,6 +83,12 @@ class CatalogDiscoveryMockAgent implements acp.Agent {
     if (!this.sessions.has(sessionId)) {
       throw new Error(`Unknown session: ${sessionId}`);
     }
+  }
+}
+
+function maybeFail(phase: "new-session" | "set-config"): void {
+  if (FAIL_PHASE === phase) {
+    throw new Error(`Mock catalog discovery failed during ${phase}.`);
   }
 }
 
