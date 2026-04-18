@@ -14,7 +14,7 @@ This package is the authority for:
 - collecting streamed ACP updates and deriving plain-text output
 - guarding nanoboss's own runtime files from recursive downstream access
 - opportunistically collecting provider-specific token metrics
-- exposing the shared downstream model catalog used elsewhere in the product
+- exposing the shared harness-discovered downstream model catalog used elsewhere in the product
 
 This package is not responsible for:
 
@@ -102,7 +102,15 @@ Important boundary:
 ### 4. Token and model helpers
 
 - token usage helpers from `token-usage.ts` and `token-metrics.ts`
-- model catalog helpers from `model-catalog.ts`
+- model catalog helpers from `model-catalog.ts` and `catalog-discovery.ts`
+
+The model catalog is discovered from the installed ACP harness for the effective
+provider config, with a short-lived cache to avoid reprobing on every caller
+action. Callers should treat it as a recent, environment-dependent view of what
+the harness currently advertises rather than as a permanently hard-coded list:
+results can differ by provider capabilities, account access, and harness
+version, and refresh failures are surfaced to callers instead of silently
+falling back to a full static catalog.
 
 These are shared support utilities for downstream-agent UX, but they are secondary to the session/invocation APIs.
 

@@ -123,7 +123,9 @@ The shortest reliable setup flow is:
    bun run nanoboss cli
    ```
 
-7. Use `/model` inside the CLI to inspect or change the default provider/model.
+7. Use `/model` inside the CLI to inspect or change the default provider/model. The
+   available model list comes from the installed ACP harness for each provider, so
+   it can vary by account access, harness version, and provider capabilities.
 
 ### What `doctor` and `doctor --register` actually do
 
@@ -187,6 +189,18 @@ Examples:
 /model gemini gemini-2.5-pro
 /model copilot gpt-5.4/xhigh
 ```
+
+For `/model`, nanoboss uses the installed ACP harness as the source of truth for
+available models instead of a fully hard-coded in-repo catalog. The models shown
+for a provider depend on what that harness currently advertises for your
+environment, so results can vary by provider, account access, harness version,
+and model capability support.
+
+`/model <provider>` reuses a recent cached discovery result when one is still
+fresh and otherwise refreshes the provider's advertised catalog before listing
+models. `/model <provider> <model>` validates against that discovered catalog,
+and if discovery fails nanoboss reports the refresh error instead of silently
+falling back to a static full model list.
 
 Environment-variable overrides:
 
