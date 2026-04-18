@@ -24,6 +24,7 @@ interface SessionBindingSource {
   getDefaultAgentConfig: () => DownstreamAgentConfig;
   setDefaultAgentSelection: (selection: DownstreamAgentSelection) => DownstreamAgentConfig;
   prepareDefaultPrompt?: (promptInput: PromptInput) => PreparedDefaultPrompt;
+  dispose?(): void;
 }
 
 export interface ProcedureInvocationBinding extends SessionBindingSource {}
@@ -112,6 +113,9 @@ export class ContextSessionApiImpl implements SessionApi {
           return nextConfig;
         },
         prepareDefaultPrompt: this.params.current.prepareDefaultPrompt,
+        dispose: () => {
+          agentSession.close();
+        },
       };
     }
 
@@ -133,6 +137,7 @@ function toProcedureInvocationBinding(binding: SessionBindingSource): ProcedureI
     getDefaultAgentConfig: binding.getDefaultAgentConfig,
     setDefaultAgentSelection: binding.setDefaultAgentSelection,
     prepareDefaultPrompt: binding.prepareDefaultPrompt,
+    dispose: binding.dispose,
   };
 }
 

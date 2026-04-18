@@ -332,6 +332,92 @@ describe("procedure API session namespaces", () => {
     expect(ctx.session.getDefaultAgentConfig()).toEqual(rootConfigBefore);
   });
 
+  test("ctx.procedures.run with session fresh closes the private child session after success", async () => {
+    const closeCounts: number[] = [];
+    const { ctx, registry } = createContext({
+      createAgentSession: (_params) => {
+        const sessionIndex = closeCounts.push(0) - 1;
+        return {
+          sessionId: `session-${sessionIndex + 1}`,
+          async getCurrentTokenSnapshot() {
+            return undefined;
+          },
+          async prompt(prompt: string | PromptInput) {
+            return {
+              raw: toPromptText(prompt),
+              updates: [],
+              durationMs: 0,
+            };
+          },
+          updateConfig() {},
+          close() {
+            closeCounts[sessionIndex] += 1;
+          },
+        };
+      },
+    });
+
+    registry.register({
+      name: "child",
+      description: "test fresh child procedure cleanup",
+      async execute(prompt, childCtx) {
+        const reply = await childCtx.agent.run(prompt, {
+          session: "default",
+          stream: false,
+        });
+        return {
+          data: reply.data,
+        };
+      },
+    });
+
+    const result = await ctx.procedures.run("child", "close me", { session: "fresh" });
+
+    expect(result.data).toBe("close me");
+    expect(closeCounts).toEqual([0, 1]);
+  });
+
+  test("ctx.procedures.run with session fresh closes the private child session after failure", async () => {
+    const closeCounts: number[] = [];
+    const { ctx, registry } = createContext({
+      createAgentSession: (_params) => {
+        const sessionIndex = closeCounts.push(0) - 1;
+        return {
+          sessionId: `session-${sessionIndex + 1}`,
+          async getCurrentTokenSnapshot() {
+            return undefined;
+          },
+          async prompt() {
+            throw new Error("fresh child session failed");
+          },
+          updateConfig() {},
+          close() {
+            closeCounts[sessionIndex] += 1;
+          },
+        };
+      },
+    });
+
+    registry.register({
+      name: "child",
+      description: "test fresh child procedure cleanup on failure",
+      async execute(prompt, childCtx) {
+        await childCtx.agent.run(prompt, {
+          session: "default",
+          stream: false,
+        });
+        return {
+          data: "unreachable",
+        };
+      },
+    });
+
+    await expect(ctx.procedures.run("child", "close on error", { session: "fresh" })).rejects.toThrow(
+      "fresh child session failed",
+    );
+    expect(closeCounts).toEqual([0, 1]);
+  });
+
   test("ctx.procedures.run with session default rebinds nested children to the master session", async () => {
     const promptedSessions: AgentSession[] = [];
     let rootSession: AgentSession | undefined;

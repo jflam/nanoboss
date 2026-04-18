@@ -69,28 +69,32 @@ export class ProcedureInvocationApiImpl implements ProcedureInvocationApi {
 
     try {
       const binding = this.params.sessionManager.resolveProcedureInvocationBinding(options?.session ?? "inherit");
-      const childContext = this.params.createChildContext({
-        procedureName: name,
-        spanId: childSpanId,
-        run: childRun,
-        promptInput,
-        ...binding,
-      });
-      const rawResult = await procedure.execute(prompt, childContext);
-      const result = normalizeProcedureResult(rawResult);
-      const finalized = this.params.store.completeRun(childRun, result);
+      try {
+        const childContext = this.params.createChildContext({
+          procedureName: name,
+          spanId: childSpanId,
+          run: childRun,
+          promptInput,
+          ...binding,
+        });
+        const rawResult = await procedure.execute(prompt, childContext);
+        const result = normalizeProcedureResult(rawResult);
+        const finalized = this.params.store.completeRun(childRun, result);
 
-      this.params.logger.write({
-        spanId: childSpanId,
-        parentSpanId: this.params.spanId,
-        procedure: name,
-        kind: "procedure_end",
-        durationMs: Date.now() - startedAt,
-        result: result.data,
-        raw: result.display,
-      });
+        this.params.logger.write({
+          spanId: childSpanId,
+          parentSpanId: this.params.spanId,
+          procedure: name,
+          kind: "procedure_end",
+          durationMs: Date.now() - startedAt,
+          result: result.data,
+          raw: result.display,
+        });
 
-      return toPublicRunResult(finalized) as RunResult<T>;
+        return toPublicRunResult(finalized) as RunResult<T>;
+      } finally {
+        binding.dispose?.();
+      }
     } catch (error) {
       this.params.logger.write({
         spanId: childSpanId,
