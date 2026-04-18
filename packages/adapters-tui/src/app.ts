@@ -29,9 +29,10 @@ import {
 import { shouldDisableEditorSubmit } from "./commands.ts";
 
 import {
+  discoverAgentCatalog,
   getProviderLabel,
   listKnownProviders,
-  listSelectableModelOptions,
+  listSelectableModelOptionsFromCatalog,
 } from "@nanoboss/agent-acp";
 import {
   type AutocompleteItem,
@@ -111,6 +112,7 @@ interface ControllerLike {
 }
 
 interface NanobossTuiAppDeps {
+  discoverAgentCatalog?: typeof discoverAgentCatalog;
   createTheme?: () => NanobossTuiTheme;
   createTerminal?: () => TerminalLike;
   createTui?: (terminal: TerminalLike) => TuiLike;
@@ -443,13 +445,28 @@ export class NanobossTuiApp {
       return undefined;
     }
 
+    let catalog: Awaited<ReturnType<typeof discoverAgentCatalog>>;
+    try {
+      catalog = await (this.deps.discoverAgentCatalog ?? discoverAgentCatalog)(provider, {
+        config: { cwd: this.cwd },
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`Failed to refresh models from ${provider} harness: ${message}`);
+    }
+
+    const items = listSelectableModelOptionsFromCatalog(catalog).map((option) => ({
+      value: option.value,
+      label: option.label,
+      description: option.description,
+    }));
+    if (items.length === 0) {
+      throw new Error(`${provider} harness did not advertise any models`);
+    }
+
     const model = await this.promptWithInlineSelect<string>({
-      title: `Choose a ${getProviderLabel(provider)} model`,
-      items: listSelectableModelOptions(provider).map((option) => ({
-        value: option.value,
-        label: option.label,
-        description: option.description,
-      })),
+      title: `Choose a ${catalog.label} model`,
+      items,
       initialValue: currentSelection?.provider === provider ? currentSelection.model : undefined,
       selectedDetailTitle: "Details",
       renderSelectedDetail: (item) => item.description ?? "",

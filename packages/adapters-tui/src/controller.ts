@@ -14,6 +14,10 @@ import {
 import type { DownstreamAgentSelection, PromptInput } from "@nanoboss/contracts";
 import { getBuildLabel } from "@nanoboss/app-support";
 import {
+  discoverAgentCatalog,
+  isKnownModelSelectionInCatalog,
+} from "@nanoboss/agent-acp";
+import {
   createTextPromptInput,
   normalizePromptInput,
   promptInputDisplayText,
@@ -63,6 +67,7 @@ export interface NanobossTuiControllerDeps {
     onEvent: (event: FrontendEventEnvelope) => void;
     onError?: (error: unknown) => void;
   }) => SessionStreamHandle;
+  discoverAgentCatalog?: typeof discoverAgentCatalog;
   promptForModelSelection?: (
     currentSelection?: DownstreamAgentSelection,
   ) => Promise<DownstreamAgentSelection | undefined>;
@@ -195,8 +200,11 @@ export class NanobossTuiController {
 
     const inlineSelection = parseModelSelectionCommand(trimmed);
     if (inlineSelection) {
-      this.applyLocalSelection(inlineSelection);
-      await this.maybePersistDefaultSelection(inlineSelection);
+      const validatedSelection = await this.validateInlineModelSelection(inlineSelection);
+      if (validatedSelection) {
+        this.applyLocalSelection(validatedSelection);
+        await this.maybePersistDefaultSelection(validatedSelection);
+      }
     }
 
     this.deps.onAddHistory?.(text);
@@ -417,7 +425,15 @@ export class NanobossTuiController {
 
   private async openModelPicker(): Promise<void> {
     this.deps.onClearInput?.();
-    const selection = await this.deps.promptForModelSelection?.(this.state.defaultAgentSelection);
+    let selection: DownstreamAgentSelection | undefined;
+    try {
+      selection = await this.deps.promptForModelSelection?.(this.state.defaultAgentSelection);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.dispatch({ type: "local_status", text: `[model] ${message}` });
+      return;
+    }
+
     if (!selection) {
       return;
     }
@@ -427,6 +443,30 @@ export class NanobossTuiController {
     const command = buildModelCommand(selection.provider, selection.model ?? "default");
     this.deps.onAddHistory?.(command);
     await this.forwardPrompt(createTextPromptInput(command));
+  }
+
+  private async validateInlineModelSelection(
+    selection: DownstreamAgentSelection,
+  ): Promise<DownstreamAgentSelection | undefined> {
+    if (!selection.model) {
+      return undefined;
+    }
+
+    try {
+      const catalog = await (this.deps.discoverAgentCatalog ?? discoverAgentCatalog)(selection.provider, {
+        config: { cwd: this.cwd },
+      });
+      return isKnownModelSelectionInCatalog(catalog, selection.model)
+        ? selection
+        : undefined;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.dispatch({
+        type: "local_status",
+        text: `[model] failed to refresh models from ${selection.provider} harness: ${message}`,
+      });
+      return undefined;
+    }
   }
 
   private applyLocalSelection(selection: DownstreamAgentSelection): void {

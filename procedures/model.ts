@@ -1,11 +1,13 @@
 import {
-  findSelectableModelOption,
+  discoverAgentCatalog,
+  findSelectableModelOptionInCatalog,
+  getAgentCatalog,
   getProviderLabel,
   getAgentTokenUsagePercent,
   isKnownAgentProvider,
-  isKnownModelSelection,
   listKnownProviders,
-  listSelectableModelOptions,
+  listSelectableModelOptionsFromCatalog,
+  isKnownModelSelectionInCatalog,
 } from "@nanoboss/agent-acp";
 import { formatAgentBanner, type AgentTokenUsage, type Procedure } from "@nanoboss/procedure-sdk";
 
@@ -56,10 +58,14 @@ export default {
     }
 
     if (rest.length === 0) {
-      const models = listSelectableModelOptions(rawProvider);
+      const catalog = await discoverCatalog(rawProvider, ctx.cwd);
+      const models = listSelectableModelOptionsFromCatalog(catalog);
       return {
         display: [
-          `Models for ${getProviderLabel(rawProvider)}:`,
+          `Models for ${catalog.label}:`,
+          ...(models.length > 0
+            ? []
+            : ["- No models advertised by the harness."]),
           ...models.map((model) => {
             const suffix = model.description ? ` — ${model.description}` : "";
             return `- ${model.value}${suffix}`;
@@ -73,7 +79,8 @@ export default {
     }
 
     const modelSelection = rest.join(" ").trim();
-    if (!isKnownModelSelection(rawProvider, modelSelection)) {
+    const catalog = await discoverCatalog(rawProvider, ctx.cwd);
+    if (!isKnownModelSelectionInCatalog(catalog, modelSelection)) {
       return {
         display: [
           `Unknown ${rawProvider} model: ${modelSelection}`,
@@ -89,7 +96,7 @@ export default {
       provider: rawProvider,
       model: modelSelection,
     });
-    const option = findSelectableModelOption(rawProvider, modelSelection);
+    const option = findSelectableModelOptionInCatalog(catalog, modelSelection);
     const nextBanner = formatAgentBanner(nextConfig);
 
     return {
@@ -99,7 +106,8 @@ export default {
       },
       display: [
         `Default agent set to ${nextBanner}.`,
-        option?.description ? `Model: ${option.label}` : undefined,
+        option ? `Model: ${option.label}` : undefined,
+        option?.description ? `Details: ${option.description}` : undefined,
         "Future /default turns will start a fresh conversation with this selection.",
         "",
       ].filter(Boolean).join("\n"),
@@ -107,6 +115,19 @@ export default {
     };
   },
 } satisfies Procedure;
+
+async function discoverCatalog(
+  provider: Parameters<typeof discoverAgentCatalog>[0],
+  cwd: string,
+): Promise<Awaited<ReturnType<typeof discoverAgentCatalog>>> {
+  try {
+    return await discoverAgentCatalog(provider, {
+      config: { cwd },
+    });
+  } catch {
+    return getAgentCatalog(provider);
+  }
+}
 
 function formatObservedContext(usage: AgentTokenUsage | undefined): string | undefined {
   if (!usage || usage.currentContextTokens === undefined) {

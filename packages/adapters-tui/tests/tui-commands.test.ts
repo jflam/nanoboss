@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
-import { parseToolCardThemeCommand, shouldDisableEditorSubmit } from "@nanoboss/adapters-tui";
+import {
+  parseModelSelectionCommand,
+  parseToolCardThemeCommand,
+  shouldDisableEditorSubmit,
+} from "@nanoboss/adapters-tui";
 
 describe("tui commands", () => {
   test("keeps submit enabled for exit commands while a run is active", () => {
@@ -28,5 +32,14 @@ describe("tui commands", () => {
     expect(parseToolCardThemeCommand("/dark")).toBe("dark");
     expect(parseToolCardThemeCommand("/light")).toBe("light");
     expect(parseToolCardThemeCommand("/model")).toBeUndefined();
+  });
+
+  test("parses inline /model commands syntactically before async validation", () => {
+    expect(parseModelSelectionCommand("/model copilot not-in-catalog")).toEqual({
+      provider: "copilot",
+      model: "not-in-catalog",
+    });
+    expect(parseModelSelectionCommand("/model nope gpt-5.4")).toBeUndefined();
+    expect(parseModelSelectionCommand("/model copilot")).toBeUndefined();
   });
 });

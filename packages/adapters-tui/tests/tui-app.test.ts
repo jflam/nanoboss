@@ -380,6 +380,87 @@ describe("NanobossTuiApp", () => {
     expect(toggles).toEqual(["toggle"]);
   });
 
+  test("uses discovered catalog data for the inline model picker", async () => {
+    const editor = new FakeEditor();
+    const currentState: UiState = createInitialUiState({ cwd: "/repo", showToolCalls: true });
+    const app = new NanobossTuiApp(
+      {
+        serverUrl: "http://localhost:3000",
+        showToolCalls: true,
+      },
+      {
+        discoverAgentCatalog: async () => ({
+          provider: "copilot",
+          label: "Copilot",
+          models: [
+            {
+              id: "claude-opus-4.7",
+              name: "Claude Opus 4.7",
+              description: "Premium reasoning model",
+            },
+          ],
+        }),
+        createTerminal: () => ({
+          setTitle() {},
+          async drainInput() {},
+        }),
+        createTui: () => ({
+          addInputListener() {},
+          addChild() {},
+          setFocus() {},
+          start() {},
+          requestRender() {},
+          stop() {},
+        }),
+        createEditor: () => editor,
+        createController: () => ({
+          getState: () => currentState,
+          async handleSubmit() {},
+          async queuePrompt() {},
+          async cancelActiveRun() {},
+          toggleToolOutput() {},
+          toggleSimplify2AutoApprove() {},
+          showStatus() {},
+          requestExit() {},
+          async run() {
+            return undefined;
+          },
+          async stop() {},
+        }),
+        createView: () => createViewStub(),
+      },
+    );
+
+    const prompts: unknown[] = [];
+    const appLike = app as unknown as {
+      promptForInlineModelSelection: (
+        currentSelection?: { provider: string; model?: string },
+      ) => Promise<{ provider: string; model?: string } | undefined>;
+      promptWithInlineSelect: (options: unknown) => Promise<string | undefined>;
+    };
+    appLike.promptWithInlineSelect = async (options: unknown) => {
+      prompts.push(options);
+      return prompts.length === 1 ? "copilot" : "claude-opus-4.7";
+    };
+
+    const selection = await appLike.promptForInlineModelSelection();
+
+    expect(selection).toEqual({
+      provider: "copilot",
+      model: "claude-opus-4.7",
+    });
+    expect(prompts[1]).toMatchObject({
+      title: "Choose a Copilot model",
+      items: [
+        {
+          value: "claude-opus-4.7",
+          label: "Claude Opus 4.7 (claude-opus-4.7)",
+          description: "Premium reasoning model",
+        },
+      ],
+    });
+  });
+
   test("pressing ctrl+v inserts an image token and submits structured prompt input", async () => {
     const editor = new FakeEditor();
     const submissions: PromptInput[] = [];

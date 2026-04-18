@@ -2,7 +2,6 @@ import type { AutocompleteItem } from "./pi-tui.ts";
 
 import {
   isKnownAgentProvider,
-  isKnownModelSelection,
 } from "@nanoboss/agent-acp";
 import type { DownstreamAgentSelection } from "@nanoboss/contracts";
 import type { ToolCardThemeMode } from "./theme.ts";
@@ -64,7 +63,7 @@ export function parseModelSelectionCommand(line: string): DownstreamAgentSelecti
   }
 
   const model = rest.join(" ").trim();
-  if (!model || !isKnownModelSelection(rawProvider, model)) {
+  if (!model) {
     return undefined;
   }
 

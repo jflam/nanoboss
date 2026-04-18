@@ -230,8 +230,12 @@ export function isKnownAgentProvider(value: string): value is DownstreamAgentPro
 export function listSelectableModelOptions(
   provider: DownstreamAgentProvider,
 ): SelectableModelOption[] {
-  const catalog = getAgentCatalog(provider);
+  return listSelectableModelOptionsFromCatalog(getAgentCatalog(provider));
+}
 
+export function listSelectableModelOptionsFromCatalog(
+  catalog: Pick<AgentCatalogEntry, "models">,
+): SelectableModelOption[] {
   return catalog.models.flatMap((model) => {
     const efforts = model.supportedReasoningEfforts ?? [];
     if (efforts.length === 0) {
@@ -256,12 +260,19 @@ export function findSelectableModelOption(
   provider: DownstreamAgentProvider,
   selection: string,
 ): SelectableModelOption | undefined {
+  return findSelectableModelOptionInCatalog(getAgentCatalog(provider), selection);
+}
+
+export function findSelectableModelOptionInCatalog(
+  catalog: Pick<AgentCatalogEntry, "models">,
+  selection: string,
+): SelectableModelOption | undefined {
   const trimmed = selection.trim();
   if (!trimmed) {
     return undefined;
   }
 
-  const direct = listSelectableModelOptions(provider).find((option) => option.value === trimmed);
+  const direct = listSelectableModelOptionsFromCatalog(catalog).find((option) => option.value === trimmed);
   if (direct) {
     return direct;
   }
@@ -271,7 +282,7 @@ export function findSelectableModelOption(
     return undefined;
   }
 
-  const model = getAgentCatalog(provider).models.find((entry) => entry.id === baseModel);
+  const model = catalog.models.find((entry) => entry.id === baseModel);
   if (!model) {
     return undefined;
   }
@@ -287,12 +298,19 @@ export function isKnownModelSelection(
   provider: DownstreamAgentProvider,
   selection: string,
 ): boolean {
+  return isKnownModelSelectionInCatalog(getAgentCatalog(provider), selection);
+}
+
+export function isKnownModelSelectionInCatalog(
+  catalog: Pick<AgentCatalogEntry, "models">,
+  selection: string,
+): boolean {
   const trimmed = selection.trim();
   if (!trimmed) {
     return false;
   }
 
-  const directMatch = getAgentCatalog(provider).models.some((model) => model.id === trimmed);
+  const directMatch = catalog.models.some((model) => model.id === trimmed);
   if (directMatch) {
     return true;
   }
@@ -302,7 +320,7 @@ export function isKnownModelSelection(
     return false;
   }
 
-  const baseEntry = getAgentCatalog(provider).models.find((model) => model.id === baseModel);
+  const baseEntry = catalog.models.find((model) => model.id === baseModel);
   if (!baseEntry) {
     return false;
   }

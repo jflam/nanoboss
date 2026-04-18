@@ -435,6 +435,17 @@ describe("NanobossTuiController", () => {
           sendCalls.push(toPromptText(prompt));
         },
         startSessionEventStream: ({ sessionId, onEvent }) => createFakeStream([], sessionId, onEvent),
+        discoverAgentCatalog: async () => ({
+          provider: "copilot",
+          label: "Copilot",
+          models: [
+            {
+              id: "gpt-5.4",
+              supportedReasoningEfforts: ["low", "medium", "high", "xhigh"],
+              defaultReasoningEffort: "medium",
+            },
+          ],
+        }),
         confirmPersistDefaultAgentSelection: async () => false,
         persistDefaultAgentSelection: async (selection) => {
           persisted.push(selection);
@@ -459,6 +470,52 @@ describe("NanobossTuiController", () => {
       markdown: "/model copilot gpt-5.4/xhigh",
       status: "complete",
     });
+
+    controller.requestExit();
+    await runPromise;
+  });
+
+  test("inline /model skips local selection updates when live discovery rejects the model", async () => {
+    const sendCalls: string[] = [];
+    const persisted: DownstreamAgentSelection[] = [];
+    const controller = new NanobossTuiController(
+      {
+        serverUrl: "http://localhost:3000",
+        showToolCalls: true,
+      },
+      {
+        ensureMatchingHttpServer: async () => {},
+        createHttpSession: async () => createSession("session-1"),
+        sendSessionPrompt: async (_baseUrl, _sessionId, prompt) => {
+          sendCalls.push(toPromptText(prompt));
+        },
+        startSessionEventStream: ({ sessionId, onEvent }) => createFakeStream([], sessionId, onEvent),
+        discoverAgentCatalog: async () => ({
+          provider: "copilot",
+          label: "Copilot",
+          models: [
+            {
+              id: "gpt-5.4",
+              supportedReasoningEfforts: ["low", "medium", "high", "xhigh"],
+              defaultReasoningEffort: "medium",
+            },
+          ],
+        }),
+        confirmPersistDefaultAgentSelection: async () => true,
+        persistDefaultAgentSelection: async (selection) => {
+          persisted.push(selection);
+        },
+      },
+    );
+
+    const runPromise = controller.run();
+    await waitFor(() => controller.getState().sessionId === "session-1");
+
+    await controller.handleSubmit("/model copilot not-in-catalog");
+
+    expect(controller.getState().defaultAgentSelection).toBeUndefined();
+    expect(persisted).toEqual([]);
+    expect(sendCalls).toEqual(["/model copilot not-in-catalog"]);
 
     controller.requestExit();
     await runPromise;
