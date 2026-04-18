@@ -46,6 +46,12 @@ describe("dispatch-progress", () => {
             content: "export const hello = 1;\nexport const world = 2;",
           },
           duration_ms: 12,
+          tokenUsage: {
+            source: "acp_prompt_response",
+            inputTokens: 10,
+            outputTokens: 4,
+            totalTrackedTokens: 14,
+          },
         },
       });
 
@@ -92,6 +98,12 @@ describe("dispatch-progress", () => {
             content: "export const hello = 1;\nexport const world = 2;",
           },
           duration_ms: 12,
+          tokenUsage: {
+            source: "acp_prompt_response",
+            inputTokens: 10,
+            outputTokens: 4,
+            totalTrackedTokens: 14,
+          },
         },
       });
 
@@ -99,6 +111,12 @@ describe("dispatch-progress", () => {
         sessionUpdate: "usage_update",
         used: 123,
         size: 456,
+      });
+      expect(emitter.currentTokenUsage).toEqual({
+        source: "acp_prompt_response",
+        inputTokens: 10,
+        outputTokens: 4,
+        totalTrackedTokens: 14,
       });
     } finally {
       rmSync(tempDir, { recursive: true, force: true });

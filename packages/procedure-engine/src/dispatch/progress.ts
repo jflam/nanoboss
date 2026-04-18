@@ -3,7 +3,7 @@ import type * as acp from "@agentclientprotocol/sdk";
 import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
 
-import type { ProcedureUiEvent, SessionUpdateEmitter } from "../context/context.ts";
+import type { ProcedureUiEvent, SessionUpdateEmitter } from "../context/shared.ts";
 import type { AgentTokenUsage } from "@nanoboss/contracts";
 
 import { toProcedureUiSessionUpdate } from "../ui-events.ts";

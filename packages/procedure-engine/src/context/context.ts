@@ -25,8 +25,6 @@ import { UiApiImpl } from "./ui-api.ts";
 
 type ActiveRun = ReturnType<SessionStore["startRun"]>;
 
-export type { ProcedureUiEvent, SessionUpdateEmitter } from "./shared.ts";
-
 interface CommandContextParams {
   cwd: string;
   sessionId?: string;

@@ -60,7 +60,7 @@ export {
   waitForRecoveredProcedureDispatchRun,
 };
 
-export type { ExecuteProcedureParams, ProcedureEngineEmitter } from "./procedure-runner.ts";
+export type { ExecuteProcedureParams } from "./procedure-runner.ts";
 export type {
   AgentSession,
   AgentSessionPromptOptions,

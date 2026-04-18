@@ -4,7 +4,6 @@ import {
   normalizeProcedureResult,
 } from "@nanoboss/store";
 import type {
-  AgentTokenUsage,
   DownstreamAgentSelection,
   KernelValue,
   PromptInput,
@@ -30,10 +29,6 @@ import type { RuntimeBindings, SessionUpdateEmitter } from "./context/shared.ts"
 import { RunLogger } from "./logger.ts";
 import { runResultFromRunRecord } from "./run-result.ts";
 import { appendTimingTraceEvent, type RunTimingTrace } from "./timing-trace.ts";
-
-export interface ProcedureEngineEmitter extends SessionUpdateEmitter {
-  readonly currentTokenUsage?: AgentTokenUsage;
-}
 
 export class ProcedureExecutionError extends Error {
   constructor(message: string, readonly run: RunRef) {
@@ -61,7 +56,7 @@ export interface ExecuteProcedureParams {
   procedure: Procedure;
   prompt: string;
   promptInput?: PromptInput;
-  emitter: ProcedureEngineEmitter;
+  emitter: SessionUpdateEmitter;
   signal?: AbortSignal;
   softStopSignal?: AbortSignal;
   bindings: RuntimeBindings;
