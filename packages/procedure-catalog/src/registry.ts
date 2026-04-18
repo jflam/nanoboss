@@ -10,11 +10,14 @@ import {
   loadProcedureFromPath as loadDiskProcedureFromPath,
   persistProcedureSource,
 } from "./disk-loader.ts";
+import {
+  assertProcedureSupportsResume,
+  type LoadableProcedureRegistry,
+} from "./loadable-registry.ts";
 import { loadBuiltinProcedures } from "./builtins.ts";
 import type {
   Procedure,
   ProcedureMetadata,
-  ProcedureRegistryLike,
 } from "@nanoboss/procedure-sdk";
 
 interface ProcedureRegistryOptions {
@@ -29,7 +32,7 @@ interface LoadableProcedureMetadata extends ProcedureMetadata {
   };
 }
 
-export class ProcedureRegistry implements ProcedureRegistryLike {
+export class ProcedureRegistry implements LoadableProcedureRegistry {
   private readonly procedures = new Map<string, Procedure>();
   private readonly procedureRoots: string[];
   private readonly profileProcedureRoot: string;
@@ -136,9 +139,7 @@ export class ProcedureRegistry implements ProcedureRegistryLike {
     if (metadata.continuation?.supportsResume) {
       procedure.resume = async (prompt, state, ctx) => {
         const loaded = await ensureLoaded();
-        if (!loaded.resume) {
-          throw new Error(`Procedure /${loaded.name} does not support continuation.`);
-        }
+        assertProcedureSupportsResume(loaded);
         return await loaded.resume(prompt, state, ctx);
       };
     }

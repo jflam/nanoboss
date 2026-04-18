@@ -1,8 +1,11 @@
+import {
+  assertProcedureSupportsResume,
+  type LoadableProcedureRegistry,
+} from "./loadable-registry.ts";
 import type {
   KernelValue,
   Procedure,
   ProcedureMetadata,
-  ProcedureRegistryLike,
 } from "@nanoboss/procedure-sdk";
 
 export const CREATE_PROCEDURE_METADATA = {
@@ -154,7 +157,7 @@ const BUILTIN_DEFINITIONS = [
   },
 ] as const satisfies readonly BuiltinDefinition[];
 
-export function loadBuiltinProcedures(registry: ProcedureRegistryLike): void {
+export function loadBuiltinProcedures(registry: LoadableProcedureRegistry): void {
   for (const definition of BUILTIN_DEFINITIONS) {
     if (!registry.get(definition.name)) {
       registry.register(createLazyBuiltinProcedure(definition));
@@ -208,9 +211,7 @@ function createLazyBuiltinProcedure(definition: BuiltinDefinition): Procedure {
       ? {
           async resume(prompt: string, state: KernelValue, ctx: Parameters<NonNullable<Procedure["resume"]>>[2]) {
             const procedure = await ensureLoaded();
-            if (!procedure.resume) {
-              throw new Error(`Builtin procedure /${definition.name} does not support continuation.`);
-            }
+            assertProcedureSupportsResume(procedure);
             return await procedure.resume(prompt, state, ctx);
           },
         }

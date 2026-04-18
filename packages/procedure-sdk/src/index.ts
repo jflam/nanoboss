@@ -186,8 +186,6 @@ export interface Procedure extends ProcedureMetadata {
 export interface ProcedureRegistryLike {
   get(name: string): Procedure | undefined;
   register(procedure: Procedure): void;
-  loadProcedureFromPath(path: string): Promise<Procedure>;
-  persist(procedureName: string, source: string, cwd: string): Promise<string>;
   listMetadata(): ProcedureMetadata[];
 }
 

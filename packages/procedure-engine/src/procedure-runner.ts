@@ -1,4 +1,5 @@
 import { CommandContextImpl } from "./context/context.ts";
+import { assertProcedureSupportsResume } from "@nanoboss/procedure-catalog";
 import {
   type SessionStore,
   normalizeProcedureResult,
@@ -192,10 +193,7 @@ async function resumeProcedureExecution(
   state: KernelValue,
   ctx: CommandContextImpl,
 ) {
-  if (!procedure.resume) {
-    throw new Error(`Procedure /${procedure.name} does not support continuation.`);
-  }
-
+  assertProcedureSupportsResume(procedure);
   return await procedure.resume(prompt, state, ctx);
 }
 

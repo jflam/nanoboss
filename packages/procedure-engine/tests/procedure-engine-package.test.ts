@@ -76,12 +76,6 @@ function createRegistry(procedures: Procedure[]): ProcedureRegistryLike {
     register(procedure) {
       byName.set(procedure.name, procedure);
     },
-    async loadProcedureFromPath() {
-      throw new Error("Not implemented in test");
-    },
-    async persist() {
-      throw new Error("Not implemented in test");
-    },
     listMetadata: () => procedures.map(({ name, description, inputHint, executionMode }) => ({
       name,
       description,

@@ -4,12 +4,12 @@ import { join } from "node:path";
 import typia from "typia";
 
 import { detectRepoRoot } from "@nanoboss/app-support";
+import type { LoadableProcedureRegistry } from "@nanoboss/procedure-catalog";
 import { expectData, jsonType } from "@nanoboss/procedure-sdk";
 import type {
   Procedure,
   ProcedureApi,
   ProcedureMetadata,
-  ProcedureRegistryLike,
 } from "@nanoboss/procedure-sdk";
 
 interface GeneratedProcedure {
@@ -28,7 +28,7 @@ const GeneratedProcedureType = jsonType<GeneratedProcedure>(
   typia.createValidate<GeneratedProcedure>(),
 );
 
-export function createCreateProcedure(registry: ProcedureRegistryLike): Procedure {
+export function createCreateProcedure(registry: LoadableProcedureRegistry): Procedure {
   return {
     ...CREATE_PROCEDURE_METADATA,
     async execute(prompt, ctx) {

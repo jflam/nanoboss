@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
 import { createCreateProcedure } from "../../procedures/create.ts";
-import type { ProcedureApi, ProcedureRegistryLike } from "@nanoboss/procedure-sdk";
+import type { LoadableProcedureRegistry } from "@nanoboss/procedure-catalog";
+import type { ProcedureApi } from "@nanoboss/procedure-sdk";
 import { normalizeProcedureResult } from "@nanoboss/store";
 
 describe("create procedure", () => {
@@ -130,8 +131,8 @@ describe("create procedure", () => {
 });
 
 function createRegistry(
-  overrides: Partial<ProcedureRegistryLike> = {},
-): ProcedureRegistryLike {
+  overrides: Partial<LoadableProcedureRegistry> = {},
+): LoadableProcedureRegistry {
   return {
     get: () => undefined,
     register() {},

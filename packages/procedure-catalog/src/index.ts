@@ -1,4 +1,9 @@
 export {
+  assertProcedureSupportsResume,
+  type LoadableProcedureRegistry,
+} from "./loadable-registry.ts";
+
+export {
   ProcedureRegistry,
   projectProcedureMetadata,
   toAvailableCommand,
