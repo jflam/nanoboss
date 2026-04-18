@@ -282,6 +282,8 @@ export {
   defaultCancellationMessage,
   normalizeRunCancelledError,
   RunCancelledError,
+  throwIfCancelled,
+  toCancelledError,
   type RunCancellationReason,
 } from "./cancellation.ts";
 

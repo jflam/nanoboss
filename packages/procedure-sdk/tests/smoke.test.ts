@@ -22,6 +22,8 @@ const EXPECTED_RUNTIME_EXPORTS = [
   "promptInputDisplayText",
   "promptInputToPlainText",
   "summarizeText",
+  "throwIfCancelled",
+  "toCancelledError",
 ] as const;
 
 test("package entrypoint resolves through built artifacts with a stable runtime export surface", async () => {

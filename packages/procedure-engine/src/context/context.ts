@@ -16,7 +16,7 @@ import type {
   StateApi,
   UiApi,
 } from "@nanoboss/procedure-sdk";
-import { RunCancelledError, defaultCancellationMessage } from "@nanoboss/procedure-sdk";
+import { throwIfCancelled } from "@nanoboss/procedure-sdk";
 
 import type { RunLogger } from "../logger.ts";
 import { normalizeProcedurePromptInput } from "../prompt.ts";
@@ -167,13 +167,9 @@ export class CommandContextImpl implements ProcedureApi {
 
   private assertCanStartBoundary(): void {
     this.assertCanStartBoundaryValue?.();
-
-    if (this.softStopSignal?.aborted) {
-      throw new RunCancelledError(defaultCancellationMessage("soft_stop"), "soft_stop");
-    }
-
-    if (this.signal?.aborted) {
-      throw new RunCancelledError(defaultCancellationMessage("abort"), "abort");
-    }
+    throwIfCancelled({
+      signal: this.signal,
+      softStopSignal: this.softStopSignal,
+    });
   }
 }

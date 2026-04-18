@@ -4,10 +4,9 @@ import type { AgentSession } from "@nanoboss/contracts";
 import { createRef } from "@nanoboss/contracts";
 import type { AgentTokenUsage, DownstreamAgentConfig, Ref, RunRecord, RunResult } from "@nanoboss/procedure-sdk";
 import {
-  RunCancelledError,
   createTextPromptInput,
-  defaultCancellationMessage,
   summarizeText,
+  throwIfCancelled,
 } from "@nanoboss/procedure-sdk";
 
 import { inferDataShape } from "../data-shape.ts";
@@ -29,13 +28,7 @@ export async function waitForRecoveredProcedureDispatchRun(
   const deadline = Date.now() + getProcedureDispatchRecoveryWaitMs();
 
   for (;;) {
-    if (params.softStopSignal?.aborted) {
-      throw new RunCancelledError(defaultCancellationMessage("soft_stop"), "soft_stop");
-    }
-
-    if (params.signal?.aborted) {
-      throw new RunCancelledError(defaultCancellationMessage("abort"), "abort");
-    }
+    throwIfCancelled(params);
 
     const found = findRecoveredProcedureDispatchRun(store, params);
     if (found) {

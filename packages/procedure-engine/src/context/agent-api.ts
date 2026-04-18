@@ -23,12 +23,10 @@ import type {
   TypeDescriptor,
 } from "@nanoboss/procedure-sdk";
 import {
-  RunCancelledError,
-  defaultCancellationMessage,
   formatErrorMessage,
-  normalizeRunCancelledError,
   promptInputDisplayText,
   summarizeText,
+  toCancelledError,
 } from "@nanoboss/procedure-sdk";
 
 import { resolveDownstreamAgentConfig, toDownstreamAgentSelection } from "../agent-config.ts";
@@ -198,10 +196,7 @@ export class AgentRunRecorder {
     error: unknown,
     agent?: DownstreamAgentSelection,
   ): never {
-    const cancelled = normalizeRunCancelledError(
-      error,
-      this.params.softStopSignal?.aborted ? "soft_stop" : "abort",
-    );
+    const cancelled = toCancelledError(error, this.params);
     const message = cancelled?.message ?? formatErrorMessage(error);
 
     this.params.logger.write({

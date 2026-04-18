@@ -17,10 +17,10 @@ import type {
 import {
   RunCancelledError,
   formatErrorMessage,
-  normalizeRunCancelledError,
   promptInputDisplayText,
   promptInputToPlainText,
   summarizeText,
+  toCancelledError,
   type RunCancellationReason,
 } from "@nanoboss/procedure-sdk";
 
@@ -143,10 +143,7 @@ export async function executeProcedure(params: ExecuteProcedureParams): Promise<
       defaultAgentSelection: changedSelection,
     });
   } catch (error) {
-    const cancelled = normalizeRunCancelledError(
-      error,
-      params.softStopSignal?.aborted ? "soft_stop" : "abort",
-    );
+    const cancelled = toCancelledError(error, params);
     if (cancelled) {
       logger.write({
         spanId: rootSpanId,
