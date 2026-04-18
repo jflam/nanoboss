@@ -1,10 +1,12 @@
 import { expect, test } from "bun:test";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
   buildReasoningModelSelection,
+  discoverAgentCatalog,
   findSelectableModelOption,
   isKnownAgentProvider,
   isKnownModelSelection,
@@ -14,6 +16,26 @@ import {
 } from "@nanoboss/agent-acp";
 
 const REPO_ROOT = fileURLToPath(new URL("../../../", import.meta.url));
+const DISCOVERY_MOCK_AGENT_PATH = fileURLToPath(
+  new URL("../../../tests/fixtures/catalog-discovery-mock-agent.ts", import.meta.url),
+);
+const originalHome = process.env.HOME;
+const testHome = mkdtempSync(join(tmpdir(), "nanoboss-model-catalog-home-"));
+
+process.env.HOME = testHome;
+process.on("exit", () => {
+  try {
+    rmSync(testHome, { recursive: true, force: true });
+  } catch {
+    // Ignore cleanup failures during test shutdown.
+  }
+
+  if (originalHome === undefined) {
+    delete process.env.HOME;
+  } else {
+    process.env.HOME = originalHome;
+  }
+});
 
 test("lists the known downstream agents", () => {
   expect(listKnownProviders()).toEqual(["claude", "gemini", "codex", "copilot"]);
@@ -80,6 +102,54 @@ test("requires canonical gemini model ids", () => {
   expect(isKnownModelSelection("gemini", "gemini-2.5-pro")).toBe(true);
   expect(isKnownModelSelection("gemini", "pro")).toBe(false);
   expect(findSelectableModelOption("gemini", "flash")).toBeUndefined();
+});
+
+test("discovers a live provider catalog from ACP session metadata and closes the probe session", async () => {
+  const logDir = mkdtempSync(join(tmpdir(), "nanoboss-model-discovery-"));
+  const logPath = join(logDir, "events.jsonl");
+  try {
+    const catalog = await discoverAgentCatalog("copilot", {
+      config: {
+        command: "bun",
+        args: ["run", DISCOVERY_MOCK_AGENT_PATH],
+        cwd: REPO_ROOT,
+        env: {
+          DISCOVERY_AGENT_LOG: logPath,
+        },
+      },
+    });
+
+    expect(catalog).toEqual({
+      provider: "copilot",
+      label: "Copilot",
+      models: [
+        {
+          id: "gpt-5.4-mini",
+          name: "GPT-5.4 Mini",
+          description: "Fast frontier mini",
+        },
+        {
+          id: "claude-opus-4.7",
+          name: "Claude Opus 4.7",
+          description: "Premium reasoning model",
+        },
+        {
+          id: "gpt-5.4",
+          name: "GPT-5.4",
+          description: "Primary frontier model",
+        },
+      ],
+    });
+
+    const events = readFileSync(logPath, "utf8")
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line) as { kind: string; sessionId: string });
+    expect(events.map((event) => event.kind)).toEqual(["new_session", "close_session"]);
+    expect(events[0]?.sessionId).toBe(events[1]?.sessionId);
+  } finally {
+    rmSync(logDir, { recursive: true, force: true });
+  }
 });
 
 test("keeps the model catalog owned by the public agent-acp package", () => {
