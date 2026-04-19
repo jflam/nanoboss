@@ -283,6 +283,101 @@ If you need to disable runtime disk command loading, set:
 NANOBOSS_LOAD_DISK_COMMANDS=0
 ```
 
+## TUI extensions
+
+TUI extensions let you add keybindings, chrome (header/footer/status) slots,
+activity-bar segments, and panel renderers to the nanoboss TUI without
+patching a core package. They load at TUI startup from three tiers, matching
+the procedure-loading layout described above.
+
+### File layout
+
+Extensions are discovered recursively under the two disk tiers:
+
+- `<repo>/.nanoboss/extensions/<name>.ts` — repo-scoped, travels with the
+  project (commit it alongside the procedures it collaborates with)
+- `<repo>/.nanoboss/extensions/<name>/index.ts` — same scope, directory form
+- `~/.nanoboss/extensions/<name>.ts` — profile-scoped, available in every
+  workspace you open
+- `~/.nanoboss/extensions/<name>/index.ts` — same scope, directory form
+
+Plus a third, non-disk tier: **built-in** extensions compiled into
+nanoboss itself (e.g. `nb-core-cards`, which owns `nb/card@1`).
+
+### Extension contract
+
+Each `.ts` entry default-exports a `TuiExtension` from
+`@nanoboss/tui-extension-sdk`. A grep-able top-level `metadata` export keeps
+discovery cheap — the catalog reads it statically without executing the
+module:
+
+```ts
+import type { TuiExtension, TuiExtensionMetadata } from "@nanoboss/tui-extension-sdk";
+
+export const metadata: TuiExtensionMetadata = {
+  name: "acme-hello",
+  version: "1.0.0",
+  description: "Greet the world from the footer slot",
+};
+
+const extension: TuiExtension = {
+  metadata,
+  activate(ctx) {
+    ctx.registerKeyBinding({
+      id: "greet",                  // becomes "acme-hello/greet" after namespacing
+      category: "custom",
+      label: "acme hello greet",
+      match: (data) => data === "\u0001acme-hello-greet\u0001",
+      run: () => ({ consume: true }),
+    });
+    ctx.registerChromeContribution({
+      id: "badge",                  // becomes "acme-hello/badge"
+      slot: "footer",
+      render: () => ({ acme: true } as unknown as never),
+    });
+  },
+};
+
+export default extension;
+```
+
+The `activate(ctx)` function receives a `TuiExtensionContext` — the only
+surface that mutates runtime state. Four `register*` methods are available:
+
+- `registerKeyBinding(binding)` — add a keyboard/sequence binding
+- `registerChromeContribution(contribution)` — render content into a named
+  chrome slot (`header`, `footer`, `status`, …)
+- `registerActivityBarSegment(segment)` — append a segment to the activity
+  bar
+- `registerPanelRenderer(renderer)` — handle `ui.panel({ rendererId, … })`
+  calls emitted by procedures (e.g. `"acme/files-dashboard@1"`)
+
+There is also a `ctx.log.{info,warning,error}` logger that routes through
+the same status-line pathway core uses, so messages surface to the user
+without crashing the TUI.
+
+### Id namespacing and precedence
+
+All contribution ids except panel-renderer `rendererId` are automatically
+namespaced `<extensionName>/<id>` when registered, so two extensions cannot
+collide on ids. Panel-renderer `rendererId`s are the public contract
+procedures target via `ui.panel(...)` and are **not** namespaced — the
+author of the id (e.g. `nb/card@1`) owns the convention.
+
+Precedence across tiers is **repo > profile > builtin**. If two extensions
+declare the same `metadata.name`, only the highest-tier copy loads. For
+panel renderers registering the same `rendererId`, the highest-tier copy
+wins and lower tiers emit a shadow warning via `ctx.log.warning`.
+
+### Introspection
+
+Inside the TUI, the `/extensions` slash command prints one line per loaded
+extension showing its scope, activation status, contribution counts, and —
+for failed extensions — the captured error message. If any extension fails
+`activate()`, an aggregate line (`[extensions] N extension(s) failed to
+activate`) is emitted via the status line after boot; the TUI itself keeps
+running with the remaining extensions active.
+
 ## Unified entrypoint
 
 Everything goes through a single `nanoboss` entrypoint.
