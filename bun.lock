@@ -157,6 +157,14 @@
         "@nanoboss/procedure-sdk": "workspace:*",
       },
     },
+    "packages/tui-extension-catalog": {
+      "name": "@nanoboss/tui-extension-catalog",
+      "version": "0.0.0",
+      "dependencies": {
+        "@nanoboss/app-support": "workspace:*",
+        "@nanoboss/tui-extension-sdk": "workspace:*",
+      },
+    },
     "packages/tui-extension-sdk": {
       "name": "@nanoboss/tui-extension-sdk",
       "version": "0.0.0",
@@ -235,6 +243,8 @@
     "@nanoboss/procedure-sdk": ["@nanoboss/procedure-sdk@workspace:packages/procedure-sdk"],
 
     "@nanoboss/store": ["@nanoboss/store@workspace:packages/store"],
+
+    "@nanoboss/tui-extension-catalog": ["@nanoboss/tui-extension-catalog@workspace:packages/tui-extension-catalog"],
 
     "@nanoboss/tui-extension-sdk": ["@nanoboss/tui-extension-sdk@workspace:packages/tui-extension-sdk"],
 
