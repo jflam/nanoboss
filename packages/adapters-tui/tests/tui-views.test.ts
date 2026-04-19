@@ -1154,6 +1154,81 @@ describe("NanobossAppView", () => {
     expect(plain).toContain("queued 1");
   });
 
+  describe("activity bar identity line priority-drop overflow", () => {
+    const baseState = () => ({
+      ...createInitialUiState({ cwd: "/repo" }),
+      sessionId: "session-1",
+      tokenUsage: { used: 32_499, limit: 168_000, percent: 19.3 },
+      defaultAgentSelection: {
+        provider: "copilot" as const,
+        model: "claude-opus-4.7/medium",
+      },
+      agentLabel: "copilot/claude-opus-4.7/medium",
+    });
+
+    const renderAt = (width: number): string => {
+      const view = new NanobossAppView(
+        { render: () => [""], invalidate() {} } as never,
+        createNanobossTuiTheme(),
+        baseState(),
+      );
+      return stripAnsi(view.render(width).join("\n"));
+    };
+
+    test("(a) at width 120 nothing is dropped", () => {
+      const plain = renderAt(120);
+      expect(plain).not.toContain("…");
+      expect(plain).toContain("@copilot");
+      expect(plain).toContain("claude-opus-4.7/medium");
+      expect(plain).toContain("tok 32.5k/168k (19%)");
+    });
+
+    test("(b) at a width where only '(NN%)' must drop, percent is dropped first and '/168k' remains", () => {
+      const plain = renderAt(55);
+      expect(plain).not.toContain("…");
+      expect(plain).not.toContain("(19%)");
+      expect(plain).toContain("tok 32.5k/168k");
+      expect(plain).toContain("@copilot");
+      expect(plain).toContain("claude-opus-4.7/medium");
+    });
+
+    test("(c) at a narrower width '/168k' is also dropped leaving 'tok 32.5k'", () => {
+      const plain = renderAt(49);
+      expect(plain).not.toContain("…");
+      expect(plain).not.toContain("(19%)");
+      expect(plain).not.toContain("168k");
+      expect(plain).toContain("tok 32.5k");
+      expect(plain).toContain("@copilot");
+      expect(plain).toContain("claude-opus-4.7/medium");
+    });
+
+    test("(d) narrower still drops '@copilot'", () => {
+      const plain = renderAt(44);
+      expect(plain).not.toContain("…");
+      expect(plain).not.toContain("@copilot");
+      expect(plain).not.toContain("168k");
+      expect(plain).not.toContain("(19%)");
+      expect(plain).toContain("tok 32.5k");
+      expect(plain).toContain("claude-opus-4.7/medium");
+    });
+
+    test("(e) narrower still drops the model '/medium' qualifier", () => {
+      const plain = renderAt(33);
+      expect(plain).not.toContain("…");
+      expect(plain).not.toContain("@copilot");
+      expect(plain).not.toContain("/medium");
+      expect(plain).not.toContain("168k");
+      expect(plain).not.toContain("(19%)");
+      expect(plain).toContain("claude-opus-4.7");
+      expect(plain).toContain("tok 32.5k");
+    });
+
+    test("(f) only at extreme narrowness does '…' truncation occur", () => {
+      const plain = renderAt(20);
+      expect(plain).toContain("…");
+    });
+  });
+
   test("collapsed tool output can be expanded globally", () => {
     const lines = Array.from({ length: 12 }, (_, index) => `line ${index + 1}`);
     const collapsedView = new NanobossAppView(

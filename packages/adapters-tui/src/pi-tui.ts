@@ -12,6 +12,8 @@ export {
   TruncatedText,
   TUI,
   matchesKey,
+  truncateToWidth,
+  visibleWidth,
   type AutocompleteItem,
   type Component,
   type EditorTheme,

@@ -1,10 +1,10 @@
-import { Container, Markdown, Spacer, Text, TruncatedText, type Component } from "./pi-tui.ts";
+import { Container, Markdown, Spacer, Text, TruncatedText, truncateToWidth, visibleWidth, type Component } from "./pi-tui.ts";
 import type { UiState, UiToolCall, UiTranscriptItem, UiTurn } from "./state.ts";
 import type { NanobossTuiTheme } from "./theme.ts";
 
 import { MessageCardComponent } from "./components/message-card.ts";
 import { ToolCardComponent } from "./components/tool-card.ts";
-import { formatCompactTokenUsage, formatElapsedRunTimer } from "./format.ts";
+import { formatCompactTokenUsage, formatElapsedRunTimer, stripModelQualifier } from "./format.ts";
 
 export class NanobossAppView implements Component {
   private readonly container = new Container();
@@ -134,10 +134,16 @@ class ActivityBarComponent implements Component {
 
   render(width: number): string[] {
     const state = this.getState();
-    const lines = buildActivityBarLines(this.theme, state, this.nowProvider());
+    const lines = buildActivityBarLines(this.theme, state, this.nowProvider(), width);
     const out: string[] = [];
     if (lines.length > 0) {
-      out.push(...new TruncatedText(lines[0]!).render(width));
+      const firstLine = lines[0]!;
+      // After priority-drop, if the line still overflows we fall back to
+      // ellipsis truncation with a "…" character (last resort).
+      const finalized = visibleWidth(firstLine) > width
+        ? truncateToWidth(firstLine, width, "…")
+        : firstLine;
+      out.push(...new TruncatedText(finalized).render(width));
     }
     for (let i = 1; i < lines.length; i += 1) {
       out.push(...new Text(lines[i]!, 0, 0).render(width));
@@ -296,27 +302,81 @@ function createTranscriptEntryComponent(
   return toolCall ? new ToolTranscriptEntryComponent(theme, toolCall, expandedToolOutput) : undefined;
 }
 
-function buildActivityBarLines(theme: NanobossTuiTheme, state: UiState, nowMs: number): string[] {
+function buildActivityBarLines(
+  theme: NanobossTuiTheme,
+  state: UiState,
+  nowMs: number,
+  width?: number,
+): string[] {
   const separator = theme.dim(" • ");
-  const identity = buildIdentityBudgetParts(theme, state);
   const runState = buildRunStateParts(theme, state, nowMs);
-  const lines: string[] = [identity.join(separator)];
+  const identityLine = buildIdentityBudgetLineForWidth(theme, state, separator, width);
+  const lines: string[] = [identityLine];
   if (runState.length > 0) {
     lines.push(runState.join(separator));
   }
   return lines;
 }
 
-function buildIdentityBudgetParts(theme: NanobossTuiTheme, state: UiState): string[] {
+interface IdentityBudgetDropLevels {
+  includeTokenPercent: boolean;
+  includeTokenLimit: boolean;
+  includeAgent: boolean;
+  includeModelQualifier: boolean;
+}
+
+const IDENTITY_BUDGET_DROP_ORDER: IdentityBudgetDropLevels[] = [
+  { includeTokenPercent: true, includeTokenLimit: true, includeAgent: true, includeModelQualifier: true },
+  { includeTokenPercent: false, includeTokenLimit: true, includeAgent: true, includeModelQualifier: true },
+  { includeTokenPercent: false, includeTokenLimit: false, includeAgent: true, includeModelQualifier: true },
+  { includeTokenPercent: false, includeTokenLimit: false, includeAgent: false, includeModelQualifier: true },
+  { includeTokenPercent: false, includeTokenLimit: false, includeAgent: false, includeModelQualifier: false },
+];
+
+function buildIdentityBudgetLineForWidth(
+  theme: NanobossTuiTheme,
+  state: UiState,
+  separator: string,
+  width: number | undefined,
+): string {
+  if (width === undefined || width <= 0) {
+    const parts = buildIdentityBudgetParts(theme, state, IDENTITY_BUDGET_DROP_ORDER[0]!);
+    return parts.join(separator);
+  }
+  let lastLine = "";
+  for (const levels of IDENTITY_BUDGET_DROP_ORDER) {
+    const parts = buildIdentityBudgetParts(theme, state, levels);
+    lastLine = parts.join(separator);
+    if (visibleWidth(lastLine) <= width) {
+      return lastLine;
+    }
+  }
+  return lastLine;
+}
+
+function buildIdentityBudgetParts(
+  theme: NanobossTuiTheme,
+  state: UiState,
+  levels: IdentityBudgetDropLevels = IDENTITY_BUDGET_DROP_ORDER[0]!,
+): string[] {
   const parts: string[] = [];
   const selection = state.defaultAgentSelection;
   if (!selection) {
-    parts.push(theme.accent(`@${state.agentLabel || "connecting"}`));
+    if (levels.includeAgent) {
+      parts.push(theme.accent(`@${state.agentLabel || "connecting"}`));
+    }
   } else {
-    parts.push(theme.accent(`@${selection.provider}`));
-    parts.push(theme.accent(getActivityBarModelLabel(state)));
+    if (levels.includeAgent) {
+      parts.push(theme.accent(`@${selection.provider}`));
+    }
+    const modelLabel = getActivityBarModelLabel(state);
+    const effectiveModel = levels.includeModelQualifier ? modelLabel : stripModelQualifier(modelLabel);
+    parts.push(theme.accent(effectiveModel));
   }
-  const tokenText = buildTokenUsageText(state);
+  const tokenText = buildTokenUsageText(state, {
+    includePercent: levels.includeTokenPercent,
+    includeLimit: levels.includeTokenLimit,
+  });
   if (tokenText) {
     parts.push(theme.success(tokenText));
   }
@@ -374,9 +434,12 @@ function buildRunTimerLine(state: UiState, nowMs: number): string | undefined {
   return formatElapsedRunTimer(Math.max(0, nowMs - state.runStartedAtMs));
 }
 
-function buildTokenUsageText(state: UiState): string | undefined {
+function buildTokenUsageText(
+  state: UiState,
+  options?: { includePercent?: boolean; includeLimit?: boolean },
+): string | undefined {
   if (state.tokenUsage) {
-    const compact = formatCompactTokenUsage(state.tokenUsage);
+    const compact = formatCompactTokenUsage(state.tokenUsage, options);
     if (compact) {
       return compact;
     }

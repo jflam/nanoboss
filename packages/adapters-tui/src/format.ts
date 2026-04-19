@@ -61,19 +61,37 @@ function formatCompactTokenCount(value: number): string {
   return `${Math.round(millions)}M`;
 }
 
-export function formatCompactTokenUsage(summary: TokenUsageSummary): string | undefined {
+interface FormatCompactTokenUsageOptions {
+  includePercent?: boolean;
+  includeLimit?: boolean;
+}
+
+export function formatCompactTokenUsage(
+  summary: TokenUsageSummary,
+  options?: FormatCompactTokenUsageOptions,
+): string | undefined {
   if (summary.used === undefined && summary.limit === undefined && summary.percent === undefined) {
     return undefined;
   }
+  const includePercent = options?.includePercent ?? true;
+  const includeLimit = options?.includeLimit ?? true;
   const used = summary.used !== undefined ? formatCompactTokenCount(summary.used) : "?";
   const segments = [`tok ${used}`];
-  if (summary.limit !== undefined) {
+  if (includeLimit && summary.limit !== undefined) {
     segments[0] = `tok ${used}/${formatCompactTokenCount(summary.limit)}`;
   }
-  if (summary.percent !== undefined) {
+  if (includePercent && summary.percent !== undefined) {
     segments.push(`(${Math.round(summary.percent)}%)`);
   }
   return segments.join(" ");
+}
+
+export function stripModelQualifier(model: string): string {
+  const slash = model.indexOf("/");
+  if (slash === -1) {
+    return model;
+  }
+  return model.slice(0, slash);
 }
 
 function trimTrailingZero(value: string): string {
