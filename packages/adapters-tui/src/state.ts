@@ -84,6 +84,7 @@ export interface UiState {
   expandedToolOutput: boolean;
   toolCardThemeMode: ToolCardThemeMode;
   simplify2AutoApprove: boolean;
+  liveUpdatesPaused?: boolean;
 }
 
 export function createInitialUiState(params: {

@@ -1446,6 +1446,101 @@ describe("NanobossTuiApp", () => {
     expect(clearedIntervals).toEqual([1]);
   });
 
+  test("ctrl+p toggles live-update pause, suppresses renders while paused, and flushes on resume", async () => {
+    const editor = new FakeEditor();
+    let currentState: UiState = createInitialUiState({ cwd: "/repo", showToolCalls: true });
+    let capturedOnStateChange: ((state: UiState) => void) | undefined;
+    let inputListener: ((data: string) => unknown) | undefined;
+    let requestRenderCalls = 0;
+    const setStates: UiState[] = [];
+
+    new NanobossTuiApp(
+      {
+        serverUrl: "http://localhost:3000",
+        showToolCalls: true,
+      },
+      {
+        createTerminal: () => ({
+          setTitle() {},
+          async drainInput() {},
+        }),
+        createTui: () => ({
+          addInputListener(listener) {
+            inputListener = listener;
+          },
+          addChild() {},
+          setFocus() {},
+          start() {},
+          requestRender() {
+            requestRenderCalls += 1;
+          },
+          stop() {},
+        }),
+        createEditor: () => editor,
+        createController: (_params, deps) => {
+          capturedOnStateChange = deps.onStateChange;
+          return {
+            getState: () => currentState,
+            async handleSubmit() {},
+            async queuePrompt() {},
+            async cancelActiveRun() {},
+            toggleToolOutput() {},
+            toggleSimplify2AutoApprove() {},
+            showStatus() {},
+            requestExit() {},
+            async run() {
+              return undefined;
+            },
+            async stop() {},
+          };
+        },
+        createView: () => ({
+          setState(state: UiState) {
+            setStates.push(state);
+          },
+          showComposer() {},
+          showEditor() {},
+        }),
+      },
+    );
+
+    // Initial syncState in constructor produces one render + one setState.
+    expect(requestRenderCalls).toBe(1);
+    expect(setStates.at(-1)?.liveUpdatesPaused).toBe(false);
+    const rendersAfterCtor = requestRenderCalls;
+
+    // Ctrl+P (DLE, \u0010) — enter paused.
+    const result = inputListener?.("\u0010");
+    await Promise.resolve();
+    expect(result).toEqual({ consume: true });
+    expect(setStates.at(-1)?.liveUpdatesPaused).toBe(true);
+    // Transition render draws the paused indicator.
+    expect(requestRenderCalls).toBe(rendersAfterCtor + 1);
+
+    // Streaming state updates while paused must NOT cause any terminal writes.
+    const rendersBeforePausedUpdates = requestRenderCalls;
+    currentState = { ...currentState, tokenUsageLine: "tokens 100" };
+    capturedOnStateChange?.(currentState);
+    currentState = { ...currentState, tokenUsageLine: "tokens 250" };
+    capturedOnStateChange?.(currentState);
+    expect(requestRenderCalls).toBe(rendersBeforePausedUpdates);
+    // But the view's in-memory state still updated so resume can flush it.
+    expect(setStates.at(-1)?.tokenUsageLine).toBe("tokens 250");
+    expect(setStates.at(-1)?.liveUpdatesPaused).toBe(true);
+
+    // Ctrl+P again — resume. Exactly one flush render, indicator cleared.
+    inputListener?.("\u0010");
+    await Promise.resolve();
+    expect(setStates.at(-1)?.liveUpdatesPaused).toBe(false);
+    expect(requestRenderCalls).toBe(rendersBeforePausedUpdates + 1);
+
+    // Post-resume updates render again as normal.
+    const rendersAfterResume = requestRenderCalls;
+    currentState = { ...currentState, tokenUsageLine: "tokens 400" };
+    capturedOnStateChange?.(currentState);
+    expect(requestRenderCalls).toBe(rendersAfterResume + 1);
+  });
+
   test("applies local tool card theme changes to the shared theme instance", () => {
     const editor = new FakeEditor();
     const theme = createNanobossTuiTheme();

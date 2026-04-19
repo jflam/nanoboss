@@ -192,6 +192,7 @@ export class NanobossTuiApp {
   private openSimplify2ContinuationSignature?: string;
   private lastSeenSimplify2ContinuationSignature?: string;
   private dismissedSimplify2ContinuationSignature?: string;
+  private liveUpdatesPaused = false;
 
   constructor(
     private readonly params: NanobossTuiAppParams,
@@ -296,6 +297,11 @@ export class NanobossTuiApp {
         return { consume: true };
       }
 
+      if (matchesKey(data, "ctrl+p")) {
+        this.toggleLiveUpdatesPaused();
+        return { consume: true };
+      }
+
       if (matchesKey(data, "backspace") && this.handleImageTokenDeletion("backspace")) {
         return { consume: true };
       }
@@ -347,12 +353,41 @@ export class NanobossTuiApp {
     if (this.theme.getToolCardMode() !== state.toolCardThemeMode) {
       this.theme.setToolCardMode(state.toolCardThemeMode);
     }
-    this.state = state;
+    this.state = { ...state, liveUpdatesPaused: this.liveUpdatesPaused };
     this.updateEditorSubmitState();
     this.refreshAutocompleteProvider();
     this.view.setState(this.state);
     this.syncSimplify2ContinuationComposer();
-    this.tui.requestRender();
+    this.requestRender();
+  }
+
+  private requestRender(force?: boolean): void {
+    if (this.liveUpdatesPaused) {
+      if (!force) {
+        return;
+      }
+      // A forced render (e.g. user-triggered overlay/composer change) implicitly
+      // resumes live updates so the user can see the UI change they just requested.
+      this.setLiveUpdatesPaused(false);
+      return;
+    }
+    this.tui.requestRender(force);
+  }
+
+  private toggleLiveUpdatesPaused(): void {
+    this.setLiveUpdatesPaused(!this.liveUpdatesPaused);
+  }
+
+  private setLiveUpdatesPaused(paused: boolean): void {
+    if (this.liveUpdatesPaused === paused) {
+      return;
+    }
+    this.liveUpdatesPaused = paused;
+    this.state = { ...this.state, liveUpdatesPaused: paused };
+    this.view.setState(this.state);
+    // Force a single render on every transition: entering pause draws the
+    // indicator; leaving pause flushes all updates accumulated while paused.
+    this.tui.requestRender(true);
   }
 
   private updateEditorSubmitState(): void {
@@ -525,7 +560,7 @@ export class NanobossTuiApp {
       );
       this.view.showComposer(component);
       this.tui.setFocus(component);
-      this.tui.requestRender(true);
+      this.requestRender(true);
     });
   }
 
@@ -534,7 +569,7 @@ export class NanobossTuiApp {
     this.openSimplify2ContinuationSignature = undefined;
     this.view.showEditor();
     this.tui.setFocus(this.editor);
-    this.tui.requestRender(true);
+    this.requestRender(true);
   }
 
   private syncSimplify2ContinuationComposer(): void {
@@ -585,7 +620,7 @@ export class NanobossTuiApp {
     );
     this.view.showComposer(component);
     this.tui.setFocus(component);
-    this.tui.requestRender(true);
+    this.requestRender(true);
   }
 
   private showSimplify2FocusPickerOverlay(
@@ -605,7 +640,7 @@ export class NanobossTuiApp {
     );
     this.view.showComposer(component);
     this.tui.setFocus(component);
-    this.tui.requestRender(true);
+    this.requestRender(true);
   }
 
   private handleSimplify2ContinuationAction(action: Simplify2CheckpointContinuationUiAction | undefined): void {
@@ -676,7 +711,7 @@ export class NanobossTuiApp {
         return;
       }
 
-      this.tui.requestRender();
+      this.requestRender();
     }, 1_000);
   }
 

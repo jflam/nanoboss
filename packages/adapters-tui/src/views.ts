@@ -92,11 +92,15 @@ export class NanobossAppView implements Component {
   }
 
   private buildFooterLine(): string {
+    if (this.state.liveUpdatesPaused) {
+      return this.theme.warning("⏸ updates paused — ctrl+p to resume (native terminal scrollback works while paused)");
+    }
     const parts = [
       this.state.inputDisabled ? "enter steer" : "enter send",
       "shift+enter newline",
       "ctrl+o tools",
       "ctrl+g auto-approve",
+      "ctrl+p pause",
       this.state.expandedToolOutput ? "expanded" : "collapsed",
       "/new",
       "/model",
