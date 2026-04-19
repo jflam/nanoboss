@@ -6,6 +6,7 @@ export {
   isTokenUsageEvent,
   isToolStartedEvent,
   isToolUpdatedEvent,
+  buildTurnDisplay,
 } from "@nanoboss/app-runtime";
 
 export {
@@ -33,4 +34,6 @@ export type {
   TokenUsageEventEnvelope,
   ToolStartedEventEnvelope,
   ToolUpdatedEventEnvelope,
+  TurnDisplay,
+  TurnDisplayBlock,
 } from "@nanoboss/app-runtime";

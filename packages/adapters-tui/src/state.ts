@@ -1,4 +1,4 @@
-import type { RenderedFrontendEventEnvelope } from "@nanoboss/adapters-http";
+import type { RenderedFrontendEventEnvelope, TurnDisplayBlock } from "@nanoboss/adapters-http";
 import type { DownstreamAgentSelection, PromptInput } from "@nanoboss/contracts";
 import type { TokenUsageSummary } from "./format.ts";
 import type { ToolCardThemeMode } from "./theme.ts";
@@ -20,6 +20,13 @@ export interface UiTurn {
   id: string;
   role: "user" | "assistant" | "system";
   markdown: string;
+  /**
+   * Structured block-list projection for assistant turns. Consumed by the
+   * view layer to preserve text/tool_call boundaries without re-deriving
+   * them from `markdown`. Kept in sync with `markdown` so existing code
+   * paths that still reference `markdown` keep working during rollout.
+   */
+  blocks?: TurnDisplayBlock[];
   status?: "streaming" | "complete" | "failed" | "cancelled";
   runId?: string;
   displayStyle?: "inline" | "card";

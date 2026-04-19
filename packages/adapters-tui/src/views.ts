@@ -500,9 +500,16 @@ function renderTurnBody(theme: NanobossTuiTheme, turn: UiTurn): Component {
     }
 
     const container = new Container();
-    container.addChild(turn.markdown.length === 0
+    const textBlocks = (turn.blocks ?? []).filter(
+      (block): block is Extract<NonNullable<UiTurn["blocks"]>[number], { kind: "text" }> =>
+        block.kind === "text",
+    );
+    const bodyText = textBlocks.length > 0
+      ? textBlocks.map((block) => block.text).join("")
+      : turn.markdown;
+    container.addChild(bodyText.length === 0
       ? new Text(theme.dim("…"))
-      : new Markdown(turn.markdown, 0, 0, theme.markdown, {
+      : new Markdown(bodyText, 0, 0, theme.markdown, {
           color: theme.text,
         }));
 

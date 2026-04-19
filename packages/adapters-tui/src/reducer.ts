@@ -307,6 +307,9 @@ function reduceFrontendEvent(state: UiState, event: RenderedFrontendEventEnvelop
         id: nextTurnId("assistant", nextTurns.length),
         role: "assistant",
         markdown: event.data.text,
+        blocks: event.data.text.length > 0
+          ? [{ kind: "text", text: event.data.text, origin: "replay" }]
+          : [],
         status: event.data.status === "paused" ? "complete" : event.data.status,
         runId: event.data.runId,
         meta: buildAssistantTurnMeta({
@@ -447,7 +450,9 @@ function reduceFrontendEvent(state: UiState, event: RenderedFrontendEventEnvelop
           : appendTranscriptItem(state.transcriptItems, { type: "tool_call", id: nextToolCall.id }),
         activeRunAttemptedToolCallIds,
       };
-      return existing || !transcriptVisible ? nextState : markAssistantTextBoundary(nextState);
+      return existing || !transcriptVisible
+        ? nextState
+        : markAssistantTextBoundary(appendToolCallBlockToActiveTurn(nextState, event.data.toolCallId));
     }
     case "tool_updated": {
       const existing = state.toolCalls.find((toolCall) => toolCall.id === event.data.toolCallId);
@@ -616,13 +621,31 @@ function appendAssistantText(state: UiState, text: string): UiState {
   return {
     ...state,
     turns: state.turns.map((turn) => turn.id === activeAssistantTurnId
-      ? {
+      ? appendTextToTurnBlocks({
           ...turn,
           markdown: `${turn.markdown}${text}`,
-        }
+        }, text, "stream")
       : turn),
     assistantParagraphBreakPending: false,
   };
+}
+
+function appendTextToTurnBlocks(
+  turn: UiTurn,
+  text: string,
+  origin: "stream" | "replay",
+): UiTurn {
+  if (text.length === 0) {
+    return turn;
+  }
+  const blocks = turn.blocks ?? [];
+  const last = blocks[blocks.length - 1];
+  if (last && last.kind === "text" && last.origin === origin) {
+    const nextBlocks = blocks.slice(0, -1);
+    nextBlocks.push({ kind: "text", text: `${last.text}${text}`, origin });
+    return { ...turn, blocks: nextBlocks };
+  }
+  return { ...turn, blocks: [...blocks, { kind: "text", text, origin }] };
 }
 
 function appendAssistantNoticeCard(
@@ -670,6 +693,32 @@ function markAssistantTextBoundary(state: UiState): UiState {
   return {
     ...state,
     assistantParagraphBreakPending: true,
+  };
+}
+
+function appendToolCallBlockToActiveTurn(state: UiState, toolCallId: string): UiState {
+  const activeId = state.activeAssistantTurnId;
+  if (!activeId) {
+    return state;
+  }
+  return {
+    ...state,
+    turns: state.turns.map((turn) => {
+      if (turn.id !== activeId) {
+        return turn;
+      }
+      const blocks = turn.blocks ?? [];
+      const alreadyPresent = blocks.some(
+        (block) => block.kind === "tool_call" && block.toolCallId === toolCallId,
+      );
+      if (alreadyPresent) {
+        return turn;
+      }
+      return {
+        ...turn,
+        blocks: [...blocks, { kind: "tool_call", toolCallId }],
+      };
+    }),
   };
 }
 
@@ -746,6 +795,7 @@ function finalizeAssistantTurn(
         id: nextTurnId("assistant", state.turns.length),
         role: "assistant",
         markdown: params.fallbackText,
+        blocks: [{ kind: "text", text: params.fallbackText, origin: "replay" }],
         status: params.status,
         runId: state.activeRunId,
         displayStyle: params.status === "complete" ? "inline" : "card",
@@ -779,9 +829,15 @@ function finalizeAssistantTurn(
 
       const hadStreamedText = turn.markdown.length > 0;
       const markdown = hadStreamedText ? turn.markdown : (params.fallbackText ?? turn.markdown);
+      const blocks = hadStreamedText
+        ? turn.blocks
+        : params.fallbackText !== undefined
+          ? [{ kind: "text" as const, text: params.fallbackText, origin: "replay" as const }]
+          : turn.blocks;
       return {
         ...turn,
         markdown,
+        blocks,
         status: params.status,
         displayStyle: !hadStreamedText && params.status !== "complete" ? "card" : turn.displayStyle,
         cardTone: !hadStreamedText && params.status !== "complete"
@@ -1044,6 +1100,9 @@ function createAssistantTurn(state: UiState, markdown: string): UiTurn {
     id: nextTurnId("assistant", state.turns.length),
     role: "assistant",
     markdown,
+    blocks: markdown.length > 0
+      ? [{ kind: "text", text: markdown, origin: "stream" }]
+      : [],
     status: "streaming",
     runId: state.activeRunId,
     meta: buildAssistantTurnMeta({

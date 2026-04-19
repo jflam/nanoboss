@@ -769,6 +769,7 @@ describe("tui reducer", () => {
         id: "assistant-2",
         role: "assistant",
         markdown: "hi",
+        blocks: [{ kind: "text", text: "hi", origin: "stream" }],
         status: "complete",
         runId: "run-1",
         meta: {

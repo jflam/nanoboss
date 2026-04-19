@@ -29,3 +29,8 @@ export type {
 
 export * from "./runtime-api.ts";
 export * from "./runtime-events.ts";
+export {
+  buildTurnDisplay,
+  type TurnDisplay,
+  type TurnDisplayBlock,
+} from "./turn-display.ts";
