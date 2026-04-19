@@ -986,6 +986,174 @@ describe("NanobossAppView", () => {
     expect(plain).toContain("[tokens] auth-source-unknown");
   });
 
+  test("activity bar emits a single line at idle and no run-state line", () => {
+    const state = {
+      ...createInitialUiState({ cwd: "/repo" }),
+      sessionId: "session-1",
+      tokenUsage: { used: 32_499, limit: 168_000, percent: 19.3 },
+      defaultAgentSelection: {
+        provider: "copilot" as const,
+        model: "claude-opus-4.7/medium",
+      },
+      agentLabel: "copilot/claude-opus-4.7/medium",
+    };
+
+    const view = new NanobossAppView(
+      { render: () => [""], invalidate() {} } as never,
+      createNanobossTuiTheme(),
+      state,
+    );
+
+    const plain = stripAnsi(view.render(120).join("\n"));
+    // identity line present
+    expect(plain).toContain("@copilot");
+    expect(plain).toContain("claude-opus-4.7/medium");
+    expect(plain).toContain("tok 32.5k/168k (19%)");
+    // no run-state line content
+    expect(plain).not.toContain("approve on");
+    expect(plain).not.toContain("approve off");
+    expect(plain).not.toContain("● busy");
+    expect(plain).not.toMatch(/proc \//);
+    expect(plain).not.toMatch(/cont \//);
+    expect(plain).not.toMatch(/steer \d+/);
+    expect(plain).not.toMatch(/queued \d+/);
+  });
+
+  test("activity bar identity line is not ellipsized at widths 80/100/120", () => {
+    const state = {
+      ...createInitialUiState({ cwd: "/repo" }),
+      sessionId: "session-1",
+      tokenUsage: { used: 32_499, limit: 168_000, percent: 19.3 },
+      defaultAgentSelection: {
+        provider: "copilot" as const,
+        model: "claude-opus-4.7/medium",
+      },
+      agentLabel: "copilot/claude-opus-4.7/medium",
+    };
+
+    const view = new NanobossAppView(
+      { render: () => [""], invalidate() {} } as never,
+      createNanobossTuiTheme(),
+      state,
+    );
+
+    for (const width of [80, 100, 120]) {
+      const plain = stripAnsi(view.render(width).join("\n"));
+      expect(plain).not.toContain("…");
+      expect(plain).toContain("@copilot");
+      expect(plain).toContain("claude-opus-4.7/medium");
+      expect(plain).toContain("tok 32.5k/168k (19%)");
+    }
+  });
+
+  test("activity bar adds a run-state line when auto-approve is enabled", () => {
+    const state = {
+      ...createInitialUiState({ cwd: "/repo" }),
+      sessionId: "session-1",
+      simplify2AutoApprove: true,
+    };
+
+    const view = new NanobossAppView(
+      { render: () => [""], invalidate() {} } as never,
+      createNanobossTuiTheme(),
+      state,
+    );
+
+    const plain = stripAnsi(view.render(120).join("\n"));
+    expect(plain).toContain("approve on");
+  });
+
+  test("activity bar adds a run-state line with busy + timer when a run is active", () => {
+    const state = {
+      ...createInitialUiState({ cwd: "/repo" }),
+      sessionId: "session-1",
+      inputDisabled: true,
+      runStartedAtMs: 5_000,
+    };
+
+    const view = new NanobossAppView(
+      { render: () => [""], invalidate() {} } as never,
+      createNanobossTuiTheme(),
+      state,
+      () => 70_000,
+    );
+
+    const plain = stripAnsi(view.render(120).join("\n"));
+    expect(plain).toContain("● busy");
+    expect(plain).toContain("[time] 1:05");
+  });
+
+  test("activity bar adds a run-state line with active procedure", () => {
+    const state = {
+      ...createInitialUiState({ cwd: "/repo" }),
+      sessionId: "session-1",
+      activeProcedure: "linter",
+    };
+
+    const view = new NanobossAppView(
+      { render: () => [""], invalidate() {} } as never,
+      createNanobossTuiTheme(),
+      state,
+    );
+
+    const plain = stripAnsi(view.render(120).join("\n"));
+    expect(plain).toContain("proc /linter");
+  });
+
+  test("activity bar adds a run-state line with pending continuation", () => {
+    const state = {
+      ...createInitialUiState({ cwd: "/repo" }),
+      sessionId: "session-1",
+      pendingContinuation: { procedure: "simplify", question: "what now?" },
+    };
+
+    const view = new NanobossAppView(
+      { render: () => [""], invalidate() {} } as never,
+      createNanobossTuiTheme(),
+      state,
+    );
+
+    const plain = stripAnsi(view.render(120).join("\n"));
+    expect(plain).toContain("cont /simplify");
+  });
+
+  test("activity bar adds a run-state line with steer count", () => {
+    const state = {
+      ...createInitialUiState({ cwd: "/repo" }),
+      sessionId: "session-1",
+      pendingPrompts: [
+        { id: "p1", text: "a", kind: "steering" as const },
+        { id: "p2", text: "b", kind: "steering" as const },
+      ],
+    };
+
+    const view = new NanobossAppView(
+      { render: () => [""], invalidate() {} } as never,
+      createNanobossTuiTheme(),
+      state,
+    );
+
+    const plain = stripAnsi(view.render(120).join("\n"));
+    expect(plain).toContain("steer 2");
+  });
+
+  test("activity bar adds a run-state line with queued count", () => {
+    const state = {
+      ...createInitialUiState({ cwd: "/repo" }),
+      sessionId: "session-1",
+      pendingPrompts: [{ id: "p1", text: "a", kind: "queued" as const }],
+    };
+
+    const view = new NanobossAppView(
+      { render: () => [""], invalidate() {} } as never,
+      createNanobossTuiTheme(),
+      state,
+    );
+
+    const plain = stripAnsi(view.render(120).join("\n"));
+    expect(plain).toContain("queued 1");
+  });
+
   test("collapsed tool output can be expanded globally", () => {
     const lines = Array.from({ length: 12 }, (_, index) => `line ${index + 1}`);
     const collapsedView = new NanobossAppView(

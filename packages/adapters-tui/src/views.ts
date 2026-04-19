@@ -29,7 +29,7 @@ export class NanobossAppView implements Component {
     this.composerContainer.addChild(this.editor);
     this.container.addChild(this.composerContainer);
     this.container.addChild(new Spacer(1));
-    this.container.addChild(new ComputedTruncatedText(() => this.buildActivityBarLine()));
+    this.container.addChild(new ActivityBarComponent(this.theme, () => this.state, this.nowProvider));
     this.container.addChild(new ComputedTruncatedText(() => this.buildFooterLine()));
   }
 
@@ -78,20 +78,6 @@ export class NanobossAppView implements Component {
     return styleStatusLine(this.theme, this.state.statusLine);
   }
 
-  private buildActivityBarLine(): string {
-    const separator = this.theme.dim(" • ");
-    const parts = buildActivityBarParts(this.theme, this.state);
-    const runTimerLine = buildRunTimerLine(this.state, this.nowProvider());
-    if (runTimerLine) {
-      parts.push(this.theme.warning(runTimerLine));
-    }
-    const tokenText = buildTokenUsageText(this.state);
-    if (tokenText) {
-      parts.push(this.theme.success(tokenText));
-    }
-    return parts.join(separator);
-  }
-
   private buildFooterLine(): string {
     if (this.state.liveUpdatesPaused) {
       return this.theme.warning("⏸ updates paused — ctrl+p to resume (native terminal scrollback works while paused)");
@@ -134,6 +120,29 @@ class ComputedTruncatedText implements Component {
     }
 
     return new TruncatedText(text).render(width);
+  }
+
+  invalidate(): void {}
+}
+
+class ActivityBarComponent implements Component {
+  constructor(
+    private readonly theme: NanobossTuiTheme,
+    private readonly getState: () => UiState,
+    private readonly nowProvider: () => number,
+  ) {}
+
+  render(width: number): string[] {
+    const state = this.getState();
+    const lines = buildActivityBarLines(this.theme, state, this.nowProvider());
+    const out: string[] = [];
+    if (lines.length > 0) {
+      out.push(...new TruncatedText(lines[0]!).render(width));
+    }
+    for (let i = 1; i < lines.length; i += 1) {
+      out.push(...new Text(lines[i]!, 0, 0).render(width));
+    }
+    return out;
   }
 
   invalidate(): void {}
@@ -287,14 +296,44 @@ function createTranscriptEntryComponent(
   return toolCall ? new ToolTranscriptEntryComponent(theme, toolCall, expandedToolOutput) : undefined;
 }
 
-function buildActivityBarParts(theme: NanobossTuiTheme, state: UiState): string[] {
-  const parts: string[] = [
-    state.simplify2AutoApprove
-      ? theme.success("approve on")
-      : theme.dim("approve off"),
-  ];
+function buildActivityBarLines(theme: NanobossTuiTheme, state: UiState, nowMs: number): string[] {
+  const separator = theme.dim(" • ");
+  const identity = buildIdentityBudgetParts(theme, state);
+  const runState = buildRunStateParts(theme, state, nowMs);
+  const lines: string[] = [identity.join(separator)];
+  if (runState.length > 0) {
+    lines.push(runState.join(separator));
+  }
+  return lines;
+}
+
+function buildIdentityBudgetParts(theme: NanobossTuiTheme, state: UiState): string[] {
+  const parts: string[] = [];
+  const selection = state.defaultAgentSelection;
+  if (!selection) {
+    parts.push(theme.accent(`@${state.agentLabel || "connecting"}`));
+  } else {
+    parts.push(theme.accent(`@${selection.provider}`));
+    parts.push(theme.accent(getActivityBarModelLabel(state)));
+  }
+  const tokenText = buildTokenUsageText(state);
+  if (tokenText) {
+    parts.push(theme.success(tokenText));
+  }
+  return parts;
+}
+
+function buildRunStateParts(theme: NanobossTuiTheme, state: UiState, nowMs: number): string[] {
+  const parts: string[] = [];
+  if (state.simplify2AutoApprove) {
+    parts.push(theme.success("approve on"));
+  }
   if (state.inputDisabled) {
     parts.push(theme.warning("● busy"));
+    const runTimerLine = buildRunTimerLine(state, nowMs);
+    if (runTimerLine) {
+      parts.push(theme.warning(runTimerLine));
+    }
   }
   if (state.activeProcedure) {
     parts.push(theme.warning(`proc /${state.activeProcedure}`));
@@ -302,7 +341,6 @@ function buildActivityBarParts(theme: NanobossTuiTheme, state: UiState): string[
   if (state.pendingContinuation) {
     parts.push(theme.warning(`cont /${state.pendingContinuation.procedure}`));
   }
-
   const steeringCount = state.pendingPrompts.filter((prompt) => prompt.kind === "steering").length;
   const queuedCount = state.pendingPrompts.filter((prompt) => prompt.kind === "queued").length;
   if (steeringCount > 0) {
@@ -311,18 +349,6 @@ function buildActivityBarParts(theme: NanobossTuiTheme, state: UiState): string[
   if (queuedCount > 0) {
     parts.push(theme.warning(`queued ${queuedCount}`));
   }
-
-  const selection = state.defaultAgentSelection;
-  if (!selection) {
-    parts.push(theme.accent(`@${state.agentLabel || "connecting"}`));
-    return parts;
-  }
-
-  const modelLabel = getActivityBarModelLabel(state);
-  parts.push(
-    theme.accent(`@${selection.provider}`),
-    theme.accent(modelLabel),
-  );
   return parts;
 }
 
