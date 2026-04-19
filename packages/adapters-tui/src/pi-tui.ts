@@ -17,6 +17,7 @@ export {
   type AutocompleteItem,
   type Component,
   type EditorTheme,
+  type KeyId,
   type MarkdownTheme,
   type SelectItem,
   type SelectListTheme,

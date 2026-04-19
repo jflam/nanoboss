@@ -44,6 +44,11 @@ import {
   isKeyRelease,
   matchesKey,
 } from "./pi-tui.ts";
+import { dispatchKeyBinding, type BindingCtx, type KeyBindingAppHooks } from "./bindings.ts";
+// Side-effect import: registers the core keybindings into the module-level
+// registry so dispatchKeyBinding() resolves them without the caller having
+// to wire individual handlers.
+import "./core-bindings.ts";
 import { SelectOverlay, type SelectOverlayOptions } from "./overlays/select-overlay.ts";
 import { Simplify2ContinuationOverlay } from "./overlays/simplify2-continuation-overlay.ts";
 import {
@@ -261,66 +266,11 @@ export class NanobossTuiApp {
         return undefined;
       }
 
-      if (matchesKey(data, "tab") && this.state.inputDisabled) {
-        if (this.editor.isShowingAutocomplete()) {
-          return undefined;
-        }
-
-        const text = this.editor.getText();
-        if (text.trim().length === 0) {
-          return undefined;
-        }
-
-        const promptInput = buildPromptInputForSubmit(
-          this.composerState,
-          text,
-          this.clearedComposerStateSnapshot,
-        );
-        this.clearedComposerStateSnapshot = undefined;
-        void this.controller.queuePrompt(promptInput);
-        return { consume: true };
-      }
-
-      if (matchesKey(data, "escape")) {
-        if (this.state.keybindingOverlayVisible) {
-          this.controller.dismissKeybindingOverlay();
-          return { consume: true };
-        }
-        if (this.state.inputDisabled) {
-          void this.controller.cancelActiveRun();
-          return { consume: true };
-        }
-      }
-
-      if (matchesKey(data, "ctrl+k")) {
-        this.controller.toggleKeybindingOverlay();
-        return { consume: true };
-      }
-
-      if (matchesKey(data, "ctrl+o")) {
-        const now = this.now();
-        if (now - this.lastToolOutputToggleAt >= TOOL_OUTPUT_TOGGLE_COOLDOWN_MS) {
-          this.lastToolOutputToggleAt = now;
-          this.controller.toggleToolOutput();
-        }
-        return { consume: true };
-      }
-
-      if (matchesKey(data, "ctrl+g")) {
-        this.controller.toggleSimplify2AutoApprove();
-        return { consume: true };
-      }
-
-      if (matchesKey(data, "ctrl+t")) {
-        this.controller.toggleToolCardsHidden();
-        return { consume: true };
-      }
-
-      if (matchesKey(data, "ctrl+p")) {
-        this.toggleLiveUpdatesPaused();
-        return { consume: true };
-      }
-
+      // Editor-local pre-step: backspace/delete image-token removal
+      // depends on cursor state and the composer's image token map,
+      // neither of which is surfaced through BindingCtx. Keep this
+      // handler ahead of the registry dispatch so a successful token
+      // deletion consumes the key before the registry sees it.
       if (matchesKey(data, "backspace") && this.handleImageTokenDeletion("backspace")) {
         return { consume: true };
       }
@@ -329,17 +279,21 @@ export class NanobossTuiApp {
         return { consume: true };
       }
 
-      if (matchesKey(data, "ctrl+v")) {
-        void this.handleCtrlVImagePaste();
+      const ctx: BindingCtx = {
+        controller: this.controller,
+        state: this.state,
+        editor: {
+          getText: () => this.editor.getText(),
+          isShowingAutocomplete: () => this.editor.isShowingAutocomplete(),
+        },
+        app: this.createBindingAppHooks(),
+      };
+
+      const result = dispatchKeyBinding(data, ctx);
+      if (result && result.consume !== false) {
         return { consume: true };
       }
-
-      if (!matchesKey(data, "ctrl+c")) {
-        return undefined;
-      }
-
-      this.handleCtrlC();
-      return { consume: true };
+      return undefined;
     });
 
     this.tui.addChild(this.view);
@@ -699,6 +653,40 @@ export class NanobossTuiApp {
       ? `archive ${action.focusId}`
       : `continue ${action.focusId}`;
     void this.controller.handleSubmit(createTextPromptInput(command));
+  }
+
+  private createBindingAppHooks(): KeyBindingAppHooks {
+    return {
+      handleCtrlC: () => this.handleCtrlC(),
+      handleCtrlVImagePaste: () => this.handleCtrlVImagePaste(),
+      handleCtrlOWithCooldown: () => {
+        const now = this.now();
+        if (now - this.lastToolOutputToggleAt >= TOOL_OUTPUT_TOGGLE_COOLDOWN_MS) {
+          this.lastToolOutputToggleAt = now;
+          this.controller.toggleToolOutput();
+        }
+      },
+      toggleLiveUpdatesPaused: () => {
+        this.toggleLiveUpdatesPaused();
+      },
+      handleTabQueue: () => {
+        if (this.editor.isShowingAutocomplete()) {
+          return false;
+        }
+        const text = this.editor.getText();
+        if (text.trim().length === 0) {
+          return false;
+        }
+        const promptInput = buildPromptInputForSubmit(
+          this.composerState,
+          text,
+          this.clearedComposerStateSnapshot,
+        );
+        this.clearedComposerStateSnapshot = undefined;
+        void this.controller.queuePrompt(promptInput);
+        return true;
+      },
+    };
   }
 
   private async stop(): Promise<void> {

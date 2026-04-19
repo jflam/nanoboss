@@ -13,3 +13,17 @@ export {
 } from "./theme.ts";
 export { promptForStoredSessionSelection } from "./overlays/session-picker.ts";
 export * from "./overlays/select-overlay.ts";
+export {
+  registerKeyBinding,
+  listKeyBindings,
+  keyMatches,
+  dispatchKeyBinding,
+  type KeyBinding,
+  type KeyBindingCategory,
+  type KeyMatcher,
+  type BindingCtx,
+  type BindingResult,
+  type KeyBindingController,
+  type KeyBindingEditor,
+  type KeyBindingAppHooks,
+} from "./bindings.ts";

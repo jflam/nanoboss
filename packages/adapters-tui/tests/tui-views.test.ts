@@ -332,6 +332,33 @@ describe("NanobossAppView", () => {
     expect(plain).toContain("ctrl+k keys");
   });
 
+  test("keybinding overlay is derived from listKeyBindings()", () => {
+    // Regression guard: the overlay must iterate the registry rather
+    // than ship a hand-written literal. Registering a new binding in a
+    // user-facing category should make it appear in the overlay
+    // without editing views.ts.
+    const { registerKeyBinding } = require("@nanoboss/adapters-tui") as typeof import("@nanoboss/adapters-tui");
+    registerKeyBinding({
+      id: "test-only.overlay-derivation",
+      category: "tools",
+      label: "ctrl+x derived-overlay-marker",
+      match: "ctrl+x",
+    });
+
+    const state = {
+      ...createInitialUiState({ cwd: "/repo" }),
+      sessionId: "session-1",
+      keybindingOverlayVisible: true,
+    };
+    const view = new NanobossAppView(
+      { render: () => [""], invalidate() {} } as never,
+      createNanobossTuiTheme(),
+      state,
+    );
+    const plain = stripAnsi(view.render(200).join("\n"));
+    expect(plain).toContain("derived-overlay-marker");
+  });
+
   test("renders the reducer-produced visible transcript contract and resets cleanly on session_ready", () => {
     let state = createTranscriptContractState("live");
 

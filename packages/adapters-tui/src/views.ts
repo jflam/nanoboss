@@ -1,6 +1,7 @@
 import { Box, Container, Markdown, Spacer, Text, TruncatedText, truncateToWidth, visibleWidth, type Component } from "./pi-tui.ts";
 import type { UiState, UiToolCall, UiTranscriptItem, UiTurn } from "./state.ts";
 import type { NanobossTuiTheme } from "./theme.ts";
+import { listKeyBindings, type KeyBindingCategory } from "./bindings.ts";
 
 import { MessageCardComponent } from "./components/message-card.ts";
 import { ToolCardComponent } from "./components/tool-card.ts";
@@ -165,15 +166,30 @@ class KeybindingOverlayComponent implements Component {
     }
 
     const theme = this.theme;
-    const lines: string[] = [
-      theme.accent("keybindings"),
-      `${theme.dim("send/compose:")} ${theme.text("enter send")}  ${theme.text("shift+enter newline")}`,
-      `${theme.dim("tools:")} ${theme.text("ctrl+o tools")}`,
-      `${theme.dim("run control:")} ${theme.text("ctrl+g auto-approve")}  ${theme.text("ctrl+p pause")}  ${theme.text("ctrl+t tool cards")}  ${theme.text("esc stop")}  ${theme.text("tab queue")}`,
-      `${theme.dim("theme:")} ${theme.text("/light")}  ${theme.text("/dark")}`,
-      `${theme.dim("commands:")} ${theme.text("/new")}  ${theme.text("/model")}  ${theme.text("/help")}  ${theme.text("/quit")}  ${theme.text("/dismiss")}`,
-      `${theme.dim("overlay:")} ${theme.text("ctrl+k keys")}`,
+    const lines: string[] = [theme.accent("keybindings")];
+
+    // Overlay groups mirror the user-visible categories. "custom" is
+    // intentionally excluded here; user-authored custom bindings can opt
+    // into a future overlay slot, but today the overlay documents only
+    // the built-in keyboard surface.
+    const displayGroups: { category: KeyBindingCategory; label: string }[] = [
+      { category: "compose", label: "send/compose" },
+      { category: "tools", label: "tools" },
+      { category: "run", label: "run control" },
+      { category: "theme", label: "theme" },
+      { category: "commands", label: "commands" },
+      { category: "overlay", label: "overlay" },
     ];
+
+    const allBindings = listKeyBindings();
+    for (const group of displayGroups) {
+      const groupBindings = allBindings.filter((binding) => binding.category === group.category);
+      if (groupBindings.length === 0) {
+        continue;
+      }
+      const labels = groupBindings.map((binding) => theme.text(binding.label)).join("  ");
+      lines.push(`${theme.dim(`${group.label}:`)} ${labels}`);
+    }
 
     const box = new Box(1, 0, theme.toolCardPendingBg);
     for (const line of lines) {
