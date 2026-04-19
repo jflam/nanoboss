@@ -466,6 +466,9 @@ describe("knowledge-base procedures", () => {
         card() {
           throw new Error("Not implemented in test");
         },
+        panel() {
+          throw new Error("Not implemented in test");
+        },
       },
       procedures: {
         run: (async (name, prompt) => {
@@ -916,6 +919,9 @@ function createMockContext(params: {
       throw new Error("Not implemented in test");
     },
     card() {
+      throw new Error("Not implemented in test");
+    },
+    panel() {
       throw new Error("Not implemented in test");
     },
   };

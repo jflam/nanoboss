@@ -6,6 +6,7 @@ import {
   createNanobossTuiTheme,
   NanobossAppView,
   reduceUiState,
+  registerKeyBinding,
 } from "@nanoboss/adapters-tui";
 
 function stripAnsi(text: string): string {
@@ -337,7 +338,6 @@ describe("NanobossAppView", () => {
     // than ship a hand-written literal. Registering a new binding in a
     // user-facing category should make it appear in the overlay
     // without editing views.ts.
-    const { registerKeyBinding } = require("@nanoboss/adapters-tui") as typeof import("@nanoboss/adapters-tui");
     registerKeyBinding({
       id: "test-only.overlay-derivation",
       category: "tools",

@@ -1,6 +1,6 @@
 import type * as acp from "@agentclientprotocol/sdk";
 
-import type { UiApi, UiCardParams, UiStatusParams } from "@nanoboss/procedure-sdk";
+import type { UiApi, UiCardParams, UiPanelParams, UiStatusParams } from "@nanoboss/procedure-sdk";
 import type { SessionStore } from "@nanoboss/store";
 
 import type { RunLogger } from "../logger.ts";
@@ -74,27 +74,36 @@ export class UiApiImpl implements UiApi {
   }
 
   card(params: UiCardParams): void {
+    this.panel({
+      rendererId: "nb/card@1",
+      slot: "transcript",
+      payload: {
+        kind: params.kind,
+        title: params.title,
+        markdown: params.markdown,
+      },
+    });
+  }
+
+  panel(params: UiPanelParams): void {
     const event = {
-      type: "card" as const,
+      type: "ui_panel" as const,
       procedure: this.procedureName,
-      kind: params.kind,
-      title: params.title,
-      markdown: params.markdown,
+      rendererId: params.rendererId,
+      slot: params.slot,
+      ...(params.key !== undefined ? { key: params.key } : {}),
+      payload: params.payload,
+      lifetime: params.lifetime ?? "run",
     };
 
-    this.log(`[card] /${event.procedure} ${event.kind}: ${event.title}`);
+    this.log(`[panel] /${event.procedure} ${event.rendererId}${event.key ? ` key=${event.key}` : ""}`);
 
     if (this.emitter.emitUiEvent) {
       this.emitter.emitUiEvent(event);
       return;
     }
 
-    this.text([
-      `[${event.kind}] ${event.title}`,
-      "",
-      event.markdown.trim(),
-      "",
-    ].join("\n"));
+    this.text(`[${event.rendererId}]${event.key ? ` ${event.key}` : ""}\n`);
   }
 
   private emitNotice(tone: NoticeTone, text: string): void {

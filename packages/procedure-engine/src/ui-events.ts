@@ -100,6 +100,12 @@ function isProcedureUiEvent(value: unknown): value is ProcedureUiEvent {
       return typeof record.kind === "string"
         && typeof record.title === "string"
         && typeof record.markdown === "string";
+    case "ui_panel":
+      return typeof record.rendererId === "string"
+        && typeof record.slot === "string"
+        && optionalString(record.key)
+        && (record.lifetime === "turn" || record.lifetime === "run" || record.lifetime === "session")
+        && "payload" in record;
     default:
       return false;
   }

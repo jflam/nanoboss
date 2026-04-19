@@ -736,6 +736,7 @@ function createMockContext(
       },
       status() {},
       card() {},
+      panel() {},
     },
     procedures: {
       async run() {

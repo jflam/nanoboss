@@ -91,6 +91,16 @@ export type RuntimeEvent =
       card: Extract<ProcedureUiEvent, { type: "card" }>;
     }
   | {
+      type: "ui_panel";
+      runId: string;
+      procedure: string;
+      rendererId: string;
+      slot: string;
+      key?: string;
+      payload: unknown;
+      lifetime: "turn" | "run" | "session";
+    }
+  | {
       type: "token_usage";
       runId: string;
       usage: AgentTokenUsage;
@@ -219,6 +229,7 @@ const PERSISTED_RUNTIME_EVENT_TYPES = new Set<PersistedRuntimeEvent["type"]>([
   "assistant_notice",
   "procedure_status",
   "procedure_card",
+  "ui_panel",
   "tool_started",
   "tool_updated",
   "token_usage",
@@ -525,7 +536,7 @@ export function mapSessionUpdateToRuntimeEvents(
 export function mapProcedureUiEventToRuntimeEvent(
   runId: string,
   event: ProcedureUiEvent,
-): Extract<RuntimeEvent, { type: "procedure_status" | "procedure_card" }> {
+): Extract<RuntimeEvent, { type: "procedure_status" | "procedure_card" | "ui_panel" }> {
   switch (event.type) {
     case "status":
       return {
@@ -538,6 +549,17 @@ export function mapProcedureUiEventToRuntimeEvent(
         type: "procedure_card",
         runId,
         card: event,
+      };
+    case "ui_panel":
+      return {
+        type: "ui_panel",
+        runId,
+        procedure: event.procedure,
+        rendererId: event.rendererId,
+        slot: event.slot,
+        ...(event.key !== undefined ? { key: event.key } : {}),
+        payload: event.payload,
+        lifetime: event.lifetime,
       };
   }
 }

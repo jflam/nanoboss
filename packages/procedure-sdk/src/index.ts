@@ -222,6 +222,16 @@ export interface UiCardParams {
   markdown: string;
 }
 
+export type UiPanelLifetime = "turn" | "run" | "session";
+
+export interface UiPanelParams {
+  rendererId: string;
+  slot: string;
+  key?: string;
+  payload: unknown;
+  lifetime?: UiPanelLifetime;
+}
+
 export interface UiApi {
   text(text: string): void;
   info(text: string): void;
@@ -229,6 +239,7 @@ export interface UiApi {
   error(text: string): void;
   status(params: UiStatusParams): void;
   card(params: UiCardParams): void;
+  panel(params: UiPanelParams): void;
 }
 
 export interface BoundAgentInvocationApi {

@@ -512,6 +512,7 @@ function createProcedureApi(options: {
       error() {},
       status() {},
       card() {},
+      panel() {},
     },
     state: {
       runs: {} as never,

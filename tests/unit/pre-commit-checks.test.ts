@@ -922,6 +922,7 @@ function createMockContext(
       error: emitText,
       status() {},
       card() {},
+      panel() {},
     },
     procedures: {
       run: runProcedure as ProcedureApi["procedures"]["run"],

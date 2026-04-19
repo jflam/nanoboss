@@ -44,3 +44,16 @@ export {
   type ActivityBarSegmentContext,
   type ActivityBarLine,
 } from "./activity-bar.ts";
+export {
+  registerPanelRenderer,
+  listPanelRenderers,
+  getPanelRenderer,
+  type PanelRenderer,
+  type PanelRenderContext,
+} from "./panel-renderers.ts";
+export {
+  renderNbCardV1Markdown,
+  nbCardV1Tone,
+  type NbCardV1Payload,
+  type NbCardTone,
+} from "./core-panels.ts";

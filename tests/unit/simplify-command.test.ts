@@ -199,6 +199,7 @@ function createMockContext(agentResults: unknown[], prompts: string[] = []): Pro
       error() {},
       status() {},
       card() {},
+      panel() {},
     },
     procedures: {
       async run() {

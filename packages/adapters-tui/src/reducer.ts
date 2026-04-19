@@ -8,8 +8,15 @@ import type { ToolCardThemeMode } from "./theme.ts";
 
 import { formatTokenUsageLine, toTokenUsageSummary, type TokenUsageSummary } from "./format.ts";
 import { LOCAL_TUI_COMMANDS } from "./commands.ts";
+import { getPanelRenderer } from "./panel-renderers.ts";
+import {
+  nbCardV1Tone,
+  renderNbCardV1Markdown,
+  type NbCardV1Payload,
+} from "./core-panels.ts";
 import {
   createInitialUiState,
+  type UiPanel,
   type UiPendingPrompt,
   type UiState,
   type UiToolCall,
@@ -141,6 +148,9 @@ export function reduceUiState(state: UiState, action: UiAction): UiState {
         stopRequestedRunId: undefined,
         statusLine: "[run] waiting for response",
         inputDisabled: true,
+        panels: evictPanelsByLifetime(state.panels, {
+          scopes: ["turn"],
+        }),
       };
     }
     case "local_send_failed": {
@@ -372,6 +382,11 @@ function reduceFrontendEvent(state: UiState, event: RenderedFrontendEventEnvelop
         return state;
       }
       return appendProcedureCard(state, event.data);
+    case "ui_panel":
+      if (shouldIgnoreMismatchedRunEvent(state, event.data.runId)) {
+        return state;
+      }
+      return applyUiPanel(state, event.data);
     case "text_delta":
       if (shouldIgnoreMismatchedRunEvent(state, event.data.runId)) {
         return state;
@@ -771,6 +786,10 @@ function finishRun(
     tokenUsage: params.tokenUsage ?? nextState.tokenUsage,
     statusLine: params.statusLine,
     inputDisabled: false,
+    panels: evictPanelsByLifetime(nextState.panels, {
+      runId: state.activeRunId,
+      scopes: ["turn", "run"],
+    }),
   };
 }
 
@@ -889,6 +908,107 @@ function appendProcedureCard(
     activeAssistantTurnId: undefined,
     assistantParagraphBreakPending: false,
   };
+}
+
+function applyUiPanel(
+  state: UiState,
+  data: Extract<RenderedFrontendEventEnvelope, { type: "ui_panel" }>["data"],
+): UiState {
+  const renderer = getPanelRenderer(data.rendererId);
+  if (!renderer) {
+    return withDiagnosticStatus(
+      state,
+      `[panel] unknown renderer "${data.rendererId}"`,
+    );
+  }
+
+  if (!renderer.schema.validate(data.payload)) {
+    return withDiagnosticStatus(
+      state,
+      `[panel] invalid payload for "${data.rendererId}"`,
+    );
+  }
+
+  if (data.rendererId === "nb/card@1" && data.slot === "transcript") {
+    const payload = data.payload as NbCardV1Payload;
+    const turns = state.activeAssistantTurnId
+      ? state.turns.map((turn) => turn.id === state.activeAssistantTurnId && turn.status === "streaming"
+        ? { ...turn, status: "complete" as const }
+        : turn)
+      : state.turns;
+    const turn = createTurn({
+      id: nextTurnId("assistant", turns.length),
+      role: "assistant",
+      markdown: renderNbCardV1Markdown(payload),
+      status: "complete",
+      runId: data.runId,
+      displayStyle: "card",
+      cardTone: nbCardV1Tone(payload.kind),
+      meta: buildAssistantTurnMeta({
+        procedure: data.procedure,
+      }),
+    });
+
+    return {
+      ...state,
+      turns: [...turns, turn],
+      transcriptItems: appendTranscriptItem(state.transcriptItems, { type: "turn", id: turn.id }),
+      activeAssistantTurnId: undefined,
+      assistantParagraphBreakPending: false,
+    };
+  }
+
+  const entry: UiPanel = {
+    rendererId: data.rendererId,
+    slot: data.slot,
+    ...(data.key !== undefined ? { key: data.key } : {}),
+    payload: data.payload,
+    lifetime: data.lifetime,
+    ...(data.runId ? { runId: data.runId } : {}),
+    ...(state.activeAssistantTurnId ? { turnId: state.activeAssistantTurnId } : {}),
+  };
+
+  const remaining = state.panels.filter((existing) => !isSamePanelKey(existing, entry));
+  return {
+    ...state,
+    panels: [...remaining, entry],
+  };
+}
+
+function isSamePanelKey(a: UiPanel, b: UiPanel): boolean {
+  return a.rendererId === b.rendererId && (a.key ?? undefined) === (b.key ?? undefined);
+}
+
+function withDiagnosticStatus(state: UiState, text: string): UiState {
+  return {
+    ...state,
+    statusLine: text,
+  };
+}
+
+function evictPanelsByLifetime(
+  panels: UiPanel[],
+  params: { runId?: string; turnId?: string; scopes: ReadonlyArray<UiPanel["lifetime"]> },
+): UiPanel[] {
+  return panels.filter((panel) => {
+    if (!params.scopes.includes(panel.lifetime)) {
+      return true;
+    }
+    if (panel.lifetime === "turn") {
+      if (params.turnId !== undefined) {
+        return panel.turnId !== params.turnId;
+      }
+      return false;
+    }
+    if (panel.lifetime === "run") {
+      if (params.runId !== undefined) {
+        return panel.runId !== params.runId;
+      }
+      return false;
+    }
+    // session lifetime entries are never evicted here.
+    return true;
+  });
 }
 
 function renderProcedureCardMarkdown(card: Extract<ProcedureUiEvent, { type: "card" }>): string {

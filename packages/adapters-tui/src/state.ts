@@ -64,6 +64,23 @@ export type UiTranscriptItem =
   | { type: "turn"; id: string }
   | { type: "tool_call"; id: string };
 
+/**
+ * A panel entry produced by a ui_panel event for any slot other than the
+ * transcript (transcript-slot panels are materialized into UiTurn card
+ * entries by the reducer so existing transcript rendering paths apply).
+ * Keyed by (rendererId, key|undefined); lifetime controls when the reducer
+ * evicts the entry.
+ */
+export interface UiPanel {
+  rendererId: string;
+  slot: string;
+  key?: string;
+  payload: unknown;
+  lifetime: "turn" | "run" | "session";
+  runId?: string;
+  turnId?: string;
+}
+
 export interface UiState {
   cwd: string;
   sessionId: string;
@@ -96,6 +113,11 @@ export interface UiState {
   liveUpdatesPaused?: boolean;
   toolCardsHidden?: boolean;
   keybindingOverlayVisible: boolean;
+  /**
+   * Panels registered via ui.panel events for non-transcript slots.
+   * Transcript-slot panels are materialized directly into turns.
+   */
+  panels: UiPanel[];
 }
 
 export function createInitialUiState(params: {
@@ -128,5 +150,6 @@ export function createInitialUiState(params: {
     simplify2AutoApprove: params.simplify2AutoApprove ?? false,
     toolCardsHidden: params.toolCardsHidden ?? false,
     keybindingOverlayVisible: false,
+    panels: [],
   };
 }

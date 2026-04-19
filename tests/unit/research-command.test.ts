@@ -220,6 +220,9 @@ function createMockContext(params: {
     card() {
       throw new Error("Not implemented in test");
     },
+    panel() {
+      throw new Error("Not implemented in test");
+    },
   };
 
   return {

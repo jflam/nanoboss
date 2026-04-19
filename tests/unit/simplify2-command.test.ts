@@ -1683,6 +1683,7 @@ function createMockContext(
       error() {},
       status() {},
       card() {},
+      panel() {},
     },
     procedures: {
       run: callProcedure,

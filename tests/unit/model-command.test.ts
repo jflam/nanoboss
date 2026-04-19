@@ -141,6 +141,7 @@ function createMockContext(): ProcedureApi {
     error() {},
     status() {},
     card() {},
+    panel() {},
   };
 
   return {
