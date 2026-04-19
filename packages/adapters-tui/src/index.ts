@@ -27,3 +27,20 @@ export {
   type KeyBindingEditor,
   type KeyBindingAppHooks,
 } from "./bindings.ts";
+export {
+  registerChromeContribution,
+  listChromeContributions,
+  getChromeContributions,
+  type ChromeContribution,
+  type ChromeRenderContext,
+  type ChromeSlotId,
+} from "./chrome.ts";
+export {
+  registerActivityBarSegment,
+  listActivityBarSegments,
+  getActivityBarSegments,
+  buildActivityBarLine,
+  type ActivityBarSegment,
+  type ActivityBarSegmentContext,
+  type ActivityBarLine,
+} from "./activity-bar.ts";

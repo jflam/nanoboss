@@ -1,16 +1,70 @@
-import { Box, Container, Markdown, Spacer, Text, TruncatedText, truncateToWidth, visibleWidth, type Component } from "./pi-tui.ts";
+import { Container, Markdown, Spacer, Text, TruncatedText, type Component } from "./pi-tui.ts";
 import type { UiState, UiToolCall, UiTranscriptItem, UiTurn } from "./state.ts";
 import type { NanobossTuiTheme } from "./theme.ts";
-import { listKeyBindings, type KeyBindingCategory } from "./bindings.ts";
+import {
+  getChromeContributions,
+  registerChromeContribution,
+  type ChromeContribution,
+  type ChromeRenderContext,
+  type ChromeSlotId,
+} from "./chrome.ts";
+
+// Side-effect imports: register every core chrome contribution and
+// activity-bar segment into the module-level registries before any
+// NanobossAppView instance iterates them.
+import "./core-chrome.ts";
+import "./core-activity-bar.ts";
 
 import { MessageCardComponent } from "./components/message-card.ts";
 import { ToolCardComponent } from "./components/tool-card.ts";
-import { formatCompactTokenUsage, formatElapsedRunTimer, stripModelQualifier } from "./format.ts";
+
+/**
+ * Ordered list of chrome slots rendered by NanobossAppView. The composer
+ * slot is rendered by the view itself (using the per-instance editor /
+ * overlay composer); every other slot is driven by the registered
+ * contributions in chrome.ts.
+ */
+const SLOT_ORDER: ChromeSlotId[] = [
+  "header",
+  "session",
+  "status",
+  "transcriptAbove",
+  "transcript",
+  "transcriptBelow",
+  "composerAbove",
+  "composer",
+  "composerBelow",
+  "activityBar",
+  "overlay",
+  "footer",
+];
+
+interface StatefulChild {
+  setState(state: UiState): void;
+}
+
+class GatedComponent implements Component {
+  constructor(
+    private readonly inner: Component,
+    private readonly gate: () => boolean,
+  ) {}
+
+  render(width: number): string[] {
+    if (!this.gate()) {
+      return [];
+    }
+    return this.inner.render(width);
+  }
+
+  invalidate(): void {
+    this.inner.invalidate();
+  }
+}
 
 export class NanobossAppView implements Component {
   private readonly container = new Container();
   private readonly composerContainer = new Container();
-  private readonly transcript: TranscriptComponent;
+  private readonly statefulChildren: StatefulChild[] = [];
   private state: UiState;
 
   constructor(
@@ -20,24 +74,52 @@ export class NanobossAppView implements Component {
     private readonly nowProvider: () => number = Date.now,
   ) {
     this.state = initialState;
-    this.transcript = new TranscriptComponent(this.theme, this.state);
-
-    this.container.addChild(new ComputedTruncatedText(() => this.buildHeaderLine()));
-    this.container.addChild(new ComputedTruncatedText(() => this.buildSessionLine()));
-    this.container.addChild(new ComputedTruncatedText(() => this.buildStatusLine()));
-    this.container.addChild(new Spacer(1));
-    this.container.addChild(this.transcript);
     this.composerContainer.addChild(this.editor);
-    this.container.addChild(this.composerContainer);
-    this.container.addChild(new Spacer(1));
-    this.container.addChild(new ActivityBarComponent(this.theme, () => this.state, this.nowProvider));
-    this.container.addChild(new KeybindingOverlayComponent(this.theme, () => this.state));
-    this.container.addChild(new ComputedTruncatedText(() => this.buildFooterLine()));
+
+    const ctx: ChromeRenderContext = {
+      state: this.state,
+      theme: this.theme,
+      getState: () => this.state,
+      getNowMs: () => this.nowProvider(),
+    };
+
+    for (const slot of SLOT_ORDER) {
+      if (slot === "composer") {
+        this.container.addChild(this.composerContainer);
+        continue;
+      }
+      for (const contribution of getChromeContributions(slot)) {
+        this.mountContribution(contribution, ctx);
+      }
+    }
+
+    // Give every stateful child the initial state snapshot so their
+    // internal layout matches the constructor-time state exactly (this
+    // mirrors the pre-migration behavior where TranscriptComponent was
+    // seeded with the initial state during construction).
+    for (const child of this.statefulChildren) {
+      child.setState(this.state);
+    }
+  }
+
+  private mountContribution(contribution: ChromeContribution, ctx: ChromeRenderContext): void {
+    const component = contribution.render(ctx);
+    const gated = contribution.shouldRender
+      ? new GatedComponent(component, () => contribution.shouldRender!(this.state))
+      : component;
+    this.container.addChild(gated);
+    const candidate = component as unknown as { setState?: (state: UiState) => void };
+    if (typeof candidate.setState === "function") {
+      const setState = candidate.setState.bind(component);
+      this.statefulChildren.push({ setState: (state) => setState(state) });
+    }
   }
 
   setState(state: UiState): void {
     this.state = state;
-    this.transcript.setState(this.state);
+    for (const child of this.statefulChildren) {
+      child.setState(state);
+    }
   }
 
   render(width: number): string[] {
@@ -45,7 +127,9 @@ export class NanobossAppView implements Component {
   }
 
   invalidate(): void {
-    this.transcript.setState(this.state);
+    for (const child of this.statefulChildren) {
+      child.setState(this.state);
+    }
     this.container.invalidate();
   }
 
@@ -58,150 +142,14 @@ export class NanobossAppView implements Component {
   showEditor(): void {
     this.showComposer(this.editor);
   }
-
-  private buildHeaderLine(): string {
-    const cwd = this.state.cwd || process.cwd();
-    return this.theme.accent(`${this.state.buildLabel} • ${cwd}`);
-  }
-
-  private buildSessionLine(): string {
-    if (!this.state.sessionId) {
-      return this.theme.dim("Connecting to nanoboss…");
-    }
-
-    return this.theme.dim(`session ${this.state.sessionId.slice(0, 8)} • retained transcript + pi-tui editor`);
-  }
-
-  private buildStatusLine(): string | undefined {
-    if (!this.state.statusLine) {
-      return undefined;
-    }
-
-    return styleStatusLine(this.theme, this.state.statusLine);
-  }
-
-  private buildFooterLine(): string {
-    if (this.state.liveUpdatesPaused) {
-      return this.theme.warning("⏸ updates paused — ctrl+p to resume (native terminal scrollback works while paused)");
-    }
-    const parts: string[] = [];
-    if (this.state.inputDisabled) {
-      const pendingCount = this.state.pendingPrompts.length;
-      parts.push(
-        "esc stop",
-        "tab queue",
-        pendingCount > 0 ? `${pendingCount} pending` : "run active",
-        "ctrl+k keys",
-      );
-    } else {
-      parts.push("ctrl+k keys", "enter send", "/help");
-    }
-    if (this.state.pendingContinuation) {
-      parts.push("/dismiss");
-    }
-    return this.theme.dim(parts.join(" • "));
-  }
 }
 
-class ComputedTruncatedText implements Component {
-  constructor(private readonly getText: () => string | undefined) {}
-
-  render(width: number): string[] {
-    const text = this.getText();
-    if (!text) {
-      return [];
-    }
-
-    return new TruncatedText(text).render(width);
-  }
-
-  invalidate(): void {}
-}
-
-class ActivityBarComponent implements Component {
-  constructor(
-    private readonly theme: NanobossTuiTheme,
-    private readonly getState: () => UiState,
-    private readonly nowProvider: () => number,
-  ) {}
-
-  render(width: number): string[] {
-    const state = this.getState();
-    const lines = buildActivityBarLines(this.theme, state, this.nowProvider(), width);
-    const out: string[] = [];
-    if (lines.length > 0) {
-      const firstLine = lines[0]!;
-      // After priority-drop, if the line still overflows we fall back to
-      // ellipsis truncation with a "…" character (last resort).
-      const finalized = visibleWidth(firstLine) > width
-        ? truncateToWidth(firstLine, width, "…")
-        : firstLine;
-      out.push(...new TruncatedText(finalized).render(width));
-    }
-    for (let i = 1; i < lines.length; i += 1) {
-      out.push(...new Text(lines[i]!, 0, 0).render(width));
-    }
-    return out;
-  }
-
-  invalidate(): void {}
-}
-
-// Keybinding overlay — non-modal: rendered as a bordered panel between the
-// activity bar and the footer when `keybindingOverlayVisible` is true. We
-// chose non-modal because the integration is trivial (just a conditional
-// component in the existing layout) — it does not need to intercept the
-// input listener. Dismissal is handled by the controller on ctrl+k (toggle)
-// and esc (explicit dismiss).
-class KeybindingOverlayComponent implements Component {
-  constructor(
-    private readonly theme: NanobossTuiTheme,
-    private readonly getState: () => UiState,
-  ) {}
-
-  render(width: number): string[] {
-    const state = this.getState();
-    if (!state.keybindingOverlayVisible) {
-      return [];
-    }
-
-    const theme = this.theme;
-    const lines: string[] = [theme.accent("keybindings")];
-
-    // Overlay groups mirror the user-visible categories. "custom" is
-    // intentionally excluded here; user-authored custom bindings can opt
-    // into a future overlay slot, but today the overlay documents only
-    // the built-in keyboard surface.
-    const displayGroups: { category: KeyBindingCategory; label: string }[] = [
-      { category: "compose", label: "send/compose" },
-      { category: "tools", label: "tools" },
-      { category: "run", label: "run control" },
-      { category: "theme", label: "theme" },
-      { category: "commands", label: "commands" },
-      { category: "overlay", label: "overlay" },
-    ];
-
-    const allBindings = listKeyBindings();
-    for (const group of displayGroups) {
-      const groupBindings = allBindings.filter((binding) => binding.category === group.category);
-      if (groupBindings.length === 0) {
-        continue;
-      }
-      const labels = groupBindings.map((binding) => theme.text(binding.label)).join("  ");
-      lines.push(`${theme.dim(`${group.label}:`)} ${labels}`);
-    }
-
-    const box = new Box(1, 0, theme.toolCardPendingBg);
-    for (const line of lines) {
-      box.addChild(new TruncatedText(line));
-    }
-    return box.render(width);
-  }
-
-  invalidate(): void {}
-}
-
-class TranscriptComponent implements Component {
+/**
+ * Transcript component used by the core "transcript" chrome contribution.
+ * Keeps its own children in sync with state.transcriptItems via setState,
+ * matching the pre-migration incremental rebuild behavior.
+ */
+export class TranscriptComponent implements Component {
   private readonly container = new Container();
   private readonly emptyState: EmptyTranscriptComponent;
 
@@ -349,151 +297,6 @@ function createTranscriptEntryComponent(
   return toolCall ? new ToolTranscriptEntryComponent(theme, toolCall, expandedToolOutput) : undefined;
 }
 
-function buildActivityBarLines(
-  theme: NanobossTuiTheme,
-  state: UiState,
-  nowMs: number,
-  width?: number,
-): string[] {
-  const separator = theme.dim(" • ");
-  const runState = buildRunStateParts(theme, state, nowMs);
-  const identityLine = buildIdentityBudgetLineForWidth(theme, state, separator, width);
-  const lines: string[] = [identityLine];
-  if (runState.length > 0) {
-    lines.push(runState.join(separator));
-  }
-  return lines;
-}
-
-interface IdentityBudgetDropLevels {
-  includeTokenPercent: boolean;
-  includeTokenLimit: boolean;
-  includeAgent: boolean;
-  includeModelQualifier: boolean;
-}
-
-const IDENTITY_BUDGET_DROP_ORDER: IdentityBudgetDropLevels[] = [
-  { includeTokenPercent: true, includeTokenLimit: true, includeAgent: true, includeModelQualifier: true },
-  { includeTokenPercent: false, includeTokenLimit: true, includeAgent: true, includeModelQualifier: true },
-  { includeTokenPercent: false, includeTokenLimit: false, includeAgent: true, includeModelQualifier: true },
-  { includeTokenPercent: false, includeTokenLimit: false, includeAgent: false, includeModelQualifier: true },
-  { includeTokenPercent: false, includeTokenLimit: false, includeAgent: false, includeModelQualifier: false },
-];
-
-function buildIdentityBudgetLineForWidth(
-  theme: NanobossTuiTheme,
-  state: UiState,
-  separator: string,
-  width: number | undefined,
-): string {
-  if (width === undefined || width <= 0) {
-    const parts = buildIdentityBudgetParts(theme, state, IDENTITY_BUDGET_DROP_ORDER[0]!);
-    return parts.join(separator);
-  }
-  let lastLine = "";
-  for (const levels of IDENTITY_BUDGET_DROP_ORDER) {
-    const parts = buildIdentityBudgetParts(theme, state, levels);
-    lastLine = parts.join(separator);
-    if (visibleWidth(lastLine) <= width) {
-      return lastLine;
-    }
-  }
-  return lastLine;
-}
-
-function buildIdentityBudgetParts(
-  theme: NanobossTuiTheme,
-  state: UiState,
-  levels: IdentityBudgetDropLevels = IDENTITY_BUDGET_DROP_ORDER[0]!,
-): string[] {
-  const parts: string[] = [];
-  const selection = state.defaultAgentSelection;
-  if (!selection) {
-    if (levels.includeAgent) {
-      parts.push(theme.accent(`@${state.agentLabel || "connecting"}`));
-    }
-  } else {
-    if (levels.includeAgent) {
-      parts.push(theme.accent(`@${selection.provider}`));
-    }
-    const modelLabel = getActivityBarModelLabel(state);
-    const effectiveModel = levels.includeModelQualifier ? modelLabel : stripModelQualifier(modelLabel);
-    parts.push(theme.accent(effectiveModel));
-  }
-  const tokenText = buildTokenUsageText(state, {
-    includePercent: levels.includeTokenPercent,
-    includeLimit: levels.includeTokenLimit,
-  });
-  if (tokenText) {
-    parts.push(theme.success(tokenText));
-  }
-  return parts;
-}
-
-function buildRunStateParts(theme: NanobossTuiTheme, state: UiState, nowMs: number): string[] {
-  const parts: string[] = [];
-  if (state.simplify2AutoApprove) {
-    parts.push(theme.success("approve on"));
-  }
-  if (state.inputDisabled) {
-    parts.push(theme.warning("● busy"));
-    const runTimerLine = buildRunTimerLine(state, nowMs);
-    if (runTimerLine) {
-      parts.push(theme.warning(runTimerLine));
-    }
-  }
-  if (state.activeProcedure) {
-    parts.push(theme.warning(`proc /${state.activeProcedure}`));
-  }
-  if (state.pendingContinuation) {
-    parts.push(theme.warning(`cont /${state.pendingContinuation.procedure}`));
-  }
-  const steeringCount = state.pendingPrompts.filter((prompt) => prompt.kind === "steering").length;
-  const queuedCount = state.pendingPrompts.filter((prompt) => prompt.kind === "queued").length;
-  if (steeringCount > 0) {
-    parts.push(theme.warning(`steer ${steeringCount}`));
-  }
-  if (queuedCount > 0) {
-    parts.push(theme.warning(`queued ${queuedCount}`));
-  }
-  return parts;
-}
-
-function getActivityBarModelLabel(state: UiState): string {
-  const selection = state.defaultAgentSelection;
-  if (!selection) {
-    return state.agentLabel || "connecting";
-  }
-
-  const prefix = `${selection.provider}/`;
-  if (state.agentLabel.startsWith(prefix)) {
-    return state.agentLabel.slice(prefix.length) || "default";
-  }
-
-  return selection.model || "default";
-}
-
-function buildRunTimerLine(state: UiState, nowMs: number): string | undefined {
-  if (!state.inputDisabled || state.runStartedAtMs === undefined) {
-    return undefined;
-  }
-
-  return formatElapsedRunTimer(Math.max(0, nowMs - state.runStartedAtMs));
-}
-
-function buildTokenUsageText(
-  state: UiState,
-  options?: { includePercent?: boolean; includeLimit?: boolean },
-): string | undefined {
-  if (state.tokenUsage) {
-    const compact = formatCompactTokenUsage(state.tokenUsage, options);
-    if (compact) {
-      return compact;
-    }
-  }
-  return state.tokenUsageLine;
-}
-
 function renderTurnLabel(theme: NanobossTuiTheme, turn: UiTurn): string {
   switch (turn.role) {
     case "user":
@@ -583,22 +386,9 @@ function inferTurnCardTone(turn: UiTurn): NonNullable<UiTurn["cardTone"]> {
   return "info";
 }
 
-function styleStatusLine(theme: NanobossTuiTheme, line: string): string {
-  if (line.includes("failed") || line.includes("error") || line.startsWith("[stream]")) {
-    return theme.error(line);
-  }
-
-  if (line.startsWith("[server]") || line.startsWith("[run]")) {
-    return theme.accent(line);
-  }
-
-  if (line.startsWith("[status]")) {
-    return theme.warning(line);
-  }
-
-  if (line.startsWith("[build]")) {
-    return theme.warning(line);
-  }
-
-  return theme.dim(line);
-}
+registerChromeContribution({
+  id: "core.transcript",
+  slot: "transcript",
+  order: 0,
+  render: ({ getState, theme }) => new TranscriptComponent(theme, getState()),
+});
