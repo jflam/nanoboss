@@ -73,7 +73,7 @@ describe("frontend-events", () => {
         type: "procedure_panel",
         runId: "run-1",
         procedure: "default",
-        panelId: expect.any(String),
+        panelId: expect.any(String) as unknown as string,
         rendererId: "nb/notice@1",
         payload: {
           message: "Operation cancelled by user",

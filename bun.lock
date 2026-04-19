@@ -14,6 +14,7 @@
         "@nanoboss/adapters-tui": "workspace:*",
         "@nanoboss/agent-acp": "workspace:*",
         "@nanoboss/app-runtime": "workspace:*",
+        "@nanoboss/app-support": "workspace:*",
         "@nanoboss/contracts": "workspace:*",
         "@nanoboss/procedure-catalog": "workspace:*",
         "@nanoboss/procedure-engine": "workspace:*",
@@ -45,6 +46,7 @@
         "@nanoboss/adapters-mcp": "workspace:*",
         "@nanoboss/agent-acp": "workspace:*",
         "@nanoboss/app-runtime": "workspace:*",
+        "@nanoboss/app-support": "workspace:*",
         "@nanoboss/contracts": "workspace:*",
         "@nanoboss/procedure-engine": "workspace:*",
       },
@@ -56,6 +58,7 @@
         "@agentclientprotocol/sdk": "^0.17.1",
         "@nanoboss/agent-acp": "workspace:*",
         "@nanoboss/app-runtime": "workspace:*",
+        "@nanoboss/app-support": "workspace:*",
         "@nanoboss/procedure-sdk": "workspace:*",
       },
     },
@@ -64,8 +67,10 @@
       "version": "0.0.0",
       "dependencies": {
         "@nanoboss/app-runtime": "workspace:*",
+        "@nanoboss/app-support": "workspace:*",
         "@nanoboss/contracts": "workspace:*",
         "@nanoboss/procedure-sdk": "workspace:*",
+        "@nanoboss/store": "workspace:*",
       },
     },
     "packages/adapters-tui": {
@@ -74,9 +79,11 @@
       "dependencies": {
         "@nanoboss/adapters-http": "workspace:*",
         "@nanoboss/agent-acp": "workspace:*",
+        "@nanoboss/app-support": "workspace:*",
         "@nanoboss/contracts": "workspace:*",
         "@nanoboss/procedure-engine": "workspace:*",
         "@nanoboss/procedure-sdk": "workspace:*",
+        "@nanoboss/store": "workspace:*",
       },
     },
     "packages/agent-acp": {
@@ -95,10 +102,20 @@
       "dependencies": {
         "@agentclientprotocol/sdk": "^0.17.1",
         "@nanoboss/agent-acp": "workspace:*",
+        "@nanoboss/app-support": "workspace:*",
+        "@nanoboss/contracts": "workspace:*",
         "@nanoboss/procedure-catalog": "workspace:*",
         "@nanoboss/procedure-engine": "workspace:*",
         "@nanoboss/procedure-sdk": "workspace:*",
         "@nanoboss/store": "workspace:*",
+      },
+    },
+    "packages/app-support": {
+      "name": "@nanoboss/app-support",
+      "version": "0.0.0",
+      "dependencies": {
+        "@typia/transform": "^12.0.1",
+        "typescript": "~5.9.3",
       },
     },
     "packages/contracts": {
@@ -109,9 +126,8 @@
       "name": "@nanoboss/procedure-catalog",
       "version": "0.0.0",
       "dependencies": {
+        "@nanoboss/app-support": "workspace:*",
         "@nanoboss/procedure-sdk": "workspace:*",
-        "@typia/transform": "^12.0.1",
-        "typescript": "~5.9.3",
       },
     },
     "packages/procedure-engine": {
@@ -136,6 +152,7 @@
       "name": "@nanoboss/store",
       "version": "0.0.0",
       "dependencies": {
+        "@nanoboss/app-support": "workspace:*",
         "@nanoboss/contracts": "workspace:*",
         "@nanoboss/procedure-sdk": "workspace:*",
       },
@@ -199,6 +216,8 @@
     "@nanoboss/agent-acp": ["@nanoboss/agent-acp@workspace:packages/agent-acp"],
 
     "@nanoboss/app-runtime": ["@nanoboss/app-runtime@workspace:packages/app-runtime"],
+
+    "@nanoboss/app-support": ["@nanoboss/app-support@workspace:packages/app-support"],
 
     "@nanoboss/contracts": ["@nanoboss/contracts@workspace:packages/contracts"],
 

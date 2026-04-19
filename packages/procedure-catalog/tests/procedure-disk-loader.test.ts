@@ -98,7 +98,7 @@ describe("procedure disk loader", () => {
     );
 
     await expect(loadProcedureFromPath(join(proceduresDir, "bad-helper-procedure.ts"))).rejects.toThrow(
-      "Procedure local imports must use explicit .ts paths: ./helper",
+      "Disk module local imports must use explicit .ts paths: ./helper",
     );
   });
 
@@ -253,9 +253,9 @@ describe("procedure disk loader", () => {
     }
   });
 
-  test("procedure-catalog declares the runtime build dependencies used by its typia plugin", () => {
+  test("app-support declares the runtime build dependencies used by the shared typia plugin", () => {
     const packageJson = JSON.parse(
-      readFileSync(join(REPO_ROOT, "packages", "procedure-catalog", "package.json"), "utf8"),
+      readFileSync(join(REPO_ROOT, "packages", "app-support", "package.json"), "utf8"),
     ) as {
       dependencies?: Record<string, string>;
     };
