@@ -99,8 +99,9 @@ describe("NanobossAppView", () => {
     expect(plain).toContain("steer 1");
     expect(plain).toContain("queued 1");
     expect(plain).toContain("@copilot");
-    expect(plain).toContain("enter steer");
+    expect(plain).toContain("esc stop");
     expect(plain).toContain("tab queue");
+    expect(plain).toContain("ctrl+k keys");
   });
 
   test("shows a live run timer next to token usage while a run is active", () => {
@@ -152,7 +153,6 @@ describe("NanobossAppView", () => {
     const plain = stripAnsi(view.render(200).join("\n"));
 
     expect(plain).toContain("approve on");
-    expect(plain).toContain("ctrl+g auto-approve");
   });
 
   test("shows the active continuation and the /dismiss escape hatch in the status area", () => {
@@ -185,6 +185,98 @@ describe("NanobossAppView", () => {
     expect(plain).toContain("[continuation] /simplify active - waiting for your reply");
     expect(plain).toContain("cont /simplify");
     expect(plain).toContain("/dismiss");
+  });
+
+  test("footer shows the minimal default hint at idle", () => {
+    const state = {
+      ...createInitialUiState({ cwd: "/repo" }),
+      sessionId: "session-1",
+    };
+
+    const view = new NanobossAppView(
+      { render: () => [""], invalidate() {} } as never,
+      createNanobossTuiTheme(),
+      state,
+    );
+
+    const plain = stripAnsi(view.render(200).join("\n"));
+
+    expect(plain).toContain("ctrl+k keys • enter send • /help");
+    expect(plain).not.toContain("shift+enter");
+    expect(plain).not.toContain("ctrl+o tools");
+    expect(plain).not.toContain("ctrl+g auto-approve");
+    expect(plain).not.toContain("/quit");
+    expect(plain).not.toContain("/model");
+  });
+
+  test("footer shows esc stop / tab queue / pending count plus ctrl+k keys when input is disabled", () => {
+    const state = {
+      ...createInitialUiState({ cwd: "/repo" }),
+      sessionId: "session-1",
+      inputDisabled: true,
+      pendingPrompts: [
+        { id: "pending-1", text: "first", kind: "queued" as const },
+        { id: "pending-2", text: "second", kind: "queued" as const },
+        { id: "pending-3", text: "third", kind: "steering" as const },
+      ],
+    };
+
+    const view = new NanobossAppView(
+      { render: () => [""], invalidate() {} } as never,
+      createNanobossTuiTheme(),
+      state,
+    );
+
+    const plain = stripAnsi(view.render(200).join("\n"));
+
+    expect(plain).toContain("esc stop");
+    expect(plain).toContain("tab queue");
+    expect(plain).toContain("3 pending");
+    expect(plain).toContain("ctrl+k keys");
+    expect(plain).not.toContain("enter send");
+    expect(plain).not.toContain("shift+enter");
+  });
+
+  test("footer preserves the pause message verbatim when live updates are paused", () => {
+    const state = {
+      ...createInitialUiState({ cwd: "/repo" }),
+      sessionId: "session-1",
+      liveUpdatesPaused: true,
+    };
+
+    const view = new NanobossAppView(
+      { render: () => [""], invalidate() {} } as never,
+      createNanobossTuiTheme(),
+      state,
+    );
+
+    const plain = stripAnsi(view.render(200).join("\n"));
+
+    expect(plain).toContain(
+      "⏸ updates paused — ctrl+p to resume (native terminal scrollback works while paused)",
+    );
+    expect(plain).not.toContain("ctrl+k keys");
+  });
+
+  test("footer appends /dismiss when a continuation is pending", () => {
+    const state = {
+      ...createInitialUiState({ cwd: "/repo" }),
+      sessionId: "session-1",
+      pendingContinuation: {
+        procedure: "simplify",
+        question: "continue?",
+      },
+    };
+
+    const view = new NanobossAppView(
+      { render: () => [""], invalidate() {} } as never,
+      createNanobossTuiTheme(),
+      state,
+    );
+
+    const plain = stripAnsi(view.render(200).join("\n"));
+
+    expect(plain).toContain("ctrl+k keys • enter send • /help • /dismiss");
   });
 
   test("renders the reducer-produced visible transcript contract and resets cleanly on session_ready", () => {
@@ -476,11 +568,9 @@ describe("NanobossAppView", () => {
 
     expect(visible).toContain("read src/mcp/jsonrpc.ts:12");
     expect(visible).toContain("please read jsonrpc.ts");
-    expect(visible).toContain("ctrl+t hide-tools");
 
     expect(hidden).not.toContain("read src/mcp/jsonrpc.ts:12");
     expect(hidden).toContain("please read jsonrpc.ts");
-    expect(hidden).toContain("ctrl+t show-tools");
   });
 
   test("renders light tool cards with explicit readable header, body, and meta colors", () => {

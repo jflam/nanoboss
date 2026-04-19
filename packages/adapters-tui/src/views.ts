@@ -82,29 +82,20 @@ export class NanobossAppView implements Component {
     if (this.state.liveUpdatesPaused) {
       return this.theme.warning("⏸ updates paused — ctrl+p to resume (native terminal scrollback works while paused)");
     }
-    const parts = [
-      this.state.inputDisabled ? "enter steer" : "enter send",
-      "shift+enter newline",
-      "ctrl+o tools",
-      "ctrl+g auto-approve",
-      "ctrl+p pause",
-      this.state.toolCardsHidden ? "ctrl+t show-tools" : "ctrl+t hide-tools",
-      this.state.expandedToolOutput ? "expanded" : "collapsed",
-      "/new",
-      "/model",
-      `/${this.state.toolCardThemeMode}`,
-      this.state.toolCardThemeMode === "dark" ? "/light" : "/dark",
-      "/quit",
-    ];
+    const parts: string[] = [];
+    if (this.state.inputDisabled) {
+      const pendingCount = this.state.pendingPrompts.length;
+      parts.push(
+        "esc stop",
+        "tab queue",
+        pendingCount > 0 ? `${pendingCount} pending` : "run active",
+        "ctrl+k keys",
+      );
+    } else {
+      parts.push("ctrl+k keys", "enter send", "/help");
+    }
     if (this.state.pendingContinuation) {
       parts.push("/dismiss");
-    }
-    if (this.state.inputDisabled) {
-      parts.push(
-        "tab queue",
-        "esc stop",
-        this.state.pendingPrompts.length > 0 ? `${this.state.pendingPrompts.length} pending` : "run active",
-      );
     }
     return this.theme.dim(parts.join(" • "));
   }
