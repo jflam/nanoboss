@@ -4,7 +4,7 @@ import type { NanobossTuiTheme } from "./theme.ts";
 
 import { MessageCardComponent } from "./components/message-card.ts";
 import { ToolCardComponent } from "./components/tool-card.ts";
-import { formatElapsedRunTimer } from "./format.ts";
+import { formatCompactTokenUsage, formatElapsedRunTimer } from "./format.ts";
 
 export class NanobossAppView implements Component {
   private readonly container = new Container();
@@ -85,8 +85,9 @@ export class NanobossAppView implements Component {
     if (runTimerLine) {
       parts.push(this.theme.warning(runTimerLine));
     }
-    if (this.state.tokenUsageLine) {
-      parts.push(this.theme.success(this.state.tokenUsageLine));
+    const tokenText = buildTokenUsageText(this.state);
+    if (tokenText) {
+      parts.push(this.theme.success(tokenText));
     }
     return parts.join(separator);
   }
@@ -289,17 +290,17 @@ function createTranscriptEntryComponent(
 function buildActivityBarParts(theme: NanobossTuiTheme, state: UiState): string[] {
   const parts: string[] = [
     state.simplify2AutoApprove
-      ? theme.success("auto-approve on")
-      : theme.dim("auto-approve off"),
+      ? theme.success("approve on")
+      : theme.dim("approve off"),
   ];
   if (state.inputDisabled) {
     parts.push(theme.warning("● busy"));
   }
   if (state.activeProcedure) {
-    parts.push(theme.warning(`procedure /${state.activeProcedure}`));
+    parts.push(theme.warning(`proc /${state.activeProcedure}`));
   }
   if (state.pendingContinuation) {
-    parts.push(theme.warning(`continuation /${state.pendingContinuation.procedure}`));
+    parts.push(theme.warning(`cont /${state.pendingContinuation.procedure}`));
   }
 
   const steeringCount = state.pendingPrompts.filter((prompt) => prompt.kind === "steering").length;
@@ -313,14 +314,14 @@ function buildActivityBarParts(theme: NanobossTuiTheme, state: UiState): string[
 
   const selection = state.defaultAgentSelection;
   if (!selection) {
-    parts.push(theme.accent(`agent/model ${state.agentLabel || "connecting"}`));
+    parts.push(theme.accent(`@${state.agentLabel || "connecting"}`));
     return parts;
   }
 
   const modelLabel = getActivityBarModelLabel(state);
   parts.push(
-    theme.accent(`agent ${selection.provider}`),
-    theme.accent(`model ${modelLabel}`),
+    theme.accent(`@${selection.provider}`),
+    theme.accent(modelLabel),
   );
   return parts;
 }
@@ -345,6 +346,16 @@ function buildRunTimerLine(state: UiState, nowMs: number): string | undefined {
   }
 
   return formatElapsedRunTimer(Math.max(0, nowMs - state.runStartedAtMs));
+}
+
+function buildTokenUsageText(state: UiState): string | undefined {
+  if (state.tokenUsage) {
+    const compact = formatCompactTokenUsage(state.tokenUsage);
+    if (compact) {
+      return compact;
+    }
+  }
+  return state.tokenUsageLine;
 }
 
 function renderTurnLabel(theme: NanobossTuiTheme, turn: UiTurn): string {

@@ -98,7 +98,7 @@ describe("NanobossAppView", () => {
     expect(plain).toContain("● busy");
     expect(plain).toContain("steer 1");
     expect(plain).toContain("queued 1");
-    expect(plain).toContain("agent copilot");
+    expect(plain).toContain("@copilot");
     expect(plain).toContain("enter steer");
     expect(plain).toContain("tab queue");
   });
@@ -151,7 +151,7 @@ describe("NanobossAppView", () => {
 
     const plain = stripAnsi(view.render(200).join("\n"));
 
-    expect(plain).toContain("auto-approve on");
+    expect(plain).toContain("approve on");
     expect(plain).toContain("ctrl+g auto-approve");
   });
 
@@ -183,7 +183,7 @@ describe("NanobossAppView", () => {
     const plain = stripAnsi(view.render(200).join("\n"));
 
     expect(plain).toContain("[continuation] /simplify active - waiting for your reply");
-    expect(plain).toContain("continuation /simplify");
+    expect(plain).toContain("cont /simplify");
     expect(plain).toContain("/dismiss");
   });
 
@@ -892,7 +892,98 @@ describe("NanobossAppView", () => {
     );
 
     const rendered = stripAnsi(view.render(120).join("\n"));
-    expect(rendered).toContain("procedure /linter");
+    expect(rendered).toContain("proc /linter");
+  });
+
+  test("renders compact token usage from structured fields", () => {
+    const state = {
+      ...createInitialUiState({ cwd: "/repo" }),
+      sessionId: "session-1",
+      tokenUsage: { used: 32_499, limit: 168_000, percent: 19.3 },
+      tokenUsageLine: "[tokens] 32,499 / 168,000 (19.3%)",
+      defaultAgentSelection: {
+        provider: "copilot" as const,
+        model: "claude-opus-4.7/medium",
+      },
+      agentLabel: "copilot/claude-opus-4.7/medium",
+    };
+
+    const view = new NanobossAppView(
+      {
+        render: () => [""],
+        invalidate() {},
+      } as never,
+      createNanobossTuiTheme(),
+      state,
+    );
+
+    const plain = stripAnsi(view.render(200).join("\n"));
+    expect(plain).toContain("tok 32.5k/168k (19%)");
+    expect(plain).toContain("@copilot");
+    expect(plain).toContain("claude-opus-4.7/medium");
+    expect(plain).not.toContain("model claude-opus-4.7");
+  });
+
+  test("renders compact token usage when percent is missing", () => {
+    const state = {
+      ...createInitialUiState({ cwd: "/repo" }),
+      sessionId: "session-1",
+      tokenUsage: { used: 1_500, limit: 8_192 },
+    };
+
+    const view = new NanobossAppView(
+      {
+        render: () => [""],
+        invalidate() {},
+      } as never,
+      createNanobossTuiTheme(),
+      state,
+    );
+
+    const plain = stripAnsi(view.render(200).join("\n"));
+    expect(plain).toContain("tok 1.5k/8.2k");
+    expect(plain).not.toMatch(/tok [^\n]*\(\d+%\)/);
+  });
+
+  test("renders compact token usage when limit is missing", () => {
+    const state = {
+      ...createInitialUiState({ cwd: "/repo" }),
+      sessionId: "session-1",
+      tokenUsage: { used: 512 },
+    };
+
+    const view = new NanobossAppView(
+      {
+        render: () => [""],
+        invalidate() {},
+      } as never,
+      createNanobossTuiTheme(),
+      state,
+    );
+
+    const plain = stripAnsi(view.render(200).join("\n"));
+    expect(plain).toContain("tok 512");
+    expect(plain).not.toMatch(/tok 512\//);
+  });
+
+  test("falls back to legacy tokenUsageLine when structured usage is unavailable", () => {
+    const state = {
+      ...createInitialUiState({ cwd: "/repo" }),
+      sessionId: "session-1",
+      tokenUsageLine: "[tokens] auth-source-unknown",
+    };
+
+    const view = new NanobossAppView(
+      {
+        render: () => [""],
+        invalidate() {},
+      } as never,
+      createNanobossTuiTheme(),
+      state,
+    );
+
+    const plain = stripAnsi(view.render(200).join("\n"));
+    expect(plain).toContain("[tokens] auth-source-unknown");
   });
 
   test("collapsed tool output can be expanded globally", () => {

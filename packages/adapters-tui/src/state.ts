@@ -1,5 +1,6 @@
 import type { RenderedFrontendEventEnvelope } from "@nanoboss/adapters-http";
 import type { DownstreamAgentSelection, PromptInput } from "@nanoboss/contracts";
+import type { TokenUsageSummary } from "./format.ts";
 import type { ToolCardThemeMode } from "./theme.ts";
 import type { ToolPreviewBlock } from "./tool-preview.ts";
 
@@ -78,6 +79,7 @@ export interface UiState {
   stopRequestedRunId?: string;
   statusLine?: string;
   tokenUsageLine?: string;
+  tokenUsage?: TokenUsageSummary;
   pendingContinuation?: FrontendContinuation;
   inputDisabled: boolean;
   showToolCalls: boolean;

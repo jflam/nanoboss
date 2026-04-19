@@ -1,6 +1,13 @@
 import { getAgentTokenUsagePercent } from "@nanoboss/agent-acp";
 import type { AgentTokenUsage } from "@nanoboss/contracts";
 
+export interface TokenUsageSummary {
+  used?: number;
+  limit?: number;
+  percent?: number;
+  source?: string;
+}
+
 function formatToolTraceLine(depth: number, text: string): string {
   return `${"│ ".repeat(depth)}${text}`;
 }
@@ -16,6 +23,61 @@ export function formatTokenUsageLine(usage: AgentTokenUsage): string {
   }
 
   return `[tokens] ${usage.source}`;
+}
+
+export function toTokenUsageSummary(usage: AgentTokenUsage): TokenUsageSummary {
+  const summary: TokenUsageSummary = { source: usage.source };
+  if (usage.currentContextTokens !== undefined) {
+    summary.used = usage.currentContextTokens;
+  }
+  if (usage.maxContextTokens !== undefined) {
+    summary.limit = usage.maxContextTokens;
+  }
+  const percent = getAgentTokenUsagePercent(usage);
+  if (percent !== undefined) {
+    summary.percent = percent;
+  }
+  return summary;
+}
+
+function formatCompactTokenCount(value: number): string {
+  if (!Number.isFinite(value) || value < 0) {
+    return "0";
+  }
+  if (value < 1_000) {
+    return String(Math.round(value));
+  }
+  if (value < 100_000) {
+    const rounded = Math.round(value / 100) / 10;
+    return `${trimTrailingZero(rounded.toFixed(1))}k`;
+  }
+  if (value < 1_000_000) {
+    return `${Math.round(value / 1_000)}k`;
+  }
+  const millions = value / 1_000_000;
+  if (millions < 10) {
+    return `${trimTrailingZero(millions.toFixed(1))}M`;
+  }
+  return `${Math.round(millions)}M`;
+}
+
+export function formatCompactTokenUsage(summary: TokenUsageSummary): string | undefined {
+  if (summary.used === undefined && summary.limit === undefined && summary.percent === undefined) {
+    return undefined;
+  }
+  const used = summary.used !== undefined ? formatCompactTokenCount(summary.used) : "?";
+  const segments = [`tok ${used}`];
+  if (summary.limit !== undefined) {
+    segments[0] = `tok ${used}/${formatCompactTokenCount(summary.limit)}`;
+  }
+  if (summary.percent !== undefined) {
+    segments.push(`(${Math.round(summary.percent)}%)`);
+  }
+  return segments.join(" ");
+}
+
+function trimTrailingZero(value: string): string {
+  return value.endsWith(".0") ? value.slice(0, -2) : value;
 }
 
 export function formatElapsedRunTimer(durationMs: number): string {

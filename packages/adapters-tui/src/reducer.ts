@@ -6,7 +6,7 @@ import type { DownstreamAgentSelection } from "@nanoboss/contracts";
 import { formatProcedureStatusText, type ProcedureUiEvent } from "@nanoboss/procedure-engine";
 import type { ToolCardThemeMode } from "./theme.ts";
 
-import { formatTokenUsageLine } from "./format.ts";
+import { formatTokenUsageLine, toTokenUsageSummary, type TokenUsageSummary } from "./format.ts";
 import { LOCAL_TUI_COMMANDS } from "./commands.ts";
 import {
   createInitialUiState,
@@ -362,6 +362,7 @@ function reduceFrontendEvent(state: UiState, event: RenderedFrontendEventEnvelop
       return {
         ...state,
         tokenUsageLine: formatTokenUsageLine(event.data.usage),
+        tokenUsage: toTokenUsageSummary(event.data.usage),
       };
     case "run_heartbeat": {
       if (shouldIgnoreMismatchedRunEvent(state, event.data.runId)) {
@@ -496,6 +497,7 @@ function reduceFrontendEvent(state: UiState, event: RenderedFrontendEventEnvelop
         return state;
       }
       const tokenUsageLine = event.data.tokenUsage ? formatTokenUsageLine(event.data.tokenUsage) : state.tokenUsageLine;
+      const tokenUsage = event.data.tokenUsage ? toTokenUsageSummary(event.data.tokenUsage) : state.tokenUsage;
       const statusLine = event.data.procedure === "dismiss"
         ? buildDismissContinuationStatusLine(event.data.display)
         : `[run] ${event.data.procedure} completed`;
@@ -503,6 +505,7 @@ function reduceFrontendEvent(state: UiState, event: RenderedFrontendEventEnvelop
         turnStatus: "complete",
         fallbackText: event.data.display,
         tokenUsageLine,
+        tokenUsage,
         completedAt: event.data.completedAt,
         statusLine,
       });
@@ -512,10 +515,12 @@ function reduceFrontendEvent(state: UiState, event: RenderedFrontendEventEnvelop
         return state;
       }
       const tokenUsageLine = event.data.tokenUsage ? formatTokenUsageLine(event.data.tokenUsage) : state.tokenUsageLine;
+      const tokenUsage = event.data.tokenUsage ? toTokenUsageSummary(event.data.tokenUsage) : state.tokenUsage;
       const nextState = finishRun(state, {
         turnStatus: "complete",
         fallbackText: event.data.display ?? event.data.question,
         tokenUsageLine,
+        tokenUsage,
         completedAt: event.data.pausedAt,
         statusLine: buildContinuationStatusLine(event.data.procedure),
       });
@@ -666,6 +671,7 @@ function finishRun(
     turnStatus: UiTurn["status"];
     fallbackText?: string;
     tokenUsageLine?: string;
+    tokenUsage?: TokenUsageSummary;
     failureMessage?: string;
     statusMessage?: string;
     completedAt?: string;
@@ -694,6 +700,7 @@ function finishRun(
     pendingStopRequest: false,
     stopRequestedRunId: undefined,
     tokenUsageLine: params.tokenUsageLine ?? nextState.tokenUsageLine,
+    tokenUsage: params.tokenUsage ?? nextState.tokenUsage,
     statusLine: params.statusLine,
     inputDisabled: false,
   };
