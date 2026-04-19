@@ -311,7 +311,7 @@ export class AgentInvocationApiImpl implements AgentInvocationApi {
         softStopSignal: this.params.softStopSignal,
         promptInput,
         onUpdate: async (update) => {
-          if (shouldForwardNestedAgentUpdate(update, options?.stream !== false)) {
+          if (shouldForwardNestedAgentUpdate(update, options?.stream !== false, started.emitToolCallEvents)) {
             this.params.emitter.emit(withNestedToolCallMetadata(update, started.toolCallId));
           }
         },
@@ -442,9 +442,16 @@ function isRef(value: RunRef | Ref): value is Ref {
 function shouldForwardNestedAgentUpdate(
   update: acp.SessionUpdate,
   streamText: boolean,
+  isWrappedInToolCall: boolean,
 ): boolean {
   if (update.sessionUpdate === "agent_message_chunk") {
-    return streamText;
+    // When the nested agent run is wrapped in its own tool_call (fresh sessions),
+    // always forward chunks so callers see the agent's commentary interleaved with
+    // its tool calls. The `stream: false` flag in that case only suppresses the
+    // persisted stream on the stored run record, not live UI visibility.
+    // For default-session calls (no wrapper), `stream: false` continues to suppress
+    // live chunks so typed-JSON responses don't leak into the transcript.
+    return isWrappedInToolCall || streamText;
   }
 
   return (
