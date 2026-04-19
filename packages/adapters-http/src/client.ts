@@ -178,6 +178,26 @@ export async function cancelSessionRun(
   }
 }
 
+export async function cancelSessionContinuation(
+  baseUrl: string,
+  sessionId: string,
+): Promise<void> {
+  const response = await fetch(
+    new URL(`/v1/sessions/${sessionId}/continuation-cancel`, baseUrl),
+    {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        connection: "close",
+      },
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(`Failed to cancel continuation: ${response.status}`);
+  }
+}
+
 export function startSessionEventStream(params: {
   baseUrl: string;
   sessionId: string;

@@ -178,9 +178,21 @@ export interface ProcedureMetadata {
   executionMode?: ProcedureExecutionMode;
 }
 
+export interface ProcedureCancelContext {
+  readonly sessionId: string;
+  readonly cwd: string;
+}
+
 export interface Procedure extends ProcedureMetadata {
   execute(prompt: string, ctx: ProcedureApi): Promise<ProcedureResult | string | void>;
   resume?(prompt: string, state: KernelValue, ctx: ProcedureApi): Promise<ProcedureResult | string | void>;
+  /**
+   * Best-effort cleanup hook invoked when a paused continuation is cancelled
+   * (via form-cancel or soft-stop). This is advisory only; cancellation always
+   * transitions to `run_cancelled` even if the hook throws. Procedures may use
+   * this to persist a "user bailed" marker or release external resources.
+   */
+  cancel?(state: KernelValue, ctx: ProcedureCancelContext): void | Promise<void>;
 }
 
 export interface ProcedureRegistryLike {

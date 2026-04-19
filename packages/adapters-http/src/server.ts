@@ -157,6 +157,20 @@ export async function startHttpServer(options: HttpServerOptions): Promise<Retur
         return json({ cancelled: true });
       }
 
+      const continuationCancelMatch = path.match(
+        /^\/v1\/sessions\/([^/]+)\/continuation-cancel$/,
+      );
+      if (request.method === "POST" && continuationCancelMatch) {
+        const sessionId = decodeURIComponent(continuationCancelMatch[1] ?? "");
+        const session = service.getSession(sessionId);
+        if (!session) {
+          return error(404, `Unknown session: ${sessionId}`);
+        }
+
+        const cancelled = await service.requestContinuationCancel(sessionId);
+        return json({ cancelled });
+      }
+
       const streamMatch = path.match(/^\/v1\/sessions\/([^/]+)\/stream$/);
       if (request.method === "GET" && streamMatch) {
         const sessionId = decodeURIComponent(streamMatch[1] ?? "");

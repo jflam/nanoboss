@@ -1356,6 +1356,78 @@ describe("NanobossService", () => {
     });
   });
 
+  test("requestContinuationCancel invokes the cancel hook exactly once and emits run_cancelled", async () => {
+    const registry = new ProcedureRegistry({ procedureRoots: [mkdtempSync(join(tmpdir(), "nab-service-cancel-hook-"))] });
+    const cancelCalls: Array<{ state: unknown; ctxSessionId: string }> = [];
+    registry.register({
+      ...createPausedWizardProcedure(),
+      async cancel(state, ctx) {
+        cancelCalls.push({ state, ctxSessionId: ctx.sessionId });
+      },
+    });
+
+    const service = new NanobossService(registry);
+    const session = service.createSession({ cwd: process.cwd() });
+
+    await service.promptSession(session.sessionId, "/wizard first");
+    const cancelled = await service.requestContinuationCancel(session.sessionId);
+    expect(cancelled).toBe(true);
+
+    const events = service.getSessionEvents(session.sessionId)?.after(-1) ?? [];
+    const runCancelled = events.findLast((event) => event.type === "run_cancelled");
+    expect(runCancelled?.type).toBe("run_cancelled");
+    expect(cancelCalls).toHaveLength(1);
+    expect(cancelCalls[0]?.ctxSessionId).toBe(session.sessionId);
+    expect((cancelCalls[0]?.state as { step: number }).step).toBe(1);
+
+    // A second requestContinuationCancel is a no-op because pendingContinuation
+    // was cleared.
+    const again = await service.requestContinuationCancel(session.sessionId);
+    expect(again).toBe(false);
+    expect(cancelCalls).toHaveLength(1);
+  });
+
+  test("requestContinuationCancel still emits run_cancelled when the cancel hook throws", async () => {
+    const registry = new ProcedureRegistry({ procedureRoots: [mkdtempSync(join(tmpdir(), "nab-service-cancel-hook-throw-"))] });
+    registry.register({
+      ...createPausedWizardProcedure(),
+      async cancel() {
+        throw new Error("cleanup exploded");
+      },
+    });
+
+    const service = new NanobossService(registry);
+    const session = service.createSession({ cwd: process.cwd() });
+
+    await service.promptSession(session.sessionId, "/wizard first");
+    const cancelled = await service.requestContinuationCancel(session.sessionId);
+    expect(cancelled).toBe(true);
+
+    const events = service.getSessionEvents(session.sessionId)?.after(-1) ?? [];
+    const runCancelled = events.findLast((event) => event.type === "run_cancelled");
+    expect(runCancelled?.type).toBe("run_cancelled");
+    const notice = events.findLast((event) => event.type === "assistant_notice");
+    expect(notice?.type).toBe("assistant_notice");
+    if (notice?.type === "assistant_notice") {
+      expect(notice.data.tone).toBe("error");
+      expect(notice.data.text).toContain("cleanup exploded");
+    }
+  });
+
+  test("requestContinuationCancel is a no-op when no continuation is paused", async () => {
+    const registry = new ProcedureRegistry({ procedureRoots: [mkdtempSync(join(tmpdir(), "nab-service-cancel-hook-noop-"))] });
+    registry.register(createPausedWizardProcedure());
+
+    const service = new NanobossService(registry);
+    const session = service.createSession({ cwd: process.cwd() });
+
+    const cancelled = await service.requestContinuationCancel(session.sessionId);
+    expect(cancelled).toBe(false);
+
+    const events = service.getSessionEvents(session.sessionId)?.after(-1) ?? [];
+    expect(events.some((event) => event.type === "run_cancelled")).toBe(false);
+  });
+
   test("session auto-approve is visible to procedures in execute and resume", async () => {
     const registry = new ProcedureRegistry({ procedureRoots: [mkdtempSync(join(tmpdir(), "nab-service-auto-approve-"))] });
     registry.register(createAutoApproveProbeProcedure());

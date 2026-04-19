@@ -1,4 +1,5 @@
 import {
+  cancelSessionContinuation,
   cancelSessionRun,
   createHttpSession,
   ensureMatchingHttpServer,
@@ -62,6 +63,7 @@ export interface NanobossTuiControllerDeps {
   setSessionAutoApprove?: typeof setSessionAutoApprove;
   sendSessionPrompt?: typeof sendSessionPrompt;
   cancelSessionRun?: typeof cancelSessionRun;
+  cancelSessionContinuation?: typeof cancelSessionContinuation;
   startSessionEventStream?: (params: {
     baseUrl: string;
     sessionId: string;
@@ -236,7 +238,17 @@ export class NanobossTuiController {
   }
 
   async cancelActiveRun(): Promise<void> {
-    if (!this.state.inputDisabled || !this.state.sessionId) {
+    if (!this.state.sessionId) {
+      return;
+    }
+
+    // If no active run is in flight but a continuation is paused, route the
+    // soft-stop through the engine-authoritative continuation cancel path so
+    // form-esc and ctrl+c share a single terminal transition.
+    if (!this.state.inputDisabled) {
+      if (this.state.pendingContinuation) {
+        await this.handleContinuationCancel();
+      }
       return;
     }
 
@@ -254,6 +266,33 @@ export class NanobossTuiController {
 
     if (activeRunId) {
       await this.sendStopRequest(activeRunId);
+    }
+  }
+
+  /**
+   * Cancels the currently paused continuation via the engine's
+   * `requestContinuationCancel` entry point. Does NOT attempt to route the
+   * user's input through `resume`; the reducer's existing `run_cancelled`
+   * handling (from step 1) will clear `pendingContinuation` and restore the
+   * default session.
+   */
+  async handleContinuationCancel(): Promise<void> {
+    const sessionId = this.state.sessionId;
+    if (!sessionId || !this.state.pendingContinuation) {
+      return;
+    }
+
+    try {
+      await (this.deps.cancelSessionContinuation ?? cancelSessionContinuation)(
+        this.params.serverUrl,
+        sessionId,
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.dispatch({
+        type: "local_status",
+        text: `[run] continuation cancel failed: ${message}`,
+      });
     }
   }
 

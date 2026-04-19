@@ -103,3 +103,5 @@ export async function syncRecoveredProcedureResultIntoDefaultConversation(params
 }): Promise<AgentTokenUsage | undefined> {
   return await syncRecoveredProcedureResultIntoDefaultConversationInternal(params);
 }
+
+export { runProcedureCancelHook } from "./procedure-runner.ts";

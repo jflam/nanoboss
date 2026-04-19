@@ -109,6 +109,7 @@ interface ControllerLike {
   handleSubmit(text: string | PromptInput): Promise<void>;
   queuePrompt(text: string | PromptInput): Promise<void>;
   cancelActiveRun(): Promise<void>;
+  handleContinuationCancel?(): Promise<void>;
   toggleToolOutput(): void;
   toggleToolCardsHidden(): void;
   toggleSimplify2AutoApprove(): void;
@@ -619,7 +620,12 @@ export class NanobossTuiApp {
   private handleSimplify2ContinuationAction(action: Simplify2CheckpointContinuationUiAction | undefined): void {
     const signature = this.openSimplify2ContinuationSignature;
     this.restoreEditorComposer();
-    if (!action || action.id === "other") {
+    if (!action) {
+      // esc cancel: route through engine-authoritative continuation cancel.
+      void this.controller.handleContinuationCancel?.();
+      return;
+    }
+    if (action.id === "other") {
       if (signature) {
         this.dismissedSimplify2ContinuationSignature = signature;
       }
@@ -635,9 +641,11 @@ export class NanobossTuiApp {
     const signature = this.openSimplify2ContinuationSignature;
     this.restoreEditorComposer();
     if (action.kind === "cancel") {
+      // Explicit cancel in the focus picker or esc: route through engine.
       if (signature) {
         this.dismissedSimplify2ContinuationSignature = signature;
       }
+      void this.controller.handleContinuationCancel?.();
       return;
     }
 

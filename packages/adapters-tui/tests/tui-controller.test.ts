@@ -1167,6 +1167,143 @@ describe("NanobossTuiController", () => {
     controller.requestExit();
     await expect(runPromise).resolves.toBe("session-1");
   });
+
+  test("handleContinuationCancel calls through to cancelSessionContinuation and does not send a prompt", async () => {
+    const sendCalls: string[] = [];
+    const cancelCalls: string[] = [];
+    const continuationCancelCalls: string[] = [];
+    const controller = new NanobossTuiController(
+      {
+        serverUrl: "http://localhost:3000",
+        showToolCalls: true,
+      },
+      {
+        ensureMatchingHttpServer: async () => {},
+        createHttpSession: async () => createSession("session-1"),
+        sendSessionPrompt: async (_baseUrl, _sessionId, prompt) => {
+          sendCalls.push(toPromptText(prompt));
+        },
+        cancelSessionRun: async (_baseUrl, sessionId) => {
+          cancelCalls.push(sessionId);
+        },
+        cancelSessionContinuation: async (_baseUrl, sessionId) => {
+          continuationCancelCalls.push(sessionId);
+        },
+        startSessionEventStream: ({ sessionId, onEvent }) =>
+          createFakeStream([], sessionId, onEvent),
+      },
+    );
+
+    const runPromise = controller.run();
+    await waitFor(() => controller.getState().sessionId === "session-1");
+
+    // Drive the controller into a paused state by replaying run_started /
+    // run_paused events onto its stream.
+    const streams: FakeStreamRecord[] = [];
+    // The stream created above is live; trigger via getState + pushing events
+    // through the controller's reducer by submitting the matching envelopes.
+    const runId = "paused-run-1";
+    const streamsRecord = (controller as unknown as { stream?: FakeStreamRecord }).stream;
+    if (streamsRecord) {
+      streams.push(streamsRecord);
+    }
+    // Fall back: dispatch via onEvent hook captured in createFakeStream through
+    // the stream we already own. The controller exposes dispatch through its
+    // state-change path, so we re-emit using the fake record.
+    // The simplest surface: set pendingContinuation directly via a synthetic
+    // frontend_event sequence.
+    (controller as unknown as { dispatch: (action: unknown) => void }).dispatch({
+      type: "frontend_event",
+      event: {
+        sessionId: "session-1",
+        seq: 1,
+        type: "run_started",
+        data: {
+          runId,
+          procedure: "wizard",
+          prompt: "go",
+          startedAt: new Date(0).toISOString(),
+        },
+      },
+    });
+    (controller as unknown as { dispatch: (action: unknown) => void }).dispatch({
+      type: "frontend_event",
+      event: {
+        sessionId: "session-1",
+        seq: 2,
+        type: "run_paused",
+        data: {
+          runId,
+          procedure: "wizard",
+          pausedAt: new Date(0).toISOString(),
+          run: { sessionId: "session-1", runId },
+          question: "continue?",
+        },
+      },
+    });
+
+    expect(controller.getState().pendingContinuation?.procedure).toBe("wizard");
+
+    await controller.handleContinuationCancel();
+
+    expect(continuationCancelCalls).toEqual(["session-1"]);
+    expect(sendCalls).toEqual([]);
+    expect(cancelCalls).toEqual([]);
+
+    controller.requestExit();
+    await expect(runPromise).resolves.toBe("session-1");
+  });
+
+  test("cancelActiveRun routes through handleContinuationCancel when a continuation is paused", async () => {
+    const cancelCalls: string[] = [];
+    const continuationCancelCalls: string[] = [];
+    const controller = new NanobossTuiController(
+      {
+        serverUrl: "http://localhost:3000",
+        showToolCalls: true,
+      },
+      {
+        ensureMatchingHttpServer: async () => {},
+        createHttpSession: async () => createSession("session-1"),
+        sendSessionPrompt: async () => {},
+        cancelSessionRun: async (_baseUrl, sessionId) => {
+          cancelCalls.push(sessionId);
+        },
+        cancelSessionContinuation: async (_baseUrl, sessionId) => {
+          continuationCancelCalls.push(sessionId);
+        },
+        startSessionEventStream: ({ sessionId, onEvent }) =>
+          createFakeStream([], sessionId, onEvent),
+      },
+    );
+
+    const runPromise = controller.run();
+    await waitFor(() => controller.getState().sessionId === "session-1");
+
+    (controller as unknown as { dispatch: (action: unknown) => void }).dispatch({
+      type: "frontend_event",
+      event: {
+        sessionId: "session-1",
+        seq: 1,
+        type: "run_paused",
+        data: {
+          runId: "paused-run-2",
+          procedure: "wizard",
+          pausedAt: new Date(0).toISOString(),
+          run: { sessionId: "session-1", runId: "paused-run-2" },
+          question: "continue?",
+        },
+      },
+    });
+
+    await controller.cancelActiveRun();
+
+    expect(continuationCancelCalls).toEqual(["session-1"]);
+    expect(cancelCalls).toEqual([]);
+
+    controller.requestExit();
+    await expect(runPromise).resolves.toBe("session-1");
+  });
 });
 
 function createSession(

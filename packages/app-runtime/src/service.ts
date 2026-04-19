@@ -36,6 +36,7 @@ import {
   procedureDispatchResultFromRecoveredRun,
   type RuntimeBindings,
   type RunTimingTrace,
+  runProcedureCancelHook,
   type SessionUpdateEmitter,
   startProcedureDispatchProgressBridge,
   ProcedureCancelledError,
@@ -314,8 +315,18 @@ export class NanobossService {
 
   cancel(sessionId: string, runId?: string): void {
     const session = this.sessions.get(sessionId);
-    const activeRun = session?.activeRun;
+    if (!session) {
+      return;
+    }
+
+    const activeRun = session.activeRun;
     if (!activeRun) {
+      // No active run: a soft-stop while paused is treated as a continuation
+      // cancel so form-esc and ctrl+c both route through a single terminal
+      // transition.
+      if (session.pendingContinuation) {
+        void this.requestContinuationCancel(sessionId);
+      }
       return;
     }
 
@@ -326,6 +337,57 @@ export class NanobossService {
     activeRun.softStopRequested = true;
     activeRun.softStopController.abort();
     this.cancelActiveProcedureDispatches(sessionId, session, activeRun);
+  }
+
+  /**
+   * Engine-authoritative cancel for a paused continuation. Invokes the
+   * procedure's optional `cancel` hook (best-effort cleanup, cannot veto),
+   * emits `run_cancelled` for the paused run, and clears
+   * `pendingContinuation`. Returns `true` when a paused run was cancelled;
+   * `false` when no continuation was pending (no-op).
+   */
+  async requestContinuationCancel(sessionId: string): Promise<boolean> {
+    const session = this.sessions.get(sessionId);
+    if (!session) {
+      return false;
+    }
+
+    const pending = session.pendingContinuation;
+    if (!pending) {
+      return false;
+    }
+
+    const procedure = this.registry.get(pending.procedure);
+    const cancelResult = procedure
+      ? await runProcedureCancelHook(procedure, pending.state, {
+          sessionId,
+          cwd: session.cwd,
+        })
+      : { ok: true as const };
+
+    if (!cancelResult.ok) {
+      const message = formatErrorMessage(cancelResult.error);
+      session.events.publish(sessionId, {
+        type: "assistant_notice",
+        runId: pending.run.runId,
+        text: `Error cancelling /${pending.procedure}: ${message}`,
+        tone: "error",
+      });
+    }
+
+    const cancellationMessage = defaultCancellationMessage("soft_stop");
+    this.publishRunCancelled({
+      session,
+      sessionId,
+      runId: pending.run.runId,
+      procedure: pending.procedure,
+      message: cancellationMessage,
+      markRunActivity: () => {},
+      run: pending.run,
+    });
+    this.setPendingContinuation(sessionId, session, undefined);
+    persistSessionState(session);
+    return true;
   }
 
   destroySession(sessionId: string): void {

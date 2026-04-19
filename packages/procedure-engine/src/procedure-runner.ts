@@ -12,6 +12,7 @@ import type {
 } from "@nanoboss/contracts";
 import type {
   Procedure,
+  ProcedureCancelContext,
   ProcedureRegistryLike,
   RunResult,
 } from "@nanoboss/procedure-sdk";
@@ -196,6 +197,28 @@ async function resumeProcedureExecution(
 ) {
   assertProcedureSupportsResume(procedure);
   return await procedure.resume(prompt, state, ctx);
+}
+
+/**
+ * Invokes a procedure's optional `cancel` hook with the supplied paused state.
+ * The hook is advisory-only: any error it throws is captured and returned but
+ * never prevents the caller from emitting `run_cancelled`. Callers should
+ * route a returned error into their existing error-reporting path.
+ */
+export async function runProcedureCancelHook(
+  procedure: Procedure,
+  state: KernelValue,
+  ctx: ProcedureCancelContext,
+): Promise<{ ok: true } | { ok: false; error: unknown }> {
+  if (!procedure.cancel) {
+    return { ok: true };
+  }
+  try {
+    await procedure.cancel(state, ctx);
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error };
+  }
 }
 
 function sameSelection(
