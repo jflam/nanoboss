@@ -1330,6 +1330,84 @@ describe("tui reducer", () => {
     expect(state).toBe(before);
     expect(state.keybindingOverlayVisible).toBe(false);
   });
+
+  test("resume error does not trap user in paused state (execute-plan regression)", () => {
+    let state = createInitialUiState({ cwd: "/repo", showToolCalls: true });
+
+    state = reduceUiState(state, { type: "local_user_submitted", text: "go" });
+    state = reduceUiState(state, {
+      type: "frontend_event",
+      event: eventEnvelope("run_started", {
+        runId: "run-1",
+        procedure: "execute-plan",
+        prompt: "go",
+        startedAt: new Date(0).toISOString(),
+      }),
+    });
+    state = reduceUiState(state, {
+      type: "frontend_event",
+      event: eventEnvelope("run_paused", {
+        runId: "run-1",
+        procedure: "execute-plan",
+        pausedAt: new Date(1_000).toISOString(),
+        run: { sessionId: "session-1", runId: "run-1" },
+        question: "Approve next step?",
+      }),
+    });
+
+    expect(state.pendingContinuation).toMatchObject({ procedure: "execute-plan" });
+
+    state = reduceUiState(state, {
+      type: "frontend_event",
+      event: eventEnvelope("run_failed", {
+        runId: "run-1",
+        procedure: "execute-plan",
+        completedAt: new Date(2_000).toISOString(),
+        error: "resume threw",
+      }),
+    });
+
+    expect(state.pendingContinuation).toBeUndefined();
+  });
+
+  test("run_cancelled clears pendingContinuation after a pause", () => {
+    let state = createInitialUiState({ cwd: "/repo", showToolCalls: true });
+
+    state = reduceUiState(state, { type: "local_user_submitted", text: "go" });
+    state = reduceUiState(state, {
+      type: "frontend_event",
+      event: eventEnvelope("run_started", {
+        runId: "run-2",
+        procedure: "execute-plan",
+        prompt: "go",
+        startedAt: new Date(0).toISOString(),
+      }),
+    });
+    state = reduceUiState(state, {
+      type: "frontend_event",
+      event: eventEnvelope("run_paused", {
+        runId: "run-2",
+        procedure: "execute-plan",
+        pausedAt: new Date(1_000).toISOString(),
+        run: { sessionId: "session-1", runId: "run-2" },
+        question: "Approve next step?",
+      }),
+    });
+
+    expect(state.pendingContinuation).toMatchObject({ procedure: "execute-plan" });
+
+    state = reduceUiState(state, {
+      type: "frontend_event",
+      event: eventEnvelope("run_cancelled", {
+        runId: "run-2",
+        procedure: "execute-plan",
+        completedAt: new Date(2_000).toISOString(),
+        message: "Stopped.",
+      }),
+    });
+
+    expect(state.pendingContinuation).toBeUndefined();
+  });
 });
 
 function eventEnvelope<EventType extends RenderedFrontendEventEnvelope["type"]>(

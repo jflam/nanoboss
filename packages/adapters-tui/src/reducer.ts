@@ -574,28 +574,32 @@ function reduceFrontendEvent(state: UiState, event: RenderedFrontendEventEnvelop
         },
       };
     }
-    case "run_failed":
+    case "run_failed": {
       if (shouldIgnoreMismatchedRunEvent(state, event.data.runId)) {
         return state;
       }
-      return finishRun(state, {
+      const nextState = finishRun(state, {
         turnStatus: "failed",
         fallbackText: event.data.error,
         failureMessage: event.data.error,
         completedAt: event.data.completedAt,
         statusLine: `[run] ${event.data.error}`,
       });
-    case "run_cancelled":
+      return { ...nextState, pendingContinuation: undefined };
+    }
+    case "run_cancelled": {
       if (shouldIgnoreMismatchedRunEvent(state, event.data.runId)) {
         return state;
       }
-      return finishRun(state, {
+      const nextState = finishRun(state, {
         turnStatus: "cancelled",
         fallbackText: event.data.message,
         statusMessage: event.data.message,
         completedAt: event.data.completedAt,
         statusLine: `[run] ${event.data.procedure} stopped`,
       });
+      return { ...nextState, pendingContinuation: undefined };
+    }
   }
 }
 
