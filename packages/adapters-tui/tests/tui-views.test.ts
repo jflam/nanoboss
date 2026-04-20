@@ -1662,6 +1662,51 @@ describe("NanobossAppView", () => {
     expect(expanded).not.toContain("stored result in cell-1");
   });
 
+  test("structured agent tool output renders a placeholder instead of raw JSON", () => {
+    const view = new NanobossAppView(
+      {
+        render: () => [""],
+        invalidate() {},
+      } as never,
+      createNanobossTuiTheme(),
+      {
+        ...createInitialUiState({ cwd: "/repo", showToolCalls: true, expandedToolOutput: true }),
+        sessionId: "session-1",
+        toolCalls: [
+          {
+            id: "tool-1",
+            runId: "run-1",
+            title: "callAgent: build a release summary",
+            kind: "other",
+            toolName: "agent",
+            status: "completed",
+            depth: 0,
+            isWrapper: false,
+            callPreview: { header: "callAgent: build a release summary" },
+            resultPreview: {
+              bodyLines: [
+                "generated structured JSON",
+                "stored ref output.data",
+              ],
+            },
+            rawOutput: {
+              run: { sessionId: "session-1", runId: "cell-1" },
+              dataRef: { run: { sessionId: "session-1", runId: "cell-1" }, path: "output.data" },
+              expandedContent: "Generated structured JSON.\nStored ref output.data.",
+            },
+          },
+        ],
+        transcriptItems: [{ type: "tool_call" as const, id: "tool-1" }],
+      },
+    );
+
+    const rendered = stripAnsi(view.render(160).join("\n"));
+
+    expect(rendered).toContain("Generated structured JSON.");
+    expect(rendered).toContain("Stored ref output.data.");
+    expect(rendered).not.toContain("{\"result\":7}");
+  });
+
   test("does not paint streamed assistant content red after a failed run", () => {
     const state = {
       ...createInitialUiState({ cwd: "/repo" }),

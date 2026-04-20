@@ -504,6 +504,86 @@ describe("procedure-engine runtime with procedure-sdk procedures", () => {
     expect(childRun?.output.display).toBe("{\"result\":7}");
   });
 
+  test("suppresses typed default-session JSON chunks and emits a structured output card", async () => {
+    const store = createStore("nab-procedure-engine-typed-default-structured");
+    const forwardedUpdates: unknown[] = [];
+    const uiEvents: unknown[] = [];
+    const fakeAgentSession = {
+      sessionId: "fake-typed-default-structured-session",
+      async getCurrentTokenSnapshot() {
+        return undefined;
+      },
+      async prompt() {
+        return {
+          raw: "{\"result\":7}",
+          durationMs: 0,
+          updates: [
+            {
+              sessionUpdate: "agent_message_chunk" as const,
+              content: {
+                type: "text" as const,
+                text: "{\"result\":7}",
+              },
+            },
+          ],
+        };
+      },
+      updateConfig() {},
+      close() {},
+    };
+    const usesTypedDefaultSession: Procedure = {
+      name: "typed-default-structured",
+      description: "Uses the default session for structured output",
+      async execute(_prompt, ctx) {
+        await ctx.agent.run("Return {\"result\":7}.", TypedAgentResultType, {
+          session: "default",
+        });
+        return {
+          summary: "structured output captured",
+        };
+      },
+    };
+    const registry = createRegistry([usesTypedDefaultSession]);
+    const runParams = buildRunParams(store, registry, usesTypedDefaultSession, "go");
+
+    await executeProcedure({
+      ...runParams,
+      emitter: {
+        emit(update) {
+          forwardedUpdates.push(update);
+        },
+        emitUiEvent(event) {
+          uiEvents.push(event);
+        },
+        async flush() {},
+      },
+      bindings: {
+        ...runParams.bindings,
+        agentSession: fakeAgentSession,
+        prepareDefaultPrompt: (promptInput) => ({ promptInput }),
+      },
+    });
+
+    expect(
+      forwardedUpdates.filter((update) =>
+        (update as { sessionUpdate?: unknown }).sessionUpdate === "agent_message_chunk"
+      ),
+    ).toHaveLength(0);
+    expect(uiEvents).toContainEqual(expect.objectContaining({
+      type: "procedure_panel",
+      rendererId: "nb/card@1",
+      payload: expect.objectContaining({
+        title: "Structured output",
+        markdown: expect.stringContaining("Generated structured JSON."),
+      }),
+    }));
+    const structuredPanel = uiEvents.find((event) =>
+      (event as { type?: unknown }).type === "procedure_panel"
+    ) as { payload?: { markdown?: string } } | undefined;
+    expect(structuredPanel?.payload?.markdown).toContain("output.data");
+    expect(structuredPanel?.payload?.markdown).not.toContain("{\"result\":7}");
+  });
+
   test("uses the injected default agent session for procedure-sdk procedures", async () => {
     const { store, getRun } = createFakeStore();
     const prompts: string[] = [];

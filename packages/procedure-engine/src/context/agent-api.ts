@@ -42,6 +42,7 @@ interface StartedAgentRun {
   startedAt: number;
   toolCallId?: string;
   emitToolCallEvents: boolean;
+  structuredOutput: boolean;
   childRun: ActiveRun;
 }
 
@@ -65,6 +66,7 @@ export class AgentRunRecorder {
       title?: string;
       rawInput?: unknown;
       emitToolCallEvents: boolean;
+      structuredOutput: boolean;
       agent?: DownstreamAgentSelection;
       promptInput?: CommandCallAgentOptions["promptInput"];
     },
@@ -74,6 +76,7 @@ export class AgentRunRecorder {
       startedAt: Date.now(),
       toolCallId: params.emitToolCallEvents ? crypto.randomUUID() : undefined,
       emitToolCallEvents: params.emitToolCallEvents,
+      structuredOutput: params.structuredOutput,
       childRun: this.params.store.startRun({
         procedure: "callAgent",
         input: prompt,
@@ -154,6 +157,9 @@ export class AgentRunRecorder {
       raw: params.raw,
     });
     const publicResult = toPublicRunResult(finalized);
+    const structuredOutputPreview = started.structuredOutput
+      ? buildStructuredOutputToolOutput(publicResult)
+      : { expandedContent: params.raw };
 
     this.params.logger.write({
       spanId: started.childSpanId,
@@ -183,10 +189,14 @@ export class AgentRunRecorder {
           dataRef: publicResult.dataRef,
           durationMs: params.durationMs,
           logFile: params.logFile,
-          expandedContent: params.raw,
+          ...structuredOutputPreview,
           ...params.rawOutputExtra,
         },
       });
+    }
+
+    if (started.structuredOutput && !started.emitToolCallEvents) {
+      emitStructuredOutputProcedurePanel(this.params.emitter, this.params.procedureName, publicResult);
     }
 
     return publicResult;
@@ -272,6 +282,7 @@ export class AgentInvocationApiImpl implements AgentInvocationApi {
     const options = (descriptor ? maybeOptions : descriptorOrOptions) as CommandCallAgentOptions | undefined;
     const sessionMode = options?.session ?? "fresh";
     const promptInput = options?.promptInput;
+    const structuredOutput = descriptor !== undefined;
     const displayPrompt = promptInput ? promptInputDisplayText(promptInput) : prompt;
     this.params.assertCanStartBoundary();
     const useDefaultSession = sessionMode === "default"
@@ -285,6 +296,7 @@ export class AgentInvocationApiImpl implements AgentInvocationApi {
     const started = this.params.recorder.begin(displayPrompt, useDefaultSession
       ? {
           emitToolCallEvents: false,
+          structuredOutput,
           agent: options?.agent,
           promptInput,
         }
@@ -296,6 +308,7 @@ export class AgentInvocationApiImpl implements AgentInvocationApi {
             refs: options?.refs,
           },
           emitToolCallEvents: true,
+          structuredOutput,
           agent: options?.agent,
           promptInput,
         });
@@ -311,7 +324,12 @@ export class AgentInvocationApiImpl implements AgentInvocationApi {
         softStopSignal: this.params.softStopSignal,
         promptInput,
         onUpdate: async (update) => {
-          if (shouldForwardNestedAgentUpdate(update, options?.stream !== false, started.emitToolCallEvents)) {
+          if (shouldForwardNestedAgentUpdate(
+            update,
+            options?.stream !== false,
+            started.emitToolCallEvents,
+            structuredOutput,
+          )) {
             this.params.emitter.emit(withNestedToolCallMetadata(update, started.toolCallId));
           }
         },
@@ -443,8 +461,13 @@ function shouldForwardNestedAgentUpdate(
   update: acp.SessionUpdate,
   streamText: boolean,
   isWrappedInToolCall: boolean,
+  isStructuredOutput: boolean,
 ): boolean {
   if (update.sessionUpdate === "agent_message_chunk") {
+    if (isStructuredOutput) {
+      return false;
+    }
+
     // When the nested agent run is wrapped in its own tool_call (fresh sessions),
     // always forward chunks so callers see the agent's commentary interleaved with
     // its tool calls. The `stream: false` flag in that case only suppresses the
@@ -459,6 +482,58 @@ function shouldForwardNestedAgentUpdate(
     update.sessionUpdate === "tool_call_update" ||
     update.sessionUpdate === "usage_update"
   );
+}
+
+function buildStructuredOutputToolOutput(
+  result: Pick<RunResult, "dataRef" | "run">,
+): {
+  expandedContent: string;
+  resultPreview: {
+    bodyLines: string[];
+  };
+} {
+  const storageLine = describeStructuredOutputStorage(result);
+  return {
+    expandedContent: `Generated structured JSON.\n${capitalize(storageLine)}.`,
+    resultPreview: {
+      bodyLines: [
+        "generated structured JSON",
+        storageLine,
+      ],
+    },
+  };
+}
+
+function emitStructuredOutputProcedurePanel(
+  emitter: SessionUpdateEmitter,
+  procedure: string,
+  result: Pick<RunResult, "dataRef" | "run">,
+): void {
+  emitter.emitUiEvent?.({
+    type: "procedure_panel",
+    procedure,
+    rendererId: "nb/card@1",
+    severity: "info",
+    dismissible: true,
+    key: `structured-output:${result.run.runId}`,
+    payload: {
+      kind: "notification",
+      title: "Structured output",
+      markdown: `Generated structured JSON.\n\n${capitalize(describeStructuredOutputStorage(result))}.`,
+    },
+  });
+}
+
+function describeStructuredOutputStorage(
+  result: Pick<RunResult, "dataRef" | "run">,
+): string {
+  return result.dataRef
+    ? `stored ref \`${result.dataRef.path}\``
+    : `stored result in \`${result.run.runId}\``;
+}
+
+function capitalize(text: string): string {
+  return text.length === 0 ? text : `${text[0]?.toUpperCase() ?? ""}${text.slice(1)}`;
 }
 
 function withNestedToolCallMetadata(
