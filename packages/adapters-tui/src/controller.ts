@@ -128,9 +128,6 @@ export class NanobossTuiController {
   async run(): Promise<string | undefined> {
     try {
       const buildFreshnessNotice = getBuildFreshnessNotice(this.cwd);
-      if (buildFreshnessNotice) {
-        this.dispatch({ type: "local_status", text: buildFreshnessNotice });
-      }
 
       await (this.deps.ensureMatchingHttpServer ?? ensureMatchingHttpServer)(this.params.serverUrl, {
         cwd: this.cwd,
@@ -152,8 +149,23 @@ export class NanobossTuiController {
           this.params.simplify2AutoApprove,
         );
       await this.applySession(session);
+      // Cards are emitted *after* applySession because session_ready
+      // resets procedurePanels as part of initial-state derivation.
+      if (buildFreshnessNotice) {
+        this.showLocalCard({
+          key: "local:build-freshness",
+          title: "Build",
+          markdown: buildFreshnessNotice,
+          severity: "warn",
+        });
+      }
       if (this.params.sessionId) {
-        this.dispatch({ type: "local_status", text: `[session] resumed ${session.sessionId}` });
+        this.showLocalCard({
+          key: "local:session",
+          title: "Session",
+          markdown: `Resumed session \`${session.sessionId}\`.`,
+          severity: "info",
+        });
       }
 
       await this.exited;
@@ -181,6 +193,12 @@ export class NanobossTuiController {
     if (toolCardThemeMode) {
       this.deps.onClearInput?.();
       this.dispatch({ type: "local_tool_card_theme_mode", mode: toolCardThemeMode });
+      this.showLocalCard({
+        key: "local:tool-theme",
+        title: "Tool cards",
+        markdown: `Theme set to **${toolCardThemeMode}**.`,
+        severity: "info",
+      });
       return;
     }
 
@@ -349,38 +367,55 @@ export class NanobossTuiController {
     this.dispatch({ type: "local_status", text });
   }
 
-  private emitExtensionsList(): void {
-    const provider = this.deps.listExtensionEntries;
-    if (!provider) {
-      this.dispatch({
-        type: "local_procedure_panel",
-        panelId: `local-extensions-${Date.now()}`,
-        rendererId: "nb/card@1",
-        payload: {
-          kind: "notice",
-          title: "Extensions",
-          markdown: "Extension registry is not available.",
-        },
-        severity: "error",
-        dismissible: true,
-        key: "local:extensions",
-      });
-      return;
-    }
-    const entries = provider();
-    const card = formatExtensionsCard(entries);
+  /**
+   * Render a small, user-facing card in the transcript as a local
+   * `nb/card@1` procedure panel. Used for slash-command output and
+   * other controller-originated messages that users need to actually
+   * read — the status line scrolls out of view too quickly for these.
+   *
+   * When a stable `key` is passed, repeated invocations replace the
+   * previous card in place (see the `local_procedure_panel` reducer
+   * path) so the transcript does not fill up with duplicates.
+   */
+  showLocalCard(opts: {
+    key: string;
+    title: string;
+    markdown: string;
+    severity?: "info" | "warn" | "error";
+    dismissible?: boolean;
+  }): void {
     this.dispatch({
       type: "local_procedure_panel",
-      panelId: `local-extensions-${Date.now()}`,
+      panelId: `local-${opts.key}-${Date.now()}`,
       rendererId: "nb/card@1",
       payload: {
         kind: "notice",
-        title: card.title,
-        markdown: card.markdown,
+        title: opts.title,
+        markdown: opts.markdown,
       },
-      severity: card.severity,
-      dismissible: true,
+      severity: opts.severity ?? "info",
+      dismissible: opts.dismissible ?? true,
+      key: opts.key,
+    });
+  }
+
+  private emitExtensionsList(): void {
+    const provider = this.deps.listExtensionEntries;
+    if (!provider) {
+      this.showLocalCard({
+        key: "local:extensions",
+        title: "Extensions",
+        markdown: "Extension registry is not available.",
+        severity: "error",
+      });
+      return;
+    }
+    const card = formatExtensionsCard(provider());
+    this.showLocalCard({
       key: "local:extensions",
+      title: card.title,
+      markdown: card.markdown,
+      severity: card.severity,
     });
   }
 
@@ -532,10 +567,22 @@ export class NanobossTuiController {
         this.state.defaultAgentSelection,
       );
       await this.applySession(session);
-      this.dispatch({ type: "local_status", text: `[session] new ${session.sessionId}` });
+      // applySession dispatches session_ready which resets procedurePanels,
+      // so the confirmation card is emitted *after* the reset to survive.
+      this.showLocalCard({
+        key: "local:session",
+        title: "Session",
+        markdown: `Started new session \`${session.sessionId}\`.`,
+        severity: "info",
+      });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      this.dispatch({ type: "local_status", text: `[session] ${message}` });
+      this.showLocalCard({
+        key: "local:session",
+        title: "Session",
+        markdown: `Failed to create new session: ${message}`,
+        severity: "error",
+      });
     }
   }
 
@@ -546,7 +593,12 @@ export class NanobossTuiController {
       selection = await this.deps.promptForModelSelection?.(this.state.defaultAgentSelection);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      this.dispatch({ type: "local_status", text: `[model] ${message}` });
+      this.showLocalCard({
+        key: "local:model",
+        title: "Model",
+        markdown: `Model picker failed: ${message}`,
+        severity: "error",
+      });
       return;
     }
 
@@ -576,9 +628,11 @@ export class NanobossTuiController {
         ? selection
         : undefined;
     } catch (error) {
-      this.dispatch({
-        type: "local_status",
-        text: `[model] ${formatAgentCatalogRefreshError(selection.provider, error)}`,
+      this.showLocalCard({
+        key: "local:model",
+        title: "Model",
+        markdown: formatAgentCatalogRefreshError(selection.provider, error),
+        severity: "error",
       });
       return undefined;
     }
@@ -606,13 +660,20 @@ export class NanobossTuiController {
       }
 
       await persist(selection);
-      this.dispatch({
-        type: "local_status",
-        text: `[model] saved ${formatAgentSelectionLabel(selection)} as the default for future runs`,
+      this.showLocalCard({
+        key: "local:model",
+        title: "Model",
+        markdown: `Saved **${formatAgentSelectionLabel(selection)}** as the default for future runs.`,
+        severity: "info",
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      this.dispatch({ type: "local_status", text: `[model] failed to save default: ${message}` });
+      this.showLocalCard({
+        key: "local:model",
+        title: "Model",
+        markdown: `Failed to save default: ${message}`,
+        severity: "error",
+      });
     }
   }
 

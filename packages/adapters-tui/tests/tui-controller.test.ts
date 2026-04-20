@@ -318,7 +318,11 @@ describe("NanobossTuiController", () => {
     expect(streams).toHaveLength(2);
     expect(streams[0]?.closeCount).toBe(1);
     expect(controller.getState().sessionId).toBe("session-2");
-    expect(controller.getState().statusLine).toBe("[session] new session-2");
+    const sessionPanel = controller.getState().procedurePanels.find((p) => p.key === "local:session");
+    expect(sessionPanel).toBeDefined();
+    const sessionPayload = sessionPanel!.payload as { markdown: string; title: string };
+    expect(sessionPayload.title).toBe("Session");
+    expect(sessionPayload.markdown).toContain("session-2");
 
     controller.requestExit();
     await expect(runPromise).resolves.toBe("session-2");
@@ -591,9 +595,11 @@ describe("NanobossTuiController", () => {
     await controller.handleSubmit("/model copilot gpt-5.4/xhigh");
 
     expect(controller.getState().defaultAgentSelection).toBeUndefined();
-    expect(statusLines).toContain(
-      "[model] Failed to refresh models from copilot harness: probe offline",
-    );
+    const modelPanel = controller.getState().procedurePanels.find((p) => p.key === "local:model");
+    expect(modelPanel).toBeDefined();
+    expect(modelPanel!.severity).toBe("error");
+    const payload = modelPanel!.payload as { markdown: string };
+    expect(payload.markdown).toContain("Failed to refresh models from copilot harness: probe offline");
     expect(sendCalls).toEqual(["/model copilot gpt-5.4/xhigh"]);
 
     controller.requestExit();
@@ -1111,7 +1117,10 @@ describe("NanobossTuiController", () => {
       provider: "copilot",
       model: "gpt-5.4/xhigh",
     });
-    expect(controller.getState().statusLine).toBe("[session] resumed session-resume");
+    const resumedPanel = controller.getState().procedurePanels.find((p) => p.key === "local:session");
+    expect(resumedPanel).toBeDefined();
+    const resumedPayload = resumedPanel!.payload as { markdown: string };
+    expect(resumedPayload.markdown).toContain("session-resume");
 
     controller.requestExit();
     await expect(runPromise).resolves.toBe("session-resume");

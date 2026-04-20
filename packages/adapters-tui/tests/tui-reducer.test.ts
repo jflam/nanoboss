@@ -1647,7 +1647,7 @@ describe("tui reducer", () => {
     });
     state = reduceUiState(state, {
       type: "frontend_event",
-      event: eventEnvelope("text_delta", { runId: "run-1", text: "streaming…" }),
+      event: eventEnvelope("text_delta", { runId: "run-1", text: "streaming…", stream: "agent" }),
     });
     const preActiveTurnId = state.activeAssistantTurnId;
     const preBoundaryPending = state.assistantParagraphBreakPending;

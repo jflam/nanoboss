@@ -121,6 +121,13 @@ interface ControllerLike {
   toggleKeybindingOverlay(): void;
   dismissKeybindingOverlay(): void;
   showStatus(text: string): void;
+  showLocalCard(opts: {
+    key: string;
+    title: string;
+    markdown: string;
+    severity?: "info" | "warn" | "error";
+    dismissible?: boolean;
+  }): void;
   requestExit(): void;
   run(): Promise<string | undefined>;
   stop(): Promise<void>;
@@ -326,6 +333,16 @@ export class NanobossTuiApp {
     this.controller.showStatus(text);
   }
 
+  showLocalCard(opts: {
+    key: string;
+    title: string;
+    markdown: string;
+    severity?: "info" | "warn" | "error";
+    dismissible?: boolean;
+  }): void {
+    this.controller.showLocalCard(opts);
+  }
+
   requestSigintExit(): boolean {
     return this.handleCtrlC();
   }
@@ -376,10 +393,14 @@ export class NanobossTuiApp {
   }
 
   private async handleCtrlVImagePaste(): Promise<void> {
-    this.controller.showStatus("[clipboard] ctrl+v received");
     const image = await this.clipboardImageProvider.readImage();
     if (!image) {
-      this.controller.showStatus("[clipboard] ctrl+v received, but no image was readable from the clipboard");
+      this.controller.showLocalCard({
+        key: "local:clipboard",
+        title: "Clipboard",
+        markdown: "No image was readable from the clipboard.",
+        severity: "warn",
+      });
       return;
     }
 
@@ -389,7 +410,12 @@ export class NanobossTuiApp {
     } else {
       this.editor.setText(`${this.editor.getText()}${record.token}`);
     }
-    this.controller.showStatus(`[clipboard] attached ${record.token}`);
+    this.controller.showLocalCard({
+      key: "local:clipboard",
+      title: "Clipboard",
+      markdown: `Attached clipboard image as \`${record.token}\`.`,
+      severity: "info",
+    });
   }
 
   private handleImageTokenDeletion(direction: "backspace" | "delete"): boolean {
@@ -412,7 +438,12 @@ export class NanobossTuiApp {
     this.composerState.imagesByToken.delete(match.token);
     const nextText = `${text.slice(0, match.start)}${text.slice(match.end)}`;
     applyEditorTextAndCursor(this.editor, nextText, match.start);
-    this.controller.showStatus(`[clipboard] removed ${match.token}`);
+    this.controller.showLocalCard({
+      key: "local:clipboard",
+      title: "Clipboard",
+      markdown: `Removed clipboard image \`${match.token}\`.`,
+      severity: "info",
+    });
     return true;
   }
 
