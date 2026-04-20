@@ -430,7 +430,7 @@ describe("NanobossAppView", () => {
 
     const resetPlain = stripAnsi(view.render(120).join("\n"));
 
-    expect(resetPlain).toContain("No turns yet. Send a prompt to start.");
+    expect(resetPlain).not.toContain("No turns yet. Send a prompt to start.");
     expect(resetPlain).not.toContain("review the repo");
     expect(resetPlain).not.toContain("read README.md");
   });

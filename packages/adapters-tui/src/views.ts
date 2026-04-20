@@ -153,13 +153,11 @@ export class NanobossAppView implements Component {
  */
 export class TranscriptComponent implements Component {
   private readonly container = new Container();
-  private readonly emptyState: EmptyTranscriptComponent;
 
   constructor(
     private readonly theme: NanobossTuiTheme,
     initialState: UiState,
   ) {
-    this.emptyState = new EmptyTranscriptComponent(this.theme);
     this.setState(initialState);
   }
 
@@ -167,7 +165,6 @@ export class TranscriptComponent implements Component {
     this.container.clear();
 
     if (state.transcriptItems.length === 0) {
-      this.container.addChild(this.emptyState);
       return;
     }
 
@@ -183,23 +180,6 @@ export class TranscriptComponent implements Component {
         this.container.addChild(component);
       }
     }
-  }
-
-  render(width: number): string[] {
-    return this.container.render(width);
-  }
-
-  invalidate(): void {
-    this.container.invalidate();
-  }
-}
-
-class EmptyTranscriptComponent implements Component {
-  private readonly container = new Container();
-
-  constructor(theme: NanobossTuiTheme) {
-    this.container.addChild(new Text(theme.dim("No turns yet. Send a prompt to start.")));
-    this.container.addChild(new Spacer(1));
   }
 
   render(width: number): string[] {
@@ -554,4 +534,3 @@ for (const slot of PANEL_HOST_SLOTS) {
     render: ({ getState, theme }) => new PanelsInSlotComponent(theme, slot, getState()),
   });
 }
-
