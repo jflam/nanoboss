@@ -81,6 +81,7 @@ export class ProcedureInvocationApiImpl implements ProcedureInvocationApi {
           ...binding,
         });
         const rawResult = await procedure.execute(prompt, childContext);
+        childContext.assertNotCancelled();
         const result = normalizeProcedureResult(rawResult);
         const finalized = this.params.store.completeRun(childRun, result);
 

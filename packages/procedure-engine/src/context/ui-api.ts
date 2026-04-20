@@ -30,9 +30,11 @@ export class UiApiImpl implements UiApi {
     private readonly spanId: string,
     private readonly procedureName: string,
     private readonly emitter: SessionUpdateEmitter,
+    private readonly assertNotCancelled?: () => void,
   ) {}
 
   text(text: string): void {
+    this.assertNotCancelled?.();
     this.store.appendStream(this.run, text);
     this.log(text);
     this.emitter.emit({
@@ -45,18 +47,22 @@ export class UiApiImpl implements UiApi {
   }
 
   info(text: string): void {
+    this.assertNotCancelled?.();
     this.emitNoticePanel("info", text);
   }
 
   warning(text: string): void {
+    this.assertNotCancelled?.();
     this.emitNoticePanel("warning", text);
   }
 
   error(text: string): void {
+    this.assertNotCancelled?.();
     this.emitNoticePanel("error", text);
   }
 
   status(params: UiStatusParams): void {
+    this.assertNotCancelled?.();
     const procedure = params.procedure?.trim() || this.procedureName;
     const event = {
       type: "status" as const,
@@ -80,6 +86,7 @@ export class UiApiImpl implements UiApi {
   }
 
   card(params: UiCardParams): void {
+    this.assertNotCancelled?.();
     this.panel({
       rendererId: "nb/card@1",
       severity: "info",
@@ -92,6 +99,7 @@ export class UiApiImpl implements UiApi {
   }
 
   panel(params: UiProcedurePanelParams | UiPanelParams): void {
+    this.assertNotCancelled?.();
     if (isLegacyPanelParams(params)) {
       this.emitLegacyPanel(params);
       return;

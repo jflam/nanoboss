@@ -28,24 +28,29 @@ interface ContextSessionApiImplParams {
   root: RuntimeBindings;
   createAgentSession?: CreateAgentSession;
   isAutoApproveEnabled?: () => boolean;
+  assertNotCancelled?: () => void;
 }
 
 export class ContextSessionApiImpl implements SessionApi {
   constructor(private readonly params: ContextSessionApiImplParams) {}
 
   getDefaultAgentConfig(): DownstreamAgentConfig {
+    this.params.assertNotCancelled?.();
     return this.params.current.getDefaultAgentConfig();
   }
 
   setDefaultAgentSelection(selection: DownstreamAgentSelection): DownstreamAgentConfig {
+    this.params.assertNotCancelled?.();
     return this.params.current.setDefaultAgentSelection(selection);
   }
 
   async getDefaultAgentTokenSnapshot() {
+    this.params.assertNotCancelled?.();
     return await this.params.current.agentSession?.getCurrentTokenSnapshot();
   }
 
   async getDefaultAgentTokenUsage() {
+    this.params.assertNotCancelled?.();
     return normalizeAgentTokenUsage(
       await this.params.current.agentSession?.getCurrentTokenSnapshot(),
       this.getDefaultAgentConfig(),
@@ -53,6 +58,7 @@ export class ContextSessionApiImpl implements SessionApi {
   }
 
   isAutoApproveEnabled(): boolean {
+    this.params.assertNotCancelled?.();
     return this.params.isAutoApproveEnabled?.() === true;
   }
 
@@ -60,6 +66,7 @@ export class ContextSessionApiImpl implements SessionApi {
     sessionMode: AgentSessionMode,
     timingTrace?: RunTimingTrace,
   ): CallAgentTransport | undefined {
+    this.params.assertNotCancelled?.();
     const agentSession = this.params.current.agentSession;
     if (sessionMode !== "default" || !agentSession) {
       return undefined;
@@ -86,6 +93,7 @@ export class ContextSessionApiImpl implements SessionApi {
   }
 
   resolveProcedureInvocationBinding(sessionMode: ProcedureSessionMode): ProcedureInvocationBinding {
+    this.params.assertNotCancelled?.();
     if (sessionMode === "default") {
       return toProcedureInvocationBinding(this.params.root);
     }
@@ -116,10 +124,12 @@ export class ContextSessionApiImpl implements SessionApi {
   }
 
   getDefaultAgentSessionId(): string | undefined {
+    this.params.assertNotCancelled?.();
     return this.params.current.agentSession?.sessionId;
   }
 
   hasDefaultAgentSession(): boolean {
+    this.params.assertNotCancelled?.();
     return this.params.current.agentSession !== undefined;
   }
 }

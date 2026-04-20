@@ -25,6 +25,7 @@ import {
   promptInputDisplayText,
   promptInputToPlainText,
   summarizeText,
+  throwIfCancelled,
   toCancelledError,
   type RunCancellationReason,
 } from "@nanoboss/procedure-sdk";
@@ -121,9 +122,11 @@ export async function executeProcedure(params: ExecuteProcedureParams): Promise<
   });
 
   try {
+    throwIfCancelled(params);
     const rawResult = params.resume
       ? await resumeProcedureExecution(params.procedure, params.resume.prompt, params.resume.state, ctx)
       : await params.procedure.execute(plainTextPrompt, ctx);
+    throwIfCancelled(params);
     const result = normalizeProcedureResult(rawResult);
     const afterSelection = toDownstreamAgentSelection(params.bindings.getDefaultAgentConfig());
     const changedSelection = sameSelection(beforeSelection, afterSelection) ? undefined : afterSelection;

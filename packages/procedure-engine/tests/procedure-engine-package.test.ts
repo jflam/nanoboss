@@ -439,6 +439,35 @@ describe("procedure-engine runtime with procedure-sdk procedures", () => {
     })).rejects.toBeInstanceOf(ProcedureCancelledError);
   });
 
+  test("treats late cancellation as authoritative even when a procedure returns normally", async () => {
+    const store = createStore("nab-procedure-engine-late-cancel");
+    let releaseWait!: () => void;
+    const waitForRelease = new Promise<void>((resolve) => {
+      releaseWait = resolve;
+    });
+    const cancellable: Procedure = {
+      name: "cancellable",
+      description: "Returns after an ignored async wait",
+      async execute() {
+        await waitForRelease;
+        return {
+          display: "should not finish\n",
+        };
+      },
+    };
+    const registry = createRegistry([cancellable]);
+    const controller = new AbortController();
+    const runPromise = executeProcedure({
+      ...buildRunParams(store, registry, cancellable, "stop later"),
+      softStopSignal: controller.signal,
+    });
+
+    controller.abort();
+    releaseWait();
+
+    await expect(runPromise).rejects.toBeInstanceOf(ProcedureCancelledError);
+  });
+
   test("shapes typed callAgent child results for procedure-sdk consumers", async () => {
     const store = createStore("nab-procedure-engine-typed-agent");
     const fakeAgentSession = {

@@ -85,7 +85,12 @@ export class CommandContextImpl implements ProcedureApi {
     this.createAgentSessionValue = params.createAgentSession;
     this.assertCanStartBoundaryValue = params.assertCanStartBoundary;
     this.timingTrace = params.timingTrace;
-    this.state = new CommandState(this.store, this.cwd, this.run.run.runId);
+    this.state = new CommandState(
+      this.store,
+      this.cwd,
+      this.run.run.runId,
+      () => this.assertCanStartBoundary(),
+    );
 
     const contextSessionApi = new ContextSessionApiImpl({
       cwd: this.cwd,
@@ -93,6 +98,7 @@ export class CommandContextImpl implements ProcedureApi {
       root: this.rootBindings,
       createAgentSession: this.createAgentSessionValue,
       isAutoApproveEnabled: params.isAutoApproveEnabled,
+      assertNotCancelled: () => this.assertCanStartBoundary(),
     });
     this.session = contextSessionApi;
 
@@ -135,6 +141,7 @@ export class CommandContextImpl implements ProcedureApi {
       params.spanId,
       params.procedureName,
       this.emitter,
+      () => this.assertCanStartBoundary(),
     );
   }
 

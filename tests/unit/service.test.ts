@@ -719,6 +719,59 @@ describe("NanobossService", () => {
     }
   }, 30_000);
 
+  test("cancels deterministic procedure work after an awaited step without leaking more output", async () => {
+    const { cwd, registry } = await createRegistryWithWorkspace({
+      slowreview: [
+        "export default {",
+        '  name: "slowreview",',
+        '  description: "cancel after deterministic follow-up work begins",',
+        '  async execute(_prompt, ctx) {',
+        '    ctx.ui.text("before wait\\n");',
+        '    await Bun.sleep(100);',
+        '    ctx.ui.text("after wait\\n");',
+        '    return {',
+        '      display: "done\\n",',
+        '    };',
+        '  },',
+        "};",
+      ].join("\n"),
+    });
+
+    const service = new NanobossService(registry);
+    const session = service.createSession({ cwd });
+
+    try {
+      const promptPromise = service.promptSession(session.sessionId, "/slowreview patch");
+
+      await waitForCondition(() => {
+        const events = service.getSessionEvents(session.sessionId)?.after(-1) ?? [];
+        return events.some((event) => event.type === "text_delta" && event.data.text.includes("before wait"));
+      });
+
+      const runStarted = service.getSessionEvents(session.sessionId)?.after(-1)
+        .findLast((event) => event.type === "run_started" && event.data.procedure === "slowreview");
+      if (runStarted?.type !== "run_started") {
+        throw new Error("Missing run_started event");
+      }
+
+      service.cancel(session.sessionId, runStarted.data.runId);
+      await promptPromise;
+
+      const events = service.getSessionEvents(session.sessionId)?.after(-1) ?? [];
+      const textEvents = events
+        .filter((event) => event.type === "text_delta")
+        .map((event) => event.data.text);
+      const cancelled = events.findLast((event) => event.type === "run_cancelled" && event.data.procedure === "slowreview");
+      const completed = events.findLast((event) => event.type === "run_completed" && event.data.procedure === "slowreview");
+
+      expect(cancelled?.type).toBe("run_cancelled");
+      expect(completed).toBeUndefined();
+      expect(textEvents.some((text) => text.includes("after wait"))).toBe(false);
+    } finally {
+      service.destroySession(session.sessionId);
+    }
+  }, 30_000);
+
   test("slash commands persist durable results without internal dispatch tooling", async () => {
     const { cwd, registry } = await createRegistryWithWorkspace({
       slowreview: [
