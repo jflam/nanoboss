@@ -189,7 +189,7 @@ describe("session persistence", () => {
     }
   });
 
-  test("throws when session.json contains malformed JSON", () => {
+  test("throws for direct reads but skips malformed sessions when listing", () => {
     const originalHome = process.env.HOME;
     tempHome = mkdtempSync(join(tmpdir(), "nanoboss-bad-session-metadata-"));
     process.env.HOME = tempHome;
@@ -200,7 +200,41 @@ describe("session persistence", () => {
       writeFileSync(join(sessionRoot, "session.json"), "{bad json\n", "utf8");
 
       expect(() => readStoredSessionMetadata("session-bad", sessionRoot)).toThrow("Failed to parse session metadata");
-      expect(() => listStoredSessions()).toThrow("Failed to parse session metadata");
+      // A single corrupt session directory must not break the whole listing.
+      expect(listStoredSessions()).toEqual([]);
+    } finally {
+      if (originalHome === undefined) {
+        delete process.env.HOME;
+      } else {
+        process.env.HOME = originalHome;
+      }
+    }
+  });
+
+  test("lists legacy session.json that stored sessionId at the top level", () => {
+    const originalHome = process.env.HOME;
+    tempHome = mkdtempSync(join(tmpdir(), "nanoboss-legacy-session-metadata-"));
+    process.env.HOME = tempHome;
+
+    try {
+      const sessionId = "legacy-session-id";
+      const sessionRoot = join(tempHome, ".nanoboss", "sessions", sessionId);
+      mkdirSync(sessionRoot, { recursive: true });
+      writeFileSync(
+        join(sessionRoot, "session.json"),
+        `${JSON.stringify({
+          sessionId,
+          cwd: "/tmp/legacy",
+          rootDir: sessionRoot,
+          createdAt: "2026-04-08T05:24:47.256Z",
+          updatedAt: "2026-04-08T05:24:47.375Z",
+        }, null, 2)}\n`,
+        "utf8",
+      );
+
+      const listed = listStoredSessions();
+      expect(listed).toHaveLength(1);
+      expect(listed[0]?.session.sessionId).toBe(sessionId);
     } finally {
       if (originalHome === undefined) {
         delete process.env.HOME;

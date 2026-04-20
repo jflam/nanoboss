@@ -68,7 +68,15 @@ export function listStoredSessions(): SessionMetadata[] {
 
   return readdirSync(sessionsDir, { withFileTypes: true })
     .filter((entry) => entry.isDirectory())
-    .map((entry) => readStoredSessionMetadata(entry.name, join(sessionsDir, entry.name)))
+    .map((entry) => {
+      try {
+        return readStoredSessionMetadata(entry.name, join(sessionsDir, entry.name));
+      } catch (error) {
+        // A single unreadable/legacy session directory must not break the whole listing.
+        console.warn(`[nanoboss] skipping session ${entry.name}: ${formatErrorMessage(error)}`);
+        return undefined;
+      }
+    })
     .filter((entry): entry is SessionMetadata => entry !== undefined)
     .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
 }
@@ -119,7 +127,10 @@ function readCurrentWorkspaceIndex(): Record<string, SessionMetadata> {
 }
 
 function parseSessionMetadata(raw: Record<string, unknown>): SessionMetadata | undefined {
-  const sessionId = asNonEmptyString(asRecord(raw.session)?.sessionId);
+  // Accept both the current nested shape ({ session: { sessionId } }) and the legacy
+  // flat shape ({ sessionId }) so older session directories remain listable.
+  const sessionId = asNonEmptyString(asRecord(raw.session)?.sessionId)
+    ?? asNonEmptyString(raw.sessionId);
   const rootDir = asNonEmptyString(raw.rootDir);
   const createdAt = asNonEmptyString(raw.createdAt);
   const updatedAt = asNonEmptyString(raw.updatedAt);
