@@ -4,7 +4,7 @@ import type { LoadableTuiExtensionRegistry } from "./loadable-registry.ts";
 /**
  * Built-in TUI extensions compiled into Nanoboss itself.
  *
- * The `nb-core-cards` extension owns the `nb/card@1` panel renderer. The
+ * The `nanoboss-core-ui` extension owns the `nb/card@1` panel renderer. The
  * renderer implementation lives in `@nanoboss/adapters-tui/core-panels.ts`;
  * moving it through the extension activation path (rather than registering
  * it at core module-import time) guarantees every panel renderer in the
@@ -18,9 +18,9 @@ import type { LoadableTuiExtensionRegistry } from "./loadable-registry.ts";
  */
 const nbCoreCardsExtension: TuiExtension = {
   metadata: {
-    name: "nb-core-cards",
+    name: "nanoboss-core-ui",
     version: "1.0.0",
-    description: "Built-in renderer for nb/card@1 panels",
+    description: "Built-in core UI renderers (nb/card@1 panels)",
     provides: { panelRenderers: ["nb/card@1"] },
   },
   async activate(ctx) {

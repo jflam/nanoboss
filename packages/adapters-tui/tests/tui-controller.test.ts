@@ -352,7 +352,9 @@ describe("NanobossTuiController", () => {
     await controller.handleSubmit("/light");
 
     expect(controller.getState().toolCardThemeMode).toBe("light");
-    expect(controller.getState().statusLine).toBe("[theme] tool cards light");
+    const lightPanel = controller.getState().procedurePanels.find((p) => p.key === "local:tool-theme");
+    expect(lightPanel).toBeDefined();
+    expect((lightPanel!.payload as { markdown: string }).markdown).toContain("light");
     expect(controller.getState().turns).toEqual([]);
     expect(sendCalls).toEqual([]);
 
@@ -363,7 +365,9 @@ describe("NanobossTuiController", () => {
     await controller.handleSubmit("/dark");
 
     expect(controller.getState().toolCardThemeMode).toBe("dark");
-    expect(controller.getState().statusLine).toBe("[theme] tool cards dark");
+    const darkPanel = controller.getState().procedurePanels.find((p) => p.key === "local:tool-theme");
+    expect(darkPanel).toBeDefined();
+    expect((darkPanel!.payload as { markdown: string }).markdown).toContain("dark");
     expect(sendCalls).toEqual(["hello"]);
 
     controller.requestExit();

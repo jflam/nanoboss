@@ -259,7 +259,6 @@ export function reduceUiState(state: UiState, action: UiAction): UiState {
       return {
         ...state,
         toolCardThemeMode: action.mode,
-        statusLine: `[theme] tool cards ${action.mode}`,
       };
     case "local_simplify2_auto_approve":
       return {

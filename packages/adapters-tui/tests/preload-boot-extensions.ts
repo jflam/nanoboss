@@ -1,5 +1,5 @@
 // Test preload: activate the built-in TUI extensions (currently just
-// `nb-core-cards`, which contributes the `nb/card@1` panel renderer) before
+// `nanoboss-core-ui`, which contributes the `nb/card@1` panel renderer) before
 // any test file's reducer path calls `getPanelRenderer("nb/card@1")`.
 //
 // We run a hermetic bootExtensions with no disk roots so user-local

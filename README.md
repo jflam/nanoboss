@@ -302,7 +302,7 @@ Extensions are discovered recursively under the two disk tiers:
 - `~/.nanoboss/extensions/<name>/index.ts` — same scope, directory form
 
 Plus a third, non-disk tier: **built-in** extensions compiled into
-nanoboss itself (e.g. `nb-core-cards`, which owns `nb/card@1`).
+nanoboss itself (e.g. `nanoboss-core-ui`, which owns `nb/card@1`).
 
 ### Extension contract
 

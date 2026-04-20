@@ -52,7 +52,7 @@ export function renderNbCardV1Markdown(payload: NbCardV1Payload): string {
 /**
  * Factory for the core nb/card@1 PanelRenderer. The renderer is no longer
  * registered at module-import time; it is contributed by the built-in
- * "nb-core-cards" TUI extension during bootExtensions(). This keeps the
+ * "nanoboss-core-ui" TUI extension during bootExtensions(). This keeps the
  * implementation in one place while still flowing through the extension
  * activation path so precedence rules (repo > profile > builtin) apply
  * uniformly to every renderer in the system.

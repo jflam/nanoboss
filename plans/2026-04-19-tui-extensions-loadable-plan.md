@@ -126,7 +126,7 @@ Structurally parallel to `@nanoboss/procedure-catalog`:
 
 ```
 packages/tui-extension-catalog/src/
-  builtins.ts           // compiled-in extensions (e.g., "nb-core-cards")
+  builtins.ts           // compiled-in extensions (e.g., "nanoboss-core-ui")
   disk-loader.ts        // discover + compile + import via Bun runtime
   loadable-registry.ts  // types shared with disk loading
   paths.ts              // reuse or parallel app-support helpers
@@ -343,7 +343,7 @@ touching any automated tests.
 
 Per step 6, **only `nb/card@1`** (the card panel renderer) has been ported
 from "registered at core module import" to "registered as a builtin
-extension" (`nb-core-cards` in
+extension" (`nanoboss-core-ui` in
 `packages/tui-extension-catalog/src/builtins.ts`). The step's goal was to
 prove the builtin tier works without a behavior change — not to relocate
 every core contribution.
@@ -402,7 +402,7 @@ Or from the repo root:
 Inside the TUI:
 
 1. Type `/extensions` and press enter. You should see at least:
-   - `nb-core-cards` — scope `builtin`, status `active`, 1 renderer.
+   - `nanoboss-core-ui` — scope `builtin`, status `active`, 1 renderer.
    - `acme-hello` — scope `repo`, status `active`, 1 binding, 1 chrome
      contribution.
 2. Type `/help` (or press `ctrl+h`) — confirm the help overlay still
@@ -489,7 +489,7 @@ Restart the TUI. Expected:
   `[extensions] 1 extension(s) failed to activate`.
 - `/extensions` shows `boom` with status `failed` and the error
   message.
-- `nb-core-cards` and `acme-hello` (if still present) remain `active`
+- `nanoboss-core-ui` and `acme-hello` (if still present) remain `active`
   — the TUI did **not** crash.
 
 Clean up: `rm ~/.nanoboss/extensions/boom.ts`.
@@ -499,7 +499,7 @@ Clean up: `rm ~/.nanoboss/extensions/boom.ts`.
 Run any procedure that emits a `ui.panel({ rendererId: "nb/card@1", …
 })` (most interactive procedures do). The card should render exactly
 as before — this is the regression check for step 6's builtin-tier
-migration. If cards render, the `nb-core-cards` builtin extension
+migration. If cards render, the `nanoboss-core-ui` builtin extension
 activation path is working.
 
 ### 7. Inspect the on-disk compile cache (optional)
