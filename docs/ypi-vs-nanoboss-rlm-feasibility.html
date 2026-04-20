@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ypi vs nanoboss — Recursive Language Models feasibility</title>
+  <style>
+    :root {
+      --bg: #0b1020;
+      --panel: #131a2e;
+      --panel-2: #0f1528;
+      --text: #e8eefc;
+      --muted: #9fb0d1;
+      --accent: #7dd3fc;
+      --good: #86efac;
+      --warn: #fcd34d;
+      --risk: #fca5a5;
+      --line: #2a3558;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      --sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: radial-gradient(circle at top, #152043 0%, var(--bg) 50%, #070b16 100%);
+      color: var(--text);
+      font-family: var(--sans);
+      line-height: 1.25;
+    }
+    .page {
+      width: min(1600px, 100vw);
+      margin: 0 auto;
+      padding: 22px;
+      display: grid;
+      grid-template-columns: repeat(12, 1fr);
+      gap: 16px;
+    }
+    .hero, .card { border: 1px solid var(--line); border-radius: 18px; }
+    .hero {
+      grid-column: 1 / -1;
+      padding: 22px 24px;
+      background: linear-gradient(135deg, rgba(125,211,252,0.12), rgba(134,239,172,0.08));
+    }
+    .hero h1 {
+      margin: 0 0 8px 0;
+      font-size: 30px;
+      letter-spacing: -0.02em;
+    }
+    .hero .sub {
+      color: var(--muted);
+      font-size: 14px;
+      margin-bottom: 12px;
+    }
+    .verdict {
+      display: inline-block;
+      padding: 8px 12px;
+      border-radius: 999px;
+      font-weight: 700;
+      background: rgba(134,239,172,0.12);
+      color: var(--good);
+      border: 1px solid rgba(134,239,172,0.3);
+    }
+    .hero .thesis {
+      margin-top: 12px;
+      font-size: 18px;
+      max-width: 1200px;
+    }
+    .card {
+      background: linear-gradient(180deg, var(--panel), var(--panel-2));
+      padding: 16px 18px;
+      min-height: 220px;
+    }
+    .card h2 {
+      margin: 0 0 10px 0;
+      font-size: 18px;
+      letter-spacing: -0.01em;
+    }
+    .card h3 {
+      margin: 12px 0 6px 0;
+      font-size: 13px;
+      color: var(--accent);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+    .muted { color: var(--muted); }
+    .small { font-size: 12px; }
+    .mono { font-family: var(--mono); }
+    ul { margin: 8px 0 0 18px; padding: 0; }
+    li { margin: 6px 0; }
+    .kpi {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin-top: 12px;
+    }
+    .pill {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 10px 12px;
+      background: rgba(255,255,255,0.02);
+    }
+    .pill b { display: block; margin-bottom: 4px; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 8px;
+      font-size: 13px;
+    }
+    th, td {
+      text-align: left;
+      vertical-align: top;
+      padding: 8px 10px;
+      border-top: 1px solid var(--line);
+    }
+    th { color: var(--accent); font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; }
+    .good { color: var(--good); }
+    .warn { color: var(--warn); }
+    .risk { color: var(--risk); }
+    .span-4 { grid-column: span 4; }
+    .span-5 { grid-column: span 5; }
+    .span-6 { grid-column: span 6; }
+    .span-7 { grid-column: span 7; }
+    .span-8 { grid-column: span 8; }
+    .span-12 { grid-column: 1 / -1; }
+    .footer {
+      grid-column: 1 / -1;
+      padding: 12px 16px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: rgba(255,255,255,0.02);
+      color: var(--muted);
+      font-size: 12px;
+    }
+    code { font-family: var(--mono); font-size: 0.92em; color: #c6f1ff; }
+    @media (max-width: 1200px) {
+      .span-4, .span-5, .span-6, .span-7, .span-8 { grid-column: 1 / -1; }
+      .kpi { grid-template-columns: 1fr; }
+    }
+    @media print {
+      body { background: white; color: black; }
+      .hero, .card, .footer { background: white; border-color: #bbb; }
+      .muted { color: #444; }
+      .good, .warn, .risk { color: black; }
+      code { color: black; }
+      .page { width: 100%; padding: 10px; gap: 10px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="hero">
+      <div class="sub">One-page slide deck • 2026-04-20 • authored from source review of ypi and nanoboss</div>
+      <h1>ypi vs nanoboss: can ypi-style Recursive Language Models live inside nanoboss procedures?</h1>
+      <div class="verdict">Short answer: Yes for recursive orchestration; not yet a faithful drop-in for isolated parallel code-editing.</div>
+      <div class="thesis">
+        <b>Core finding:</b> your intuition is basically right. Nanoboss already has the two hardest ingredients for an RLM-style system — <b>fresh child agent sessions</b> and <b>nested procedure invocation with durable run lineage</b>. What it <b>doesn’t</b> yet have is ypi’s built-in <b>per-child worktree isolation</b> and <b>first-class recursion guardrails</b> (depth/calls/budget/timeout/cost). So an <code>/rlm</code> procedure is feasible today, but a <i>ypi-equivalent recursive coding mode</i> needs a small runtime layer on top of the current procedure SDK.
+      </div>
+    </section>
+
+    <section class="card span-4">
+      <h2>1. What ypi actually is</h2>
+      <ul>
+        <li><b>Architecture:</b> a thin shell around Pi. The launcher puts <code>rlm_query</code> on <code>PATH</code>, builds a combined system prompt from <code>SYSTEM_PROMPT.md</code> + the live <code>rlm_query</code> source, and starts Pi.</li>
+        <li><b>Recursion unit:</b> each <code>rlm_query</code> call spawns another Pi process with the <i>same prompt and tools</i>; children can recurse again until the max depth.</li>
+        <li><b>Context model:</b> child gets piped stdin or inherited <code>$CONTEXT</code>; original prompt is materialized as <code>$RLM_PROMPT_FILE</code>.</li>
+        <li><b>Isolation:</b> recursive children get their own <b>jj workspace</b>; parent worktree stays untouched until the patch is absorbed.</li>
+        <li><b>Guardrails:</b> depth, max calls, budget, timeout, model routing, PATH scrubbing at the leaf, session tree tracing, optional async fan-out.</li>
+      </ul>
+      <div class="kpi">
+        <div class="pill"><b>Design center</b><span class="muted">generic self-delegating coding agent</span></div>
+        <div class="pill"><b>Behavior source</b><span class="muted">prompt + one shell function</span></div>
+        <div class="pill"><b>Invariant</b><span class="muted">same agent at every depth</span></div>
+      </div>
+    </section>
+
+    <section class="card span-4">
+      <h2>2. What nanoboss actually is</h2>
+      <ul>
+        <li><b>Architecture:</b> a <b>procedure-oriented runtime</b>, not a single generic inner loop. Procedure code decides continuity, checkpoints, recovery, validation, and “done”.</li>
+        <li><b>Execution core:</b> <code>ctx.agent.run</code>, <code>ctx.procedures.run</code>, <code>ctx.session</code>, <code>ctx.state</code>, <code>ctx.ui</code>, plus pause/resume.</li>
+        <li><b>Downstream transport:</b> ACP over stdio; each new agent session mounts the global <code>nanoboss</code> MCP server automatically.</li>
+        <li><b>Durability:</b> every top-level, nested procedure, and agent call becomes a stored run/ref tree; descendants/ancestors are queryable later.</li>
+        <li><b>Existing evidence:</b> <code>/research</code>, <code>/second-opinion</code>, <code>/simplify2</code>, and <code>/autoresearch</code> already do multi-step orchestration, typed outputs, resumable checkpoints, and background dispatch.</li>
+      </ul>
+      <div class="kpi">
+        <div class="pill"><b>Design center</b><span class="muted">typed workflow runtime</span></div>
+        <div class="pill"><b>Behavior source</b><span class="muted">TypeScript procedures</span></div>
+        <div class="pill"><b>Invariant</b><span class="muted">durable run graph + MCP inspection</span></div>
+      </div>
+    </section>
+
+    <section class="card span-4">
+      <h2>3. The most important similarity — and the biggest gap</h2>
+      <h3>Why this can work</h3>
+      <ul>
+        <li><span class="good">Fresh child procedures already exist.</span> <code>ctx.procedures.run(name, prompt, { session: "fresh" })</code> gives the child a private default-session binding; tests verify the root binding is untouched.</li>
+        <li><span class="good">Fresh child agent contexts already exist.</span> <code>ctx.agent.run(...)</code> defaults to fresh ACP sessions; <code>session: "default"</code> reuses the persistent conversation when needed.</li>
+        <li><span class="good">Child results are first-class objects.</span> Nanoboss stores summaries, data refs, explicit schemas, descendants, and UI events — stronger observability than ypi’s temp-file trace alone.</li>
+      </ul>
+      <h3>The blocker for a faithful ypi port</h3>
+      <ul>
+        <li><span class="risk">No per-child worktree isolation in the current SDK.</span> Child procedures and child agent calls inherit the same <code>cwd</code>/<code>worktree</code>.</li>
+        <li><span class="risk">No built-in recursion budget API.</span> Cancellation exists, but depth/call/budget/timeout/cost accounting must be implemented by the procedure itself.</li>
+      </ul>
+    </section>
+
+    <section class="card span-7">
+      <h2>4. Primitive mapping: ypi RLM → nanoboss procedure runtime</h2>
+      <table>
+        <thead>
+          <tr><th>ypi primitive</th><th>nanoboss analog</th><th>assessment</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>rlm_query "task"</code></td>
+            <td><code>ctx.procedures.run("rlm", prompt, { session: "fresh" })</code> or MCP <code>procedure_dispatch_start/wait</code></td>
+            <td class="good">Strong match for recursion semantics</td>
+          </tr>
+          <tr>
+            <td>Fresh child context window</td>
+            <td>Fresh child ACP session / fresh child procedure binding</td>
+            <td class="good">Already present</td>
+          </tr>
+          <tr>
+            <td><code>$CONTEXT</code> file / stdin chunk</td>
+            <td>named refs + <code>ctx.state.refs.read/writeToFile</code> + normal files</td>
+            <td class="warn">Works, but less ergonomic than pipe-to-child</td>
+          </tr>
+          <tr>
+            <td>Recursive session tree</td>
+            <td>durable run tree + ancestors/descendants + MCP inspection</td>
+            <td class="good">Nanoboss is stronger here</td>
+          </tr>
+          <tr>
+            <td><code>--async</code> child jobs</td>
+            <td>procedure dispatch jobs + progress bridge</td>
+            <td class="warn">Good for top-level/background work; child fan-out API is not first-class in the SDK</td>
+          </tr>
+          <tr>
+            <td>Depth/max-calls/budget/timeout</td>
+            <td>custom procedure state + cancellation hooks</td>
+            <td class="risk">Missing as a reusable runtime primitive</td>
+          </tr>
+          <tr>
+            <td>Per-child jj workspace</td>
+            <td>none in stable procedure APIs</td>
+            <td class="risk">Main gap for parallel code-editing recursion</td>
+          </tr>
+          <tr>
+            <td>Self-hosted recursion source in prompt</td>
+            <td>procedure source on disk + optional MCP self-dispatch</td>
+            <td class="warn">Can approximate at the procedure layer, not as literal same-prompt self-hosting</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="card span-5">
+      <h2>5. Feasibility judgment</h2>
+      <ul>
+        <li><b class="good">Analysis / summarization RLM:</b> feasible <i>today</i>. A disk procedure could recursively decompose work, invoke fresh child procedures, and aggregate typed outputs.</li>
+        <li><b class="good">Sequential coding RLM:</b> also feasible today. It would look more like <code>/simplify2</code> or <code>/autoresearch</code>: one worktree, explicit validation/revert/commit steps, no parallel patch branches.</li>
+        <li><b class="warn">Model-directed self-recursion:</b> feasible if the recursive policy is exposed as a procedure (for example <code>/rlm</code>) and the downstream agent is taught to call it through the global MCP tools.</li>
+        <li><b class="risk">ypi-style parallel isolated subtree editing:</b> <i>not cleanly feasible</i> with current stable APIs, because there is no per-child worktree/cwd override analogous to ypi’s jj workspaces.</li>
+      </ul>
+      <h3>Bottom line</h3>
+      <p class="small">Nanoboss can implement the <b>recursive language model control pattern</b>. It cannot yet implement the <b>full ypi coding-agent ergonomics</b> without adding workspace isolation and reusable recursion guardrails.</p>
+    </section>
+
+    <section class="card span-8">
+      <h2>6. Recommended implementation path inside nanoboss</h2>
+      <h3>Phase 1 — ship an <code>/rlm</code> procedure</h3>
+      <ul>
+        <li>Encode a typed recursive state envelope: <code>{ depth, maxDepth, remainingCalls, deadlineMs, objective, contextRef?, parentRun? }</code>.</li>
+        <li>Use one typed agent call to return a decomposition plan: <code>leaf | split | stop</code>.</li>
+        <li>For <code>split</code>, recurse via <code>ctx.procedures.run("rlm", childPrompt, { session: "fresh" })</code>; for <code>leaf</code>, call <code>ctx.agent.run</code>.</li>
+        <li>Store chunk/context payloads as refs; materialize to files only when a child tool needs filesystem access.</li>
+      </ul>
+      <h3>Phase 2 — add the runtime pieces ypi gets “for free”</h3>
+      <ul>
+        <li><b>Workspace API:</b> per-child worktree or <code>cwd</code> override for agent/procedure calls.</li>
+        <li><b>Recursion guardrails helper:</b> shared depth/call/budget/timeout/cost accounting so every recursive procedure does not reinvent it.</li>
+        <li><b>Child fan-out helper:</b> a first-class nested async dispatch API instead of reaching into engine internals.</li>
+      </ul>
+      <h3>Phase 3 — optional ypi-style self-similarity</h3>
+      <ul>
+        <li>Expose <code>/rlm</code> through the existing global MCP path so the default agent can self-dispatch it as a tool.</li>
+        <li>Keep the recursive strategy prompt/spec next to the procedure so the procedure can read and evolve its own decomposition rules.</li>
+      </ul>
+    </section>
+
+    <section class="card span-4">
+      <h2>7. Why nanoboss may actually be the better product substrate</h2>
+      <ul>
+        <li><span class="good">More durable:</span> recursive trees become stored runs/refs, not just ephemeral child sessions.</li>
+        <li><span class="good">More inspectable:</span> MCP tools and run lineage make postmortems easy.</li>
+        <li><span class="good">More controllable:</span> typed outputs, continuations, and structured UI panels fit product workflows better than pure prompt choreography.</li>
+        <li><span class="warn">Less elegant:</span> you lose some of ypi’s beauty — one prompt, one shell function, universal self-similarity.</li>
+      </ul>
+      <p class="small"><b>Best framing:</b> ypi is the minimal research vehicle; nanoboss is the better place to turn the idea into a durable runtime feature.</p>
+    </section>
+
+    <section class="footer">
+      <b>Primary source files reviewed</b><br />
+      <span class="mono">ypi:</span> <span class="mono">README.md</span>, <span class="mono">SYSTEM_PROMPT.md</span>, <span class="mono">ypi</span>, <span class="mono">rlm_query</span>, <span class="mono">tests/test_e2e.sh</span>.<br />
+      <span class="mono">nanoboss:</span> <span class="mono">README.md</span>, <span class="mono">docs/architecture.md</span>, <span class="mono">docs/procedure-engine-package.md</span>, <span class="mono">docs/procedure-sdk-package.md</span>, <span class="mono">packages/procedure-engine/src/context/{procedure-api.ts,session-api.ts,agent-api.ts,state-api.ts}</span>, <span class="mono">packages/agent-acp/src/{transport.ts,session.ts,runtime-capability.ts,config.ts}</span>, <span class="mono">packages/app-runtime/src/{default-agent-policy.ts,agent-runtime-instructions.ts}</span>, <span class="mono">procedures/{research.ts,second-opinion.ts,simplify2.ts,autoresearch/runner.ts}</span>, <span class="mono">tests/unit/context-call-agent-session.test.ts</span>, <span class="mono">packages/procedure-engine/tests/procedure-engine-package.test.ts</span>.
+    </section>
+  </main>
+</body>
+</html>
