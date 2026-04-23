@@ -1,86 +1,27 @@
+import type {
+  BindingCtx as SdkBindingCtx,
+  BindingResult,
+  KeyBinding as SdkKeyBinding,
+  KeyBindingAppHooks,
+  KeyBindingCategory,
+  KeyBindingController,
+  KeyBindingEditor,
+  KeyMatcher,
+} from "@nanoboss/tui-extension-sdk";
 import type { UiState } from "./state.ts";
-import { matchesKey, type KeyId } from "./pi-tui.ts";
-import type { PromptInput } from "@nanoboss/procedure-sdk";
+import { matchesKey } from "./pi-tui.ts";
 
-export type KeyMatcher = KeyId | ((data: string) => boolean);
+export type {
+  BindingResult,
+  KeyBindingAppHooks,
+  KeyBindingCategory,
+  KeyBindingController,
+  KeyBindingEditor,
+  KeyMatcher,
+} from "@nanoboss/tui-extension-sdk";
 
-export type KeyBindingCategory =
-  | "compose"
-  | "run"
-  | "tools"
-  | "theme"
-  | "commands"
-  | "overlay"
-  | "custom";
-
-export interface BindingResult {
-  consume?: boolean;
-}
-
-/**
- * Context passed to a KeyBinding's run() at dispatch time. The shape is
- * intentionally minimal: controller covers state-changing side effects,
- * state gives read-only gating information, editor exposes composer text
- * access, and app exposes the handful of app-private hooks that a few
- * bindings (ctrl+c, ctrl+v, ctrl+p, ctrl+o cooldown, tab queue) need.
- */
-export interface BindingCtx {
-  controller: KeyBindingController;
-  state: UiState;
-  editor: KeyBindingEditor;
-  app: KeyBindingAppHooks;
-}
-
-export interface KeyBindingController {
-  toggleToolOutput(): void;
-  toggleToolCardsHidden(): void;
-  toggleSimplify2AutoApprove(): void;
-  showLocalCard(opts: {
-    key?: string;
-    title: string;
-    markdown: string;
-    severity?: "info" | "warn" | "error";
-    dismissible?: boolean;
-  }): void;
-  cancelActiveRun(): Promise<void> | void;
-  queuePrompt(input: string | PromptInput): Promise<void> | void;
-}
-
-export interface KeyBindingEditor {
-  getText(): string;
-  isShowingAutocomplete(): boolean;
-}
-
-/**
- * App-private hooks exposed to registered bindings. These wrap behavior
- * that depends on state the controller does not own (clipboard, pause
- * toggle, debounce windows, structured prompt construction).
- */
-export interface KeyBindingAppHooks {
-  handleCtrlC(): boolean;
-  handleCtrlVImagePaste(): Promise<void>;
-  handleCtrlOWithCooldown(): void;
-  toggleLiveUpdatesPaused(): void;
-  handleTabQueue(): boolean;
-}
-
-export interface KeyBinding {
-  /** Stable identifier; registrations are deduplicated by id. */
-  id: string;
-  /**
-   * Key identifier or a matcher function. If omitted, this binding is
-   * docs-only: it appears in the overlay but never dispatches.
-   */
-  match?: KeyMatcher;
-  /** State-level gate. If it returns false the binding is skipped. */
-  when?: (state: UiState) => boolean;
-  category: KeyBindingCategory;
-  /** Human-readable one-line description shown in the overlay. */
-  label: string;
-  /** Insertion-order tiebreak within a category; lower comes first. */
-  order?: number;
-  run?: (ctx: BindingCtx) => void | Promise<void> | BindingResult | undefined;
-}
+export type BindingCtx = SdkBindingCtx<UiState>;
+export type KeyBinding = SdkKeyBinding<UiState>;
 
 const registry = new Map<string, KeyBinding>();
 const insertionIndex = new Map<string, number>();
@@ -117,7 +58,7 @@ export function keyMatches(match: KeyMatcher | undefined, data: string): boolean
   if (typeof match === "function") {
     return match(data);
   }
-  return matchesKey(data, match);
+  return matchesKey(data, match as Parameters<typeof matchesKey>[1]);
 }
 
 /**

@@ -1,53 +1,14 @@
-import type { Component } from "./pi-tui.ts";
+import type {
+  ChromeContribution as SdkChromeContribution,
+  ChromeRenderContext as SdkChromeRenderContext,
+  ChromeSlotId,
+} from "@nanoboss/tui-extension-sdk";
 import type { UiState } from "./state.ts";
 import type { NanobossTuiTheme } from "./theme.ts";
 
-/**
- * Named slots that compose the nanoboss TUI chrome. Slot order is declared
- * by the renderer (NanobossAppView); contributions only pick which slot they
- * live in and (optionally) their relative order within that slot.
- */
-export type ChromeSlotId =
-  | "header"
-  | "session"
-  | "status"
-  | "transcriptAbove"
-  | "transcript"
-  | "transcriptBelow"
-  | "composerAbove"
-  | "composer"
-  | "composerBelow"
-  | "activityBar"
-  | "overlay"
-  | "footer";
-
-/**
- * Per-contribution render context. State is the snapshot captured at
- * rebuild time; getState/getNowMs are live accessors for components that
- * need to update between state changes (e.g. the run timer, footer copy).
- */
-export interface ChromeRenderContext {
-  state: UiState;
-  theme: NanobossTuiTheme;
-  getState: () => UiState;
-  getNowMs: () => number;
-}
-
-export interface ChromeContribution {
-  /** Stable identifier; registrations are deduplicated by id. */
-  id: string;
-  slot: ChromeSlotId;
-  /** Insertion-order tiebreak within a slot; lower comes first. */
-  order?: number;
-  /**
-   * Optional state-level gate evaluated once at rebuild time. If it
-   * returns false, the contribution is skipped. For contributions that
-   * need live gating (e.g. the overlay), prefer leaving this undefined
-   * and emitting empty lines from render() based on state instead.
-   */
-  shouldRender?(state: UiState): boolean;
-  render(ctx: ChromeRenderContext): Component;
-}
+export type { ChromeSlotId } from "@nanoboss/tui-extension-sdk";
+export type ChromeRenderContext = SdkChromeRenderContext<UiState, NanobossTuiTheme>;
+export type ChromeContribution = SdkChromeContribution<UiState, NanobossTuiTheme>;
 
 const registry = new Map<string, ChromeContribution>();
 const insertionIndex = new Map<string, number>();

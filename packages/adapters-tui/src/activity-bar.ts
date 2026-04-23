@@ -1,55 +1,17 @@
+import type {
+  ActivityBarLine,
+  ActivityBarSegment as SdkActivityBarSegment,
+  ActivityBarSegmentContext as SdkActivityBarSegmentContext,
+} from "@nanoboss/tui-extension-sdk";
 import type { UiState } from "./state.ts";
 import type { NanobossTuiTheme } from "./theme.ts";
 import { visibleWidth } from "./pi-tui.ts";
 
-export type ActivityBarLine = "identity" | "runState";
-
-export interface ActivityBarSegmentContext {
-  state: UiState;
-  theme: NanobossTuiTheme;
-  nowMs: number;
-  /**
-   * Degradation detail level for this render. 0 is the most detailed
-   * representation; the line builder increments this for segments that
-   * opt into sub-segment degradation via `detailLevels`. Segments that
-   * do not care about degradation should ignore this field.
-   */
-  detail: number;
-}
-
-export interface ActivityBarSegment {
-  /** Stable identifier; registrations are deduplicated by id. */
-  id: string;
-  line: ActivityBarLine;
-  /** Left-to-right placement within the line; lower comes first. */
-  order?: number;
-  /**
-   * Lower priority is degraded/dropped first by the cascade. Defaults
-   * to 0. Segments in the same line must have distinct priorities to
-   * produce a deterministic cascade (ties fall back to insertion order).
-   */
-  priority?: number;
-  /**
-   * Number of additional detail steps (beyond detail=0) this segment
-   * supports before being fully dropped. Defaults to 0 (one-step drop).
-   * Example: a token-usage segment with detailLevels=2 can render with
-   * percent+limit (0), limit-only (1), or bare (2) before being dropped.
-   */
-  detailLevels?: number;
-  /**
-   * If false, the segment is never removed by the cascade even once its
-   * detail reaches `detailLevels` — the cascade moves on to the next
-   * segment. Defaults to true.
-   */
-  droppable?: boolean;
-  shouldRender?(state: UiState): boolean;
-  /**
-   * Render the segment for the given detail level. Returning undefined
-   * or an empty string suppresses the segment (equivalent to
-   * shouldRender returning false for this particular detail).
-   */
-  render(ctx: ActivityBarSegmentContext): string | undefined;
-}
+export type { ActivityBarLine } from "@nanoboss/tui-extension-sdk";
+export type ActivityBarSegmentContext =
+  SdkActivityBarSegmentContext<UiState, NanobossTuiTheme>;
+export type ActivityBarSegment =
+  SdkActivityBarSegment<UiState, NanobossTuiTheme>;
 
 const registry = new Map<string, ActivityBarSegment>();
 const insertionIndex = new Map<string, number>();

@@ -1,30 +1,13 @@
-import type { TypeDescriptor } from "@nanoboss/procedure-sdk";
+import type {
+  PanelRenderer as SdkPanelRenderer,
+  PanelRenderContext as SdkPanelRenderContext,
+} from "@nanoboss/tui-extension-sdk";
 
-import type { Component } from "./pi-tui.ts";
 import type { UiState } from "./state.ts";
 import type { NanobossTuiTheme } from "./theme.ts";
 
-/**
- * Per-renderer context handed to PanelRenderer.render. The payload has
- * already been validated against the renderer's schema by the reducer
- * before the view layer calls into this function.
- */
-export interface PanelRenderContext<T> {
-  payload: T;
-  state: UiState;
-  theme: NanobossTuiTheme;
-}
-
-/**
- * A registered panel renderer. Renderer ids are the public contract
- * procedures target via ui.panel({ rendererId, ... }); schemas are
- * typia-backed via the shared jsonType(...) pattern.
- */
-export interface PanelRenderer<T = unknown> {
-  rendererId: string;
-  schema: TypeDescriptor<T>;
-  render(ctx: PanelRenderContext<T>): Component;
-}
+export type PanelRenderContext<T> = SdkPanelRenderContext<T, UiState, NanobossTuiTheme>;
+export type PanelRenderer<T = unknown> = SdkPanelRenderer<T, UiState, NanobossTuiTheme>;
 
 const registry = new Map<string, PanelRenderer<unknown>>();
 

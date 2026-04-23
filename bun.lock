@@ -172,7 +172,7 @@
       "name": "@nanoboss/tui-extension-sdk",
       "version": "0.0.0",
       "dependencies": {
-        "@nanoboss/adapters-tui": "workspace:*",
+        "@nanoboss/procedure-sdk": "workspace:*",
       },
     },
   },

@@ -11,6 +11,6 @@
     "typecheck": "tsc -p tsconfig.json --noEmit --pretty false"
   },
   "dependencies": {
-    "@nanoboss/adapters-tui": "workspace:*"
+    "@nanoboss/procedure-sdk": "workspace:*"
   }
 }

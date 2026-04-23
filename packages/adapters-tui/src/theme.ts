@@ -1,38 +1,18 @@
 import { highlight, supportsLanguage } from "cli-highlight";
 
+import type {
+  NanobossTuiTheme as SdkNanobossTuiTheme,
+  ToolCardThemeMode,
+} from "@nanoboss/tui-extension-sdk";
 import type { EditorTheme, MarkdownTheme, SelectListTheme } from "./pi-tui.ts";
 
-export type ToolCardThemeMode = "dark" | "light";
+export type { ToolCardThemeMode } from "@nanoboss/tui-extension-sdk";
 
-export interface NanobossTuiTheme {
-  text: (text: string) => string;
-  accent: (text: string) => string;
-  muted: (text: string) => string;
-  dim: (text: string) => string;
-  success: (text: string) => string;
-  error: (text: string) => string;
-  warning: (text: string) => string;
-  bold: (text: string) => string;
-  italic: (text: string) => string;
-  underline: (text: string) => string;
-  toolCardPendingBg: (text: string) => string;
-  toolCardSuccessBg: (text: string) => string;
-  toolCardErrorBg: (text: string) => string;
-  toolCardBorder: (text: string) => string;
-  toolCardTitle: (text: string) => string;
-  toolCardMeta: (text: string) => string;
-  toolCardBody: (text: string) => string;
-  toolCardAccent: (text: string) => string;
-  toolCardWarning: (text: string) => string;
-  toolCardSuccess: (text: string) => string;
-  toolCardError: (text: string) => string;
-  highlightCode: (code: string, lang?: string) => string[];
-  getToolCardMode: () => ToolCardThemeMode;
-  setToolCardMode: (mode: ToolCardThemeMode) => void;
-  editor: EditorTheme;
-  selectList: SelectListTheme;
-  markdown: MarkdownTheme;
-}
+export type NanobossTuiTheme = SdkNanobossTuiTheme<
+  EditorTheme,
+  SelectListTheme,
+  MarkdownTheme
+>;
 
 function style(text: string, codes: number[], resetCodes: number[]): string {
   if (text.length === 0) {
