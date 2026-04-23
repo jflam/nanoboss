@@ -1116,22 +1116,24 @@ describe("NanobossService", () => {
   });
 
   test("leading whitespace before a slash command still dispatches the command", async () => {
-    const { cwd, registry } = await createRegistryWithWorkspace();
+    await withMockCopilotCatalogEnv(async () => {
+      const { cwd, registry } = await createRegistryWithWorkspace();
 
-    const service = new NanobossService(registry);
-    const session = service.createSession({ cwd });
+      const service = new NanobossService(registry);
+      const session = service.createSession({ cwd });
 
-    await service.promptSession(session.sessionId, "  /model copilot gpt-5.4/xhigh");
+      await service.promptSession(session.sessionId, "  /model copilot gpt-5.4/xhigh");
 
-    const started = (service.getSessionEvents(session.sessionId)?.after(-1) ?? [])
-      .find((event) => event.type === "run_started");
+      const started = (service.getSessionEvents(session.sessionId)?.after(-1) ?? [])
+        .find((event) => event.type === "run_started");
 
-    expect(started?.type).toBe("run_started");
-    if (started?.type !== "run_started") {
-      throw new Error("Missing run_started event");
-    }
+      expect(started?.type).toBe("run_started");
+      if (started?.type !== "run_started") {
+        throw new Error("Missing run_started event");
+      }
 
-    expect(started.data.procedure).toBe("model");
+      expect(started.data.procedure).toBe("model");
+    });
   });
 
   test("cancelled slash commands still publish a terminal run_cancelled event", async () => {
