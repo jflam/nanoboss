@@ -16,25 +16,16 @@ const PACKAGE_NAMES = [
   "procedure-engine",
   "procedure-sdk",
   "store",
-] as const;
-
-// Additional workspace packages that exist on disk but are intentionally
-// excluded from the per-package layering validation below (e.g. the TUI
-// extension SDK is cyclic with adapters-tui by design). They are still
-// recognised as known workspace packages so imports into them do not get
-// flagged as "unknown".
-const ADDITIONAL_WORKSPACE_PACKAGES = [
   "tui-extension-catalog",
   "tui-extension-sdk",
 ] as const;
 
 type PackageName = (typeof PACKAGE_NAMES)[number];
-type WorkspacePackageName = PackageName | (typeof ADDITIONAL_WORKSPACE_PACKAGES)[number];
 
 const REPO_ROOT = process.cwd();
 const PACKAGE_SCOPE = "@nanoboss/";
 
-const ALLOWED_LAYERING: Record<PackageName, readonly WorkspacePackageName[]> = {
+const ALLOWED_LAYERING: Record<PackageName, readonly PackageName[]> = {
   "adapters-acp-server": [
     "agent-acp",
     "adapters-mcp",
@@ -72,6 +63,8 @@ const ALLOWED_LAYERING: Record<PackageName, readonly WorkspacePackageName[]> = {
   "procedure-engine": ["agent-acp", "contracts", "procedure-catalog", "procedure-sdk", "store"],
   "procedure-sdk": ["contracts"],
   store: ["app-support", "contracts", "procedure-sdk"],
+  "tui-extension-catalog": ["app-support", "tui-extension-sdk"],
+  "tui-extension-sdk": ["procedure-sdk"],
 };
 
 for (const packageName of PACKAGE_NAMES) {
@@ -238,11 +231,8 @@ function parseWorkspaceDependencySpecifier(specifier: string): string | null {
   return dependency && dependency.length > 0 ? dependency : null;
 }
 
-function isWorkspacePackageName(value: string): value is WorkspacePackageName {
-  return (
-    (PACKAGE_NAMES as readonly string[]).includes(value) ||
-    (ADDITIONAL_WORKSPACE_PACKAGES as readonly string[]).includes(value)
-  );
+function isWorkspacePackageName(value: string): value is PackageName {
+  return (PACKAGE_NAMES as readonly string[]).includes(value);
 }
 
 function isValidatedPackageName(value: string): value is PackageName {
@@ -253,7 +243,7 @@ function formatWorkspaceDependency(packageName: string): string {
   return `${PACKAGE_SCOPE}${packageName}`;
 }
 
-function formatDependencyList(packageNames: readonly WorkspacePackageName[]): string {
+function formatDependencyList(packageNames: readonly PackageName[]): string {
   return packageNames.length === 0 ? "(none)" : packageNames.map(formatWorkspaceDependency).join(", ");
 }
 
