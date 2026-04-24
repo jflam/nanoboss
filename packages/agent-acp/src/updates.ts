@@ -1,6 +1,6 @@
 import type * as acp from "@agentclientprotocol/sdk";
 
-import { summarizeText } from "./text.ts";
+import { summarizeText } from "@nanoboss/procedure-sdk";
 import { parseProcedureUiMarker } from "./ui-marker.ts";
 
 interface AssistantNotice {

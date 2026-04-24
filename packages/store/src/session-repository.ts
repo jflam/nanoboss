@@ -14,8 +14,8 @@ import type {
   SessionMetadata,
 } from "@nanoboss/contracts";
 import { createSessionRef } from "@nanoboss/contracts";
+import { formatErrorMessage } from "@nanoboss/procedure-sdk";
 import { parseDownstreamAgentSelection } from "./agent-selection.ts";
-import { formatErrorMessage } from "./error-format.ts";
 import { getNanobossHome, getSessionDir } from "./paths.ts";
 
 const SESSION_METADATA_FILE = "session.json";

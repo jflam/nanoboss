@@ -5,11 +5,11 @@ import { createRef } from "@nanoboss/contracts";
 import type { AgentTokenUsage, DownstreamAgentConfig, Ref, RunRecord, RunResult } from "@nanoboss/procedure-sdk";
 import {
   createTextPromptInput,
+  inferDataShape,
   summarizeText,
   throwIfCancelled,
 } from "@nanoboss/procedure-sdk";
 
-import { inferDataShape } from "../data-shape.ts";
 import { runResultFromRunRecord } from "../run-result.ts";
 
 export function isProcedureDispatchTimeout(message: string | undefined): boolean {

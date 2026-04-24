@@ -9,7 +9,8 @@ import type {
   ProcedureMetadata,
   ProcedureRegistryLike,
 } from "@nanoboss/procedure-sdk";
-import { inferDataShape, ProcedureDispatchJobManager } from "@nanoboss/procedure-engine";
+import { inferDataShape } from "@nanoboss/procedure-sdk";
+import { ProcedureDispatchJobManager } from "@nanoboss/procedure-engine";
 import { ProcedureRegistry, projectProcedureMetadata } from "@nanoboss/procedure-catalog";
 import {
   SessionStore,

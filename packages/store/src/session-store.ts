@@ -9,10 +9,8 @@ import {
   createValueRef,
   valueRefFromRef,
 } from "./ref-store.ts";
-import { inferDataShape } from "./data-shape.ts";
 import { getSessionDir } from "./paths.ts";
 import { publicContinuationFromStored, publicKernelValueFromStored } from "./stored-values.ts";
-import { summarizeText } from "./text.ts";
 import type {
   Continuation,
   DownstreamAgentSelection,
@@ -32,7 +30,7 @@ import type {
   RunSummary,
 } from "@nanoboss/contracts";
 import { createRef, createRunRef } from "@nanoboss/contracts";
-import type { ProcedureResult } from "@nanoboss/procedure-sdk";
+import { inferDataShape, summarizeText, type ProcedureResult } from "@nanoboss/procedure-sdk";
 
 interface RunDraft {
   run: RunRef;

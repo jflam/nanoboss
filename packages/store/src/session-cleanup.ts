@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, readdirSync, rmSync, statSync } from "node:fs";
 import { join } from "node:path";
 
-import { formatErrorMessage } from "./error-format.ts";
+import { formatErrorMessage } from "@nanoboss/procedure-sdk";
 import { getNanobossHome } from "./paths.ts";
 import { readStoredSessionMetadata } from "./session-repository.ts";
 

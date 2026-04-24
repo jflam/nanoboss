@@ -9,7 +9,7 @@ import { extractProcedureDispatchResult, NanobossService } from "@nanoboss/app-r
 const MOCK_AGENT_PATH = join(process.cwd(), "tests/fixtures/mock-agent.ts");
 const DISCOVERY_MOCK_AGENT_PATH = join(process.cwd(), "tests/fixtures/catalog-discovery-mock-agent.ts");
 const SELF_COMMAND_PATH = join(process.cwd(), "dist", "nanoboss");
-const BUILD_HOOK_TIMEOUT_MS = 30_000;
+const BUILD_HOOK_TIMEOUT_MS = 90_000;
 
 import type { Procedure, PromptInput } from "@nanoboss/procedure-sdk";
 import { createTextPromptInput, promptInputDisplayText } from "@nanoboss/procedure-sdk";

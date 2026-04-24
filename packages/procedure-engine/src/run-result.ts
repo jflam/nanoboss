@@ -1,5 +1,6 @@
 import { createRef } from "@nanoboss/contracts";
 import type { StoredRunResult } from "@nanoboss/store";
+import { inferDataShape } from "@nanoboss/procedure-sdk";
 import type {
   AgentTokenUsage,
   DownstreamAgentSelection,
@@ -7,8 +8,6 @@ import type {
   RunRecord,
   RunResult,
 } from "@nanoboss/procedure-sdk";
-
-import { inferDataShape } from "./data-shape.ts";
 
 export function toPublicRunResult<T extends KernelValue>(
   result: StoredRunResult<T>,

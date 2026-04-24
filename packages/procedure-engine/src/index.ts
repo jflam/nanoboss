@@ -81,7 +81,7 @@ export {
 export {
   inferDataShape,
   stringifyCompactShape,
-} from "./data-shape.ts";
+} from "@nanoboss/procedure-sdk";
 export {
   resolveSelfCommand,
   resolveSelfCommandWithRuntime,

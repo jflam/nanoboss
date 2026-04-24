@@ -327,6 +327,11 @@ export {
 } from "./agent-banner.ts";
 
 export {
+  inferDataShape,
+  stringifyCompactShape,
+} from "./data-shape.ts";
+
+export {
   formatErrorMessage,
 } from "./error-format.ts";
 

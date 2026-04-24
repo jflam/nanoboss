@@ -1,5 +1,5 @@
 import type { SessionMetadata } from "@nanoboss/contracts";
-import { summarizeText } from "./text.ts";
+import { summarizeText } from "@nanoboss/procedure-sdk";
 
 export function formatSessionLine(session: SessionMetadata, cwd: string): string {
   const markers: string[] = [];
