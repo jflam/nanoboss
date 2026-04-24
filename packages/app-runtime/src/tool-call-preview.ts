@@ -1,5 +1,3 @@
-import { summarizeText } from "@nanoboss/procedure-sdk";
-
 import {
   asRecord,
   extractPathLike,
@@ -8,8 +6,9 @@ import {
   firstString,
   normalizeToolInputPayload,
   normalizeToolResultPayload,
-} from "./tool-payload-normalizer.ts";
-import type { ToolPayloadIdentity } from "./tool-payload-normalizer.ts";
+  summarizeText,
+} from "@nanoboss/procedure-sdk";
+import type { ToolPayloadIdentity } from "@nanoboss/procedure-sdk";
 
 const MAX_HEADER_LENGTH = 140;
 const MAX_WARNING_LENGTH = 180;

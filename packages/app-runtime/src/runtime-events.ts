@@ -7,6 +7,7 @@ import type {
   ContinuationForm,
   RunRef,
 } from "@nanoboss/contracts";
+import { normalizeToolName } from "@nanoboss/procedure-sdk";
 
 import type { ProcedureMemoryCard } from "./memory-cards.ts";
 import {
@@ -14,7 +15,6 @@ import {
   summarizeToolCallUpdate,
   type ToolPreviewBlock,
 } from "./tool-call-preview.ts";
-import { normalizeToolName } from "./tool-payload-normalizer.ts";
 
 export { UiApiImpl };
 

@@ -4,7 +4,7 @@ export interface ToolPayloadIdentity {
   kind?: string;
 }
 
-interface NormalizedToolPayload {
+export interface NormalizedToolPayload {
   toolName?: string;
   header?: string;
   text?: string;
@@ -332,7 +332,7 @@ export function firstNumber(...values: unknown[]): number | undefined {
   return undefined;
 }
 
-function stringifyValue(value: unknown): string | undefined {
+export function stringifyValue(value: unknown): string | undefined {
   if (value === undefined || value === null) {
     return undefined;
   }

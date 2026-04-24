@@ -350,3 +350,17 @@ export {
 export {
   summarizeText,
 } from "./text.ts";
+
+export {
+  asRecord,
+  extractPathLike,
+  extractToolErrorText,
+  firstNumber,
+  firstString,
+  normalizeToolInputPayload,
+  normalizeToolName,
+  normalizeToolResultPayload,
+  stringifyValue,
+  type NormalizedToolPayload,
+  type ToolPayloadIdentity,
+} from "./tool-payload-normalizer.ts";

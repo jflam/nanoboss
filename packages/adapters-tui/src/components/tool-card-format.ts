@@ -6,7 +6,7 @@ import {
   normalizeToolInputPayload,
   normalizeToolResultPayload,
   stringifyValue,
-} from "../tool-payload-normalizer.ts";
+} from "@nanoboss/procedure-sdk";
 import type { UiToolCall } from "../state.ts";
 import type { NanobossTuiTheme } from "../theme.ts";
 import { getLanguageFromPath } from "../theme.ts";
