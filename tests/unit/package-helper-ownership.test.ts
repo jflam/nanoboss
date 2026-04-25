@@ -9,8 +9,14 @@ type HelperFamily = {
   family: string;
   canonicalOwner: string;
   implementationNames: readonly string[];
-  allowedImplementationFiles: readonly string[];
+  allowedImplementations: readonly HelperImplementationOwner[];
   publicExports: readonly PublicHelperExport[];
+};
+
+type HelperImplementationOwner = {
+  packageName: string;
+  path: string;
+  reason: string;
 };
 
 type PublicHelperExport = {
@@ -26,7 +32,13 @@ const HELPER_FAMILIES = [
     family: "data shape helpers",
     canonicalOwner: "@nanoboss/procedure-sdk",
     implementationNames: ["inferDataShape", "stringifyCompactShape"],
-    allowedImplementationFiles: ["packages/procedure-sdk/src/data-shape.ts"],
+    allowedImplementations: [
+      {
+        packageName: "@nanoboss/procedure-sdk",
+        path: "packages/procedure-sdk/src/data-shape.ts",
+        reason: "Canonical procedure result shape helper owner.",
+      },
+    ],
     publicExports: [
       {
         packageName: "@nanoboss/procedure-sdk",
@@ -47,7 +59,13 @@ const HELPER_FAMILIES = [
     family: "text summarization",
     canonicalOwner: "@nanoboss/procedure-sdk",
     implementationNames: ["summarizeText"],
-    allowedImplementationFiles: ["packages/procedure-sdk/src/text.ts"],
+    allowedImplementations: [
+      {
+        packageName: "@nanoboss/procedure-sdk",
+        path: "packages/procedure-sdk/src/text.ts",
+        reason: "Canonical pure text helper owner.",
+      },
+    ],
     publicExports: [
       {
         packageName: "@nanoboss/procedure-sdk",
@@ -61,7 +79,13 @@ const HELPER_FAMILIES = [
     family: "error formatting",
     canonicalOwner: "@nanoboss/procedure-sdk",
     implementationNames: ["formatErrorMessage"],
-    allowedImplementationFiles: ["packages/procedure-sdk/src/error-format.ts"],
+    allowedImplementations: [
+      {
+        packageName: "@nanoboss/procedure-sdk",
+        path: "packages/procedure-sdk/src/error-format.ts",
+        reason: "Canonical pure error formatting helper owner.",
+      },
+    ],
     publicExports: [
       {
         packageName: "@nanoboss/procedure-sdk",
@@ -84,7 +108,13 @@ const HELPER_FAMILIES = [
       "firstNumber",
       "stringifyValue",
     ],
-    allowedImplementationFiles: ["packages/procedure-sdk/src/tool-payload-normalizer.ts"],
+    allowedImplementations: [
+      {
+        packageName: "@nanoboss/procedure-sdk",
+        path: "packages/procedure-sdk/src/tool-payload-normalizer.ts",
+        reason: "Canonical adapter-neutral tool payload normalization owner.",
+      },
+    ],
     publicExports: [
       {
         packageName: "@nanoboss/procedure-sdk",
@@ -99,6 +129,8 @@ const HELPER_FAMILIES = [
           "normalizeToolName",
           "normalizeToolResultPayload",
           "stringifyValue",
+          "NormalizedToolPayload",
+          "ToolPayloadIdentity",
         ],
         source: "./tool-payload-normalizer.ts",
       },
@@ -108,12 +140,18 @@ const HELPER_FAMILIES = [
     family: "self-command resolution",
     canonicalOwner: "@nanoboss/app-support",
     implementationNames: ["resolveSelfCommand", "resolveSelfCommandWithRuntime"],
-    allowedImplementationFiles: ["packages/app-support/src/self-command.ts"],
+    allowedImplementations: [
+      {
+        packageName: "@nanoboss/app-support",
+        path: "packages/app-support/src/self-command.ts",
+        reason: "Canonical low-level process entrypoint helper owner.",
+      },
+    ],
     publicExports: [
       {
         packageName: "@nanoboss/app-support",
         barrel: "packages/app-support/src/index.ts",
-        names: ["resolveSelfCommand", "resolveSelfCommandWithRuntime"],
+        names: ["resolveSelfCommand", "resolveSelfCommandWithRuntime", "SelfCommand", "SelfCommandRuntime"],
         source: "./self-command.ts",
       },
       {
@@ -131,19 +169,26 @@ const GUARDED_HELPER_NAMES: ReadonlySet<string> = new Set(
   HELPER_FAMILIES.flatMap((family) => [...family.implementationNames]),
 );
 
+const GUARDED_PUBLIC_HELPER_NAMES: ReadonlySet<string> = new Set(
+  HELPER_FAMILIES.flatMap((family) => family.publicExports.flatMap((publicExport) => [...publicExport.names])),
+);
+
 test("keeps duplicate helper families owned by their canonical package", () => {
   for (const family of HELPER_FAMILIES) {
     expect(family.canonicalOwner).toStartWith("@nanoboss/");
 
-    for (const path of family.allowedImplementationFiles) {
-      expect(existsSync(join(REPO_ROOT, path))).toBe(true);
+    for (const implementation of family.allowedImplementations) {
+      expect(implementation.packageName).toBe(family.canonicalOwner);
+      expect(implementation.packageName === packageNameFromPackagePath(implementation.path)).toBe(true);
+      expect(implementation.reason.length).toBeGreaterThan(0);
+      expect(existsSync(join(REPO_ROOT, implementation.path))).toBe(true);
     }
   }
 
   const implementations = collectPackageHelperImplementations();
 
   for (const family of HELPER_FAMILIES) {
-    const allowedFiles = new Set(family.allowedImplementationFiles);
+    const allowedFiles = new Set(family.allowedImplementations.map((implementation) => implementation.path));
     const actualFiles = new Set(
       implementations
         .filter((implementation) => includesString(family.implementationNames, implementation.name))
@@ -253,11 +298,17 @@ function collectPackageBarrelExports(): Map<string, PublicHelperExport> {
 }
 
 function isGuardedPublicHelperName(name: string): boolean {
-  return name === "asRecord" || GUARDED_HELPER_NAMES.has(name);
+  return GUARDED_PUBLIC_HELPER_NAMES.has(name);
 }
 
 function includesString(values: readonly string[], value: string): boolean {
   return values.includes(value);
+}
+
+function packageNameFromPackagePath(path: string): string {
+  const match = /^packages\/([^/]+)\//.exec(path);
+  expect(match).not.toBeNull();
+  return `@nanoboss/${match?.[1] ?? ""}`;
 }
 
 function publicExportKey(packageName: string, names: readonly string[], source: string): string {
