@@ -16,6 +16,7 @@ It owns:
 - procedure and extension workspace roots
 - repo artifact directories and atomic file writes
 - repo fingerprinting and workspace identity
+- timing trace file writes for cross-package latency diagnostics
 
 It does not own:
 
@@ -27,8 +28,9 @@ It does not own:
 - UI rendering or extension activation policy
 
 The package should stay boring and low-level. If a helper is not about process
-entrypoints, filesystem paths, disk loading, repo/workspace identity, or atomic
-repo files, it probably belongs somewhere else.
+entrypoints, filesystem paths, disk loading, repo/workspace identity, atomic
+repo files, or low-level diagnostic file writes, it probably belongs somewhere
+else.
 
 ## Public Interface
 
@@ -112,6 +114,16 @@ These helpers are shared by store code, procedure support files, and review
 procedures that need stable repo-local artifacts without duplicating atomic
 write or fingerprint behavior.
 
+### Timing traces
+
+- `createRunTimingTrace(...)`
+- `appendTimingTraceEvent(...)`
+- `RunTimingTrace`
+
+These helpers append JSONL timing events under a session root. They are shared by
+agent and procedure execution packages so trace buffering, directory creation,
+and file layout stay in one low-level owner.
+
 ## Package Structure
 
 - `src/build-info.ts`
@@ -138,6 +150,8 @@ write or fingerprint behavior.
   Git/filesystem fingerprinting.
 - `src/workspace-identity.ts`
   Workspace keys and procedure fingerprints.
+- `src/timing-trace.ts`
+  Shared JSONL timing trace writer.
 
 ## Dependency Model
 
@@ -153,7 +167,8 @@ adapter types is probably too high-level for this package.
 
 - Export high-level support capabilities, not their parser subroutines.
 - Keep package-owned helper files focused by noun: build info, paths, disk
-  loading, repo artifacts, repo fingerprinting, workspace identity.
+  loading, repo artifacts, repo fingerprinting, workspace identity, timing
+  traces.
 - Do not put generic text, error, data-shape, or tool payload helpers here.
   Those belong to `@nanoboss/procedure-sdk` when they are procedure/result
   contracts.
@@ -166,17 +181,21 @@ adapter types is probably too high-level for this package.
 
 Measured during the 2026-05 app-support review:
 
-- source files: 13
-- source lines: 1,458
+- source files: 14
+- source lines: 1,584
 - largest file: `src/disk-loader.ts` at 637 lines
 - workspace package dependencies: 0
-- public app-support symbols: reduced from 40 to 38
+- public app-support runtime value exports: 30
 - internalized implementation helpers: `splitPath(...)` and
   `createTypiaBunPlugin(...)`
+- code simplification applied: centralized duplicated `timing-trace.ts`
+  implementations from `agent-acp` and `procedure-engine`
 
 This is a surface-area cleanup, not a behavior change. The higher-level
 install-path and disk-loader APIs still cover the same behavior, while callers
-no longer see parser/plugin details as public app-support capabilities.
+no longer see parser/plugin details as public app-support capabilities. Timing
+trace helpers are exposed because multiple higher packages need the same
+diagnostic file writer.
 
 ## Good Future Targets
 

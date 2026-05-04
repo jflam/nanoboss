@@ -15,7 +15,7 @@ import type {
 import { createTextPromptInput } from "@nanoboss/procedure-sdk";
 
 import { resolveDownstreamAgentConfig } from "../agent-config.ts";
-import type { RunTimingTrace } from "../timing-trace.ts";
+import type { RunTimingTrace } from "@nanoboss/app-support";
 import type { RuntimeBindings } from "./shared.ts";
 
 export interface ProcedureInvocationBinding extends RuntimeBindings {

@@ -244,8 +244,8 @@ The strongest package-level usage examples are in [packages/agent-acp/tests/agen
 
 Measured during the 2026-05 agent-acp boundary reviews:
 
-- source files: 17
-- source lines: 3,675
+- source files: 16
+- source lines: 3,578
 - largest file: `src/catalog-discovery.ts` at 677 lines
 - runtime value exports: 51 -> 36
 - public wildcard exports: 0
@@ -256,6 +256,7 @@ Measured during the 2026-05 agent-acp boundary reviews:
     `agent-acp` implementation modules from the package entrypoint
   - removed typed-response prompt/parser helpers from the package entrypoint
     while keeping direct source-level tests for the parser seam
+  - centralized the duplicated timing trace writer in `@nanoboss/app-support`
 
 Those tests demonstrate:
 

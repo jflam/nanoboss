@@ -38,7 +38,7 @@ import { resolveDownstreamAgentConfig } from "../agent-config.ts";
 import { requireValue } from "../argv.ts";
 import type { RuntimeBindings } from "../context/shared.ts";
 import { runResultFromRunRecord } from "../run-result.ts";
-import { appendTimingTraceEvent, createRunTimingTrace } from "../timing-trace.ts";
+import { appendTimingTraceEvent, createRunTimingTrace } from "@nanoboss/app-support";
 
 const PROCEDURE_DISPATCH_JOBS_DIR = "procedure-dispatch-jobs";
 const PROCEDURE_DISPATCH_CANCELS_DIR = "procedure-dispatch-cancels";

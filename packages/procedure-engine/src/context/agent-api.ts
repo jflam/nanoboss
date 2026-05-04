@@ -33,7 +33,7 @@ import {
 import { resolveDownstreamAgentConfig } from "../agent-config.ts";
 import type { RunLogger } from "../logger.ts";
 import { toPublicRunResult } from "../run-result.ts";
-import { appendTimingTraceEvent, type RunTimingTrace } from "../timing-trace.ts";
+import { appendTimingTraceEvent, type RunTimingTrace } from "@nanoboss/app-support";
 
 type ActiveRun = ReturnType<SessionStore["startRun"]>;
 

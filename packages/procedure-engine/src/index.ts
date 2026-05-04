@@ -77,7 +77,7 @@ export {
   appendTimingTraceEvent,
   createRunTimingTrace,
   type RunTimingTrace,
-} from "./timing-trace.ts";
+} from "@nanoboss/app-support";
 export {
   createProcedureUiMarkerStream,
   formatProcedureStatusText,

@@ -98,10 +98,9 @@ The central type is `ProcedureDispatchJobManager`.
   Session-aware downstream-agent selection/config resolution.
 - [src/logger.ts](/Users/jflam/agentboss/workspaces/nanoboss/packages/procedure-engine/src/logger.ts:1)
   Per-run JSONL trace logging.
-- [src/timing-trace.ts](/Users/jflam/agentboss/workspaces/nanoboss/packages/procedure-engine/src/timing-trace.ts:1)
-  Structured timing traces for cross-boundary latency debugging.
 - `@nanoboss/app-support`
-  Owns self-command resolution used by dispatch workers.
+  Owns self-command resolution used by dispatch workers and the shared
+  structured timing trace writer.
 - `@nanoboss/procedure-sdk`
   Owns compact data-shape helpers used by run-result and recovery code.
 
@@ -395,11 +394,11 @@ If new execution logic is added outside these paths, that is usually a sign that
 
 Measured during the 2026-05 compatibility re-export review:
 
-- source files: 20
-- source lines: 3,167
+- source files: 19
+- source lines: 3,071
 - largest file: `src/dispatch/jobs.ts` at 741 lines
 - runtime value exports: 36 -> 32
 - public wildcard exports: 0
 - code simplification applied: removed compatibility re-exports for data-shape
-  helpers and self-command helpers; import those from `@nanoboss/procedure-sdk`
-  and `@nanoboss/app-support` instead
+  helpers and self-command helpers; centralized the duplicated timing trace
+  writer in `@nanoboss/app-support`

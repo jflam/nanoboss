@@ -47,3 +47,8 @@ export {
   resolveWorkspaceKey,
   type WorkspaceIdentity,
 } from "./workspace-identity.ts";
+export {
+  appendTimingTraceEvent,
+  createRunTimingTrace,
+  type RunTimingTrace,
+} from "./timing-trace.ts";

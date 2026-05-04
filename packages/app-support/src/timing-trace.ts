@@ -22,6 +22,16 @@ interface TimingTraceEvent {
   details?: Record<string, unknown>;
 }
 
+export function createRunTimingTrace(rootDir: string, traceId: string): RunTimingTrace {
+  return {
+    rootDir,
+    traceId,
+    shared: {
+      firstAgentActionRecorded: false,
+    },
+  };
+}
+
 export function appendTimingTraceEvent(
   trace: RunTimingTrace | undefined,
   source: string,

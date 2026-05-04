@@ -20,7 +20,7 @@ import { throwIfCancelled } from "@nanoboss/procedure-sdk";
 
 import type { RunLogger } from "../logger.ts";
 import { normalizeProcedurePromptInput } from "../prompt.ts";
-import type { RunTimingTrace } from "../timing-trace.ts";
+import type { RunTimingTrace } from "@nanoboss/app-support";
 import { UiApiImpl } from "./ui-api.ts";
 
 type ActiveRun = ReturnType<SessionStore["startRun"]>;

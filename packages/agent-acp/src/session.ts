@@ -19,7 +19,7 @@ import {
 } from "./runtime.ts";
 import { buildAgentRuntimeSessionRuntime } from "./runtime-capability.ts";
 import { collectTokenSnapshot, enrichToolCallUpdateWithTokenUsage } from "./token-metrics.ts";
-import { appendTimingTraceEvent, type RunTimingTrace } from "./timing-trace.ts";
+import { appendTimingTraceEvent, type RunTimingTrace } from "@nanoboss/app-support";
 import type {
   AgentSession,
   AgentSessionPromptOptions,
