@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { resolveNanobossInstallDir, splitPath } from "@nanoboss/app-support";
+import { resolveNanobossInstallDir } from "@nanoboss/app-support";
 
 describe("install-path", () => {
   test("prefers ~/.local/bin when it is on PATH", () => {
@@ -26,9 +26,9 @@ describe("install-path", () => {
   });
 
   test("expands tilde entries in PATH", () => {
-    expect(splitPath("~/bin:/usr/bin", "/Users/tester")).toEqual([
-      "/Users/tester/bin",
-      "/usr/bin",
-    ]);
+    expect(resolveNanobossInstallDir({
+      homeDir: "/Users/tester",
+      pathEnv: "~/bin:/usr/bin",
+    })).toBe("/Users/tester/bin");
   });
 });
