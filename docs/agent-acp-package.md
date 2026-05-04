@@ -57,10 +57,6 @@ The surface breaks down into a few groups.
 
 - `createAgentSession(...)`
 - `invokeAgent(...)`
-- `buildPrompt(...)`
-- `parseAgentResponse(...)`
-- `sanitizeJsonResponse(...)`
-- `MAX_PARSE_RETRIES`
 
 These are the core client APIs.
 
@@ -148,7 +144,7 @@ Important invariants:
 - A material `updateConfig(...)` change resets conversation continuity.
 - Fresh `invokeAgent(...)` calls create a new child/session unless `persistedSessionId` is supplied.
 - `agentSessionId` is the ACP session id for the downstream agent, not the nanoboss session id.
-- Typed calls retry parsing up to `MAX_PARSE_RETRIES + 1` total attempts by sending a corrective follow-up prompt.
+- Typed calls retry parsing with corrective follow-up prompts before surfacing a contract failure.
 - Token metrics are best-effort. Clients must not depend on them being present.
 
 ## Runtime and on-disk model
@@ -251,13 +247,15 @@ Measured during the 2026-05 agent-acp boundary reviews:
 - source files: 17
 - source lines: 3,675
 - largest file: `src/catalog-discovery.ts` at 677 lines
-- runtime value exports: 51 -> 40
+- runtime value exports: 51 -> 36
 - public wildcard exports: 0
 - code simplification applied:
   - removed provider-specific token parser helpers from the package entrypoint
     while keeping direct source-level tests for those parser seams
   - removed model-selection parser/constants that are only used by
     `agent-acp` implementation modules from the package entrypoint
+  - removed typed-response prompt/parser helpers from the package entrypoint
+    while keeping direct source-level tests for the parser seam
 
 Those tests demonstrate:
 

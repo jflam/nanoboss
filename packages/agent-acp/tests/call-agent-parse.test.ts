@@ -3,14 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import {
-  MAX_PARSE_RETRIES,
-  buildPrompt,
-  invokeAgent,
-  parseAgentResponse,
-  sanitizeJsonResponse,
-  type CallAgentTransport,
-} from "@nanoboss/agent-acp";
+import { invokeAgent, type CallAgentTransport } from "@nanoboss/agent-acp";
 import { jsonType } from "@nanoboss/procedure-sdk";
 
 interface MathResult {
@@ -63,22 +56,27 @@ describe("invokeAgent response parsing", () => {
     expect(result.raw).toBe("plain text");
   });
 
-  test("parses valid JSON matching schema", () => {
-    expect(parseAgentResponse("{\"result\":4}", MathResultType)).toEqual({ result: 4 });
+  test("parses valid JSON matching schema", async () => {
+    const transport = createTransport(["{\"result\":4}"]);
+    const result = await invokeAgent("compute", MathResultType, {}, transport);
+
+    expect(result.data).toEqual({ result: 4 });
   });
 
-  test("extracts typed JSON from mixed prose and trailing text", () => {
-    expect(
-      parseAgentResponse(
-        "Running lint now, then I will report back.{\"result\":4}\nDone validating.",
-        MathResultType,
-      ),
-    ).toEqual({ result: 4 });
+  test("extracts typed JSON from mixed prose and trailing text", async () => {
+    const transport = createTransport([
+      "Running lint now, then I will report back.{\"result\":4}\nDone validating.",
+    ]);
+    const result = await invokeAgent("compute", MathResultType, {}, transport);
+
+    expect(result.data).toEqual({ result: 4 });
   });
 
-  test("rejects JSON that fails schema validation", () => {
-    expect(() => parseAgentResponse("{\"result\":\"nope\"}", MathResultType)).toThrow(
-      "JSON parsed but failed schema validation",
+  test("rejects JSON that fails schema validation", async () => {
+    const transport = createTransport(["{\"result\":\"nope\"}", "{\"result\":\"still nope\"}", "{\"result\":\"bad\"}"]);
+
+    await expect(invokeAgent("compute", MathResultType, {}, transport)).rejects.toThrow(
+      "invokeAgent failed after 3 attempts: JSON parsed but failed schema validation",
     );
   });
 
@@ -101,33 +99,33 @@ describe("invokeAgent response parsing", () => {
     expect(transport.invocations).toHaveLength(1);
   });
 
-  test("includes named refs in the constructed prompt", () => {
-    const prompt = buildPrompt(
+  test("includes named refs in the constructed prompt", async () => {
+    const transport = createTransport(["plain text"]);
+    await invokeAgent(
       "Summarize `answer`.",
       undefined,
-      0,
-      "",
-      "",
-      { answer: { text: "hello" } },
+      { namedRefs: { answer: { text: "hello" } } },
+      transport,
     );
 
+    const prompt = transport.invocations[0] ?? "";
     expect(prompt).toContain("<ref name=\"answer\">");
     expect(prompt).toContain("\"text\": \"hello\"");
   });
 
   test("throws after retries are exhausted", async () => {
-    const transport = createTransport(
-      Array.from({ length: MAX_PARSE_RETRIES + 1 }, () => "still bad"),
-    );
+    const transport = createTransport(["still bad", "still bad", "still bad"]);
 
     await expect(invokeAgent("compute", MathResultType, {}, transport)).rejects.toThrow(
-      `invokeAgent failed after ${MAX_PARSE_RETRIES + 1} attempts`,
+      "invokeAgent failed after 3 attempts",
     );
   });
 
-  test("strips markdown code fences from response before parsing", () => {
-    expect(sanitizeJsonResponse("```json\n{\"result\":4}\n```"))
-      .toBe("{\"result\":4}");
+  test("strips markdown code fences from response before parsing", async () => {
+    const transport = createTransport(["```json\n{\"result\":4}\n```"]);
+    const result = await invokeAgent("compute", MathResultType, {}, transport);
+
+    expect(result.data).toEqual({ result: 4 });
   });
 });
 

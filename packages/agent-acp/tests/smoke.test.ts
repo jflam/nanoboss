@@ -14,4 +14,8 @@ test("public entrypoint exports a smoke symbol", () => {
   expect("parseCopilotSessionState" in agentAcp).toBe(false);
   expect("parseDescendantPidsFromPsOutput" in agentAcp).toBe(false);
   expect("findCopilotLogsForPids" in agentAcp).toBe(false);
+  expect("buildPrompt" in agentAcp).toBe(false);
+  expect("parseAgentResponse" in agentAcp).toBe(false);
+  expect("sanitizeJsonResponse" in agentAcp).toBe(false);
+  expect("MAX_PARSE_RETRIES" in agentAcp).toBe(false);
 });
