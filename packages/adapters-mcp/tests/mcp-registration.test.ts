@@ -6,12 +6,14 @@ import { afterEach, describe, expect, test } from "bun:test";
 
 import {
   buildGlobalMcpStdioServer,
+} from "@nanoboss/adapters-mcp";
+import {
   registerMcpClaude,
   registerMcpCodex,
   registerMcpCopilot,
   registerMcpGemini,
   resolveMcpCommand,
-} from "@nanoboss/adapters-mcp";
+} from "../src/registration.ts";
 
 const tempDirs: string[] = [];
 const TEST_COMMAND = {

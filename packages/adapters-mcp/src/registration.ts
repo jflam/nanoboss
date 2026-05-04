@@ -7,7 +7,7 @@ import { homedir } from "node:os";
 
 export const REGISTERED_MCP_SERVER_NAME = "nanoboss";
 
-export type SupportedAgentId = "claude" | "codex" | "gemini" | "copilot";
+type SupportedAgentId = "claude" | "codex" | "gemini" | "copilot";
 
 export interface McpRegistrationResult {
   id: SupportedAgentId;

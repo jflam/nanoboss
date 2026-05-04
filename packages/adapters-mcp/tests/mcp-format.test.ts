@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { formatMcpToolResult } from "@nanoboss/adapters-mcp";
+import { formatMcpToolResult } from "../src/server.ts";
 
 describe("nanoboss MCP formatting", () => {
   test("wraps array results in an items record for structuredContent", () => {
