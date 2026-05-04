@@ -168,6 +168,18 @@ test("packages keep baseline manifest and tsconfig parity", () => {
   }
 });
 
+test("package entrypoints stay explicit", () => {
+  for (const packageRoot of listPackageRoots()) {
+    const indexPath = join(packageRoot, "src", "index.ts");
+    if (!existsSync(indexPath)) {
+      continue;
+    }
+
+    const source = readFileSync(indexPath, "utf8");
+    expect(source).not.toMatch(/^\s*export\s+\*\s+from\s+["'][^"']+["'];?\s*$/m);
+  }
+});
+
 function listTypeScriptFilesIn(root: string): string[] {
   if (!existsSync(root)) {
     return [];
