@@ -1,5 +1,9 @@
 import type { PreparedDefaultPrompt } from "@nanoboss/procedure-engine";
 import {
+  appendTimingTraceEvent,
+  type RunTimingTrace,
+} from "@nanoboss/app-support";
+import {
   promptInputDisplayText,
   type PromptInput,
 } from "@nanoboss/procedure-sdk";
@@ -11,11 +15,6 @@ import {
   collectUnsyncedProcedureMemoryCards,
   renderProcedureMemoryCardsSection,
 } from "./memory-cards.ts";
-import {
-  appendTimingTraceEvent,
-  type RunTimingTrace,
-} from "@nanoboss/procedure-engine";
-
 import type { SessionState } from "./session-runtime.ts";
 
 const SESSION_TOOL_GUIDANCE = [

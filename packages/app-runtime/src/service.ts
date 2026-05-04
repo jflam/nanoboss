@@ -4,6 +4,11 @@ import {
   toDownstreamAgentSelection,
 } from "@nanoboss/agent-acp";
 import {
+  appendTimingTraceEvent,
+  createRunTimingTrace,
+  type RunTimingTrace,
+} from "@nanoboss/app-support";
+import {
   createTextPromptInput,
   RunCancelledError,
   defaultCancellationMessage,
@@ -27,15 +32,12 @@ import {
 } from "./runtime-events.ts";
 import { readStoredSessionMetadata } from "@nanoboss/store";
 import {
-  appendTimingTraceEvent,
-  createRunTimingTrace,
   executeProcedure,
   ProcedureDispatchJobManager,
   type ProcedureUiEvent,
   type ProcedureDispatchStatusResult,
   procedureDispatchResultFromRecoveredRun,
   type RuntimeBindings,
-  type RunTimingTrace,
   runProcedureCancelHook,
   type SessionUpdateEmitter,
   startProcedureDispatchProgressBridge,

@@ -149,6 +149,26 @@ const HELPER_FAMILIES = [
       },
     ],
   },
+  {
+    family: "timing traces",
+    canonicalOwner: "@nanoboss/app-support",
+    implementationNames: ["appendTimingTraceEvent", "createRunTimingTrace"],
+    allowedImplementations: [
+      {
+        packageName: "@nanoboss/app-support",
+        path: "packages/app-support/src/timing-trace.ts",
+        reason: "Canonical low-level timing trace writer owner.",
+      },
+    ],
+    publicExports: [
+      {
+        packageName: "@nanoboss/app-support",
+        barrel: "packages/app-support/src/index.ts",
+        names: ["appendTimingTraceEvent", "createRunTimingTrace", "RunTimingTrace"],
+        source: "./timing-trace.ts",
+      },
+    ],
+  },
 ] as const satisfies readonly HelperFamily[];
 
 const GUARDED_HELPER_NAMES: ReadonlySet<string> = new Set(

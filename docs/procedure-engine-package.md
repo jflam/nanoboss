@@ -397,8 +397,8 @@ Measured during the 2026-05 compatibility re-export review:
 - source files: 19
 - source lines: 3,071
 - largest file: `src/dispatch/jobs.ts` at 741 lines
-- runtime value exports: 36 -> 32
+- runtime value exports: 36 -> 30
 - public wildcard exports: 0
 - code simplification applied: removed compatibility re-exports for data-shape
   helpers and self-command helpers; centralized the duplicated timing trace
-  writer in `@nanoboss/app-support`
+  writer and public timing trace imports in `@nanoboss/app-support`
