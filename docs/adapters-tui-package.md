@@ -61,7 +61,6 @@ surface without wildcard barrels, grouped around:
   - chrome contributions
   - activity bar segments
   - panel renderers
-  - form renderers
   - extension boot helpers
 - theme:
   - `createNanobossTuiTheme`
@@ -101,7 +100,7 @@ Measured during the 2026-05 TUI adapter review:
 - source lines: 7,963
 - largest file: `src/reducer.ts` at 1,418 lines
 - workspace package dependencies: 9
-- runtime value exports: 46 -> 30
+- runtime value exports: 46 -> 27
 - public wildcard exports: 8 -> 0
 - code simplification applied:
   - replaced the public wildcard barrel with an explicit named-entrypoint
@@ -110,6 +109,7 @@ Measured during the 2026-05 TUI adapter review:
     package entrypoint while keeping direct source-level tests for those seams
   - internalized local command parser/formatter helpers behind controller/app
     behavior
+  - internalized form renderer registry helpers behind TUI app behavior
 
 The useful outcome of this pass is the entrypoint baseline: future TUI adapter
 exports should be deliberate additions, not accidental leakage from broad

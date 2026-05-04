@@ -36,7 +36,7 @@ export interface FormRenderContext<T> {
  * target via Continuation.form.formId; schemas are typia-backed via the
  * shared jsonType(...) pattern so payloads are validated at mount time.
  */
-export interface FormRenderer<T = unknown> {
+interface FormRenderer<T = unknown> {
   formId: string;
   schema: TypeDescriptor<T>;
   render(ctx: FormRenderContext<T>): Component;

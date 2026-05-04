@@ -81,14 +81,6 @@ export {
   type PanelRenderContext,
 } from "./panel-renderers.ts";
 export {
-  registerFormRenderer,
-  listFormRenderers,
-  getFormRenderer,
-  type FormRenderer,
-  type FormRenderContext,
-  type EditorLike as FormRendererEditorLike,
-} from "./form-renderers.ts";
-export {
   bootExtensions,
   createTuiExtensionContextFactory,
   type BootExtensionsOptions,

@@ -9,7 +9,6 @@ import {
   listFormRenderers,
   registerFormRenderer,
   type FormRenderContext,
-  type FormRenderer,
 } from "../src/form-renderers.ts";
 import {
   createInitialUiState,
@@ -54,7 +53,7 @@ function buildCtx(
 }
 
 describe("form renderer registry", () => {
-  let snapshot: FormRenderer<unknown>[] = [];
+  let snapshot: ReturnType<typeof listFormRenderers> = [];
 
   beforeAll(() => {
     snapshot = listFormRenderers();
