@@ -18,12 +18,12 @@ export interface NbCardV1Payload {
   markdown: string;
 }
 
-export const NbCardV1PayloadType: TypeDescriptor<NbCardV1Payload> = jsonType<NbCardV1Payload>(
+const NbCardV1PayloadType: TypeDescriptor<NbCardV1Payload> = jsonType<NbCardV1Payload>(
   typia.json.schema<NbCardV1Payload>(),
   typia.createValidate<NbCardV1Payload>(),
 );
 
-export type NbCardTone = "info" | "success" | "warning" | "error";
+type NbCardTone = "info" | "success" | "warning" | "error";
 
 export function nbCardV1Tone(kind: string): NbCardTone {
   switch (kind) {

@@ -55,14 +55,10 @@ surface without wildcard barrels, grouped around:
   - TUI state/action types
 - views and overlays:
   - `NanobossAppView`
-  - `TranscriptComponent`
-  - `SelectOverlay`
-  - `promptWithSelectList`
   - `promptForStoredSessionSelection`
 - commands and formatting:
   - command predicates/parsers
   - `formatExtensionsCard`
-  - card renderer helpers
 - extension host registries:
   - key bindings
   - chrome contributions
@@ -108,10 +104,13 @@ Measured during the 2026-05 TUI adapter review:
 - source lines: 7,963
 - largest file: `src/reducer.ts` at 1,418 lines
 - workspace package dependencies: 9
-- runtime value exports: 46
+- runtime value exports: 46 -> 39
 - public wildcard exports: 8 -> 0
-- code simplification applied: replaced the public wildcard barrel with an
-  explicit named-entrypoint barrel while preserving the existing public surface
+- code simplification applied:
+  - replaced the public wildcard barrel with an explicit named-entrypoint
+    barrel while preserving the existing public surface
+  - internalized transcript/select-overlay/core-card renderer helpers from the
+    package entrypoint while keeping direct source-level tests for those seams
 
 The useful outcome of this pass is the entrypoint baseline: future TUI adapter
 exports should be deliberate additions, not accidental leakage from broad

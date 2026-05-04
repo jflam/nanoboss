@@ -151,7 +151,7 @@ export class NanobossAppView implements Component {
  * Keeps its own children in sync with state.transcriptItems via setState,
  * matching the pre-migration incremental rebuild behavior.
  */
-export class TranscriptComponent implements Component {
+class TranscriptComponent implements Component {
   private readonly container = new Container();
 
   constructor(
