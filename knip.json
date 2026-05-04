@@ -49,10 +49,7 @@
     "src/**/*.ts"
   ],
   "ignore": [
-    "dist/**",
-    "coverage/**",
-    "tests/**",
-    "packages/*/tests/**",
+    "packages/adapters-tui/tests/preload-boot-extensions.ts",
     "packages/procedure-sdk/test-fixtures/consumer/index.ts"
   ]
 }
