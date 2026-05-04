@@ -255,7 +255,7 @@ Measured during the 2026-05 agent-acp boundary reviews:
   - removed model-selection parser/constants that are only used by
     `agent-acp` implementation modules from the package entrypoint
   - removed typed-response prompt/parser helpers from the package entrypoint
-    while keeping direct source-level tests for the parser seam
+    while keeping behavior coverage through the public `invokeAgent(...)` API
   - centralized the duplicated timing trace writer in `@nanoboss/app-support`
 
 Those tests demonstrate:
