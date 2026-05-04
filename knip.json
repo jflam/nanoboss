@@ -31,6 +31,9 @@
     "packages/adapters-tui/src/form-renderers.ts": [
       "exports"
     ],
+    "packages/adapters-acp-server/src/server.ts": [
+      "exports"
+    ],
     "packages/procedure-catalog/src/names.ts": [
       "exports"
     ]

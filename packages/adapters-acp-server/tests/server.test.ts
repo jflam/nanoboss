@@ -7,7 +7,7 @@ import {
   extractNanobossSessionId,
   QueuedSessionUpdateEmitter,
   runAcpServerCommand,
-} from "@nanoboss/adapters-acp-server";
+} from "../src/server.ts";
 
 describe("top-level ACP session diagnostics", () => {
   test("exports the ACP server command through the package boundary", () => {
