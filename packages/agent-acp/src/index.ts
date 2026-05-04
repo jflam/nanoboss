@@ -40,15 +40,12 @@ export {
 } from "./token-usage.ts";
 export {
   buildReasoningModelSelection,
-  findSelectableModelOption,
   findSelectableModelOptionInCatalog,
   getAgentCatalog,
   getProviderLabel,
   isKnownAgentProvider,
-  isKnownModelSelection,
   isKnownModelSelectionInCatalog,
   listKnownProviders,
-  listSelectableModelOptions,
   listSelectableModelOptionsFromCatalog,
   parseReasoningModelSelection,
 } from "./model-catalog.ts";

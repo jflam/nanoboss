@@ -18,4 +18,7 @@ test("public entrypoint exports a smoke symbol", () => {
   expect("parseAgentResponse" in agentAcp).toBe(false);
   expect("sanitizeJsonResponse" in agentAcp).toBe(false);
   expect("MAX_PARSE_RETRIES" in agentAcp).toBe(false);
+  expect("findSelectableModelOption" in agentAcp).toBe(false);
+  expect("isKnownModelSelection" in agentAcp).toBe(false);
+  expect("listSelectableModelOptions" in agentAcp).toBe(false);
 });
