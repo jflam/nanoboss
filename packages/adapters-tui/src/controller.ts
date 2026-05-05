@@ -9,14 +9,6 @@ import {
   promptInputDisplayText,
 } from "@nanoboss/procedure-sdk";
 
-import {
-  isExitRequest,
-  isExtensionsListRequest,
-  isModelPickerRequest,
-  isNewSessionRequest,
-  parseModelSelectionCommand,
-  parseToolCardThemeCommand,
-} from "./commands.ts";
 import { reduceUiState } from "./reducer.ts";
 import type { UiAction } from "./reducer-actions.ts";
 import { createInitialUiState, type UiPendingPrompt, type UiState } from "./state.ts";
@@ -29,7 +21,6 @@ import {
   type ControllerLocalCardOptions,
 } from "./controller-local-cards.ts";
 import {
-  applyInlineModelSelection as applyInlineModelSelectionInternal,
   openModelPicker as openModelPickerInternal,
 } from "./controller-model-selection.ts";
 import {
@@ -52,6 +43,7 @@ import {
   applyControllerSessionStream,
   closeControllerStream,
 } from "./controller-stream.ts";
+import { handleControllerSubmit } from "./controller-submit.ts";
 export type {
   NanobossTuiControllerDeps,
   NanobossTuiControllerParams,
@@ -113,70 +105,22 @@ export class NanobossTuiController {
   }
 
   async handleSubmit(input: string | PromptInput): Promise<void> {
-    const promptInput = normalizePromptInput(input);
-    const text = promptInputDisplayText(promptInput);
-    const trimmed = text.trim();
-    if (trimmed.length === 0) {
-      return;
-    }
-
-    if (isExitRequest(trimmed)) {
-      this.deps.onClearInput?.();
-      this.requestExit();
-      return;
-    }
-
-    const toolCardThemeMode = parseToolCardThemeCommand(trimmed);
-    if (toolCardThemeMode) {
-      this.deps.onClearInput?.();
-      this.dispatch({ type: "local_tool_card_theme_mode", mode: toolCardThemeMode });
-      this.showLocalCard({
-        key: "local:tool-theme",
-        title: "Tool cards",
-        markdown: `Theme set to **${toolCardThemeMode}**.`,
-        severity: "info",
-      });
-      return;
-    }
-
-    if (this.state.inputDisabled) {
-      if (await this.handleBusyPromptInput(promptInput, text, trimmed, "steering")) {
-        return;
-      }
-    }
-
-    if (isNewSessionRequest(trimmed)) {
-      this.deps.onClearInput?.();
-      await this.createNewSession();
-      return;
-    }
-
-    if (isExtensionsListRequest(trimmed)) {
-      this.deps.onClearInput?.();
-      this.emitExtensionsList();
-      return;
-    }
-
-    if (isModelPickerRequest(trimmed)) {
-      await this.openModelPicker();
-      return;
-    }
-
-    const inlineSelection = parseModelSelectionCommand(trimmed);
-    if (inlineSelection) {
-      await applyInlineModelSelectionInternal({
-        selection: inlineSelection,
-        cwd: this.cwd,
-        deps: this.deps,
-        withLocalBusy: async (status, work) => await this.withLocalBusy(status, work),
-        showLocalCard: (opts) => this.showLocalCard(opts),
-        dispatch: (action) => this.dispatch(action),
-      });
-    }
-
-    this.deps.onAddHistory?.(text);
-    this.deps.onClearInput?.();
-    await this.forwardPrompt(promptInput);
+    await handleControllerSubmit({
+      input,
+      cwd: this.cwd,
+      deps: this.deps,
+      getState: () => this.state,
+      requestExit: () => this.requestExit(),
+      dispatch: (action) => this.dispatch(action),
+      showLocalCard: (opts) => this.showLocalCard(opts),
+      handleBusyPromptInput: async (promptInput, text, trimmed, kind) =>
+        await this.handleBusyPromptInput(promptInput, text, trimmed, kind),
+      createNewSession: async () => await this.createNewSession(),
+      emitExtensionsList: () => this.emitExtensionsList(),
+      openModelPicker: async () => await this.openModelPicker(),
+      withLocalBusy: async (status, work) => await this.withLocalBusy(status, work),
+      forwardPrompt: async (prompt) => await this.forwardPrompt(prompt),
+    });
   }
 
   async queuePrompt(input: string | PromptInput): Promise<void> {
