@@ -18,6 +18,7 @@ import {
   executeProcedure,
 } from "../procedure-runner.ts";
 import { runResultFromRunRecord } from "../run-result.ts";
+import { watchProcedureDispatchCancellation } from "./cancellation-watcher.ts";
 import {
   clearProcedureDispatchCancellation,
   isProcedureDispatchCancellationRequested,
@@ -249,7 +250,13 @@ export class ProcedureDispatchJobManager {
     }
 
     const softStopController = new AbortController();
-    const stopWatchingCancellation = this.watchCancellation(dispatchId, job.dispatchCorrelationId, softStopController);
+    const stopWatchingCancellation = watchProcedureDispatchCancellation({
+      rootDir: this.params.rootDir,
+      dispatchId,
+      dispatchCorrelationId: job.dispatchCorrelationId,
+      jobStore: this.jobStore,
+      controller: softStopController,
+    });
     const startedAt = new Date().toISOString();
     job = {
       ...job,
@@ -464,34 +471,4 @@ export class ProcedureDispatchJobManager {
     }
   }
 
-  private watchCancellation(
-    dispatchId: string,
-    dispatchCorrelationId: string,
-    controller: AbortController,
-  ): () => void {
-    const poll = () => {
-      if (controller.signal.aborted) {
-        return;
-      }
-
-      const latest = this.jobStore.read(dispatchId);
-      if (
-        latest.status !== "cancelled"
-        && !isProcedureDispatchCancellationRequested(this.params.rootDir, dispatchCorrelationId)
-      ) {
-        return;
-      }
-
-      if (latest.status !== "cancelled") {
-        this.jobStore.write(markJobCancelled(latest));
-      }
-      controller.abort();
-    };
-
-    poll();
-    const timer = setInterval(poll, PROCEDURE_DISPATCH_WAIT_POLL_MS);
-    return () => {
-      clearInterval(timer);
-    };
-  }
 }

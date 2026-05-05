@@ -89,6 +89,8 @@ The central type is `ProcedureDispatchJobManager`.
   Dispatch lifecycle orchestration, worker launch, wait/cancel/status reconciliation.
 - `src/dispatch/job-store.ts`
   Internal JSON file persistence and reusable correlation-id lookup for dispatch jobs.
+- `src/dispatch/cancellation-watcher.ts`
+  Detached-worker cancellation marker polling and abort signalling.
 - `src/dispatch/files.ts`
   Dispatch job/cancellation path helpers and cancellation marker writes.
 - `src/dispatch/worker-args.ts`
@@ -411,9 +413,9 @@ If new execution logic is added outside these paths, that is usually a sign that
 
 Measured during the 2026-05 compatibility re-export review:
 
-- source files: 27
-- source lines: 3,152
-- largest file: `src/dispatch/jobs.ts` at 497 lines
+- source files: 28
+- source lines: 3,168
+- largest file: `src/dispatch/jobs.ts` at 474 lines
 - runtime value exports: 36 -> 30
 - public wildcard exports: 0
 - code simplification applied: removed compatibility re-exports for data-shape
@@ -425,3 +427,5 @@ Measured during the 2026-05 compatibility re-export review:
   the job manager module
 - code simplification applied: split dispatch wait timing policy out of the
   job manager module
+- code simplification applied: split detached-worker cancellation polling out
+  of the job manager module
