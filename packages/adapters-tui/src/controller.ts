@@ -2,15 +2,13 @@ import {
   type FrontendEventEnvelope,
   type SessionStreamHandle,
 } from "@nanoboss/adapters-http";
-import type { DownstreamAgentSelection, PromptInput } from "@nanoboss/contracts";
+import type { PromptInput } from "@nanoboss/contracts";
 import { getBuildLabel } from "@nanoboss/app-support";
 import {
-  createTextPromptInput,
   normalizePromptInput,
   promptInputDisplayText,
 } from "@nanoboss/procedure-sdk";
 
-import { buildModelCommand } from "./model-command.ts";
 import {
   isExitRequest,
   isExtensionsListRequest,
@@ -31,9 +29,8 @@ import {
   type ControllerLocalCardOptions,
 } from "./controller-local-cards.ts";
 import {
-  createLocalAgentSelectionAction,
-  maybePersistDefaultSelection as maybePersistDefaultSelectionInternal,
-  validateInlineModelSelection as validateInlineModelSelectionInternal,
+  applyInlineModelSelection as applyInlineModelSelectionInternal,
+  openModelPicker as openModelPickerInternal,
 } from "./controller-model-selection.ts";
 import {
   connectControllerSession,
@@ -188,11 +185,14 @@ export class NanobossTuiController {
 
     const inlineSelection = parseModelSelectionCommand(trimmed);
     if (inlineSelection) {
-      const validatedSelection = await this.validateInlineModelSelection(inlineSelection);
-      if (validatedSelection) {
-        this.applyLocalSelection(validatedSelection);
-        await this.maybePersistDefaultSelection(validatedSelection);
-      }
+      await applyInlineModelSelectionInternal({
+        selection: inlineSelection,
+        cwd: this.cwd,
+        deps: this.deps,
+        withLocalBusy: async (status, work) => await this.withLocalBusy(status, work),
+        showLocalCard: (opts) => this.showLocalCard(opts),
+        dispatch: (action) => this.dispatch(action),
+      });
     }
 
     this.deps.onAddHistory?.(text);
@@ -413,55 +413,14 @@ export class NanobossTuiController {
 
   private async openModelPicker(): Promise<void> {
     this.deps.onClearInput?.();
-    let selection: DownstreamAgentSelection | undefined;
-    try {
-      selection = await this.withLocalBusy(
-        "[model] choose an agent",
-        async () => await this.deps.promptForModelSelection?.(this.state.defaultAgentSelection),
-      );
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      this.showLocalCard({
-        key: "local:model",
-        title: "Model",
-        markdown: `Model picker failed: ${message}`,
-        severity: "error",
-      });
-      return;
-    }
-
-    if (!selection) {
-      return;
-    }
-
-    this.applyLocalSelection(selection);
-    await this.maybePersistDefaultSelection(selection);
-    const command = buildModelCommand(selection.provider, selection.model ?? "default");
-    this.deps.onAddHistory?.(command);
-    await this.forwardPrompt(createTextPromptInput(command));
-  }
-
-  private async validateInlineModelSelection(
-    selection: DownstreamAgentSelection,
-  ): Promise<DownstreamAgentSelection | undefined> {
-    return await validateInlineModelSelectionInternal({
-      selection,
-      cwd: this.cwd,
+    await openModelPickerInternal({
+      currentSelection: this.state.defaultAgentSelection,
       deps: this.deps,
       withLocalBusy: async (status, work) => await this.withLocalBusy(status, work),
       showLocalCard: (opts) => this.showLocalCard(opts),
-    });
-  }
-
-  private applyLocalSelection(selection: DownstreamAgentSelection): void {
-    this.dispatch(createLocalAgentSelectionAction(selection));
-  }
-
-  private async maybePersistDefaultSelection(selection: DownstreamAgentSelection): Promise<void> {
-    await maybePersistDefaultSelectionInternal({
-      selection,
-      deps: this.deps,
-      showLocalCard: (opts) => this.showLocalCard(opts),
+      dispatch: (action) => this.dispatch(action),
+      onAddHistory: this.deps.onAddHistory,
+      forwardPrompt: async (prompt) => await this.forwardPrompt(prompt),
     });
   }
 

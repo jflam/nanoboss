@@ -37,9 +37,6 @@ export interface NanobossTuiControllerDeps
     ControllerStopDeps,
     ControllerPromptFlowDeps,
     ControllerStreamDeps {
-  promptForModelSelection?: (
-    currentSelection?: DownstreamAgentSelection,
-  ) => Promise<DownstreamAgentSelection | undefined>;
   /**
    * Snapshot of loaded TUI extensions, used to serve the `/extensions`
    * slash command. Supplied at boot by runTuiCli from the
