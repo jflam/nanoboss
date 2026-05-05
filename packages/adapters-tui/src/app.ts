@@ -235,7 +235,7 @@ export class NanobossTuiApp {
   private async promptWithInlineSelect<T extends string>(
     options: SelectOverlayOptions<T>,
   ): Promise<T | undefined> {
-    return await this.helpers.inlineSelect.prompt(options);
+    return await this.helpers.continuationComposer.promptSelect(options);
   }
 
   private createBindingAppHooks() {

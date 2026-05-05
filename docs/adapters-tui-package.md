@@ -87,8 +87,8 @@ are:
 - `app-controller-deps.ts`: app-to-controller dependency adapter helper
 - `app-controller-wiring.ts`: app-level controller dependency and construction
   wiring
-- `app-continuation-composer.ts`: app-level inline continuation composer
-  lifecycle helpers
+- `app-continuation-composer.ts`: app-level inline continuation and select
+  composer lifecycle helpers
 - `app-continuation-form.ts`: app-level continuation form extraction and
   signature helpers
 - `app-continuation-renderer.ts`: app-level continuation form renderer lookup,
@@ -98,7 +98,6 @@ are:
   dispatch wiring
 - `app-interaction-wiring.ts`: app-level editor handler and terminal input
   listener binding helper
-- `app-inline-select.ts`: app-level inline select overlay mounting helper
 - `app-lifecycle.ts`: app-level start, stop, render-start, and terminal drain
   lifecycle helper
 - `app-live-updates.ts`: app-level live-update pause and refresh timer
@@ -107,8 +106,8 @@ are:
   controller dependency wiring
 - `app-model-selection.ts`: app-level inline model picker and persistence
   confirmation flow
-- `app-runtime-helpers.ts`: app-level autocomplete, SIGINT, continuation,
-  inline-select, and live-update helper construction bundle
+- `app-runtime-helpers.ts`: app-level autocomplete, SIGINT, continuation, and
+  live-update helper construction bundle
 - `app-runtime-wiring.ts`: app-level view, runtime helper, and model-prompt
   construction wiring
 - `app-sigint-exit.ts`: app-level ctrl-c double-press exit helper
@@ -294,8 +293,8 @@ of growing `reducer.ts`, `app.ts`, or `controller.ts` further.
 
 Measured during the 2026-05 TUI adapter review:
 
-- source files: 158
-- source lines: 10,407
+- source files: 157
+- source lines: 10,377
 - largest file: `src/controller.ts` at 315 lines
 - workspace package dependencies: 9
 - runtime value exports: 46 -> 12
@@ -309,6 +308,8 @@ Measured during the 2026-05 TUI adapter review:
     extension-contributed nb/card renderer module
   - split process-terminal select overlay prompting out of the reusable select
     overlay component
+  - folded the one-caller inline select mounting helper into the continuation
+    composer owner, reducing app helper indirection and one source file
   - internalized local command parser/formatter helpers behind controller/app
     behavior
   - internalized form renderer registry helpers behind TUI app behavior

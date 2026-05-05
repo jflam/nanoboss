@@ -1,6 +1,5 @@
 import { AppAutocompleteSync } from "./app-autocomplete.ts";
 import { AppContinuationComposer } from "./app-continuation-composer.ts";
-import { AppInlineSelect } from "./app-inline-select.ts";
 import { AppLiveUpdates } from "./app-live-updates.ts";
 import { AppSigintExit } from "./app-sigint-exit.ts";
 import type {
@@ -17,7 +16,6 @@ export interface AppRuntimeHelpers {
   autocomplete: AppAutocompleteSync;
   sigintExit: AppSigintExit;
   continuationComposer: AppContinuationComposer;
-  inlineSelect: AppInlineSelect;
   liveUpdates: AppLiveUpdates;
 }
 
@@ -54,13 +52,6 @@ export function createAppRuntimeHelpers(params: {
     getState: params.getState,
     requestRender: params.requestRender,
   });
-  const inlineSelect = new AppInlineSelect({
-    tui: params.tui,
-    view: params.view,
-    theme: params.theme,
-    continuationComposer,
-    requestRender: params.requestRender,
-  });
   const liveUpdates = new AppLiveUpdates({
     tui: params.tui,
     view: params.view,
@@ -75,7 +66,6 @@ export function createAppRuntimeHelpers(params: {
     autocomplete,
     sigintExit,
     continuationComposer,
-    inlineSelect,
     liveUpdates,
   };
 }
