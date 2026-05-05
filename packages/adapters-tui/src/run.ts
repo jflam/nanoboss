@@ -6,6 +6,7 @@ import {
   type RunTuiAppDeps,
   type TuiAppRunner,
 } from "./run-app.ts";
+import { cleanupTuiRun } from "./run-cleanup.ts";
 export {
   assertInteractiveTty,
   canUseNanobossTui,
@@ -72,17 +73,11 @@ export async function runTuiCli(params: RunTuiCliParams, deps: RunTuiCliDeps = {
     }
     sessionId = await app.run();
   } finally {
-    try {
-      for (const removeSignalListener of removeSignalListeners.reverse()) {
-        removeSignalListener();
-      }
-    } finally {
-      try {
-        await restoreTerminalInput?.();
-      } finally {
-        await server?.stop();
-      }
-    }
+    await cleanupTuiRun({
+      removeSignalListeners,
+      restoreTerminalInput,
+      server,
+    });
   }
 
   if (sessionId) {

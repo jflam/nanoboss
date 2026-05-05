@@ -203,6 +203,7 @@ are:
 - `build-freshness.ts`: TUI build-freshness filesystem and git probing helper
 - `run.ts`: public CLI runner and terminal/server lifecycle orchestration
 - `run-app.ts`: CLI app construction plus extension boot status replay
+- `run-cleanup.ts`: CLI signal, terminal, and private-server cleanup ordering
 - `run-extensions.ts`: CLI TUI extension boot status buffering and replay
 - `run-signals.ts`: CLI TUI process signal handling helpers
 - `run-terminal.ts`: CLI terminal control-character and process signal helpers
@@ -271,8 +272,8 @@ of growing `reducer.ts`, `app.ts`, or `controller.ts` further.
 
 Measured during the 2026-05 TUI adapter review:
 
-- source files: 146
-- source lines: 10,198
+- source files: 147
+- source lines: 10,218
 - largest file: `src/controller.ts` at 315 lines
 - workspace package dependencies: 9
 - runtime value exports: 46 -> 12
@@ -387,6 +388,8 @@ Measured during the 2026-05 TUI adapter review:
     TUI controller
   - split CLI app construction and extension boot status replay out of the
     public TUI runner
+  - split CLI signal, terminal, and private-server cleanup ordering out of
+    the public TUI runner
   - split public interactive-TTY guards out of the public TUI runner
   - split controller-owned session stream event reactions out of the TUI
     controller
