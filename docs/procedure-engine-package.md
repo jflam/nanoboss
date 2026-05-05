@@ -100,6 +100,8 @@ The central type is `ProcedureDispatchJobManager`.
 - `src/dispatch/status.ts`
   Dispatch terminal-status checks, dead-worker detection, cancellation marking,
   and status result shaping.
+- `src/dispatch/wait.ts`
+  Dispatch wait timeout bounds and poll interval policy.
 - [src/dispatch/recovery.ts](/Users/jflam/agentboss/workspaces/nanoboss/packages/procedure-engine/src/dispatch/recovery.ts:1)
   Recovery when the outer polling path loses the terminal result.
 - [src/dispatch/progress.ts](/Users/jflam/agentboss/workspaces/nanoboss/packages/procedure-engine/src/dispatch/progress.ts:1)
@@ -409,9 +411,9 @@ If new execution logic is added outside these paths, that is usually a sign that
 
 Measured during the 2026-05 compatibility re-export review:
 
-- source files: 26
-- source lines: 3,148
-- largest file: `src/dispatch/jobs.ts` at 505 lines
+- source files: 27
+- source lines: 3,152
+- largest file: `src/dispatch/jobs.ts` at 497 lines
 - runtime value exports: 36 -> 30
 - public wildcard exports: 0
 - code simplification applied: removed compatibility re-exports for data-shape
@@ -421,3 +423,5 @@ Measured during the 2026-05 compatibility re-export review:
   disk registry loading out of the job manager module
 - code simplification applied: split detached worker process spawning out of
   the job manager module
+- code simplification applied: split dispatch wait timing policy out of the
+  job manager module

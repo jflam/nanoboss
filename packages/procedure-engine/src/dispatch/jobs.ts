@@ -36,11 +36,11 @@ import {
   markJobCancelled,
   toProcedureDispatchStatusResult,
 } from "./status.ts";
+import {
+  PROCEDURE_DISPATCH_WAIT_POLL_MS,
+  clampProcedureDispatchWaitMs,
+} from "./wait.ts";
 import { spawnProcedureDispatchWorker } from "./worker-process.ts";
-
-const DEFAULT_WAIT_MS = 1_000;
-const MAX_WAIT_MS = 2_000;
-const WAIT_POLL_MS = 100;
 
 export {
   buildProcedureDispatchCancelPath,
@@ -186,7 +186,7 @@ export class ProcedureDispatchJobManager {
   }
 
   async wait(dispatchId: string, waitMs?: number): Promise<ProcedureDispatchStatusResult> {
-    const boundedWaitMs = clampWaitMs(waitMs);
+    const boundedWaitMs = clampProcedureDispatchWaitMs(waitMs);
     const deadline = Date.now() + boundedWaitMs;
 
     for (;;) {
@@ -195,7 +195,7 @@ export class ProcedureDispatchJobManager {
         return current;
       }
 
-      await Bun.sleep(WAIT_POLL_MS);
+      await Bun.sleep(PROCEDURE_DISPATCH_WAIT_POLL_MS);
     }
   }
 
@@ -489,17 +489,9 @@ export class ProcedureDispatchJobManager {
     };
 
     poll();
-    const timer = setInterval(poll, WAIT_POLL_MS);
+    const timer = setInterval(poll, PROCEDURE_DISPATCH_WAIT_POLL_MS);
     return () => {
       clearInterval(timer);
     };
   }
-}
-
-function clampWaitMs(value: number | undefined): number {
-  if (value === undefined || !Number.isFinite(value) || value <= 0) {
-    return DEFAULT_WAIT_MS;
-  }
-
-  return Math.min(Math.max(Math.floor(value), 1), MAX_WAIT_MS);
 }
