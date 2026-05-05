@@ -14,6 +14,7 @@ import {
 } from "./app-clipboard.ts";
 import { AppContinuationComposer } from "./app-continuation-composer.ts";
 import { bindAppEditorHandlers } from "./app-editor-handlers.ts";
+import { AppSigintExit } from "./app-sigint-exit.ts";
 
 import {
   NanobossTuiController,
@@ -73,13 +74,13 @@ export class NanobossTuiApp {
   private readonly liveUpdates: AppLiveUpdates;
   private readonly continuationComposer: AppContinuationComposer;
   private readonly autocomplete: AppAutocompleteSync;
+  private readonly sigintExit: AppSigintExit;
   private readonly now: () => number;
   private state: UiState;
   private readonly composerState = createComposerState();
   private clearedComposerStateSnapshot?: ComposerState;
   private stopped = false;
   private lastToolOutputToggleAt = Number.NEGATIVE_INFINITY;
-  private lastCtrlCAt = Number.NEGATIVE_INFINITY;
 
   constructor(
     private readonly params: NanobossTuiAppParams,
@@ -124,6 +125,12 @@ export class NanobossTuiApp {
     this.autocomplete = new AppAutocompleteSync({
       editor: this.editor,
       cwd: this.cwd,
+    });
+    this.sigintExit = new AppSigintExit({
+      controller: this.controller,
+      editor: this.editor,
+      now: this.now,
+      exitWindowMs: CTRL_C_EXIT_WINDOW_MS,
     });
     this.continuationComposer = new AppContinuationComposer({
       tui: this.tui,
@@ -211,7 +218,7 @@ export class NanobossTuiApp {
   }
 
   requestSigintExit(): boolean {
-    return this.handleCtrlC();
+    return this.sigintExit.request();
   }
 
   private syncState(state: UiState): void {
@@ -258,18 +265,6 @@ export class NanobossTuiApp {
       editor: this.editor,
       showClipboardCard: (opts) => this.controller.showLocalCard(opts),
     });
-  }
-
-  private handleCtrlC(): boolean {
-    const now = this.now();
-    if (now - this.lastCtrlCAt < CTRL_C_EXIT_WINDOW_MS) {
-      this.controller.requestExit();
-      return true;
-    }
-
-    this.lastCtrlCAt = now;
-    this.editor.setText("");
-    return false;
   }
 
   private async promptForInlineModelSelection(
@@ -322,7 +317,7 @@ export class NanobossTuiApp {
       clearClearedComposerStateSnapshot: () => {
         this.clearedComposerStateSnapshot = undefined;
       },
-      handleCtrlC: () => this.handleCtrlC(),
+      handleCtrlC: () => this.sigintExit.request(),
       handleCtrlVImagePaste: async () => await this.handleCtrlVImagePaste(),
       toggleLiveUpdatesPaused: () => {
         this.toggleLiveUpdatesPaused();

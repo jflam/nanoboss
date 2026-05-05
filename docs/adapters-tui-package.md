@@ -90,6 +90,7 @@ are:
   behavior
 - `app-model-selection.ts`: app-level inline model picker and persistence
   confirmation flow
+- `app-sigint-exit.ts`: app-level ctrl-c double-press exit helper
 - `app-types.ts`: app-local dependency adapter contracts
 - `reducer.ts`: frontend event reduction and state transition logic
 - `reducer-actions.ts`: reducer action contracts shared by controller and
@@ -152,8 +153,8 @@ of growing `reducer.ts`, `app.ts`, or `controller.ts` further.
 
 Measured during the 2026-05 TUI adapter review:
 
-- source files: 79
-- source lines: 8,911
+- source files: 80
+- source lines: 8,935
 - largest file: `src/controller.ts` at 358 lines
 - workspace package dependencies: 9
 - runtime value exports: 46 -> 12
@@ -202,6 +203,7 @@ Measured during the 2026-05 TUI adapter review:
   - split app-level editor submit/change handler wiring out of the TUI app
   - split app-level terminal input listener and keybinding dispatch wiring out
     of the TUI app
+  - split app-level ctrl-c double-press exit handling out of the TUI app
   - split controller-owned busy-input, pending-prompt, and terminal-event
     helpers out of the TUI controller
   - consolidated controller busy-input steering and queued prompt handling
