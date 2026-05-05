@@ -2,8 +2,8 @@ import {
   Spacer,
 } from "./pi-tui.ts";
 import { registerChromeContribution } from "./chrome.ts";
+import { createActivityBarComponent } from "./core-chrome-activity.ts";
 import {
-  createActivityBarComponent,
   createFooterComponent,
   createHeaderComponent,
   createSessionComponent,

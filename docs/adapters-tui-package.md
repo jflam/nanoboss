@@ -148,6 +148,8 @@ are:
   dispatch helpers
 - `core-bindings-help.ts`: core keybinding help-card markdown formatter
 - `core-chrome.ts`: core chrome contribution registration manifest
+- `core-chrome-activity.ts`: core activity-bar chrome component and
+  overflow handling
 - `core-chrome-components.ts`: core chrome component factories and line
   formatting helpers
 - `core-activity-identity.ts`: core identity activity-bar segment helpers
@@ -192,8 +194,8 @@ of growing `reducer.ts`, `app.ts`, or `controller.ts` further.
 
 Measured during the 2026-05 TUI adapter review:
 
-- source files: 103
-- source lines: 9,304
+- source files: 104
+- source lines: 9,310
 - largest file: `src/controller.ts` at 355 lines
 - workspace package dependencies: 9
 - runtime value exports: 46 -> 12
@@ -291,6 +293,8 @@ Measured during the 2026-05 TUI adapter review:
     helpers out of generic ui_panel handling
   - split core chrome component factories and line formatting helpers out of
     the registration manifest
+  - split core activity-bar chrome rendering and overflow handling out of
+    generic chrome line helpers
   - split assistant-turn finalization and completion-note helpers out of
     reducer run cleanup
   - split core keybinding help-card formatting out of the registration
