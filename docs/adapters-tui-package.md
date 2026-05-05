@@ -84,6 +84,7 @@ are:
   behavior
 - `app-model-selection.ts`: app-level inline model picker and persistence
   confirmation flow
+- `app-types.ts`: app-local dependency adapter contracts
 - `reducer.ts`: frontend event reduction and state transition logic
 - `reducer-local-actions.ts`: reducer-owned local/controller action handling
 - `reducer-tool-calls.ts`: reducer-owned tool-call list and preview helpers
@@ -129,9 +130,9 @@ of growing `reducer.ts`, `app.ts`, or `controller.ts` further.
 
 Measured during the 2026-05 TUI adapter review:
 
-- source files: 67
-- source lines: 8,479
-- largest file: `src/app.ts` at 587 lines
+- source files: 68
+- source lines: 8,491
+- largest file: `src/controller.ts` at 584 lines
 - workspace package dependencies: 9
 - runtime value exports: 46 -> 12
 - public wildcard exports: 8 -> 0
@@ -165,6 +166,7 @@ Measured during the 2026-05 TUI adapter review:
     of the TUI app
   - split app-level live-update pause and refresh timer behavior out of the
     TUI app
+  - split app-local dependency adapter contracts out of the TUI app
   - split transcript turn, tool, and procedure-panel rendering out of the
     TUI view shell
   - split non-transcript ui_panel chrome hosts out of the TUI view shell
