@@ -1,5 +1,5 @@
 import type { UiState } from "./state.ts";
-import { applyLocalProcedurePanel } from "./reducer-procedure-panels.ts";
+import { applyLocalProcedurePanel } from "./reducer-local-procedure-panels.ts";
 import {
   reduceLocalSendFailed,
   reduceLocalUserSubmitted,

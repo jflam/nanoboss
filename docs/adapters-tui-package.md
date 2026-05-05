@@ -108,6 +108,8 @@ are:
 - `reducer-local-actions.ts`: reducer-owned local/controller action dispatch
 - `reducer-local-turns.ts`: reducer-owned local submitted/send-failed turn
   construction
+- `reducer-local-procedure-panels.ts`: reducer-owned local procedure-panel
+  transcript state helpers
 - `reducer-tool-calls.ts`: reducer-owned tool-call list and preview helpers
 - `reducer-tool-event-records.ts`: reducer-owned tool start/update record
   construction helpers
@@ -131,8 +133,8 @@ are:
   rendering helpers
 - `reducer-procedure-panel-turns.ts`: reducer-owned procedure-panel
   active-turn block mutation helpers
-- `reducer-procedure-panels.ts`: reducer-owned procedure-panel transcript
-  state and turn-block helpers
+- `reducer-procedure-panels.ts`: reducer-owned frontend procedure-panel
+  transcript state and turn-block helpers
 - `reducer-panels.ts`: reducer-owned non-transcript ui_panel helpers
 - `controller.ts`: session/runtime orchestration for the TUI
 - `controller-auto-approve.ts`: controller-owned session auto-approve toggle
@@ -231,8 +233,8 @@ of growing `reducer.ts`, `app.ts`, or `controller.ts` further.
 
 Measured during the 2026-05 TUI adapter review:
 
-- source files: 124
-- source lines: 9,572
+- source files: 125
+- source lines: 9,571
 - largest file: `src/controller.ts` at 355 lines
 - workspace package dependencies: 9
 - runtime value exports: 46 -> 12
@@ -383,6 +385,8 @@ Measured during the 2026-05 TUI adapter review:
   - split restored run replay transitions out of live run lifecycle reducers
   - split local submitted/send-failed turn construction out of local action
     dispatch
+  - split local procedure-panel transcript state helpers out of frontend
+    procedure-panel event handling
   - split model selection persistence and local selection action helpers out
     of controller model validation/picker flow
   - split inline model catalog refresh and validation helpers out of
