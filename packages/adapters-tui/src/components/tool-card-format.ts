@@ -1,12 +1,7 @@
-import {
-  asRecord,
-  extractPathLike,
-  firstString,
-} from "@nanoboss/procedure-sdk";
 import type { UiToolCall } from "../state.ts";
 import type { NanobossTuiTheme } from "../theme.ts";
-import { getLanguageFromPath } from "../theme.ts";
 import type { ToolPreviewBlock } from "../tool-preview.ts";
+import { getToolCodeContext } from "./tool-card-code-context.ts";
 import {
   formatExpandedToolHeader,
   getExpandedToolErrorBlock,
@@ -202,25 +197,6 @@ export function formatErrorLines(
     collapsedLines,
     lineFormatter: (currentTheme, line) => currentTheme.toolCardError(line),
   });
-}
-
-function getToolCodeContext(toolCall: UiToolCall): { shouldHighlight: boolean; language?: string } {
-  const toolName = getCanonicalToolName(toolCall);
-  const inputRecord = asRecord(toolCall.rawInput);
-  const outputRecord = asRecord(toolCall.rawOutput);
-  const explicitLanguage = firstString(
-    inputRecord?.language,
-    inputRecord?.lang,
-    outputRecord?.language,
-    outputRecord?.lang,
-  );
-  const path = firstString(extractPathLike(inputRecord), extractPathLike(outputRecord));
-  const inferredLanguage = path ? getLanguageFromPath(path) : undefined;
-
-  return {
-    shouldHighlight: toolName === "read" || toolName === "write" || explicitLanguage !== undefined || inferredLanguage !== undefined,
-    language: explicitLanguage ?? inferredLanguage,
-  };
 }
 
 export function joinToolContent(...groups: Array<string[] | string | undefined>): string[] {
