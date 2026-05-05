@@ -163,6 +163,8 @@ are:
   helper
 - `controller-session.ts`: controller-owned HTTP session connect/create and
   `/new` session lifecycle helpers
+- `controller-session-events.ts`: controller-owned session stream event
+  reactions for stop latching and pending-prompt flushing
 - `controller-stop.ts`: controller-owned run stop and continuation cancel
   helpers
 - `controller-stream.ts`: controller-owned session event stream lifecycle
@@ -249,9 +251,9 @@ of growing `reducer.ts`, `app.ts`, or `controller.ts` further.
 
 Measured during the 2026-05 TUI adapter review:
 
-- source files: 133
-- source lines: 9,923
-- largest file: `src/controller.ts` at 345 lines
+- source files: 134
+- source lines: 9,951
+- largest file: `src/app.ts` at 333 lines
 - workspace package dependencies: 9
 - runtime value exports: 46 -> 12
 - public wildcard exports: 8 -> 0
@@ -350,6 +352,8 @@ Measured during the 2026-05 TUI adapter review:
     the TUI controller
   - split controller-owned session event stream lifecycle helpers out of the
     TUI controller
+  - split controller-owned session stream event reactions out of the TUI
+    controller
   - split controller-owned prompt submit and queued-prompt command flow
     helpers out of the TUI controller
   - split controller-owned local submit command branch handlers out of prompt

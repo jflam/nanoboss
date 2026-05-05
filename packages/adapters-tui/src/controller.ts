@@ -1,7 +1,4 @@
-import {
-  type FrontendEventEnvelope,
-  type SessionStreamHandle,
-} from "@nanoboss/adapters-http";
+import type { SessionStreamHandle } from "@nanoboss/adapters-http";
 import type { PromptInput } from "@nanoboss/contracts";
 
 import { reduceUiState } from "./reducer.ts";
@@ -31,12 +28,8 @@ import {
 import {
   buildPendingPromptAction,
   forwardPrompt as forwardPromptInternal,
-  maybeFlushPendingPrompt as maybeFlushPendingPromptInternal,
 } from "./controller-prompt-flow.ts";
 import { toggleSessionAutoApprove as toggleSessionAutoApproveInternal } from "./controller-auto-approve.ts";
-import {
-  applyControllerSessionStream,
-} from "./controller-stream.ts";
 import {
   handleControllerSubmit,
   queueControllerPrompt,
@@ -47,6 +40,7 @@ import {
   requestControllerExit,
   stopControllerLifecycle,
 } from "./controller-lifecycle.ts";
+import { applyControllerSessionEventStream } from "./controller-session-events.ts";
 export type {
   NanobossTuiControllerDeps,
   NanobossTuiControllerParams,
@@ -210,26 +204,19 @@ export class NanobossTuiController {
   }
 
   private async applySession(session: SessionResponse): Promise<void> {
-    this.stream = await applyControllerSessionStream({
+    this.stream = await applyControllerSessionEventStream({
       deps: this.deps,
       serverUrl: this.params.serverUrl,
       stream: this.stream,
       session,
       dispatch: (action) => this.dispatch(action),
-      onEvent: (event) => {
-        this.maybeSendLatchedStopRequest(event);
-        void this.maybeFlushPendingPrompt(event);
+      getState: () => this.state,
+      sendStopRequest: async (runId) => await this.sendStopRequest(runId),
+      getFlushingPendingPrompt: () => this.flushingPendingPrompt,
+      setFlushingPendingPrompt: (flushing) => {
+        this.flushingPendingPrompt = flushing;
       },
-    });
-  }
-
-  private maybeSendLatchedStopRequest(event: FrontendEventEnvelope): void {
-    maybeSendLatchedStopRequestInternal({
-      event,
-      state: this.state,
-      sendStopRequest: (runId) => {
-        void this.sendStopRequest(runId);
-      },
+      forwardPrompt: async (prompt) => await this.forwardPrompt(prompt),
     });
   }
 
@@ -274,19 +261,6 @@ export class NanobossTuiController {
       onClearInput: this.deps.onClearInput,
       enqueuePendingPrompt: async (nextPromptInput, nextKind) =>
         await this.enqueuePendingPrompt(nextPromptInput, nextKind),
-    });
-  }
-
-  private async maybeFlushPendingPrompt(event: FrontendEventEnvelope): Promise<void> {
-    await maybeFlushPendingPromptInternal({
-      event,
-      getState: () => this.state,
-      flushingPendingPrompt: this.flushingPendingPrompt,
-      setFlushingPendingPrompt: (flushing) => {
-        this.flushingPendingPrompt = flushing;
-      },
-      forwardPrompt: async (prompt) => await this.forwardPrompt(prompt),
-      dispatch: (action) => this.dispatch(action),
     });
   }
 
