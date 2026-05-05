@@ -34,15 +34,9 @@ export {
   type RuntimeServiceParams,
 } from "./runtime-api.ts";
 export {
-  isCommandsUpdatedEvent,
   isMemorySyncRuntimeEvent,
   isPersistedRuntimeEvent,
   isRenderedRuntimeEvent,
-  isRunFailedEvent,
-  isTextDeltaEvent,
-  isTokenUsageEvent,
-  isToolStartedEvent,
-  isToolUpdatedEvent,
   mapProcedureUiEventToRuntimeEvent,
   mapSessionUpdateToRuntimeEvents,
   SessionEventLog,

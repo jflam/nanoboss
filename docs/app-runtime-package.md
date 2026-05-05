@@ -191,8 +191,8 @@ Measured during the 2026-05 app-runtime review:
 - public barrel wildcard exports: reduced from 2 to 0
 - public app-runtime symbols: reduced from 58 to 57 by removing the accidental
   `UiApiImpl` value re-export
-- runtime value exports: 29 -> 26 by internalizing runtime-mode and tool-call
-  preview helper exports
+- runtime value exports: 29 -> 20 by internalizing runtime-mode, tool-call
+  preview helper exports, and unused runtime-event guard aliases
 
 The small surface reduction matters more than the raw symbol count: the package
 now exports runtime abstractions intentionally instead of forwarding every

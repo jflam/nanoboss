@@ -283,14 +283,6 @@ export class SessionEventLog {
   }
 }
 
-export function isCommandsUpdatedEvent(event: RuntimeEventEnvelope): event is CommandsUpdatedEventEnvelope {
-  return event.type === "commands_updated";
-}
-
-export function isTextDeltaEvent(event: RuntimeEventEnvelope): event is TextDeltaEventEnvelope {
-  return event.type === "text_delta";
-}
-
 interface NanobossToolMeta {
   toolKind?: string;
   parentToolCallId?: string;
@@ -343,22 +335,6 @@ function isCancelledToolOutput(rawOutput: unknown): boolean {
     && "cancelled" in rawOutput
     && rawOutput.cancelled === true,
   );
-}
-
-export function isToolStartedEvent(event: RuntimeEventEnvelope): event is ToolStartedEventEnvelope {
-  return event.type === "tool_started";
-}
-
-export function isToolUpdatedEvent(event: RuntimeEventEnvelope): event is ToolUpdatedEventEnvelope {
-  return event.type === "tool_updated";
-}
-
-export function isTokenUsageEvent(event: RuntimeEventEnvelope): event is TokenUsageEventEnvelope {
-  return event.type === "token_usage";
-}
-
-export function isRunFailedEvent(event: RuntimeEventEnvelope): event is RunFailedEventEnvelope {
-  return event.type === "run_failed";
 }
 
 export function isMemorySyncRuntimeEvent(
