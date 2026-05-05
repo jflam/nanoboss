@@ -80,8 +80,9 @@ Those seams are intentionally not exported from the package entrypoint.
 ## Package Structure
 
 - `src/server.ts`
-  MCP tool definitions, argument parsing, result formatting, method dispatch,
-  and stdio server entrypoint.
+  MCP tool definitions, runtime method dispatch, and stdio server entrypoint.
+- `src/tool-args.ts`
+  MCP tool input schemas and argument parsing helpers.
 - `src/jsonrpc.ts`
   Generic MCP JSON-RPC method dispatcher.
 - `src/stdio-jsonrpc.ts`
@@ -125,9 +126,9 @@ only parse MCP arguments, call runtime methods, and format MCP tool results.
 
 Measured during the 2026-05 MCP adapter review:
 
-- source files: 7
-- source lines: 1,216
-- largest file: `src/server.ts` at 538 lines
+- source files: 8
+- source lines: 1,236
+- largest file: `src/server.ts` at 434 lines
 - public barrel wildcard exports: reduced from 4 to 0
 - public package symbols: reduced from 26 to 10
 - internalized package-entrypoint test seams:
@@ -138,7 +139,9 @@ This is a public-surface cleanup. Runtime behavior is unchanged; tests still
 cover the lower-level seams through direct source imports. MCP result
 formatting now lives outside the server entrypoint in `src/tool-result-format.ts`,
 and stdio framing lives outside the server loop in
-`src/stdio-jsonrpc-framing.ts`.
+`src/stdio-jsonrpc-framing.ts`. Tool argument schemas and parsing now live in
+`src/tool-args.ts`, keeping `src/server.ts` focused on the tool table and MCP
+dispatch.
 
 ## Good Future Targets
 

@@ -1,16 +1,21 @@
 import { getBuildLabel } from "@nanoboss/app-support";
 import { dispatchMcpToolsMethod, type JsonRpcToolMetadata } from "./jsonrpc.ts";
 import { runStdioJsonRpcServer } from "./stdio-jsonrpc.ts";
-import {
-  type ListRunsArgs,
-  type RuntimeService,
-} from "@nanoboss/app-runtime";
-import type {
-  Ref,
-  RunRef,
-  RunKind,
-} from "@nanoboss/contracts";
+import type { RuntimeService } from "@nanoboss/app-runtime";
 import { parseRequiredDownstreamAgentSelection } from "@nanoboss/store";
+import {
+  CELL_KIND_SCHEMA,
+  REF_SCHEMA,
+  RUN_REF_SCHEMA,
+  asOptionalBoolean,
+  asOptionalNonNegativeNumber,
+  asOptionalRunKind,
+  asOptionalRunScope,
+  asOptionalString,
+  asString,
+  parseRef,
+  parseRunRef,
+} from "./tool-args.ts";
 import { formatMcpToolResult } from "./tool-result-format.ts";
 
 const MCP_PROTOCOL_VERSION = "2025-11-25";
@@ -27,39 +32,6 @@ interface McpToolDefinition extends JsonRpcToolMetadata {
   parseArgs(args: Record<string, unknown>): unknown;
   call(runtime: RuntimeService, args: unknown): Promise<unknown>;
 }
-
-const RUN_REF_SCHEMA = {
-  type: "object",
-  properties: {
-    sessionId: { type: "string" },
-    runId: { type: "string" },
-  },
-  required: ["sessionId", "runId"],
-  additionalProperties: false,
-};
-
-const REF_SCHEMA = {
-  type: "object",
-  properties: {
-    run: {
-      type: "object",
-      properties: {
-        sessionId: { type: "string" },
-        runId: { type: "string" },
-      },
-      required: ["sessionId", "runId"],
-      additionalProperties: false,
-    },
-    path: { type: "string" },
-  },
-  required: ["run", "path"],
-  additionalProperties: false,
-};
-
-const CELL_KIND_SCHEMA = {
-  type: "string",
-  enum: ["top_level", "procedure", "agent"],
-};
 
 function defineTool<Args>(definition: {
   name: string;
@@ -459,80 +431,4 @@ export async function runMcpServer(
   options: McpServerOptions = {},
 ): Promise<void> {
   await runStdioJsonRpcServer((method, messageParams) => dispatchMcpMethod(runtime, method, messageParams, options));
-}
-
-function parseRunRef(value: unknown): RunRef {
-  const record = asObject(value);
-  return {
-    sessionId: asString(record.sessionId, "sessionId"),
-    runId: asString(record.runId, "runId"),
-  };
-}
-
-function parseRef(value: unknown): Ref {
-  const record = asObject(value);
-  return {
-    run: parseRunRef(record.run),
-    path: asString(record.path, "path"),
-  };
-}
-
-function asObject(value: unknown): Record<string, unknown> {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    throw new Error("Expected object");
-  }
-
-  return value as Record<string, unknown>;
-}
-
-function asString(value: unknown, name: string): string {
-  if (typeof value !== "string" || value.length === 0) {
-    throw new Error(`Expected ${name} to be a non-empty string`);
-  }
-
-  return value;
-}
-
-function asOptionalString(value: unknown): string | undefined {
-  return typeof value === "string" && value.length > 0 ? value : undefined;
-}
-
-function asOptionalBoolean(value: unknown): boolean | undefined {
-  return typeof value === "boolean" ? value : undefined;
-}
-
-function asOptionalRunKind(value: unknown): RunKind | undefined {
-  if (value === undefined) {
-    return undefined;
-  }
-
-  if (value === "top_level" || value === "procedure" || value === "agent") {
-    return value;
-  }
-
-  throw new Error("Expected kind to be one of top_level, procedure, or agent");
-}
-
-function asOptionalRunScope(value: unknown): ListRunsArgs["scope"] | undefined {
-  if (value === undefined) {
-    return undefined;
-  }
-
-  if (value === "recent" || value === "top_level") {
-    return value;
-  }
-
-  throw new Error("Expected scope to be 'recent' or 'top_level'");
-}
-
-function asOptionalNonNegativeNumber(value: unknown, name: string): number | undefined {
-  if (value === undefined) {
-    return undefined;
-  }
-
-  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
-    throw new Error(`Expected ${name} to be a non-negative number`);
-  }
-
-  return value;
 }
