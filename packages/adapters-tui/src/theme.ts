@@ -3,6 +3,12 @@ import type {
   ToolCardThemeMode,
 } from "@nanoboss/tui-extension-sdk";
 import type { EditorTheme, MarkdownTheme, SelectListTheme } from "./pi-tui.ts";
+import {
+  attrStyle,
+  fgStyle,
+  rgbBgStyle,
+  style,
+} from "./theme-ansi.ts";
 import { createToolCardCodeHighlighter } from "./theme-highlight.ts";
 import {
   applyBoldRgb,
@@ -18,30 +24,6 @@ export type NanobossTuiTheme = SdkNanobossTuiTheme<
   SelectListTheme,
   MarkdownTheme
 >;
-
-function style(text: string, codes: number[], resetCodes: number[]): string {
-  if (text.length === 0) {
-    return text;
-  }
-
-  return `\u001b[${codes.join(";")}m${text}\u001b[${resetCodes.join(";")}m`;
-}
-
-function fgStyle(text: string, ...codes: number[]): string {
-  return style(text, codes, [39]);
-}
-
-function rgbFgStyle(text: string, red: number, green: number, blue: number): string {
-  return style(text, [38, 2, red, green, blue], [39]);
-}
-
-function rgbBgStyle(text: string, red: number, green: number, blue: number): string {
-  return style(text, [48, 2, red, green, blue], [49]);
-}
-
-function attrStyle(text: string, code: number, resetCode: number): string {
-  return style(text, [code], [resetCode]);
-}
 
 export function createNanobossTuiTheme(initialToolCardMode: ToolCardThemeMode = "dark"): NanobossTuiTheme {
   let toolCardMode = initialToolCardMode;
