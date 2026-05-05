@@ -99,6 +99,7 @@ are:
 - `reducer.ts`: frontend event reduction and state transition logic
 - `reducer-actions.ts`: reducer action contracts shared by controller and
   reducer helper modules
+- `state-initial.ts`: initial TUI state construction defaults
 - `reducer-local-actions.ts`: reducer-owned local/controller action dispatch
 - `reducer-local-turns.ts`: reducer-owned local submitted/send-failed turn
   construction
@@ -197,8 +198,8 @@ of growing `reducer.ts`, `app.ts`, or `controller.ts` further.
 
 Measured during the 2026-05 TUI adapter review:
 
-- source files: 106
-- source lines: 9,329
+- source files: 107
+- source lines: 9,333
 - largest file: `src/controller.ts` at 355 lines
 - workspace package dependencies: 9
 - runtime value exports: 46 -> 12
@@ -220,6 +221,7 @@ Measured during the 2026-05 TUI adapter review:
   - split reducer-owned tool start/update event reducers out of the central
     reducer
   - split reducer action contracts out of the central reducer
+  - split initial TUI state construction defaults out of state contracts
   - split reducer-owned local/controller action handling out of the central
     reducer
   - split reducer-owned assistant turn and transcript helpers out of the
