@@ -70,6 +70,8 @@ The central type is `ProcedureDispatchJobManager`.
   Concrete `ProcedureApi` implementation.
 - [src/context/agent-api.ts](/Users/jflam/agentboss/workspaces/nanoboss/packages/procedure-engine/src/context/agent-api.ts:1)
   Implements `ctx.agent`.
+- `src/context/agent-output-events.ts`
+  Internal structured-output panel formatting and nested agent update metadata helpers.
 - [src/context/procedure-api.ts](/Users/jflam/agentboss/workspaces/nanoboss/packages/procedure-engine/src/context/procedure-api.ts:1)
   Implements `ctx.procedures`.
 - [src/context/session-api.ts](/Users/jflam/agentboss/workspaces/nanoboss/packages/procedure-engine/src/context/session-api.ts:1)
@@ -403,9 +405,9 @@ If new execution logic is added outside these paths, that is usually a sign that
 
 Measured during the 2026-05 compatibility re-export review:
 
-- source files: 23
-- source lines: 3,115
-- largest file: `src/context/agent-api.ts` at 617 lines
+- source files: 24
+- source lines: 3,127
+- largest file: `src/dispatch/jobs.ts` at 539 lines
 - runtime value exports: 36 -> 30
 - public wildcard exports: 0
 - code simplification applied: removed compatibility re-exports for data-shape
