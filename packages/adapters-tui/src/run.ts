@@ -2,6 +2,14 @@ import { NanobossTuiApp, type NanobossTuiAppParams } from "./app.ts";
 import { startPrivateHttpServer } from "@nanoboss/adapters-http";
 import type { FrontendConnectionMode } from "./connection-mode.ts";
 import { bootExtensions, type BootExtensionsResult, type TuiExtensionBootLog } from "./boot-extensions.ts";
+import {
+  addProcessSignalListener,
+  getSignalExitCode,
+  setProcessExitCode,
+  suspendReservedControlCharacters,
+  type RestoreTerminalInput,
+  type TuiExitSignal,
+} from "./run-terminal.ts";
 
 export function canUseNanobossTui(): boolean {
   return process.stdin.isTTY && process.stdout.isTTY;
@@ -28,9 +36,6 @@ interface TuiAppRunner {
   requestSigintExit?(): boolean;
   showStatus?(text: string): void;
 }
-
-type RestoreTerminalInput = () => void | Promise<void>;
-type TuiExitSignal = "SIGINT" | "SIGTERM";
 
 export interface RunTuiCliDeps {
   startPrivateHttpServer?: typeof startPrivateHttpServer;
@@ -152,85 +157,4 @@ export async function runTuiCli(params: RunTuiCliParams, deps: RunTuiCliDeps = {
   if (exitSignal) {
     (deps.setExitCode ?? setProcessExitCode)(getSignalExitCode(exitSignal));
   }
-}
-
-const RESERVED_TTY_CONTROL_CHARACTERS = [
-  "discard",
-  "dsusp",
-] as const;
-
-async function suspendReservedControlCharacters(): Promise<RestoreTerminalInput | undefined> {
-  if (process.platform === "win32" || !process.stdin.isTTY || !process.stdout.isTTY) {
-    return undefined;
-  }
-
-  const ttyArgs = getSttyTargetArgs();
-  if (!ttyArgs) {
-    return undefined;
-  }
-
-  const savedState = runStty([...ttyArgs, "-g"]);
-  if (!savedState || savedState.exitCode !== 0) {
-    return undefined;
-  }
-
-  const encodedState = readProcessText(savedState);
-  if (!encodedState) {
-    return undefined;
-  }
-
-  let changed = false;
-  for (const controlCharacter of RESERVED_TTY_CONTROL_CHARACTERS) {
-    const result = runStty([...ttyArgs, controlCharacter, "undef"]);
-    if (result && result.exitCode === 0) {
-      changed = true;
-    }
-  }
-
-  if (!changed) {
-    return undefined;
-  }
-
-  return () => {
-    void runStty([...ttyArgs, encodedState]);
-  };
-}
-
-function getSttyTargetArgs(): string[] | undefined {
-  if (!Bun.which("stty", { PATH: process.env.PATH })) {
-    return undefined;
-  }
-
-  return process.platform === "darwin" || process.platform === "freebsd"
-    ? ["-f", "/dev/tty"]
-    : ["-F", "/dev/tty"];
-}
-
-function runStty(args: string[]): Bun.SyncSubprocess | undefined {
-  return Bun.spawnSync({
-    cmd: ["stty", ...args],
-    env: process.env,
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-}
-
-function readProcessText(result: Bun.SyncSubprocess): string {
-  const decoder = new TextDecoder();
-  return `${decoder.decode(result.stdout)}${decoder.decode(result.stderr)}`.trim();
-}
-
-function addProcessSignalListener(signal: TuiExitSignal, listener: () => void): () => void {
-  process.on(signal, listener);
-  return () => {
-    process.off(signal, listener);
-  };
-}
-
-function setProcessExitCode(code: number): void {
-  process.exitCode = code;
-}
-
-function getSignalExitCode(signal: TuiExitSignal): number {
-  return signal === "SIGINT" ? 130 : 143;
 }
