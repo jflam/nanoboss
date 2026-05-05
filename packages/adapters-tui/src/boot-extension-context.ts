@@ -25,6 +25,7 @@ import {
   unregisterPanelRenderer as defaultUnregisterPanelRenderer,
   type PanelRenderer,
 } from "./panel-renderers.ts";
+import { createTuiExtensionContributionRegistrations } from "./boot-extension-contributions.ts";
 import type { NanobossTuiTheme } from "./theme.ts";
 
 export type TuiExtensionBootLogLevel = "info" | "warning" | "error";
@@ -79,17 +80,6 @@ export function createTuiExtensionContextFactory(
 
   return ({ metadata, scope }) => {
     const extensionName = metadata.name;
-    const namespace = (id: string) => `${extensionName}/${id}`;
-
-    const getCounts = (): TuiExtensionContributionCounts | undefined => {
-      if (!contributionCounts) return undefined;
-      let current = contributionCounts.get(extensionName);
-      if (!current) {
-        current = { bindings: 0, chromeContributions: 0, activityBarSegments: 0, panelRenderers: 0 };
-        contributionCounts.set(extensionName, current);
-      }
-      return current;
-    };
 
     const logger: TuiExtensionLogger = {
       info: (text) => { log("info", `[${extensionName}] ${text}`); },
@@ -102,34 +92,19 @@ export function createTuiExtensionContextFactory(
       scope,
       theme,
       log: logger,
-      registerKeyBinding(binding) {
-        registerBinding({ ...binding, id: namespace(binding.id) });
-        const counts = getCounts();
-        if (counts) counts.bindings += 1;
-      },
-      registerChromeContribution(contribution) {
-        registerChrome({ ...contribution, id: namespace(contribution.id) });
-        const counts = getCounts();
-        if (counts) counts.chromeContributions += 1;
-      },
-      registerActivityBarSegment(segment) {
-        registerSegment({ ...segment, id: namespace(segment.id) });
-        const counts = getCounts();
-        if (counts) counts.activityBarSegments += 1;
-      },
-      registerPanelRenderer(renderer) {
-        // Panel rendererIds are NOT namespaced by extension name because they
-        // are the public contract a procedure targets via ui.panel().
-        if (getRenderer(renderer.rendererId)) {
-          logger.warning(
-            `panel renderer "${renderer.rendererId}" shadows a previously-registered renderer`,
-          );
-          unregisterRenderer(renderer.rendererId);
-        }
-        registerRenderer(renderer);
-        const counts = getCounts();
-        if (counts) counts.panelRenderers += 1;
-      },
+      ...createTuiExtensionContributionRegistrations({
+        extensionName,
+        logger,
+        adapters: {
+          registerBinding,
+          registerChrome,
+          registerSegment,
+          registerRenderer,
+          getRenderer,
+          unregisterRenderer,
+        },
+        contributionCounts,
+      }),
     };
     return context;
   };
