@@ -236,7 +236,9 @@ are:
 - `views-turns.ts`: transcript turn component lifecycle wrapper
 - `views-tool-transcript.ts`: transcript tool-card entry component lifecycle
   wrapper
-- `views-transcript.ts`: transcript item composition and entry dispatch
+- `views-transcript-entries.ts`: transcript item indexing and entry component
+  dispatch
+- `views-transcript.ts`: core transcript chrome component host
 - `components/tool-card-expanded.ts`: expanded tool-card payload
   normalization helpers
 - `components/tool-card-diff.ts`: tool-card diff detection and line styling
@@ -280,8 +282,8 @@ of growing `reducer.ts`, `app.ts`, or `controller.ts` further.
 
 Measured during the 2026-05 TUI adapter review:
 
-- source files: 152
-- source lines: 10,347
+- source files: 153
+- source lines: 10,362
 - largest file: `src/controller.ts` at 315 lines
 - workspace package dependencies: 9
 - runtime value exports: 46 -> 12
@@ -360,6 +362,8 @@ Measured during the 2026-05 TUI adapter review:
     transcript turn component wrapper
   - split transcript tool-card entry component lifecycle out of transcript
     item composition
+  - split transcript item indexing and entry component dispatch out of the
+    transcript chrome host
   - split chrome contribution mounting and gated stateful-child registration
     out of the TUI view shell
   - split transcript procedure-panel rendering and replay fallback helpers out
