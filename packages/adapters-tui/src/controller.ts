@@ -33,8 +33,8 @@ import {
   openModelPicker as openModelPickerInternal,
 } from "./controller-model-selection.ts";
 import {
+  createAndApplyControllerSession,
   connectControllerSession,
-  createControllerSession,
 } from "./controller-session.ts";
 import {
   cancelActiveRun as cancelActiveRunInternal,
@@ -381,34 +381,15 @@ export class NanobossTuiController {
   }
 
   private async createNewSession(): Promise<void> {
-    this.dispatch({ type: "local_status", text: "[session] creating new session…" });
-
-    try {
-      const session = await createControllerSession({
-        deps: this.deps,
-        serverUrl: this.params.serverUrl,
-        cwd: this.cwd,
-        simplify2AutoApprove: this.state.simplify2AutoApprove,
-        defaultAgentSelection: this.state.defaultAgentSelection,
-      });
-      await this.applySession(session);
-      // applySession dispatches session_ready which resets procedurePanels,
-      // so the confirmation card is emitted *after* the reset to survive.
-      this.showLocalCard({
-        key: "local:session",
-        title: "Session",
-        markdown: `Started new session \`${session.sessionId}\`.`,
-        severity: "info",
-      });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      this.showLocalCard({
-        key: "local:session",
-        title: "Session",
-        markdown: `Failed to create new session: ${message}`,
-        severity: "error",
-      });
-    }
+    await createAndApplyControllerSession({
+      deps: this.deps,
+      serverUrl: this.params.serverUrl,
+      cwd: this.cwd,
+      state: this.state,
+      dispatch: (action) => this.dispatch(action),
+      applySession: async (session) => await this.applySession(session),
+      showLocalCard: (opts) => this.showLocalCard(opts),
+    });
   }
 
   private async openModelPicker(): Promise<void> {
