@@ -5,13 +5,13 @@ import {
   getFormContinuation,
   type FrontendContinuationWithFormId,
 } from "./app-continuation-form.ts";
+import { renderContinuationFormComponent } from "./app-continuation-renderer.ts";
 import type {
   ControllerLike,
   EditorLike,
   TuiLike,
   ViewLike,
 } from "./app-types.ts";
-import { getFormRenderer, type FormRenderContext } from "./form-renderers.ts";
 import type { UiState } from "./state.ts";
 import type { NanobossTuiTheme } from "./theme.ts";
 
@@ -79,30 +79,9 @@ export class AppContinuationComposer {
     continuation: FrontendContinuationWithFormId,
     signature: string,
   ): void {
-    const renderer = getFormRenderer(continuation.formId);
-    if (!renderer) {
-      // Unknown formId: dismiss the inline composer so the user can
-      // still type a free-form reply instead of crashing the TUI.
-      this.dismissedSimplify2ContinuationSignature = signature;
-      return;
-    }
-
-    if (!renderer.schema.validate(continuation.formPayload)) {
-      // Payload failed typia validation. Treat as unknown/dismissed
-      // rather than crashing the TUI; the underlying continuation is
-      // still pending and the user can type a reply in the default
-      // composer.
-      this.dismissedSimplify2ContinuationSignature = signature;
-      return;
-    }
-
-    const state = this.deps.getState();
-    this.inlineComposerMode = "simplify2";
-    this.openSimplify2ContinuationSignature = signature;
-
-    const ctx: FormRenderContext<unknown> = {
-      payload: continuation.formPayload,
-      state,
+    const component = renderContinuationFormComponent({
+      continuation,
+      state: this.deps.getState(),
       theme: this.deps.theme,
       editor: {
         setText: (text: string) => {
@@ -116,9 +95,14 @@ export class AppContinuationComposer {
       cancel: () => {
         this.handleFormCancel();
       },
-    };
+    });
+    if (!component) {
+      this.dismissedSimplify2ContinuationSignature = signature;
+      return;
+    }
 
-    const component = renderer.render(ctx);
+    this.inlineComposerMode = "simplify2";
+    this.openSimplify2ContinuationSignature = signature;
     this.deps.view.showComposer(component);
     this.deps.tui.setFocus(component);
     this.deps.requestRender(true);

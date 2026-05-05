@@ -86,6 +86,8 @@ are:
   lifecycle helpers
 - `app-continuation-form.ts`: app-level continuation form extraction and
   signature helpers
+- `app-continuation-renderer.ts`: app-level continuation form renderer lookup,
+  validation, and render-context helper
 - `app-editor-handlers.ts`: app-level editor submit/change handler wiring
 - `app-input-listener.ts`: app-level terminal input listener and keybinding
   dispatch wiring
@@ -219,8 +221,8 @@ of growing `reducer.ts`, `app.ts`, or `controller.ts` further.
 
 Measured during the 2026-05 TUI adapter review:
 
-- source files: 118
-- source lines: 9,501
+- source files: 119
+- source lines: 9,522
 - largest file: `src/controller.ts` at 355 lines
 - workspace package dependencies: 9
 - runtime value exports: 46 -> 12
@@ -283,6 +285,8 @@ Measured during the 2026-05 TUI adapter review:
     the TUI app
   - split app-level inline continuation composer lifecycle helpers out of the
     TUI app
+  - split app-level continuation form renderer lookup and validation out of
+    inline continuation composer lifecycle
   - split app-level editor submit/change handler wiring out of the TUI app
   - split app-level terminal input listener and keybinding dispatch wiring out
     of the TUI app
