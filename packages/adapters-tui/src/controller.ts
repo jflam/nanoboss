@@ -1,9 +1,6 @@
 import {
   cancelSessionContinuation,
   cancelSessionRun,
-  createHttpSession,
-  ensureMatchingHttpServer,
-  resumeHttpSession,
   setSessionAutoApprove,
   sendSessionPrompt,
   startSessionEventStream,
@@ -20,7 +17,6 @@ import {
   promptInputDisplayText,
 } from "@nanoboss/procedure-sdk";
 
-import { getBuildFreshnessNotice } from "./build-freshness.ts";
 import { buildModelCommand } from "./model-command.ts";
 import {
   isExitRequest,
@@ -50,6 +46,11 @@ import {
   validateInlineModelSelection as validateInlineModelSelectionInternal,
   type ControllerModelSelectionDeps,
 } from "./controller-model-selection.ts";
+import {
+  connectControllerSession,
+  createControllerSession,
+  type ControllerSessionDeps,
+} from "./controller-session.ts";
 
 import type { TuiExtensionStatus } from "@nanoboss/tui-extension-catalog";
 
@@ -71,10 +72,7 @@ export interface NanobossTuiControllerParams {
   simplify2AutoApprove?: boolean;
 }
 
-export interface NanobossTuiControllerDeps extends ControllerModelSelectionDeps {
-  ensureMatchingHttpServer?: typeof ensureMatchingHttpServer;
-  createHttpSession?: typeof createHttpSession;
-  resumeHttpSession?: typeof resumeHttpSession;
+export interface NanobossTuiControllerDeps extends ControllerModelSelectionDeps, ControllerSessionDeps {
   setSessionAutoApprove?: typeof setSessionAutoApprove;
   sendSessionPrompt?: typeof sendSessionPrompt;
   cancelSessionRun?: typeof cancelSessionRun;
@@ -133,27 +131,16 @@ export class NanobossTuiController {
 
   async run(): Promise<string | undefined> {
     try {
-      const buildFreshnessNotice = getBuildFreshnessNotice(this.cwd);
-
-      await (this.deps.ensureMatchingHttpServer ?? ensureMatchingHttpServer)(this.params.serverUrl, {
+      const { session, buildFreshnessNotice } = await connectControllerSession({
+        deps: this.deps,
+        serverUrl: this.params.serverUrl,
         cwd: this.cwd,
+        sessionId: this.params.sessionId,
+        simplify2AutoApprove: this.params.simplify2AutoApprove,
         onStatus: (text) => {
           this.dispatch({ type: "local_status", text });
         },
       });
-
-      const session = this.params.sessionId
-        ? await (this.deps.resumeHttpSession ?? resumeHttpSession)(
-          this.params.serverUrl,
-          this.params.sessionId,
-          this.cwd,
-          this.params.simplify2AutoApprove,
-        )
-        : await (this.deps.createHttpSession ?? createHttpSession)(
-          this.params.serverUrl,
-          this.cwd,
-          this.params.simplify2AutoApprove,
-        );
       await this.applySession(session);
       // Cards are emitted *after* applySession because session_ready
       // resets procedurePanels as part of initial-state derivation.
@@ -533,12 +520,13 @@ export class NanobossTuiController {
     this.dispatch({ type: "local_status", text: "[session] creating new session…" });
 
     try {
-      const session = await (this.deps.createHttpSession ?? createHttpSession)(
-        this.params.serverUrl,
-        this.cwd,
-        this.state.simplify2AutoApprove,
-        this.state.defaultAgentSelection,
-      );
+      const session = await createControllerSession({
+        deps: this.deps,
+        serverUrl: this.params.serverUrl,
+        cwd: this.cwd,
+        simplify2AutoApprove: this.state.simplify2AutoApprove,
+        defaultAgentSelection: this.state.defaultAgentSelection,
+      });
       await this.applySession(session);
       // applySession dispatches session_ready which resets procedurePanels,
       // so the confirmation card is emitted *after* the reset to survive.

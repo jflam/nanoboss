@@ -97,6 +97,7 @@ are:
   `/extensions` card formatting helpers
 - `controller-model-selection.ts`: controller-owned model validation and
   default persistence helpers
+- `controller-session.ts`: controller-owned HTTP session connect/create helpers
 - `views.ts`: transcript, chrome, and panel composition
 - `theme.ts`: adapter theme construction
 
@@ -119,9 +120,9 @@ of growing `reducer.ts`, `app.ts`, or `controller.ts` further.
 
 Measured during the 2026-05 TUI adapter review:
 
-- source files: 61
-- source lines: 8,206
-- largest file: `src/controller.ts` at 665 lines
+- source files: 62
+- source lines: 8,262
+- largest file: `src/controller.ts` at 653 lines
 - workspace package dependencies: 9
 - runtime value exports: 46 -> 12
 - public wildcard exports: 8 -> 0
@@ -161,6 +162,8 @@ Measured during the 2026-05 TUI adapter review:
     helpers out of the TUI controller
   - split controller-owned model validation and default persistence helpers
     out of the TUI controller
+  - split controller-owned HTTP session connect/create helpers out of the TUI
+    controller
   - split the slash-aware app autocomplete provider out of the TUI app
   - split app-level inline model picker and persistence confirmation flow out
     of the TUI app
