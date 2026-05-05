@@ -7,17 +7,13 @@ import {
   clearComposerState,
   type ComposerState,
   createComposerState,
-  reconcileComposerState,
 } from "./composer.ts";
-import {
-  buildPromptInputForSubmit,
-  cloneComposerState,
-} from "./app-composer.ts";
 import {
   handleCtrlVImagePaste as handleCtrlVImagePasteInternal,
   handleImageTokenDeletion as handleImageTokenDeletionInternal,
 } from "./app-clipboard.ts";
 import { AppContinuationComposer } from "./app-continuation-composer.ts";
+import { bindAppEditorHandlers } from "./app-editor-handlers.ts";
 
 import {
   NanobossTuiController,
@@ -148,24 +144,19 @@ export class NanobossTuiApp {
       clearInterval: deps.clearInterval ?? globalThis.clearInterval,
     });
 
-    this.editor.onSubmit = (text) => {
-      const promptInput = buildPromptInputForSubmit(
-        this.composerState,
-        text,
-        this.clearedComposerStateSnapshot,
-      );
-      this.clearedComposerStateSnapshot = undefined;
-      void this.controller.handleSubmit(promptInput);
-    };
-    this.editor.onChange = (text) => {
-      if (text.length === 0 && this.composerState.imagesByToken.size > 0) {
-        this.clearedComposerStateSnapshot = cloneComposerState(this.composerState);
-      } else if (text.length > 0) {
+    bindAppEditorHandlers({
+      editor: this.editor,
+      controller: this.controller,
+      composerState: this.composerState,
+      getClearedComposerStateSnapshot: () => this.clearedComposerStateSnapshot,
+      setClearedComposerStateSnapshot: (snapshot) => {
+        this.clearedComposerStateSnapshot = snapshot;
+      },
+      clearClearedComposerStateSnapshot: () => {
         this.clearedComposerStateSnapshot = undefined;
-      }
-      reconcileComposerState(this.composerState, text);
-      this.updateEditorSubmitState();
-    };
+      },
+      updateEditorSubmitState: () => this.updateEditorSubmitState(),
+    });
 
     this.tui.addInputListener((data) => {
       if (isKeyRelease(data)) {
