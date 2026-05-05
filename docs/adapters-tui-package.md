@@ -186,6 +186,8 @@ are:
   normalization helpers
 - `components/tool-card-diff.ts`: tool-card diff detection and line styling
   helpers
+- `components/tool-card-code-preview.ts`: tool-card code preview rendering,
+  diff fallback, and syntax highlighting helper
 - `components/tool-card-code-context.ts`: tool-card code language and
   highlighting context inference
 - `components/tool-card-header.ts`: tool-card header, canonical name, and
@@ -221,8 +223,8 @@ of growing `reducer.ts`, `app.ts`, or `controller.ts` further.
 
 Measured during the 2026-05 TUI adapter review:
 
-- source files: 119
-- source lines: 9,522
+- source files: 120
+- source lines: 9,521
 - largest file: `src/controller.ts` at 355 lines
 - workspace package dependencies: 9
 - runtime value exports: 46 -> 12
@@ -353,6 +355,8 @@ Measured during the 2026-05 TUI adapter review:
   - split app-to-controller dependency adapter wiring out of the TUI app
     constructor
   - split tool-card code language and highlighting context inference out of
+    shared tool-card formatting
+  - split tool-card code preview rendering and syntax highlighting out of
     shared tool-card formatting
   - split transcript turn rendering components out of the transcript item
     composition shell

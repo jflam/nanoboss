@@ -1,7 +1,7 @@
 import type { UiToolCall } from "../../state.ts";
 import type { NanobossTuiTheme } from "../../theme.ts";
+import { formatCodePreviewBody } from "../tool-card-code-preview.ts";
 import {
-  formatCodePreviewBody,
   formatErrorLines,
   formatExpandedToolHeader,
   formatToolDurationLine,
