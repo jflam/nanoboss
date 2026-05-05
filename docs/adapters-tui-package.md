@@ -145,7 +145,8 @@ are:
 - `views-panels.ts`: non-transcript ui_panel chrome host components
 - `views-procedure-panels.ts`: transcript procedure-panel rendering and
   replay fallback helpers
-- `views-transcript.ts`: transcript turn, tool, and procedure-panel rendering
+- `views-turns.ts`: transcript turn rendering components
+- `views-transcript.ts`: transcript item composition and tool entry rendering
   components
 - `components/tool-card-expanded.ts`: expanded tool-card payload
   normalization helpers
@@ -178,8 +179,8 @@ of growing `reducer.ts`, `app.ts`, or `controller.ts` further.
 
 Measured during the 2026-05 TUI adapter review:
 
-- source files: 94
-- source lines: 9,196
+- source files: 95
+- source lines: 9,200
 - largest file: `src/controller.ts` at 355 lines
 - workspace package dependencies: 9
 - runtime value exports: 46 -> 12
@@ -285,6 +286,8 @@ Measured during the 2026-05 TUI adapter review:
     constructor
   - split tool-card code language and highlighting context inference out of
     shared tool-card formatting
+  - split transcript turn rendering components out of the transcript item
+    composition shell
 
 The useful outcome of this pass is the entrypoint baseline: future TUI adapter
 exports should be deliberate additions, not accidental leakage from broad
