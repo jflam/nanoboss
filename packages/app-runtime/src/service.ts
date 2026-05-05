@@ -23,7 +23,6 @@ import {
 import { resolveDownstreamAgentConfig } from "@nanoboss/procedure-engine";
 
 import { buildMcpProcedureDispatchPrompt } from "./agent-runtime-instructions.ts";
-import { materializeProcedureMemoryCard } from "./memory-cards.ts";
 import {
   SessionEventLog,
   toRuntimeCommands,
@@ -46,10 +45,11 @@ import {
   waitForProcedureDispatchResult,
 } from "./procedure-dispatch-manager.ts";
 import {
-  buildRunCancelledEvent,
-  buildRunCompletedEvent,
-  buildRunPausedEvent,
-} from "./run-events.ts";
+  publishRunCancelled,
+  publishRunCompleted,
+  publishRunFailed,
+  publishRunPaused,
+} from "./run-publication.ts";
 import { ProcedureRegistry } from "@nanoboss/procedure-catalog";
 import { shouldLoadDiskCommands } from "./runtime-mode.ts";
 import {
@@ -338,7 +338,7 @@ export class NanobossService {
     }
 
     const cancellationMessage = defaultCancellationMessage("soft_stop");
-    this.publishRunCancelled({
+    publishRunCancelled({
       session,
       sessionId,
       runId: pending.run.runId,
@@ -548,149 +548,6 @@ export class NanobossService {
     persistSessionState(session, { preserveDefaultAcpSessionId: false });
   }
 
-  private emitDisplayIfNeeded(
-    emitter: CompositeSessionUpdateEmitter,
-    display: string | undefined,
-  ): void {
-    if (!display || emitter.hasStreamedText(display)) {
-      return;
-    }
-
-    emitter.emit({
-      sessionUpdate: "agent_message_chunk",
-      content: {
-        type: "text",
-        text: display,
-      },
-    });
-  }
-
-  private publishRunCompleted(params: {
-    session: SessionState;
-    sessionId: string;
-    runId: string;
-    procedure: string;
-    result: RunResult;
-    tokenUsage?: AgentTokenUsage;
-    emitter: CompositeSessionUpdateEmitter;
-    markRunActivity: () => void;
-  }): void {
-    this.applyDefaultAgentSelection(params.session, params.result.defaultAgentSelection);
-    this.emitDisplayIfNeeded(params.emitter, params.result.display);
-    publishStoredMemoryCard(params.session, params.sessionId, params.runId, params.result.run);
-    if (params.tokenUsage) {
-      params.session.events.publish(params.sessionId, {
-        type: "token_usage",
-        runId: params.runId,
-        usage: params.tokenUsage,
-        sourceUpdate: "run_completed",
-      });
-    }
-    params.session.events.publish(
-      params.sessionId,
-      buildRunCompletedEvent({
-        runId: params.runId,
-        procedure: params.procedure,
-        result: params.result,
-        tokenUsage: params.tokenUsage,
-      }),
-    );
-    params.markRunActivity();
-  }
-
-  private publishRunPaused(params: {
-    session: SessionState;
-    sessionId: string;
-    runId: string;
-    procedure: string;
-    result: RunResult;
-    tokenUsage?: AgentTokenUsage;
-    emitter: CompositeSessionUpdateEmitter;
-    markRunActivity: () => void;
-  }): void {
-    this.applyDefaultAgentSelection(params.session, params.result.defaultAgentSelection);
-    this.emitDisplayIfNeeded(
-      params.emitter,
-      params.result.display ?? params.result.pause?.question,
-    );
-    publishStoredMemoryCard(params.session, params.sessionId, params.runId, params.result.run);
-    if (params.tokenUsage) {
-      params.session.events.publish(params.sessionId, {
-        type: "token_usage",
-        runId: params.runId,
-        usage: params.tokenUsage,
-        sourceUpdate: "run_paused",
-      });
-    }
-    params.session.events.publish(
-      params.sessionId,
-      buildRunPausedEvent({
-        runId: params.runId,
-        procedure: params.procedure,
-        result: params.result,
-        tokenUsage: params.tokenUsage,
-      }),
-    );
-    params.markRunActivity();
-  }
-
-  private publishRunFailed(params: {
-    session: SessionState;
-    sessionId: string;
-    runId: string;
-    procedure: string;
-    error: string;
-    markRunActivity: () => void;
-    run?: RunRef;
-  }): void {
-    // Always emit an error procedure_panel alongside run_failed so the
-    // message survives any tool-card filter state on the client.
-    params.session.events.publish(params.sessionId, {
-      type: "procedure_panel",
-      runId: params.runId,
-      procedure: params.procedure,
-      panelId: `panel-${params.runId}-failed`,
-      rendererId: "nb/error@1",
-      payload: {
-        procedure: params.procedure,
-        message: params.error,
-      },
-      severity: "error",
-      dismissible: false,
-    });
-
-    params.session.events.publish(params.sessionId, {
-      type: "run_failed",
-      runId: params.runId,
-      procedure: params.procedure,
-      completedAt: new Date().toISOString(),
-      error: params.error,
-      run: params.run,
-    });
-    params.markRunActivity();
-  }
-
-  private publishRunCancelled(params: {
-    session: SessionState;
-    sessionId: string;
-    runId: string;
-    procedure: string;
-    message: string;
-    markRunActivity: () => void;
-    run?: RunRef;
-  }): void {
-    params.session.events.publish(
-      params.sessionId,
-      buildRunCancelledEvent({
-        runId: params.runId,
-        procedure: params.procedure,
-        message: params.message,
-        run: params.run,
-      }),
-    );
-    params.markRunActivity();
-  }
-
   async promptSession(
     sessionId: string,
     promptText: string | PromptInput,
@@ -779,7 +636,7 @@ export class NanobossService {
           },
         });
         await emitter.flush();
-        this.publishRunFailed({
+        publishRunFailed({
           session,
           sessionId,
           runId,
@@ -806,7 +663,7 @@ export class NanobossService {
         });
         await emitter.flush();
 
-        this.publishRunFailed({
+        publishRunFailed({
           session,
           sessionId,
           runId,
@@ -830,7 +687,7 @@ export class NanobossService {
         });
         await emitter.flush();
 
-        this.publishRunFailed({
+        publishRunFailed({
           session,
           sessionId,
           runId,
@@ -892,7 +749,7 @@ export class NanobossService {
             session,
             buildPendingContinuation(procedure.name, result),
           );
-          this.publishRunPaused({
+          publishRunPaused({
             session,
             sessionId,
             runId,
@@ -901,6 +758,7 @@ export class NanobossService {
             tokenUsage: result.tokenUsage,
             emitter,
             markRunActivity,
+            applyDefaultAgentSelection: (selection) => this.applyDefaultAgentSelection(session, selection),
           });
         } else {
           if (continuation) {
@@ -908,7 +766,7 @@ export class NanobossService {
           } else if (procedure.name === DISMISS_CONTINUATION_COMMAND_NAME) {
             this.setPendingContinuation(sessionId, session, undefined);
           }
-          this.publishRunCompleted({
+          publishRunCompleted({
             session,
             sessionId,
             runId,
@@ -917,12 +775,13 @@ export class NanobossService {
             tokenUsage: result.tokenUsage,
             emitter,
             markRunActivity,
+            applyDefaultAgentSelection: (selection) => this.applyDefaultAgentSelection(session, selection),
           });
         }
         persistedTopLevelRun = result.run;
       } catch (error) {
         if (error instanceof ProcedureExecutionError) {
-          this.publishRunFailed({
+          publishRunFailed({
             session,
             sessionId,
             runId,
@@ -932,7 +791,7 @@ export class NanobossService {
             markRunActivity,
           });
         } else if (error instanceof ProcedureCancelledError) {
-          this.publishRunCancelled({
+          publishRunCancelled({
             session,
             sessionId,
             runId,
@@ -962,7 +821,7 @@ export class NanobossService {
       }
 
       if (cancelled && !(error instanceof ProcedureCancelledError)) {
-        this.publishRunCancelled({
+        publishRunCancelled({
           session,
           sessionId,
           runId,
@@ -971,7 +830,7 @@ export class NanobossService {
           markRunActivity,
         });
       } else if (!cancelled && !(error instanceof ProcedureExecutionError)) {
-        this.publishRunFailed({
+        publishRunFailed({
           session,
           sessionId,
           runId,
@@ -1010,28 +869,6 @@ export class NanobossService {
 
     return { stopReason: "end_turn", runId };
   }
-}
-
-function publishStoredMemoryCard(
-  session: SessionState,
-  sessionId: string,
-  runId: string,
-  runRef?: RunRef,
-): void {
-  if (!runRef) {
-    return;
-  }
-
-  const storedMemoryCard = materializeProcedureMemoryCard(session.store, runRef);
-  if (!storedMemoryCard) {
-    return;
-  }
-
-  session.events.publish(sessionId, {
-    type: "memory_card_stored",
-    runId,
-    card: storedMemoryCard,
-  });
 }
 
 function mapAvailableCommands(

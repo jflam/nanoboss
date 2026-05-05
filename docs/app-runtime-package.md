@@ -139,6 +139,9 @@ entrypoint APIs. Generic data helpers belong in `@nanoboss/procedure-sdk` or
   Active run heartbeat state.
 - `src/run-events.ts`
   Run terminal-event builders.
+- `src/run-publication.ts`
+  Terminal run publication, display fallback emission, and stored memory-card
+  events.
 - `src/runtime-prompt.ts`
   Prompt-input text prepending.
 - `src/runtime-mode.ts`
@@ -190,9 +193,9 @@ HTTP/frontend flow:
 
 Measured during the 2026-05 app-runtime review:
 
-- source files: 20
-- source lines: 4,032
-- largest file: `src/service.ts` at 1,044 lines
+- source files: 21
+- source lines: 4,051
+- largest file: `src/service.ts` at 881 lines
 - public barrel wildcard exports: reduced from 2 to 0
 - public app-runtime symbols: reduced from 58 to 57 by removing the accidental
   `UiApiImpl` value re-export
