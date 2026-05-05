@@ -148,6 +148,8 @@ are:
 - `build-freshness-rules.ts`: TUI build-freshness evaluation and git-status
   path filtering rules
 - `build-freshness.ts`: TUI build-freshness filesystem and git probing helper
+- `run-extensions.ts`: CLI TUI extension boot status buffering and replay
+- `run-signals.ts`: CLI TUI process signal handling helpers
 - `run-terminal.ts`: CLI terminal control-character and process signal helpers
 - `core-bindings.ts`: core keybinding registration manifest
 - `core-bindings-actions.ts`: core keybinding app/controller action
@@ -203,8 +205,8 @@ of growing `reducer.ts`, `app.ts`, or `controller.ts` further.
 
 Measured during the 2026-05 TUI adapter review:
 
-- source files: 109
-- source lines: 9,369
+- source files: 111
+- source lines: 9,438
 - largest file: `src/controller.ts` at 355 lines
 - workspace package dependencies: 9
 - runtime value exports: 46 -> 12
@@ -307,6 +309,8 @@ Measured during the 2026-05 TUI adapter review:
     central reducer
   - split CLI terminal control-character and signal helpers out of the TUI
     runner
+  - split CLI TUI extension boot status buffering and process signal handling
+    out of the TUI runner
   - split reducer-owned procedure-panel transcript state and turn-block
     helpers out of generic ui_panel handling
   - split core chrome component factories and line formatting helpers out of

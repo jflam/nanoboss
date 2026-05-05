@@ -3,6 +3,11 @@ import { startPrivateHttpServer } from "@nanoboss/adapters-http";
 import type { FrontendConnectionMode } from "./connection-mode.ts";
 import { bootExtensions, type BootExtensionsResult, type TuiExtensionBootLog } from "./boot-extensions.ts";
 import {
+  bootTuiExtensionsForRun,
+  flushTuiExtensionStatuses,
+} from "./run-extensions.ts";
+import { installTuiExitSignalHandlers } from "./run-signals.ts";
+import {
   addProcessSignalListener,
   getSignalExitCode,
   setProcessExitCode,
@@ -55,38 +60,21 @@ export interface RunTuiCliDeps {
   now?: () => number;
 }
 
-const CTRL_C_EXIT_WINDOW_MS = 500;
-
 export async function runTuiCli(params: RunTuiCliParams, deps: RunTuiCliDeps = {}): Promise<void> {
   let server: Awaited<ReturnType<typeof startPrivateHttpServer>> | undefined;
   let sessionId: string | undefined;
   let app: TuiAppRunner | undefined;
   let exitSignal: TuiExitSignal | undefined;
-  let lastSigintAt = Number.NEGATIVE_INFINITY;
   const restoreTerminalInput = await (deps.suspendReservedControlCharacters ?? suspendReservedControlCharacters)();
   const addSignalListener = deps.addSignalListener ?? addProcessSignalListener;
-  const removeSignalListeners = [
-    addSignalListener("SIGINT", () => {
-      const appHandled = app?.requestSigintExit?.();
-      if (appHandled) {
-        exitSignal ??= "SIGINT";
-        return;
-      }
-
-      const now = (deps.now ?? Date.now)();
-      if (now - lastSigintAt < CTRL_C_EXIT_WINDOW_MS) {
-        exitSignal ??= "SIGINT";
-        app?.requestExit?.();
-        return;
-      }
-
-      lastSigintAt = now;
-    }),
-    addSignalListener("SIGTERM", () => {
-      exitSignal ??= "SIGTERM";
-      app?.requestExit?.();
-    }),
-  ];
+  const removeSignalListeners = installTuiExitSignalHandlers({
+    addSignalListener,
+    getApp: () => app,
+    now: deps.now ?? Date.now,
+    onExitSignal: (signal) => {
+      exitSignal ??= signal;
+    },
+  });
 
   try {
     server = params.connectionMode === "private"
@@ -97,18 +85,12 @@ export async function runTuiCli(params: RunTuiCliParams, deps: RunTuiCliDeps = {
       throw new Error("nanoboss CLI expected a server URL or private server mode");
     }
 
+    const cwd = params.cwd ?? process.cwd();
     // Boot TUI extensions BEFORE constructing NanobossTuiApp so every
     // registry mutation happens before NanobossAppView is built. Messages
     // emitted by extension activation are buffered here and flushed through
     // the app's status-line pathway once the controller exists.
-    const pendingExtensionStatuses: string[] = [];
-    const bufferingLog: TuiExtensionBootLog = (level, text) => {
-      pendingExtensionStatuses.push(`[extension:${level}] ${text}`);
-    };
-    const cwd = params.cwd ?? process.cwd();
-    const bootResult = await (deps.bootExtensions ?? bootExtensions)(cwd, {
-      log: bufferingLog,
-    });
+    const extensionBoot = await bootTuiExtensionsForRun(cwd, deps.bootExtensions ?? bootExtensions);
 
     app = (deps.createApp ?? ((appParams) => new NanobossTuiApp(appParams)))({
       cwd: params.cwd,
@@ -116,22 +98,12 @@ export async function runTuiCli(params: RunTuiCliParams, deps: RunTuiCliDeps = {
       showToolCalls: params.showToolCalls,
       simplify2AutoApprove: params.simplify2AutoApprove,
       sessionId: params.sessionId,
-      listExtensionEntries: bootResult
-        ? () => bootResult.registry.listMetadata()
+      listExtensionEntries: extensionBoot.bootResult
+        ? () => extensionBoot.bootResult!.registry.listMetadata()
         : undefined,
     });
 
-    if (app.showStatus) {
-      for (const text of pendingExtensionStatuses) {
-        app.showStatus(text);
-      }
-      // When one or more extensions failed to activate, point the user at
-      // `/extensions` for per-extension detail. The aggregate line itself
-      // was already flushed above via the buffered log replay.
-      if (bootResult && bootResult.failedCount > 0) {
-        app.showStatus("[extensions] run /extensions for details");
-      }
-    }
+    flushTuiExtensionStatuses(app, extensionBoot);
 
     if (exitSignal) {
       app.requestExit?.();
