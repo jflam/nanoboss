@@ -1,8 +1,12 @@
 import type { FrontendEventEnvelope } from "@nanoboss/adapters-http";
+import type { PromptInput } from "@nanoboss/contracts";
 
-import type { UiPendingPrompt } from "./state.ts";
+import type { UiPendingPrompt, UiState } from "./state.ts";
+import type { UiAction } from "./reducer-actions.ts";
 
-export function getBusyLocalCommandLabel(trimmed: string): string | undefined {
+type Dispatch = (action: UiAction) => void;
+
+function getBusyLocalCommandLabel(trimmed: string): string | undefined {
   if (trimmed === "/new") {
     return "/new";
   }
@@ -32,10 +36,48 @@ export function formatPendingPromptClearStatus(count: number): string {
   return `[run] cleared ${count} pending prompt${count === 1 ? "" : "s"} after send failed`;
 }
 
-export function getLocalBusyInputStatus(statusLine: string | undefined): string {
+function getLocalBusyInputStatus(statusLine: string | undefined): string {
   if (statusLine?.startsWith("[model]")) {
     return "[model] wait for the current model update to finish before sending more input";
   }
 
   return "[status] wait for the current local task to finish before sending more input";
+}
+
+export async function handleBusyPromptInput(params: {
+  state: UiState;
+  trimmed: string;
+  text: string;
+  promptInput: PromptInput;
+  kind: UiPendingPrompt["kind"];
+  dispatch: Dispatch;
+  onAddHistory?: (text: string) => void;
+  onClearInput?: () => void;
+  enqueuePendingPrompt: (promptInput: PromptInput, kind: UiPendingPrompt["kind"]) => Promise<void>;
+}): Promise<boolean> {
+  if (!params.state.inputDisabled) {
+    return false;
+  }
+
+  if (params.state.inputDisabledReason === "local") {
+    params.dispatch({
+      type: "local_status",
+      text: getLocalBusyInputStatus(params.state.statusLine),
+    });
+    return true;
+  }
+
+  const blockedCommand = getBusyLocalCommandLabel(params.trimmed);
+  if (blockedCommand) {
+    params.dispatch({
+      type: "local_status",
+      text: `[run] wait for the current run to finish before using ${blockedCommand}`,
+    });
+    return true;
+  }
+
+  params.onAddHistory?.(params.text);
+  params.onClearInput?.();
+  await params.enqueuePendingPrompt(params.promptInput, params.kind);
+  return true;
 }

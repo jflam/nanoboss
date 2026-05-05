@@ -25,8 +25,7 @@ import { reduceUiState } from "./reducer.ts";
 import type { UiAction } from "./reducer-actions.ts";
 import { createInitialUiState, type UiPendingPrompt, type UiState } from "./state.ts";
 import {
-  getBusyLocalCommandLabel,
-  getLocalBusyInputStatus,
+  handleBusyPromptInput,
 } from "./controller-input-flow.ts";
 import {
   buildExtensionsLocalCard,
@@ -163,27 +162,9 @@ export class NanobossTuiController {
     }
 
     if (this.state.inputDisabled) {
-      if (this.state.inputDisabledReason === "local") {
-        this.dispatch({
-          type: "local_status",
-          text: getLocalBusyInputStatus(this.state.statusLine),
-        });
+      if (await this.handleBusyPromptInput(promptInput, text, trimmed, "steering")) {
         return;
       }
-
-      const blockedCommand = getBusyLocalCommandLabel(trimmed);
-      if (blockedCommand) {
-        this.dispatch({
-          type: "local_status",
-          text: `[run] wait for the current run to finish before using ${blockedCommand}`,
-        });
-        return;
-      }
-
-      this.deps.onAddHistory?.(text);
-      this.deps.onClearInput?.();
-      await this.enqueuePendingPrompt(promptInput, "steering");
-      return;
     }
 
     if (isNewSessionRequest(trimmed)) {
@@ -225,26 +206,7 @@ export class NanobossTuiController {
       return;
     }
 
-    if (this.state.inputDisabledReason === "local") {
-      this.dispatch({
-        type: "local_status",
-        text: getLocalBusyInputStatus(this.state.statusLine),
-      });
-      return;
-    }
-
-    const blockedCommand = getBusyLocalCommandLabel(trimmed);
-    if (blockedCommand) {
-      this.dispatch({
-        type: "local_status",
-        text: `[run] wait for the current run to finish before using ${blockedCommand}`,
-      });
-      return;
-    }
-
-    this.deps.onAddHistory?.(text);
-    this.deps.onClearInput?.();
-    await this.enqueuePendingPrompt(promptInput, "queued");
+    await this.handleBusyPromptInput(promptInput, text, trimmed, "queued");
   }
 
   async cancelActiveRun(): Promise<void> {
@@ -405,6 +367,26 @@ export class NanobossTuiController {
     if (kind === "steering") {
       await this.cancelActiveRun();
     }
+  }
+
+  private async handleBusyPromptInput(
+    promptInput: PromptInput,
+    text: string,
+    trimmed: string,
+    kind: UiPendingPrompt["kind"],
+  ): Promise<boolean> {
+    return await handleBusyPromptInput({
+      state: this.state,
+      trimmed,
+      text,
+      promptInput,
+      kind,
+      dispatch: (action) => this.dispatch(action),
+      onAddHistory: this.deps.onAddHistory,
+      onClearInput: this.deps.onClearInput,
+      enqueuePendingPrompt: async (nextPromptInput, nextKind) =>
+        await this.enqueuePendingPrompt(nextPromptInput, nextKind),
+    });
   }
 
   private async maybeFlushPendingPrompt(event: FrontendEventEnvelope): Promise<void> {
