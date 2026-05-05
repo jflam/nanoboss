@@ -58,8 +58,8 @@ import { startPromptRun } from "./prompt-run-lifecycle.ts";
 import {
   mapRuntimeCommands,
   publishSessionCommands,
-  refreshSessionCommands,
 } from "./runtime-commands.ts";
+import { finishPromptRun } from "./prompt-run-finalization.ts";
 import {
   buildSessionDescriptor,
   createSessionState,
@@ -569,29 +569,18 @@ export class NanobossService {
         });
       }
     } finally {
-      heartbeat.stop();
-      const availableCommands = refreshSessionCommands({
+      await finishPromptRun({
         sessionId,
         session,
         registry: this.registry,
+        delegate,
+        emitter,
+        heartbeat,
+        replayCapture,
+        persistedTopLevelRun,
+        prompt: displayPrompt,
+        activeRun,
       });
-      delegate?.emit({
-        sessionUpdate: "available_commands_update",
-        availableCommands,
-      });
-      await emitter.flush();
-      replayCapture.stop();
-      if (persistedTopLevelRun && replayCapture.replayEvents.length > 0) {
-        session.store.patchRun(persistedTopLevelRun, {
-          output: {
-            replayEvents: replayCapture.replayEvents,
-          },
-        });
-      }
-      persistSessionState(session, { prompt: displayPrompt });
-      if (session.activeRun === activeRun) {
-        session.activeRun = undefined;
-      }
     }
 
     return { stopReason: "end_turn", runId };

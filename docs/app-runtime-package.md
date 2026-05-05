@@ -121,6 +121,9 @@ entrypoint APIs. Generic data helpers belong in `@nanoboss/procedure-sdk` or
 - `src/prompt-run-lifecycle.ts`
   Prompt run startup state, heartbeat, replay capture, and composite emitter
   wiring.
+- `src/prompt-run-finalization.ts`
+  Prompt run command refresh, replay persistence, session persistence, and
+  active-run cleanup.
 - `src/composite-session-update-emitter.ts`
   Session update fanout into runtime events, token snapshots, and delegate
   emitters.
@@ -205,9 +208,9 @@ HTTP/frontend flow:
 
 Measured during the 2026-05 app-runtime review:
 
-- source files: 25
-- source lines: 3,601
-- largest file: `src/service.ts` at 599 lines
+- source files: 26
+- source lines: 3,635
+- largest file: `src/service.ts` at 588 lines
 - public barrel wildcard exports: reduced from 2 to 0
 - public app-runtime symbols: reduced from 58 to 57 by removing the accidental
   `UiApiImpl` value re-export
@@ -232,6 +235,8 @@ Measured during the 2026-05 app-runtime review:
   update publication out of `NanobossService`
 - code simplification applied: split prompt-run startup lifecycle wiring out of
   `NanobossService`
+- code simplification applied: split prompt-run finalization and replay
+  persistence out of `NanobossService`
 
 The small surface reduction matters more than the raw symbol count: the package
 now exports runtime abstractions intentionally instead of forwarding every
