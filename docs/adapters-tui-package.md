@@ -113,6 +113,8 @@ are:
   transitions
 - `reducer-panel-cards.ts`: reducer-owned procedure-card and transcript card
   rendering helpers
+- `reducer-procedure-panel-turns.ts`: reducer-owned procedure-panel
+  active-turn block mutation helpers
 - `reducer-procedure-panels.ts`: reducer-owned procedure-panel transcript
   state and turn-block helpers
 - `reducer-panels.ts`: reducer-owned non-transcript ui_panel helpers
@@ -195,8 +197,8 @@ of growing `reducer.ts`, `app.ts`, or `controller.ts` further.
 
 Measured during the 2026-05 TUI adapter review:
 
-- source files: 105
-- source lines: 9,321
+- source files: 106
+- source lines: 9,329
 - largest file: `src/controller.ts` at 355 lines
 - workspace package dependencies: 9
 - runtime value exports: 46 -> 12
@@ -228,6 +230,8 @@ Measured during the 2026-05 TUI adapter review:
     central reducer
   - split reducer-owned procedure-card and transcript card rendering helpers
     out of the panel reducer
+  - split reducer-owned procedure-panel active-turn block mutation helpers
+    out of procedure-panel state transitions
   - split file-extension language inference out of the TUI theme constructor
   - split tool-card palette data and RGB styling helpers out of the TUI
     theme constructor
