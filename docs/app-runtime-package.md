@@ -92,15 +92,14 @@ about ACP update shapes and procedure UI event shapes, but it should emit plain
 runtime envelopes that adapters can translate without calling lower-level
 package internals.
 
-### 4. Prompt, memory, and tool presentation helpers
+### 4. Prompt, memory, and tool presentation internals
 
-- `prependPromptInputText(...)`
-- `collectUnsyncedProcedureMemoryCards(...)`
-- `materializeProcedureMemoryCard(...)`
-- `renderProcedureMemoryCardsSection(...)`
 - `buildTurnDisplay(...)`
 
-These helpers are runtime presentation policy, not procedure authoring API.
+These helpers are runtime presentation policy, not procedure authoring API. The
+prompt and memory-card helpers are source-level implementation seams used by
+default-agent policy and service memory synchronization; `buildTurnDisplay(...)`
+remains public because downstream adapters share its turn projection shape.
 They should stay small and deterministic. Tool-call preview summarizers and
 runtime-mode gates are source-level implementation seams, not package
 entrypoint APIs. Generic data helpers belong in `@nanoboss/procedure-sdk` or
@@ -191,8 +190,9 @@ Measured during the 2026-05 app-runtime review:
 - public barrel wildcard exports: reduced from 2 to 0
 - public app-runtime symbols: reduced from 58 to 57 by removing the accidental
   `UiApiImpl` value re-export
-- runtime value exports: 29 -> 20 by internalizing runtime-mode, tool-call
-  preview helper exports, and unused runtime-event guard aliases
+- runtime value exports: 29 -> 16 by internalizing runtime-mode, tool-call
+  preview helper exports, unused runtime-event guard aliases, and prompt/memory
+  presentation helpers
 
 The small surface reduction matters more than the raw symbol count: the package
 now exports runtime abstractions intentionally instead of forwarding every

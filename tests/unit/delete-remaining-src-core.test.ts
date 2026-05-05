@@ -6,7 +6,7 @@ const CANONICAL_IMPORT_EXPECTATIONS = [
   ["build.ts", 'from "@nanoboss/procedure-catalog"'],
   ["scripts/probe-acp-usage.ts", 'from "@nanoboss/procedure-engine"'],
   ["packages/procedure-engine/tests/config.test.ts", 'from "@nanoboss/procedure-engine"'],
-  ["packages/app-runtime/tests/memory-cards.test.ts", 'from "@nanoboss/app-runtime"'],
+  ["packages/app-runtime/tests/default-memory-bridge.test.ts", 'from "@nanoboss/app-runtime"'],
   ["packages/procedure-sdk/tests/runtime-banner.test.ts", 'from "@nanoboss/procedure-sdk"'],
   ["tests/unit/test-home-isolation.test.ts", 'from "@nanoboss/store"'],
   ["tests/unit/ui-cli.test.ts", 'from "@nanoboss/procedure-engine"'],

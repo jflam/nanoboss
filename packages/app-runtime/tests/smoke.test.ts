@@ -12,6 +12,10 @@ test("public entrypoint exports a smoke symbol", () => {
   expect("isTokenUsageEvent" in appRuntime).toBe(false);
   expect("isToolStartedEvent" in appRuntime).toBe(false);
   expect("isToolUpdatedEvent" in appRuntime).toBe(false);
+  expect("prependPromptInputText" in appRuntime).toBe(false);
+  expect("collectUnsyncedProcedureMemoryCards" in appRuntime).toBe(false);
+  expect("materializeProcedureMemoryCard" in appRuntime).toBe(false);
+  expect("renderProcedureMemoryCardsSection" in appRuntime).toBe(false);
 });
 
 test("public entrypoint does not leak procedure-engine implementation classes", () => {

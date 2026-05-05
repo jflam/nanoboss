@@ -10,9 +10,6 @@ import {
   summarizePromptInputForAcpLog,
 } from "@nanoboss/agent-acp";
 import {
-  prependPromptInputText,
-} from "@nanoboss/app-runtime";
-import {
   attachClipboardImage,
   buildPromptInputFromComposer,
   createComposerState,
@@ -82,17 +79,4 @@ describe("prompt input helpers", () => {
     expect(composer.imagesByToken.size).toBe(0);
   });
 
-  test("prepends runtime guidance through the app-runtime package surface", () => {
-    const prefixed = prependPromptInputText(normalizePromptInput("final question"), [
-      "Runtime guidance",
-      "User message:",
-    ]);
-
-    expect(prefixed.parts).toEqual([
-      {
-        type: "text",
-        text: "Runtime guidance\n\nUser message:\n\nfinal question",
-      },
-    ]);
-  });
 });

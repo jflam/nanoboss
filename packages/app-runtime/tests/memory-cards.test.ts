@@ -5,7 +5,7 @@ import { join } from "node:path";
 import {
   collectUnsyncedProcedureMemoryCards,
   renderProcedureMemoryCardsSection,
-} from "@nanoboss/app-runtime";
+} from "../src/memory-cards.ts";
 import { SessionStore } from "@nanoboss/store";
 
 const tempDirs: string[] = [];
