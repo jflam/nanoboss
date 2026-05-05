@@ -106,8 +106,9 @@ are:
   helpers
 - `reducer-panel-cards.ts`: reducer-owned procedure-card and transcript card
   rendering helpers
-- `reducer-panels.ts`: reducer-owned procedure-card, procedure-panel, and
-  ui-panel helpers
+- `reducer-procedure-panels.ts`: reducer-owned procedure-panel transcript
+  state and turn-block helpers
+- `reducer-panels.ts`: reducer-owned non-transcript ui_panel helpers
 - `controller.ts`: session/runtime orchestration for the TUI
 - `controller-auto-approve.ts`: controller-owned session auto-approve toggle
   helper
@@ -168,8 +169,8 @@ of growing `reducer.ts`, `app.ts`, or `controller.ts` further.
 
 Measured during the 2026-05 TUI adapter review:
 
-- source files: 88
-- source lines: 9,113
+- source files: 89
+- source lines: 9,120
 - largest file: `src/controller.ts` at 355 lines
 - workspace package dependencies: 9
 - runtime value exports: 46 -> 12
@@ -263,6 +264,8 @@ Measured during the 2026-05 TUI adapter review:
     central reducer
   - split CLI terminal control-character and signal helpers out of the TUI
     runner
+  - split reducer-owned procedure-panel transcript state and turn-block
+    helpers out of generic ui_panel handling
 
 The useful outcome of this pass is the entrypoint baseline: future TUI adapter
 exports should be deliberate additions, not accidental leakage from broad

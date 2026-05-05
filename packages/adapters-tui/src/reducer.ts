@@ -6,9 +6,11 @@ import { formatProcedureStatusText } from "@nanoboss/procedure-engine";
 import { type UiState } from "./state.ts";
 import {
   appendProcedureCard,
-  applyProcedurePanel,
   applyUiPanel,
 } from "./reducer-panels.ts";
+import {
+  applyProcedurePanel,
+} from "./reducer-procedure-panels.ts";
 import {
   mergeAvailableCommands,
   reduceLocalUiAction,

@@ -11,7 +11,7 @@ import {
   nextTurnId,
 } from "./reducer-turns.ts";
 import { evictPanelsByLifetime } from "./reducer-run-completion.ts";
-import { applyLocalProcedurePanel } from "./reducer-panels.ts";
+import { applyLocalProcedurePanel } from "./reducer-procedure-panels.ts";
 import type { UiLocalAction } from "./reducer-actions.ts";
 
 export const STOP_REQUESTED_STATUS = "[run] ESC received - stopping at next tool boundary...";
