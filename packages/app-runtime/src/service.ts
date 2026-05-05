@@ -4,12 +4,9 @@ import {
 } from "@nanoboss/agent-acp";
 import {
   appendTimingTraceEvent,
-  createRunTimingTrace,
   type RunTimingTrace,
 } from "@nanoboss/app-support";
 import {
-  RunCancelledError,
-  defaultCancellationMessage,
   formatErrorMessage,
   hasPromptInputContent,
   hasPromptInputImages,
@@ -30,7 +27,6 @@ import {
   ProcedureCancelledError,
   ProcedureExecutionError,
 } from "@nanoboss/procedure-engine";
-import { CompositeSessionUpdateEmitter } from "./composite-session-update-emitter.ts";
 import { cancelActiveProcedureDispatches } from "./procedure-dispatch-manager.ts";
 import {
   publishRunCancelled,
@@ -40,10 +36,6 @@ import {
 } from "./run-publication.ts";
 import { ProcedureRegistry } from "@nanoboss/procedure-catalog";
 import { shouldLoadDiskCommands } from "./runtime-mode.ts";
-import {
-  createActiveRunState,
-  startRunHeartbeat,
-} from "./active-run.ts";
 import {
   buildAvailableCommands,
   buildPendingContinuation,
@@ -60,9 +52,9 @@ import {
 } from "./procedure-runtime-bindings.ts";
 import { prepareDefaultPrompt } from "./default-agent-policy.ts";
 import {
-  capturePersistedRuntimeEvents,
   restorePersistedSessionHistory,
 } from "./replay.ts";
+import { startPromptRun } from "./prompt-run-lifecycle.ts";
 import {
   mapRuntimeCommands,
   publishSessionCommands,
@@ -348,54 +340,25 @@ export class NanobossService {
       ? createDismissContinuationProcedure(session)
       : this.registry.get(commandName);
     const procedureName = procedure?.name ?? commandName;
-    const activeRun = createActiveRunState();
-    session.activeRun = activeRun;
-    const runId = activeRun.runId;
-    const directTimingTrace = procedure
-      ? createRunTimingTrace(session.store.rootDir, runId)
-      : undefined;
-    appendTimingTraceEvent(directTimingTrace, "service", "submit_received", {
-      runId,
-      procedure: procedureName,
-      promptLength: promptInputDisplayText(commandPromptInput).length,
-      mode: continuation ? "resume" : "direct",
-    });
-    const startedAt = Date.now();
-    const assertCanStartBoundary = () => {
-      if (activeRun.softStopRequested) {
-        throw new RunCancelledError(defaultCancellationMessage("soft_stop"), "soft_stop");
-      }
-
-      if (activeRun.abortController.signal.aborted) {
-        throw new RunCancelledError(defaultCancellationMessage("abort"), "abort");
-      }
-    };
     let persistedTopLevelRun: RunRef | undefined;
-    const replayCapture = capturePersistedRuntimeEvents(session.events, runId);
-    const heartbeat = startRunHeartbeat({
-      eventLog: session.events,
-      sessionId,
+    const {
+      activeRun,
       runId,
-      procedure: procedureName,
-    });
-    const { markRunActivity } = heartbeat;
-
-    session.events.publish(sessionId, {
-      type: "run_started",
-      runId,
-      procedure: procedureName,
-      prompt: promptInputDisplayText(commandPromptInput),
-      startedAt: new Date(startedAt).toISOString(),
-    });
-    markRunActivity();
-    const emitter = new CompositeSessionUpdateEmitter(
-      sessionId,
-      runId,
-      procedureName,
-      session.events,
+      timingTrace,
+      assertCanStartBoundary,
+      replayCapture,
+      heartbeat,
       markRunActivity,
+      emitter,
+    } = startPromptRun({
+      sessionId,
+      session,
+      procedureName,
+      commandPromptInput,
+      hasProcedure: Boolean(procedure),
+      mode: continuation ? "resume" : "direct",
       delegate,
-    );
+    });
 
     try {
       if (hasPromptInputImages(commandPromptInput) && procedureName !== "default") {
@@ -472,7 +435,6 @@ export class NanobossService {
       }
 
       try {
-        const timingTrace = directTimingTrace;
         const bindings = createProcedureRuntimeBindings({
           session,
           runId,
