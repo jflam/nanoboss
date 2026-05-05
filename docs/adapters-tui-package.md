@@ -204,6 +204,8 @@ are:
   formatting helpers
 - `core-activity-identity.ts`: core identity activity-bar segment helpers
 - `views.ts`: transcript, chrome, and panel composition
+- `views-chrome-mount.ts`: chrome contribution mounting, render gating, and
+  stateful child registration helper
 - `views-panels.ts`: non-transcript ui_panel chrome host components
 - `views-procedure-panels.ts`: transcript procedure-panel rendering and
   replay fallback helpers
@@ -251,8 +253,8 @@ of growing `reducer.ts`, `app.ts`, or `controller.ts` further.
 
 Measured during the 2026-05 TUI adapter review:
 
-- source files: 134
-- source lines: 9,951
+- source files: 135
+- source lines: 9,976
 - largest file: `src/app.ts` at 333 lines
 - workspace package dependencies: 9
 - runtime value exports: 46 -> 12
@@ -316,6 +318,8 @@ Measured during the 2026-05 TUI adapter review:
   - split app-local dependency adapter contracts out of the TUI app
   - split transcript turn, tool, and procedure-panel rendering out of the
     TUI view shell
+  - split chrome contribution mounting and gated stateful-child registration
+    out of the TUI view shell
   - split transcript procedure-panel rendering and replay fallback helpers out
     of the transcript component
   - split non-transcript ui_panel chrome hosts out of the TUI view shell

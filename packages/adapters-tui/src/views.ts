@@ -3,10 +3,13 @@ import type { UiState } from "./state.ts";
 import type { NanobossTuiTheme } from "./theme.ts";
 import {
   getChromeContributions,
-  type ChromeContribution,
   type ChromeRenderContext,
   type ChromeSlotId,
 } from "./chrome.ts";
+import {
+  mountChromeContribution,
+  type StatefulChromeChild,
+} from "./views-chrome-mount.ts";
 
 // Side-effect imports: register every core chrome contribution and
 // activity-bar segment into the module-level registries before any
@@ -38,32 +41,10 @@ const SLOT_ORDER: ChromeSlotId[] = [
   "footer",
 ];
 
-interface StatefulChild {
-  setState(state: UiState): void;
-}
-
-class GatedComponent implements Component {
-  constructor(
-    private readonly inner: Component,
-    private readonly gate: () => boolean,
-  ) {}
-
-  render(width: number): string[] {
-    if (!this.gate()) {
-      return [];
-    }
-    return this.inner.render(width);
-  }
-
-  invalidate(): void {
-    this.inner.invalidate();
-  }
-}
-
 export class NanobossAppView implements Component {
   private readonly container = new Container();
   private readonly composerContainer = new Container();
-  private readonly statefulChildren: StatefulChild[] = [];
+  private readonly statefulChildren: StatefulChromeChild[] = [];
   private state: UiState;
 
   constructor(
@@ -88,7 +69,13 @@ export class NanobossAppView implements Component {
         continue;
       }
       for (const contribution of getChromeContributions(slot)) {
-        this.mountContribution(contribution, ctx);
+        mountChromeContribution({
+          container: this.container,
+          contribution,
+          ctx,
+          getState: () => this.state,
+          statefulChildren: this.statefulChildren,
+        });
       }
     }
 
@@ -98,19 +85,6 @@ export class NanobossAppView implements Component {
     // seeded with the initial state during construction).
     for (const child of this.statefulChildren) {
       child.setState(this.state);
-    }
-  }
-
-  private mountContribution(contribution: ChromeContribution, ctx: ChromeRenderContext): void {
-    const component = contribution.render(ctx);
-    const gated = contribution.shouldRender
-      ? new GatedComponent(component, () => contribution.shouldRender!(this.state))
-      : component;
-    this.container.addChild(gated);
-    const candidate = component as unknown as { setState?: (state: UiState) => void };
-    if (typeof candidate.setState === "function") {
-      const setState = candidate.setState.bind(component);
-      this.statefulChildren.push({ setState: (state) => setState(state) });
     }
   }
 
