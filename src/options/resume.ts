@@ -3,7 +3,7 @@ import {
   type FrontendConnectionOptions,
 } from "./frontend-connection.ts";
 
-export interface ResumeOptions extends FrontendConnectionOptions {
+interface ResumeOptions extends FrontendConnectionOptions {
   list: boolean;
   sessionId?: string;
 }

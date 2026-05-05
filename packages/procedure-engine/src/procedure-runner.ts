@@ -32,7 +32,7 @@ import {
 import type { RuntimeBindings, SessionUpdateEmitter } from "./context/shared.ts";
 import { RunLogger } from "./logger.ts";
 import { runResultFromRunRecord } from "./run-result.ts";
-import { appendTimingTraceEvent, type RunTimingTrace } from "./timing-trace.ts";
+import { appendTimingTraceEvent, type RunTimingTrace } from "@nanoboss/app-support";
 
 export class ProcedureExecutionError extends Error {
   constructor(message: string, readonly run: RunRef) {

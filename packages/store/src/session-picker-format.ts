@@ -34,7 +34,7 @@ export function formatSessionInitialPrompt(session: SessionMetadata): string {
     : "(no turns yet)";
 }
 
-export function formatTimestamp(value: string): string {
+function formatTimestamp(value: string): string {
   const timestamp = Date.parse(value);
   if (!Number.isFinite(timestamp)) {
     return value;

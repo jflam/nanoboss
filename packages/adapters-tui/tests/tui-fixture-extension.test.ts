@@ -7,14 +7,18 @@ import { fileURLToPath } from "node:url";
 import {
   bootExtensions,
   createInitialUiState,
+} from "@nanoboss/adapters-tui";
+import type {
+  KeyBindingController,
+  KeyBindingEditor,
+} from "@nanoboss/tui-extension-sdk";
+import {
   dispatchKeyBinding,
-  getChromeContributions,
   listKeyBindings,
   type BindingCtx,
   type KeyBindingAppHooks,
-  type KeyBindingController,
-  type KeyBindingEditor,
-} from "@nanoboss/adapters-tui";
+} from "../src/core/bindings.ts";
+import { getChromeContributions } from "../src/core/chrome.ts";
 
 // The fixture lives under <repo>/tests/fixtures/extensions/acme-hello/ and
 // carries its own .nanoboss/extensions entry. Pointing bootExtensions at

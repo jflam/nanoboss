@@ -7,11 +7,11 @@ import { TuiExtensionRegistry } from "@nanoboss/tui-extension-catalog";
 
 import {
   bootExtensions,
-  formatExtensionsCard,
   NanobossTuiController,
   type NanobossTuiControllerDeps,
-  type PanelRenderer,
 } from "@nanoboss/adapters-tui";
+import { formatExtensionsCard } from "../src/extensions/command-extensions-card.ts";
+import type { PanelRenderer } from "../src/core/panel-renderers.ts";
 import type { TypeDescriptor } from "@nanoboss/procedure-sdk";
 
 function makeRegistry(): TuiExtensionRegistry {

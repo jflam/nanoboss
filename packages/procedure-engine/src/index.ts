@@ -33,8 +33,11 @@ export {
   isProcedureDispatchCancellationRequested,
   ProcedureDispatchJobManager,
   requestProcedureDispatchCancellation,
-  runProcedureDispatchWorkerCommand,
 } from "./dispatch/jobs.ts";
+
+export {
+  runProcedureDispatchWorkerCommand,
+} from "./dispatch/worker-command.ts";
 
 export {
   buildProcedureDispatchProgressPath,
@@ -73,23 +76,6 @@ export type {
 
 export { UiApiImpl } from "./context/ui-api.ts";
 export { resolveDownstreamAgentConfig } from "./agent-config.ts";
-export {
-  appendTimingTraceEvent,
-  createRunTimingTrace,
-  type RunTimingTrace,
-} from "./timing-trace.ts";
-// Compatibility re-export: data shape helpers moved to @nanoboss/procedure-sdk.
-// Removal note: prefer importing these helpers from @nanoboss/procedure-sdk.
-export {
-  inferDataShape,
-  stringifyCompactShape,
-} from "@nanoboss/procedure-sdk";
-// Compatibility re-export: self-command helpers moved to @nanoboss/app-support.
-// Removal note: prefer importing these helpers from @nanoboss/app-support.
-export {
-  resolveSelfCommand,
-  resolveSelfCommandWithRuntime,
-} from "@nanoboss/app-support";
 export {
   createProcedureUiMarkerStream,
   formatProcedureStatusText,

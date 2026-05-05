@@ -4,12 +4,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { createRef, type DownstreamAgentConfig, type RunRecord, type RunRef } from "@nanoboss/contracts";
+import { resolveSelfCommandWithRuntime } from "@nanoboss/app-support";
 import {
   executeProcedure,
   findRecoveredProcedureDispatchRun,
   procedureDispatchResultFromRecoveredRun,
   ProcedureCancelledError,
-  resolveSelfCommandWithRuntime,
   waitForRecoveredProcedureDispatchRun,
 } from "@nanoboss/procedure-engine";
 import type {
@@ -96,7 +96,7 @@ function createStore(name: string): SessionStore {
   });
 }
 
-test("keeps the self-command compatibility re-export", () => {
+test("uses the canonical self-command helper owner", () => {
   expect(resolveSelfCommandWithRuntime("mcp", [], {
     executable: "/Users/jflam/.local/bin/nanoboss",
     scriptPath: "/$bunfs/root/nanoboss.js",

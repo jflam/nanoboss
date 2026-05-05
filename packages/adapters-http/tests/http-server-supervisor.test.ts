@@ -3,37 +3,48 @@ import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { getWorkspaceIdentity } from "@nanoboss/app-support";
-import { describeWorkspaceMismatch, matchesServerBuild, startPrivateHttpServer } from "@nanoboss/adapters-http";
+import { getBuildCommit } from "@nanoboss/app-support";
+import { ensureMatchingHttpServer, startPrivateHttpServer } from "@nanoboss/adapters-http";
 
 describe("http server supervisor", () => {
-  test("treats dirty and clean builds as different", () => {
-    expect(matchesServerBuild({
+  test("rejects a reachable server with a different build commit", async () => {
+    const server = startHealthServer({
       status: "ok",
-      buildCommit: "516daef",
-    }, "516daef-dirty")).toBe(false);
+      buildCommit: "not-this-build",
+      buildLabel: "not-this-build",
+    });
+    try {
+      await expect(ensureMatchingHttpServer(server.url)).rejects.toThrow(/but this CLI/);
+    } finally {
+      server.stop();
+    }
   });
 
-  test("accepts an exact build commit match", () => {
-    expect(matchesServerBuild({
+  test("accepts an exact build commit match", async () => {
+    const server = startHealthServer({
       status: "ok",
-      buildCommit: "516daef-dirty",
-    }, "516daef-dirty")).toBe(true);
+      buildCommit: getBuildCommit(),
+    });
+    try {
+      await expect(ensureMatchingHttpServer(server.url)).resolves.toBeUndefined();
+    } finally {
+      server.stop();
+    }
   });
 
-  test("rejects workspace mismatches for explicit shared servers", () => {
-    expect(describeWorkspaceMismatch({
+  test("rejects workspace mismatches for explicit shared servers", async () => {
+    const server = startHealthServer({
       status: "ok",
+      buildCommit: getBuildCommit(),
       workspaceKey: "/repo-two",
       repoRoot: "/repo-two",
       proceduresFingerprint: "def456",
-    }, {
-      ...getWorkspaceIdentity("/repo-one"),
-      cwd: "/repo-one",
-      repoRoot: "/repo-one",
-      workspaceKey: "/repo-one",
-      proceduresFingerprint: "abc123",
-    })).toContain("/repo-two");
+    });
+    try {
+      await expect(ensureMatchingHttpServer(server.url, { cwd: "/repo-one" })).rejects.toThrow(/repo-two/);
+    } finally {
+      server.stop();
+    }
   });
 
   test("starts private servers through the shared self-command resolver", async () => {
@@ -80,4 +91,25 @@ function restoreEnv(name: string, value: string | undefined): void {
   } else {
     process.env[name] = value;
   }
+}
+
+function startHealthServer(health: Record<string, unknown>): {
+  url: string;
+  stop: () => void;
+} {
+  const server = Bun.serve({
+    port: 0,
+    fetch(request) {
+      const url = new URL(request.url);
+      if (request.method === "GET" && url.pathname === "/v1/health") {
+        return Response.json(health);
+      }
+      return new Response("not found", { status: 404 });
+    },
+  });
+
+  return {
+    url: `http://127.0.0.1:${server.port}`,
+    stop: () => server.stop(true),
+  };
 }

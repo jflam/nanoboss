@@ -3,17 +3,17 @@ import type { SourceMapInput } from "@jridgewell/trace-mapping";
 import { relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-export interface SourceByteAttribution {
+interface SourceByteAttribution {
   sourceBytes: Map<string, number>;
   unmappedBytes: number;
 }
 
-export interface SizeGroup {
+interface SizeGroup {
   label: string;
   bytes: number;
 }
 
-export interface BundleSizeSummary {
+interface BundleSizeSummary {
   appBytes: number;
   dependencyBytes: number;
   unmappedBytes: number;

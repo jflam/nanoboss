@@ -1,14 +1,14 @@
 import { describe, expect, test } from "bun:test";
 
 import {
-  buildActivityBarLine,
   createInitialUiState,
   createNanobossTuiTheme,
-  getActivityBarSegments,
-  listActivityBarSegments,
+} from "@nanoboss/adapters-tui";
+import {
+  buildActivityBarLine,
   registerActivityBarSegment,
   type ActivityBarSegment,
-} from "@nanoboss/adapters-tui";
+} from "../src/core/activity-bar.ts";
 
 function stripAnsi(text: string): string {
   const esc = String.fromCharCode(27);
@@ -34,23 +34,38 @@ function stripAnsi(text: string): string {
 
 describe("activity-bar registry", () => {
   test("core segments are registered on both identity and runState lines", () => {
-    const identityIds = new Set(getActivityBarSegments("identity").map((s) => s.id));
-    expect(identityIds.has("identity.agent")).toBe(true);
-    expect(identityIds.has("identity.model")).toBe(true);
-    expect(identityIds.has("identity.token-usage")).toBe(true);
+    const theme = createNanobossTuiTheme();
+    const sep = theme.dim(" • ");
+    const state = {
+      ...createInitialUiState({ cwd: "/repo" }),
+      sessionId: "session-1",
+      tokenUsage: { used: 10_000, limit: 100_000, percent: 10 },
+      defaultAgentSelection: { provider: "codex" as const, model: "gpt-5.4" },
+      agentLabel: "codex/gpt-5.4",
+      simplify2AutoApprove: true,
+      inputDisabled: true,
+      inputDisabledReason: "run" as const,
+      runStartedAtMs: 0,
+      activeProcedure: "demo",
+      pendingContinuation: { procedure: "simplify", question: "choose" },
+      pendingPrompts: [
+        { id: "steer-1", text: "revise", kind: "steering" as const },
+        { id: "queued-1", text: "next", kind: "queued" as const },
+      ],
+    };
 
-    const runStateIds = new Set(getActivityBarSegments("runState").map((s) => s.id));
-    expect(runStateIds.has("runState.autoApprove")).toBe(true);
-    expect(runStateIds.has("runState.busy")).toBe(true);
-    expect(runStateIds.has("runState.timer")).toBe(true);
-    expect(runStateIds.has("runState.activeProcedure")).toBe(true);
-    expect(runStateIds.has("runState.continuation")).toBe(true);
-    expect(runStateIds.has("runState.steer")).toBe(true);
-    expect(runStateIds.has("runState.queued")).toBe(true);
+    const identityLine = stripAnsi(buildActivityBarLine("identity", state, theme, 5_000, sep) ?? "");
+    expect(identityLine).toContain("@codex");
+    expect(identityLine).toContain("gpt-5.4");
+    expect(identityLine).toContain("tok 10k/100k");
 
-    const all = listActivityBarSegments();
-    const allIdsSet = new Set(all.map((s) => s.id));
-    expect(allIdsSet.size).toBe(all.length);
+    const runStateLine = stripAnsi(buildActivityBarLine("runState", state, theme, 5_000, sep) ?? "");
+    expect(runStateLine).toContain("approve on");
+    expect(runStateLine).toContain("busy");
+    expect(runStateLine).toContain("demo");
+    expect(runStateLine).toContain("simplify");
+    expect(runStateLine).toContain("steer");
+    expect(runStateLine).toContain("queued");
   });
 
   test("registerActivityBarSegment rejects duplicate ids", () => {

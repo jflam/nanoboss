@@ -4,11 +4,13 @@ import type { RenderedFrontendEventEnvelope } from "@nanoboss/adapters-http";
 import {
   createInitialUiState,
   createNanobossTuiTheme,
-  dispatchKeyBinding,
   NanobossAppView,
   reduceUiState,
-  registerKeyBinding,
 } from "@nanoboss/adapters-tui";
+import {
+  dispatchKeyBinding,
+  registerKeyBinding,
+} from "../src/core/bindings.ts";
 
 function stripAnsi(text: string): string {
   const esc = String.fromCharCode(27);

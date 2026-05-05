@@ -5,9 +5,9 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { homedir } from "node:os";
 
-export const REGISTERED_MCP_SERVER_NAME = "nanoboss";
+const REGISTERED_MCP_SERVER_NAME = "nanoboss";
 
-export type SupportedAgentId = "claude" | "codex" | "gemini" | "copilot";
+type SupportedAgentId = "claude" | "codex" | "gemini" | "copilot";
 
 export interface McpRegistrationResult {
   id: SupportedAgentId;
@@ -30,7 +30,7 @@ interface JsonObject {
 
 type JsonValue = null | boolean | number | string | JsonObject | JsonValue[];
 
-export function resolveMcpCommand(): ReturnType<typeof resolveSelfCommand> {
+function resolveMcpCommand(): ReturnType<typeof resolveSelfCommand> {
   return resolveSelfCommand("mcp");
 }
 
@@ -55,7 +55,7 @@ export function registerSupportedAgentMcp(command = resolveMcpCommand()): McpReg
   ];
 }
 
-export function registerMcpClaude(command = resolveMcpCommand()): McpRegistrationResult {
+function registerMcpClaude(command = resolveMcpCommand()): McpRegistrationResult {
   if (!commandExists("claude")) {
     return {
       id: "claude",
@@ -94,7 +94,7 @@ export function registerMcpClaude(command = resolveMcpCommand()): McpRegistratio
   };
 }
 
-export function registerMcpCodex(command = resolveMcpCommand()): McpRegistrationResult {
+function registerMcpCodex(command = resolveMcpCommand()): McpRegistrationResult {
   if (!commandExists("codex")) {
     return {
       id: "codex",
@@ -130,7 +130,7 @@ export function registerMcpCodex(command = resolveMcpCommand()): McpRegistration
   };
 }
 
-export function registerMcpGemini(command = resolveMcpCommand()): McpRegistrationResult {
+function registerMcpGemini(command = resolveMcpCommand()): McpRegistrationResult {
   if (!commandExists("gemini")) {
     return {
       id: "gemini",
@@ -154,7 +154,7 @@ export function registerMcpGemini(command = resolveMcpCommand()): McpRegistratio
   );
 }
 
-export function registerMcpCopilot(command = resolveMcpCommand()): McpRegistrationResult {
+function registerMcpCopilot(command = resolveMcpCommand()): McpRegistrationResult {
   if (!commandExists("copilot")) {
     return {
       id: "copilot",

@@ -1,14 +1,16 @@
 import { describe, expect, test } from "bun:test";
+import type { ChromeSlotId } from "@nanoboss/tui-extension-sdk";
 
 import {
   createInitialUiState,
   createNanobossTuiTheme,
-  getChromeContributions,
-  listChromeContributions,
   NanobossAppView,
+} from "@nanoboss/adapters-tui";
+import {
+  getChromeContributions,
   registerChromeContribution,
   type ChromeContribution,
-} from "@nanoboss/adapters-tui";
+} from "../src/core/chrome.ts";
 
 function stripAnsi(text: string): string {
   const esc = String.fromCharCode(27);
@@ -34,8 +36,19 @@ function stripAnsi(text: string): string {
 
 describe("chrome registry", () => {
   test("core contributions are registered and reach every slot we expect", () => {
-    const all = listChromeContributions();
-    const ids = new Set(all.map((c) => c.id));
+    const coreSlots = [
+      "header",
+      "session",
+      "status",
+      "transcriptAbove",
+      "transcript",
+      "composerBelow",
+      "activityBar",
+      "footer",
+    ] as const satisfies readonly ChromeSlotId[];
+    const ids = new Set(
+      coreSlots.flatMap((slot) => getChromeContributions(slot).map((c) => c.id)),
+    );
     expect(ids.has("core.header")).toBe(true);
     expect(ids.has("core.session")).toBe(true);
     expect(ids.has("core.status")).toBe(true);

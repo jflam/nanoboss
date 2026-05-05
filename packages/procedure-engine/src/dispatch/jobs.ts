@@ -1,31 +1,6 @@
-import { spawn } from "node:child_process";
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  readdirSync,
-  renameSync,
-  unlinkSync,
-  writeFileSync,
-} from "node:fs";
-import { join } from "node:path";
-
-import { resolveSelfCommand } from "@nanoboss/app-support";
-import { findRecoveredProcedureDispatchRun } from "./recovery.ts";
-import {
-  ProcedureDispatchProgressEmitter,
-  buildProcedureDispatchProgressPath,
-} from "./progress.ts";
-import {
-  ProcedureCancelledError,
-  ProcedureExecutionError,
-  executeProcedure,
-} from "../procedure-runner.ts";
-import { ProcedureRegistry } from "@nanoboss/procedure-catalog";
-import { SessionStore } from "@nanoboss/store";
+import { appendTimingTraceEvent, createRunTimingTrace } from "@nanoboss/app-support";
 import type {
   DownstreamAgentSelection,
-  RunRecord,
   RunRef,
 } from "@nanoboss/contracts";
 import type {
@@ -33,18 +8,49 @@ import type {
   RunResult,
 } from "@nanoboss/procedure-sdk";
 import { defaultCancellationMessage } from "@nanoboss/procedure-sdk";
+import { SessionStore } from "@nanoboss/store";
 
-import { resolveDownstreamAgentConfig } from "../agent-config.ts";
-import { requireValue } from "../argv.ts";
-import type { RuntimeBindings } from "../context/shared.ts";
+import {
+  ProcedureCancelledError,
+  ProcedureExecutionError,
+  executeProcedure,
+} from "../procedure-runner.ts";
 import { runResultFromRunRecord } from "../run-result.ts";
-import { appendTimingTraceEvent, createRunTimingTrace } from "../timing-trace.ts";
+import { watchProcedureDispatchCancellation } from "./cancellation-watcher.ts";
+import {
+  clearProcedureDispatchCancellation,
+  isProcedureDispatchCancellationRequested,
+  requestProcedureDispatchCancellation,
+} from "./files.ts";
+import { ProcedureDispatchJobStore } from "./job-store.ts";
+import {
+  ProcedureDispatchProgressEmitter,
+  buildProcedureDispatchProgressPath,
+} from "./progress.ts";
+import { findRecoveredProcedureDispatchRun } from "./recovery.ts";
+import { createProcedureDispatchRuntimeBindings } from "./runtime-bindings.ts";
+import {
+  isDeadWorkerJob,
+  isTerminalStatus,
+  looksLikeProcedureFailureRecord,
+  markJobCancelled,
+  toProcedureDispatchStatusResult,
+} from "./status.ts";
+import {
+  PROCEDURE_DISPATCH_WAIT_POLL_MS,
+  clampProcedureDispatchWaitMs,
+} from "./wait.ts";
+import { spawnProcedureDispatchWorker } from "./worker-process.ts";
 
-const PROCEDURE_DISPATCH_JOBS_DIR = "procedure-dispatch-jobs";
-const PROCEDURE_DISPATCH_CANCELS_DIR = "procedure-dispatch-cancels";
-const DEFAULT_WAIT_MS = 1_000;
-const MAX_WAIT_MS = 2_000;
-const WAIT_POLL_MS = 100;
+export {
+  buildProcedureDispatchCancelPath,
+  buildProcedureDispatchCancelsDir,
+  buildProcedureDispatchJobPath,
+  buildProcedureDispatchJobsDir,
+  clearProcedureDispatchCancellation,
+  isProcedureDispatchCancellationRequested,
+  requestProcedureDispatchCancellation,
+} from "./files.ts";
 
 export type ProcedureDispatchJobStatus = "queued" | "running" | "completed" | "failed" | "cancelled";
 
@@ -92,10 +98,10 @@ interface ProcedureDispatchJobManagerParams {
 }
 
 export class ProcedureDispatchJobManager {
-  private readonly jobsDir: string;
+  private readonly jobStore: ProcedureDispatchJobStore;
 
   constructor(private readonly params: ProcedureDispatchJobManagerParams) {
-    this.jobsDir = buildProcedureDispatchJobsDir(params.rootDir);
+    this.jobStore = new ProcedureDispatchJobStore(params.rootDir);
   }
 
   async start(args: {
@@ -115,7 +121,7 @@ export class ProcedureDispatchJobManager {
     }
 
     const existing = args.dispatchCorrelationId
-      ? this.findReusableJobByCorrelationId(args.dispatchCorrelationId, args.name, args.prompt)
+      ? this.jobStore.findReusableByCorrelationId(args.dispatchCorrelationId, args.name, args.prompt)
       : undefined;
     if (existing) {
       return {
@@ -153,10 +159,10 @@ export class ProcedureDispatchJobManager {
         cancelledBeforeStart: cancellationRequested,
       },
     );
-    this.writeJob(cancellationRequested ? markJobCancelled(job) : job);
+    this.jobStore.write(cancellationRequested ? markJobCancelled(job) : job);
     if (!cancellationRequested) {
       const workerPid = this.spawnWorker(dispatchId);
-      this.writeJobWorkerPid(dispatchId, workerPid);
+      this.jobStore.writeWorkerPid(dispatchId, workerPid);
       appendTimingTraceEvent(
         createRunTimingTrace(this.params.rootDir, job.dispatchCorrelationId),
         "dispatch_job",
@@ -175,12 +181,12 @@ export class ProcedureDispatchJobManager {
   }
 
   async status(dispatchId: string): Promise<ProcedureDispatchStatusResult> {
-    const job = await this.reconcileJob(this.readJob(dispatchId));
+    const job = await this.reconcileJob(this.jobStore.read(dispatchId));
     return toProcedureDispatchStatusResult(job);
   }
 
   async wait(dispatchId: string, waitMs?: number): Promise<ProcedureDispatchStatusResult> {
-    const boundedWaitMs = clampWaitMs(waitMs);
+    const boundedWaitMs = clampProcedureDispatchWaitMs(waitMs);
     const deadline = Date.now() + boundedWaitMs;
 
     for (;;) {
@@ -189,31 +195,31 @@ export class ProcedureDispatchJobManager {
         return current;
       }
 
-      await Bun.sleep(WAIT_POLL_MS);
+      await Bun.sleep(PROCEDURE_DISPATCH_WAIT_POLL_MS);
     }
   }
 
   cancelByCorrelationId(dispatchCorrelationId: string): void {
     requestProcedureDispatchCancellation(this.params.rootDir, dispatchCorrelationId);
-    for (const job of this.listJobs()) {
+    for (const job of this.jobStore.list()) {
       if (job.dispatchCorrelationId !== dispatchCorrelationId || isTerminalStatus(job.status)) {
         continue;
       }
 
-      this.writeJob(markJobCancelled(job));
+      this.jobStore.write(markJobCancelled(job));
     }
   }
 
   cancelMatchingProcedures(procedures: readonly string[]): number {
     const names = new Set(procedures);
     let cancelled = 0;
-    for (const job of this.listJobs()) {
+    for (const job of this.jobStore.list()) {
       if (!names.has(job.procedure) || isTerminalStatus(job.status)) {
         continue;
       }
 
       requestProcedureDispatchCancellation(this.params.rootDir, job.dispatchCorrelationId);
-      this.writeJob(markJobCancelled(job));
+      this.jobStore.write(markJobCancelled(job));
       cancelled += 1;
     }
 
@@ -221,7 +227,7 @@ export class ProcedureDispatchJobManager {
   }
 
   async run(dispatchId: string): Promise<void> {
-    let job = this.readJob(dispatchId);
+    let job = this.jobStore.read(dispatchId);
     const timingTrace = createRunTimingTrace(this.params.rootDir, job.dispatchCorrelationId);
     appendTimingTraceEvent(timingTrace, "dispatch_worker", "run_started", {
       dispatchId,
@@ -229,7 +235,7 @@ export class ProcedureDispatchJobManager {
     });
     if (job.status === "cancelled" || isProcedureDispatchCancellationRequested(this.params.rootDir, job.dispatchCorrelationId)) {
       if (job.status !== "cancelled") {
-        this.writeJob(markJobCancelled(job));
+        this.jobStore.write(markJobCancelled(job));
       }
       appendTimingTraceEvent(timingTrace, "dispatch_worker", "run_aborted_before_start");
       return;
@@ -243,7 +249,13 @@ export class ProcedureDispatchJobManager {
     }
 
     const softStopController = new AbortController();
-    const stopWatchingCancellation = this.watchCancellation(dispatchId, job.dispatchCorrelationId, softStopController);
+    const stopWatchingCancellation = watchProcedureDispatchCancellation({
+      rootDir: this.params.rootDir,
+      dispatchId,
+      dispatchCorrelationId: job.dispatchCorrelationId,
+      jobStore: this.jobStore,
+      controller: softStopController,
+    });
     const startedAt = new Date().toISOString();
     job = {
       ...job,
@@ -251,18 +263,10 @@ export class ProcedureDispatchJobManager {
       startedAt: job.startedAt ?? startedAt,
       updatedAt: startedAt,
     };
-    this.writeJob(job);
+    this.jobStore.write(job);
 
     const store = this.createStore();
-    let defaultAgentConfig = resolveDownstreamAgentConfig(this.params.cwd, job.defaultAgentSelection);
-    const bindings = {
-      getDefaultAgentConfig: () => defaultAgentConfig,
-      setDefaultAgentSelection: (selection) => {
-        const nextConfig = resolveDownstreamAgentConfig(this.params.cwd, selection);
-        defaultAgentConfig = nextConfig;
-        return nextConfig;
-      },
-    } satisfies RuntimeBindings;
+    const bindings = createProcedureDispatchRuntimeBindings(this.params.cwd, job.defaultAgentSelection);
     const emitter = new ProcedureDispatchProgressEmitter(
       buildProcedureDispatchProgressPath(store.rootDir, job.dispatchCorrelationId),
       () => {
@@ -296,9 +300,9 @@ export class ProcedureDispatchJobManager {
       });
 
       const completedAt = new Date().toISOString();
-      const latest = this.readJob(dispatchId);
+      const latest = this.jobStore.read(dispatchId);
       if (latest.status === "cancelled" || softStopController.signal.aborted) {
-        this.writeJob({
+        this.jobStore.write({
           ...markJobCancelled(latest, completedAt),
           run: result.run,
           result,
@@ -308,7 +312,7 @@ export class ProcedureDispatchJobManager {
         return;
       }
 
-      this.writeJob({
+      this.jobStore.write({
         ...latest,
         status: "completed",
         updatedAt: completedAt,
@@ -324,13 +328,13 @@ export class ProcedureDispatchJobManager {
       });
     } catch (error) {
       const completedAt = new Date().toISOString();
-      const latest = this.readJob(dispatchId);
+      const latest = this.jobStore.read(dispatchId);
       const message = error instanceof Error ? error.message : String(error);
       const run = error instanceof ProcedureExecutionError || error instanceof ProcedureCancelledError
         ? error.run
         : latest.run;
       if (latest.status === "cancelled" || softStopController.signal.aborted) {
-        this.writeJob({
+        this.jobStore.write({
           ...markJobCancelled(latest, completedAt),
           run,
           error: message,
@@ -338,7 +342,7 @@ export class ProcedureDispatchJobManager {
         return;
       }
 
-      this.writeJob({
+      this.jobStore.write({
         ...latest,
         status: "failed",
         updatedAt: completedAt,
@@ -365,33 +369,21 @@ export class ProcedureDispatchJobManager {
   }
 
   private spawnWorker(dispatchId: string): number | undefined {
-    const command = resolveSelfCommand("procedure-dispatch-worker", [
-      "--session-id",
-      this.params.sessionId,
-      "--cwd",
-      this.params.cwd,
-      "--root-dir",
-      this.params.rootDir,
-      "--dispatch-id",
-      dispatchId,
-    ]);
-    const child = spawn(command.command, command.args, {
+    return spawnProcedureDispatchWorker({
       cwd: this.params.cwd,
-      env: process.env,
-      detached: true,
-      stdio: "ignore",
+      sessionId: this.params.sessionId,
+      rootDir: this.params.rootDir,
+      dispatchId,
     });
-    child.unref();
-    return child.pid;
   }
 
   private touchRunningJob(dispatchId: string): void {
-    const job = this.readJob(dispatchId);
+    const job = this.jobStore.read(dispatchId);
     if (isTerminalStatus(job.status)) {
       return;
     }
 
-    this.writeJob({
+    this.jobStore.write({
       ...job,
       updatedAt: new Date().toISOString(),
     });
@@ -418,7 +410,7 @@ export class ProcedureDispatchJobManager {
           completedAt: job.completedAt ?? new Date().toISOString(),
           error: job.error ?? `Procedure dispatch worker exited before completing: pid ${job.workerPid}`,
         };
-        this.writeJob(failed);
+        this.jobStore.write(failed);
         return failed;
       }
 
@@ -439,7 +431,7 @@ export class ProcedureDispatchJobManager {
         run: record.run,
         error: job.error ?? record.output.summary ?? `${job.procedure} failed`,
       };
-      this.writeJob(failed);
+      this.jobStore.write(failed);
       return failed;
     }
 
@@ -458,7 +450,7 @@ export class ProcedureDispatchJobManager {
       error: undefined,
       defaultAgentSelection: result.defaultAgentSelection ?? job.defaultAgentSelection,
     };
-    this.writeJob(reconciled);
+    this.jobStore.write(reconciled);
     return reconciled;
   }
 
@@ -470,272 +462,4 @@ export class ProcedureDispatchJobManager {
     }
   }
 
-  private readJob(dispatchId: string): ProcedureDispatchJob {
-    const filePath = buildProcedureDispatchJobPath(this.params.rootDir, dispatchId);
-    if (!existsSync(filePath)) {
-      throw new Error(`Unknown procedure dispatch: ${dispatchId}`);
-    }
-
-    return JSON.parse(readFileSync(filePath, "utf8")) as ProcedureDispatchJob;
-  }
-
-  private writeJob(job: ProcedureDispatchJob): void {
-    mkdirSync(this.jobsDir, { recursive: true });
-    const filePath = buildProcedureDispatchJobPath(this.params.rootDir, job.dispatchId);
-    const tempPath = `${filePath}.${process.pid}.tmp`;
-    writeFileSync(tempPath, `${JSON.stringify(job, null, 2)}\n`, "utf8");
-    renameSync(tempPath, filePath);
-  }
-
-  private writeJobWorkerPid(dispatchId: string, workerPid: number | undefined): void {
-    const latest = this.readJob(dispatchId);
-    this.writeJob({
-      ...latest,
-      workerPid: workerPid ?? latest.workerPid,
-      updatedAt: latest.updatedAt,
-    });
-  }
-
-  private findReusableJobByCorrelationId(
-    dispatchCorrelationId: string,
-    procedure: string,
-    prompt: string,
-  ): ProcedureDispatchJob | undefined {
-    const candidates = this.listJobs()
-      .filter((job) => job.dispatchCorrelationId === dispatchCorrelationId)
-      .sort((left, right) => left.createdAt.localeCompare(right.createdAt));
-    const latest = candidates.at(-1);
-    if (!latest) {
-      return undefined;
-    }
-
-    if (latest.procedure !== procedure || latest.prompt !== prompt) {
-      throw new Error(`Dispatch correlation id already exists for a different procedure run: ${dispatchCorrelationId}`);
-    }
-
-    return latest.status === "failed" || latest.status === "cancelled" ? undefined : latest;
-  }
-
-  private listJobs(): ProcedureDispatchJob[] {
-    if (!existsSync(this.jobsDir)) {
-      return [];
-    }
-
-    return readdirSync(this.jobsDir)
-      .filter((entry) => entry.endsWith(".json"))
-      .map((entry) => JSON.parse(readFileSync(join(this.jobsDir, entry), "utf8")) as ProcedureDispatchJob);
-  }
-
-  private watchCancellation(
-    dispatchId: string,
-    dispatchCorrelationId: string,
-    controller: AbortController,
-  ): () => void {
-    const poll = () => {
-      if (controller.signal.aborted) {
-        return;
-      }
-
-      const latest = this.readJob(dispatchId);
-      if (
-        latest.status !== "cancelled"
-        && !isProcedureDispatchCancellationRequested(this.params.rootDir, dispatchCorrelationId)
-      ) {
-        return;
-      }
-
-      if (latest.status !== "cancelled") {
-        this.writeJob(markJobCancelled(latest));
-      }
-      controller.abort();
-    };
-
-    poll();
-    const timer = setInterval(poll, WAIT_POLL_MS);
-    return () => {
-      clearInterval(timer);
-    };
-  }
-}
-
-export function buildProcedureDispatchJobsDir(rootDir: string): string {
-  return join(rootDir, PROCEDURE_DISPATCH_JOBS_DIR);
-}
-
-export function buildProcedureDispatchCancelsDir(rootDir: string): string {
-  return join(rootDir, PROCEDURE_DISPATCH_CANCELS_DIR);
-}
-
-export function buildProcedureDispatchJobPath(rootDir: string, dispatchId: string): string {
-  return join(buildProcedureDispatchJobsDir(rootDir), `${dispatchId}.json`);
-}
-
-export function buildProcedureDispatchCancelPath(rootDir: string, dispatchCorrelationId: string): string {
-  return join(buildProcedureDispatchCancelsDir(rootDir), `${dispatchCorrelationId}.cancel`);
-}
-
-export function requestProcedureDispatchCancellation(rootDir: string, dispatchCorrelationId: string): void {
-  mkdirSync(buildProcedureDispatchCancelsDir(rootDir), { recursive: true });
-  const targetPath = buildProcedureDispatchCancelPath(rootDir, dispatchCorrelationId);
-  const tempPath = `${targetPath}.${process.pid}.tmp`;
-  writeFileSync(tempPath, `${new Date().toISOString()}\n`, "utf8");
-  renameSync(tempPath, targetPath);
-}
-
-export function clearProcedureDispatchCancellation(rootDir: string, dispatchCorrelationId: string): void {
-  const filePath = buildProcedureDispatchCancelPath(rootDir, dispatchCorrelationId);
-  if (!existsSync(filePath)) {
-    return;
-  }
-
-  unlinkSync(filePath);
-}
-
-export function isProcedureDispatchCancellationRequested(rootDir: string, dispatchCorrelationId: string): boolean {
-  return existsSync(buildProcedureDispatchCancelPath(rootDir, dispatchCorrelationId));
-}
-
-export async function runProcedureDispatchWorkerCommand(argv: string[]): Promise<void> {
-  const params = parseProcedureDispatchWorkerArgs(argv);
-  const manager = new ProcedureDispatchJobManager({
-    cwd: params.cwd,
-    sessionId: params.sessionId,
-    rootDir: params.rootDir,
-    getRegistry: () => loadProcedureDispatchRegistry(params.cwd),
-  });
-  await manager.run(params.dispatchId);
-}
-
-async function loadProcedureDispatchRegistry(cwd: string): Promise<ProcedureRegistryLike> {
-  const registry = new ProcedureRegistry({ cwd });
-  registry.loadBuiltins();
-  await registry.loadFromDisk();
-  return registry;
-}
-
-function parseProcedureDispatchWorkerArgs(argv: string[]): {
-  sessionId: string;
-  cwd: string;
-  rootDir: string;
-  dispatchId: string;
-} {
-  let sessionId: string | undefined;
-  let cwd: string | undefined;
-  let rootDir: string | undefined;
-  let dispatchId: string | undefined;
-
-  for (let index = 0; index < argv.length; index += 1) {
-    const arg = argv[index];
-    const next = argv[index + 1];
-
-    switch (arg) {
-      case "--session-id":
-        sessionId = requireValue(next, "--session-id");
-        index += 1;
-        break;
-      case "--cwd":
-        cwd = requireValue(next, "--cwd");
-        index += 1;
-        break;
-      case "--root-dir":
-        rootDir = requireValue(next, "--root-dir");
-        index += 1;
-        break;
-      case "--dispatch-id":
-        dispatchId = requireValue(next, "--dispatch-id");
-        index += 1;
-        break;
-      default:
-        throw new Error(`Unknown procedure-dispatch-worker arg: ${arg}`);
-    }
-  }
-
-  if (!sessionId) {
-    throw new Error("Missing required arg: --session-id");
-  }
-
-  if (!cwd) {
-    throw new Error("Missing required arg: --cwd");
-  }
-
-  if (!rootDir) {
-    throw new Error("Missing required arg: --root-dir");
-  }
-
-  if (!dispatchId) {
-    throw new Error("Missing required arg: --dispatch-id");
-  }
-
-  return { sessionId, cwd, rootDir, dispatchId };
-}
-
-function clampWaitMs(value: number | undefined): number {
-  if (value === undefined || !Number.isFinite(value) || value <= 0) {
-    return DEFAULT_WAIT_MS;
-  }
-
-  return Math.min(Math.max(Math.floor(value), 1), MAX_WAIT_MS);
-}
-
-function isTerminalStatus(status: ProcedureDispatchJobStatus): boolean {
-  return status === "completed" || status === "failed" || status === "cancelled";
-}
-
-function isDeadWorkerJob(job: ProcedureDispatchJob): boolean {
-  return (
-    (job.status === "queued" || job.status === "running") &&
-    typeof job.workerPid === "number" &&
-    job.workerPid > 0 &&
-    !isProcessAlive(job.workerPid)
-  );
-}
-
-function isProcessAlive(pid: number): boolean {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "EPERM") {
-      return true;
-    }
-    return false;
-  }
-}
-
-function looksLikeProcedureFailureRecord(record: RunRecord): boolean {
-  return (
-    record.output.data === undefined &&
-    record.output.display === undefined &&
-    record.output.memory === undefined &&
-    typeof record.output.summary === "string" &&
-    /^Error:/i.test(record.output.summary)
-  );
-}
-
-function toProcedureDispatchStatusResult(job: ProcedureDispatchJob): ProcedureDispatchStatusResult {
-  return {
-    dispatchId: job.dispatchId,
-    status: job.status,
-    procedure: job.procedure,
-    createdAt: job.createdAt,
-    updatedAt: job.updatedAt,
-    startedAt: job.startedAt,
-    completedAt: job.completedAt,
-    run: job.run,
-    result: job.result,
-    error: job.error,
-  };
-}
-
-function markJobCancelled(
-  job: ProcedureDispatchJob,
-  timestamp = new Date().toISOString(),
-): ProcedureDispatchJob {
-  return {
-    ...job,
-    status: "cancelled",
-    updatedAt: timestamp,
-    completedAt: job.completedAt ?? timestamp,
-    error: job.error ?? defaultCancellationMessage("soft_stop"),
-  };
 }

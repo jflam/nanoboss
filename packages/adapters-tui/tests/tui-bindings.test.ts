@@ -2,17 +2,21 @@ import { describe, expect, test } from "bun:test";
 
 import {
   createInitialUiState,
+  type UiState,
+} from "@nanoboss/adapters-tui";
+import type {
+  BindingResult,
+  KeyBindingController,
+  KeyBindingEditor,
+} from "@nanoboss/tui-extension-sdk";
+import {
   dispatchKeyBinding,
-  keyMatches,
   listKeyBindings,
   registerKeyBinding,
   type BindingCtx,
   type KeyBinding,
   type KeyBindingAppHooks,
-  type KeyBindingController,
-  type KeyBindingEditor,
-  type UiState,
-} from "@nanoboss/adapters-tui";
+} from "../src/core/bindings.ts";
 
 function makeController(overrides: Partial<KeyBindingController> = {}): KeyBindingController {
   return {
@@ -93,18 +97,6 @@ describe("keybinding registry", () => {
     expect(ids).toEqual(["theme.light", "theme.dark"]);
   });
 
-  test("keyMatches delegates to pi-tui matchesKey for string identifiers", () => {
-    // ctrl+k encodes as the VT byte 0x0b.
-    expect(keyMatches("ctrl+k", "\u000b")).toBe(true);
-    expect(keyMatches("ctrl+o", "\u000b")).toBe(false);
-  });
-
-  test("keyMatches supports function matchers", () => {
-    const match = (data: string) => data === "custom-sequence";
-    expect(keyMatches(match, "custom-sequence")).toBe(true);
-    expect(keyMatches(match, "other")).toBe(false);
-  });
-
   test("dispatch selects the correct binding for ctrl+o and calls its hook", () => {
     let ctrlOCooldownCalls = 0;
     const state = createInitialUiState({ cwd: "/repo" });
@@ -169,6 +161,28 @@ describe("keybinding registry", () => {
     // re-summon help even when an earlier card has scrolled off-screen.
     expect(cardCalls[0]!.key).toBeUndefined();
     expect(cardCalls[0]!.markdown).toContain("Send / compose");
+  });
+
+  test("dispatch supports function matchers", () => {
+    const suffix = Math.random().toString(36).slice(2);
+    const id = `test.function-match.${suffix}`;
+    const calls: string[] = [];
+    registerKeyBinding({
+      id,
+      category: "custom",
+      label: "function matcher",
+      match: (data) => data === `custom-sequence-${suffix}`,
+      run: () => {
+        calls.push("matched");
+        return { consume: true };
+      },
+    });
+
+    const state = createInitialUiState({ cwd: "/repo" });
+    const ctx = makeCtx(state);
+    expect(dispatchKeyBinding(`custom-sequence-${suffix}`, ctx)).toEqual({ consume: true });
+    expect(dispatchKeyBinding(`other-${suffix}`, ctx)).toBeUndefined();
+    expect(calls).toEqual(["matched"]);
   });
 
   test("docs-only bindings with no matcher never dispatch", () => {

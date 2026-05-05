@@ -36,7 +36,7 @@ export function resolveNanobossInstallDir(options: InstallPathOptions = {}): str
   return join(homeDir, ".local/bin");
 }
 
-export function splitPath(pathEnv: string, homeDir: string): string[] {
+function splitPath(pathEnv: string, homeDir: string): string[] {
   return pathEnv
     .split(":")
     .map((entry) => entry.trim())

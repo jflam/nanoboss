@@ -1,20 +1,16 @@
 import { expect, test } from "bun:test";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { join, relative } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 
 const CANONICAL_IMPORT_EXPECTATIONS = [
   ["build.ts", 'from "@nanoboss/procedure-catalog"'],
   ["scripts/probe-acp-usage.ts", 'from "@nanoboss/procedure-engine"'],
   ["packages/procedure-engine/tests/config.test.ts", 'from "@nanoboss/procedure-engine"'],
-  ["packages/app-runtime/tests/memory-cards.test.ts", 'from "@nanoboss/app-runtime"'],
+  ["packages/app-runtime/tests/default-memory-bridge.test.ts", 'from "@nanoboss/app-runtime"'],
   ["packages/procedure-sdk/tests/runtime-banner.test.ts", 'from "@nanoboss/procedure-sdk"'],
   ["tests/unit/test-home-isolation.test.ts", 'from "@nanoboss/store"'],
   ["tests/unit/ui-cli.test.ts", 'from "@nanoboss/procedure-engine"'],
 ] as const;
-
-const bannedCoreImportPattern = /^\s*(?:import|export)\b[^;]*?\bfrom\s*["'][^"']*src\/core\/[^"']*["'];?/gm;
-const bannedCoreSideEffectImportPattern = /^\s*import\s*["'][^"']*src\/core\/[^"']*["'];?/gm;
-const bannedCoreDynamicImportPattern = /import\(\s*["'][^"']*src\/core\/[^"']*["']\s*\)/g;
 
 test("keeps src/core deleted and out of repository TypeScript imports", () => {
   expect(existsSync(join(process.cwd(), "src/core"))).toBe(false);
@@ -26,11 +22,28 @@ test("keeps src/core deleted and out of repository TypeScript imports", () => {
 
   for (const path of listRepositoryTypeScriptFiles()) {
     const source = readFileSync(path, "utf8");
-    expect(source).not.toMatch(bannedCoreImportPattern);
-    expect(source).not.toMatch(bannedCoreSideEffectImportPattern);
-    expect(source).not.toMatch(bannedCoreDynamicImportPattern);
+    expect(findRootCoreImportSpecifiers(path, source)).toEqual([]);
   }
 });
+
+function findRootCoreImportSpecifiers(path: string, source: string): string[] {
+  const violations: string[] = [];
+  const importPattern = /(?:from\s*|import\s*\(\s*|import\s+)["']([^"']+)["']/g;
+  for (const match of source.matchAll(importPattern)) {
+    const specifier = match[1];
+    if (!specifier) {
+      continue;
+    }
+
+    const resolved = specifier.startsWith(".")
+      ? relative(process.cwd(), resolve(dirname(path), specifier)).replaceAll("\\", "/")
+      : specifier;
+    if (resolved === "src/core" || resolved.startsWith("src/core/")) {
+      violations.push(specifier);
+    }
+  }
+  return violations;
+}
 
 function listRepositoryTypeScriptFiles(): string[] {
   return [

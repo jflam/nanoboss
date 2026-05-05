@@ -5,13 +5,10 @@ import {
   getWorkspaceIdentity,
 } from "@nanoboss/app-support";
 import {
-  createTextPromptInput,
-  hasPromptInputContent,
-  parsePromptInputPayload,
   type DownstreamAgentSelection,
-  type PromptInput,
 } from "@nanoboss/procedure-sdk";
 import type { FrontendEventEnvelope } from "./event-mapping.ts";
+import { parseSessionPromptRequestBody } from "./prompt-request.ts";
 export interface HttpServerOptions {
   port: number;
   host?: string;
@@ -244,27 +241,6 @@ export async function startHttpServer(options: HttpServerOptions): Promise<Retur
   }
   console.log(`${getBuildLabel()} server listening on ${baseUrl}`);
   return server;
-}
-
-export function parseSessionPromptRequestBody(body: { prompt?: string; promptInput?: unknown }):
-  | { prompt: PromptInput }
-  | { error: string } {
-  const promptInput = body.promptInput !== undefined
-    ? parsePromptInputPayload(body.promptInput)
-    : undefined;
-  if (body.promptInput !== undefined && !promptInput) {
-    return { error: "promptInput is invalid" };
-  }
-  if (promptInput) {
-    return hasPromptInputContent(promptInput)
-      ? { prompt: promptInput }
-      : { error: "prompt is required" };
-  }
-
-  const prompt = body.prompt?.trim();
-  return prompt
-    ? { prompt: createTextPromptInput(prompt) }
-    : { error: "prompt is required" };
 }
 
 function formatSseEvent(event: FrontendEventEnvelope): string {

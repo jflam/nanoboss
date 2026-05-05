@@ -5,11 +5,13 @@ import {
   bootExtensions,
   createInitialUiState,
   createNanobossTuiTheme,
-  getPanelRenderer,
   NanobossAppView,
   reduceUiState,
-  registerPanelRenderer,
 } from "@nanoboss/adapters-tui";
+import {
+  getPanelRenderer,
+  registerPanelRenderer,
+} from "../src/core/panel-renderers.ts";
 
 // The `nb/card@1` panel renderer is contributed by the built-in
 // `nanoboss-core-ui` TUI extension, which is only registered at

@@ -44,14 +44,14 @@ async function tryGetServerHealth(baseUrl: string): Promise<ServerHealthResponse
   }
 }
 
-export function matchesServerBuild(
+function matchesServerBuild(
   health: ServerHealthResponse | null,
   desiredCommit: string,
 ): boolean {
   return health?.buildCommit === desiredCommit;
 }
 
-export function describeWorkspaceMismatch(
+function describeWorkspaceMismatch(
   health: ServerHealthResponse,
   expected: WorkspaceIdentity,
 ): string | undefined {

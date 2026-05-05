@@ -4,7 +4,7 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSyn
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createAgentSession, type AgentSession } from "@nanoboss/agent-acp";
-import { extractProcedureDispatchResult, NanobossService } from "@nanoboss/app-runtime";
+import { NanobossService } from "@nanoboss/app-runtime";
 
 const MOCK_AGENT_PATH = join(process.cwd(), "tests/fixtures/mock-agent.ts");
 const DISCOVERY_MOCK_AGENT_PATH = join(process.cwd(), "tests/fixtures/catalog-discovery-mock-agent.ts");
@@ -277,40 +277,6 @@ function createAutoApproveProbeProcedure(): Procedure {
 }
 
 describe("NanobossService", () => {
-  test("extracts async procedure dispatch results from copilot-style tool payloads", () => {
-    const parsed = extractProcedureDispatchResult([
-      {
-        sessionUpdate: "tool_call_update",
-        toolCallId: "call_123",
-        status: "completed",
-        rawOutput: {
-          content: '{"dispatchId":"dispatch_123","status":"completed","procedure":"research","result":{"run":{"sessionId":"s1","runId":"c1"},"display":"done"}}',
-          detailedContent: '{"dispatchId":"dispatch_123","status":"completed","procedure":"research","result":{"run":{"sessionId":"s1","runId":"c1"},"display":"done"}}',
-          contents: [
-            {
-              type: "text",
-              text: '{"dispatchId":"dispatch_123","status":"completed","procedure":"research","result":{"run":{"sessionId":"s1","runId":"c1"},"display":"done"}}',
-            },
-          ],
-        },
-        content: [
-          {
-            type: "content",
-            content: {
-              type: "text",
-              text: '{"dispatchId":"dispatch_123","status":"completed","procedure":"research","result":{"run":{"sessionId":"s1","runId":"c1"},"display":"done"}}',
-            },
-          },
-        ],
-      } as never,
-    ]);
-
-    expect(parsed).toEqual({
-      run: { sessionId: "s1", runId: "c1" },
-      display: "done",
-    });
-  });
-
   test("does not duplicate final display when the same text was already streamed", async () => {
     const registry = new ProcedureRegistry({ procedureRoots: [mkdtempSync(join(tmpdir(), "nab-service-"))] });
     registry.register({

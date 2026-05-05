@@ -14,6 +14,7 @@ import {
 } from "@nanoboss/procedure-sdk";
 
 import type { RuntimeContinuation } from "./runtime-events.ts";
+import type { SessionState } from "./session-runtime.ts";
 
 export const DISMISS_CONTINUATION_COMMAND_NAME = "dismiss";
 
@@ -29,7 +30,7 @@ export function buildAvailableCommands(registry: ProcedureRegistryLike): acp.Ava
     : [...commands, DISMISS_CONTINUATION_COMMAND];
 }
 
-export function toRuntimeContinuation(
+function toRuntimeContinuation(
   continuation?: PendingContinuation,
 ): RuntimeContinuation | undefined {
   if (!continuation) {
@@ -43,6 +44,25 @@ export function toRuntimeContinuation(
     suggestedReplies: continuation.suggestedReplies,
     form: continuation.form,
   };
+}
+
+export function publishPendingContinuation(
+  sessionId: string,
+  session: SessionState,
+): void {
+  session.events.publish(sessionId, {
+    type: "continuation_updated",
+    continuation: toRuntimeContinuation(session.pendingContinuation),
+  });
+}
+
+export function setPendingContinuation(
+  sessionId: string,
+  session: SessionState,
+  continuation?: PendingContinuation,
+): void {
+  session.pendingContinuation = continuation;
+  publishPendingContinuation(sessionId, session);
 }
 
 export function createDismissContinuationProcedure(session: {

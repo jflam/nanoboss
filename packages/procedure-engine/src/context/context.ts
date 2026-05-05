@@ -1,6 +1,7 @@
 import type { SessionStore } from "@nanoboss/store";
 import type { CreateAgentSession } from "@nanoboss/agent-acp";
-import { AgentInvocationApiImpl, AgentRunRecorder } from "./agent-api.ts";
+import { AgentInvocationApiImpl } from "./agent-api.ts";
+import { AgentRunRecorder } from "./agent-run-recorder.ts";
 import { type RuntimeBindings, type SessionUpdateEmitter } from "./shared.ts";
 import { ProcedureInvocationApiImpl, type ChildContextBindingParams } from "./procedure-api.ts";
 import { ContextSessionApiImpl } from "./session-api.ts";
@@ -20,7 +21,7 @@ import { throwIfCancelled } from "@nanoboss/procedure-sdk";
 
 import type { RunLogger } from "../logger.ts";
 import { normalizeProcedurePromptInput } from "../prompt.ts";
-import type { RunTimingTrace } from "../timing-trace.ts";
+import type { RunTimingTrace } from "@nanoboss/app-support";
 import { UiApiImpl } from "./ui-api.ts";
 
 type ActiveRun = ReturnType<SessionStore["startRun"]>;

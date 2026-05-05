@@ -1,6 +1,6 @@
-export type CompactTestStatus = "." | "F" | "S";
+type CompactTestStatus = "." | "F" | "S";
 
-export interface CompactTestReport {
+interface CompactTestReport {
   statuses: CompactTestStatus[];
   total: number;
   passed: number;

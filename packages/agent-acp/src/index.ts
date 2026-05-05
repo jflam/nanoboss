@@ -12,11 +12,7 @@ export {
   summarizePromptInputForAcpLog,
 } from "./prompt.ts";
 export {
-  buildPrompt,
   invokeAgent,
-  MAX_PARSE_RETRIES,
-  parseAgentResponse,
-  sanitizeJsonResponse,
 } from "./transport.ts";
 export {
   buildAgentRuntimeSessionRuntime,
@@ -36,36 +32,20 @@ export {
 } from "./updates.ts";
 export {
   collectTokenSnapshot,
-  enrichToolCallUpdateWithTokenUsage,
-  findCopilotLogsForPids,
-  parseClaudeDebugMetrics,
-  parseCopilotLogMetrics,
-  parseCopilotSessionState,
-  parseDescendantPidsFromPsOutput,
 } from "./token-metrics.ts";
 export {
   getAgentTokenUsagePercent,
   normalizeAgentTokenUsage,
 } from "./token-usage.ts";
 export {
-  buildReasoningModelSelection,
-  buildAgentModelSelection,
-  findSelectableModelOption,
   findSelectableModelOptionInCatalog,
   getAgentCatalog,
   getProviderLabel,
   isKnownAgentProvider,
-  isKnownModelSelection,
   isKnownModelSelectionInCatalog,
-  isReasoningEffort,
   listKnownProviders,
-  listSelectableModelOptions,
   listSelectableModelOptionsFromCatalog,
-  parseAgentModelSelection,
   parseReasoningModelSelection,
-  REASONING_EFFORT_DESCRIPTIONS,
-  REASONING_EFFORT_LABELS,
-  REASONING_EFFORTS,
 } from "./model-catalog.ts";
 
 export type {

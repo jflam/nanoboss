@@ -29,14 +29,14 @@ export interface ParsedModelSelection {
   reasoningEffort?: ReasoningEffort;
 }
 
-export const REASONING_EFFORT_LABELS: Record<ReasoningEffort, string> = {
+const REASONING_EFFORT_LABELS: Record<ReasoningEffort, string> = {
   low: "Low",
   medium: "Medium",
   high: "High",
   xhigh: "Extra High",
 };
 
-export const REASONING_EFFORT_DESCRIPTIONS: Record<ReasoningEffort, string> = {
+const REASONING_EFFORT_DESCRIPTIONS: Record<ReasoningEffort, string> = {
   low: "Faster responses, lighter reasoning",
   medium: "Balanced speed and reasoning depth",
   high: "More thorough reasoning, slower responses",
@@ -227,12 +227,6 @@ export function isKnownAgentProvider(value: string): value is DownstreamAgentPro
   return Object.prototype.hasOwnProperty.call(AGENT_MODEL_CATALOG, value);
 }
 
-export function listSelectableModelOptions(
-  provider: DownstreamAgentProvider,
-): SelectableModelOption[] {
-  return listSelectableModelOptionsFromCatalog(getAgentCatalog(provider));
-}
-
 export function listSelectableModelOptionsFromCatalog(
   catalog: Pick<AgentCatalogEntry, "models">,
 ): SelectableModelOption[] {
@@ -254,13 +248,6 @@ export function listSelectableModelOptionsFromCatalog(
       description: [model.description, REASONING_EFFORT_DESCRIPTIONS[effort]].filter(Boolean).join(". "),
     }));
   });
-}
-
-export function findSelectableModelOption(
-  provider: DownstreamAgentProvider,
-  selection: string,
-): SelectableModelOption | undefined {
-  return findSelectableModelOptionInCatalog(getAgentCatalog(provider), selection);
 }
 
 export function findSelectableModelOptionInCatalog(
@@ -294,13 +281,6 @@ export function findSelectableModelOptionInCatalog(
   };
 }
 
-export function isKnownModelSelection(
-  provider: DownstreamAgentProvider,
-  selection: string,
-): boolean {
-  return isKnownModelSelectionInCatalog(getAgentCatalog(provider), selection);
-}
-
 export function isKnownModelSelectionInCatalog(
   catalog: Pick<AgentCatalogEntry, "models">,
   selection: string,
@@ -332,7 +312,7 @@ export function isKnownModelSelectionInCatalog(
   return (baseEntry.supportedReasoningEfforts ?? []).includes(reasoningEffort);
 }
 
-export function buildReasoningModelSelection(
+function buildReasoningModelSelection(
   modelId: string,
   reasoningEffort?: ReasoningEffort,
 ): string {

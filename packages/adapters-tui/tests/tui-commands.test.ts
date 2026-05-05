@@ -4,7 +4,7 @@ import {
   parseModelSelectionCommand,
   parseToolCardThemeCommand,
   shouldDisableEditorSubmit,
-} from "@nanoboss/adapters-tui";
+} from "../src/app/commands.ts";
 
 describe("tui commands", () => {
   test("keeps submit enabled for exit commands while a run is active", () => {

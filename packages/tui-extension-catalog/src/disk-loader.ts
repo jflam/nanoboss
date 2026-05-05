@@ -9,7 +9,7 @@ import type { TuiExtension, TuiExtensionMetadata } from "@nanoboss/tui-extension
 
 import { assertTuiExtension } from "./loadable-registry.ts";
 
-export interface DiscoveredDiskTuiExtension {
+interface DiscoveredDiskTuiExtension {
   metadata: TuiExtensionMetadata;
   path: string;
 }

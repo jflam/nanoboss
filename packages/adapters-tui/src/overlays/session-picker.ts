@@ -5,8 +5,8 @@ import {
 } from "@nanoboss/store";
 import type { SessionMetadata } from "@nanoboss/contracts";
 
-import type { NanobossTuiTheme } from "../theme.ts";
-import { promptWithSelectList } from "./select-overlay.ts";
+import type { NanobossTuiTheme } from "../theme/theme.ts";
+import { promptWithSelectList } from "./select-overlay-prompt.ts";
 
 export async function promptForStoredSessionSelection(
   theme: NanobossTuiTheme,

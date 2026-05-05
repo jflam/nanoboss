@@ -1,16 +1,13 @@
-import { afterEach, beforeAll, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 
 import typia from "typia";
 import { jsonType } from "@nanoboss/procedure-sdk";
 
 import {
-  clearFormRenderers,
   getFormRenderer,
-  listFormRenderers,
   registerFormRenderer,
   type FormRenderContext,
-  type FormRenderer,
-} from "../src/form-renderers.ts";
+} from "../src/core/form-renderers.ts";
 import {
   createInitialUiState,
   createNanobossTuiTheme,
@@ -18,7 +15,7 @@ import {
 // Side-effect import: populates the registry with core renderers that
 // other test files (e.g. tui-app.test.ts) rely on when running in the
 // shared bun test process.
-import "../src/core-form-renderers.ts";
+import "../src/core/core-form-renderers.ts";
 
 interface SamplePayload {
   title: string;
@@ -54,41 +51,25 @@ function buildCtx(
 }
 
 describe("form renderer registry", () => {
-  let snapshot: FormRenderer<unknown>[] = [];
-
-  beforeAll(() => {
-    snapshot = listFormRenderers();
-  });
-
-  afterEach(() => {
-    // Restore the snapshot so tests in other files that rely on the
-    // side-effect registrations from core-form-renderers.ts still see
-    // the core simplify2 forms after this file runs.
-    clearFormRenderers();
-    for (const renderer of snapshot) {
-      registerFormRenderer(renderer);
-    }
-  });
-
   test("registerFormRenderer throws on duplicate formId", () => {
     registerFormRenderer<SamplePayload>({
-      formId: "nb/test-form@1",
+      formId: "nb/test-form-duplicate@1",
       schema: samplePayloadType,
       render() { return stubComponent("first") as never; },
     });
 
     expect(() => {
       registerFormRenderer<SamplePayload>({
-        formId: "nb/test-form@1",
+        formId: "nb/test-form-duplicate@1",
         schema: samplePayloadType,
         render() { return stubComponent("second") as never; },
       });
     }).toThrow(/already registered/);
   });
 
-  test("getFormRenderer returns the registered renderer and listFormRenderers includes it", () => {
+  test("getFormRenderer returns the registered renderer", () => {
     const renderer = {
-      formId: "nb/test-form@1",
+      formId: "nb/test-form-get@1",
       schema: samplePayloadType,
       render(ctx: FormRenderContext<SamplePayload>) {
         return stubComponent(`label:${ctx.payload.title}`) as never;
@@ -96,19 +77,18 @@ describe("form renderer registry", () => {
     };
     registerFormRenderer(renderer);
 
-    expect(getFormRenderer("nb/test-form@1")).toBe(renderer as unknown as ReturnType<typeof getFormRenderer>);
-    expect(listFormRenderers().length).toBeGreaterThanOrEqual(snapshot.length + 1);
+    expect(getFormRenderer("nb/test-form-get@1")).toBe(renderer as unknown as ReturnType<typeof getFormRenderer>);
     expect(getFormRenderer("nb/does-not-exist@1")).toBeUndefined();
   });
 
   test("payload failing typia validation is rejected at mount time", () => {
     registerFormRenderer<SamplePayload>({
-      formId: "nb/test-form@1",
+      formId: "nb/test-form-validation@1",
       schema: samplePayloadType,
       render() { return stubComponent("ok") as never; },
     });
 
-    const renderer = getFormRenderer("nb/test-form@1");
+    const renderer = getFormRenderer("nb/test-form-validation@1");
     expect(renderer).toBeDefined();
     // Missing required `reply` field must fail schema.validate.
     expect(renderer!.schema.validate({ title: "hi" } as unknown)).toBe(false);
@@ -119,14 +99,14 @@ describe("form renderer registry", () => {
     const submitted: string[] = [];
     const cancelled: number[] = [];
     registerFormRenderer<SamplePayload>({
-      formId: "nb/test-form@1",
+      formId: "nb/test-form-submit@1",
       schema: samplePayloadType,
       render(ctx) {
         ctx.submit(ctx.payload.reply);
         return stubComponent("x") as never;
       },
     });
-    const renderer = getFormRenderer("nb/test-form@1")!;
+    const renderer = getFormRenderer("nb/test-form-submit@1")!;
     const ctx = buildCtx({ title: "hi", reply: "go-ahead" }, {
       submit: (reply) => { submitted.push(reply); },
       cancel: () => { cancelled.push(1); },
@@ -140,14 +120,14 @@ describe("form renderer registry", () => {
     const submitted: string[] = [];
     const cancelled: number[] = [];
     registerFormRenderer<SamplePayload>({
-      formId: "nb/test-form@1",
+      formId: "nb/test-form-cancel@1",
       schema: samplePayloadType,
       render(ctx) {
         ctx.cancel();
         return stubComponent("x") as never;
       },
     });
-    const renderer = getFormRenderer("nb/test-form@1")!;
+    const renderer = getFormRenderer("nb/test-form-cancel@1")!;
     const ctx = buildCtx({ title: "hi", reply: "go" }, {
       submit: (reply) => { submitted.push(reply); },
       cancel: () => { cancelled.push(1); },

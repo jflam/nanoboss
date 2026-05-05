@@ -1,10 +1,17 @@
 import type * as acp from "@agentclientprotocol/sdk";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
-import { normalizeAgentTokenUsage } from "./token-usage.ts";
 import type { AgentTokenSnapshot, DownstreamAgentConfig } from "./types.ts";
+import { findCopilotProcessLogs } from "./copilot-process-logs.ts";
+import {
+  attachTokenUsageToRawOutput,
+  isTerminalToolCallUpdate,
+  mergeTokenSnapshots,
+  snapshotFromPromptResponse,
+  snapshotFromUsageUpdate,
+} from "./token-snapshot.ts";
 
 interface CollectTokenSnapshotParams {
   childPid?: number | undefined;
@@ -84,152 +91,6 @@ export async function enrichToolCallUpdateWithTokenUsage(
   };
 }
 
-function snapshotFromUsageUpdate(
-  config: DownstreamAgentConfig,
-  sessionId: acp.SessionId,
-  updates: acp.SessionUpdate[],
-): AgentTokenSnapshot | undefined {
-  const last = [...updates].reverse().find(isUsageUpdate);
-  if (!last) {
-    return undefined;
-  }
-
-  return {
-    provider: config.provider,
-    model: config.model,
-    sessionId,
-    source: "acp_usage_update",
-    contextWindowTokens: last.size,
-    usedContextTokens: last.used,
-  };
-}
-
-function snapshotFromPromptResponse(
-  config: DownstreamAgentConfig,
-  sessionId: acp.SessionId,
-  promptResponse?: acp.PromptResponse,
-): AgentTokenSnapshot | undefined {
-  const usage = promptResponse?.usage;
-  if (!usage) {
-    return undefined;
-  }
-
-  const cacheReadTokens = usage.cachedReadTokens ?? 0;
-  const cacheWriteTokens = usage.cachedWriteTokens ?? 0;
-  const inputTokens = Math.max(0, usage.inputTokens - cacheReadTokens);
-
-  return {
-    provider: config.provider,
-    model: config.model,
-    sessionId,
-    source: "acp_prompt_response",
-    inputTokens,
-    outputTokens: usage.outputTokens,
-    cacheReadTokens,
-    cacheWriteTokens,
-    totalTokens: usage.totalTokens,
-  };
-}
-
-function mergeTokenSnapshots(
-  ...snapshots: Array<AgentTokenSnapshot | undefined>
-): AgentTokenSnapshot | undefined {
-  const primary = snapshots.find((snapshot) => snapshot !== undefined);
-  if (!primary) {
-    return undefined;
-  }
-
-  return {
-    provider: pickSnapshotField(snapshots, (snapshot) => snapshot.provider),
-    model: pickSnapshotField(snapshots, (snapshot) => snapshot.model),
-    sessionId: pickSnapshotField(snapshots, (snapshot) => snapshot.sessionId),
-    source: primary.source,
-    capturedAt: pickSnapshotField(snapshots, (snapshot) => snapshot.capturedAt),
-    contextWindowTokens: pickSnapshotField(snapshots, (snapshot) => snapshot.contextWindowTokens),
-    usedContextTokens: pickSnapshotField(snapshots, (snapshot) => snapshot.usedContextTokens),
-    systemTokens: pickSnapshotField(snapshots, (snapshot) => snapshot.systemTokens),
-    conversationTokens: pickSnapshotField(snapshots, (snapshot) => snapshot.conversationTokens),
-    toolDefinitionsTokens: pickSnapshotField(snapshots, (snapshot) => snapshot.toolDefinitionsTokens),
-    inputTokens: pickSnapshotField(snapshots, (snapshot) => snapshot.inputTokens),
-    outputTokens: pickSnapshotField(snapshots, (snapshot) => snapshot.outputTokens),
-    cacheReadTokens: pickSnapshotField(snapshots, (snapshot) => snapshot.cacheReadTokens),
-    cacheWriteTokens: pickSnapshotField(snapshots, (snapshot) => snapshot.cacheWriteTokens),
-    totalTokens: pickSnapshotField(snapshots, (snapshot) => snapshot.totalTokens),
-  };
-}
-
-function pickSnapshotField<T>(
-  snapshots: Array<AgentTokenSnapshot | undefined>,
-  picker: (snapshot: AgentTokenSnapshot) => T | undefined,
-): T | undefined {
-  for (const snapshot of snapshots) {
-    if (!snapshot) {
-      continue;
-    }
-
-    const value = picker(snapshot);
-    if (value !== undefined) {
-      return value;
-    }
-  }
-
-  return undefined;
-}
-
-function isUsageUpdate(
-  update: acp.SessionUpdate,
-): update is Extract<acp.SessionUpdate, { sessionUpdate: "usage_update" }> {
-  return update.sessionUpdate === "usage_update";
-}
-
-function isTerminalToolCallUpdate(
-  update: acp.SessionUpdate,
-): update is Extract<acp.SessionUpdate, { sessionUpdate: "tool_call_update" }> {
-  const status = update.sessionUpdate === "tool_call_update"
-    ? update.status as string | null | undefined
-    : undefined;
-  return (
-    update.sessionUpdate === "tool_call_update"
-    && (
-      status === "completed"
-      || status === "failed"
-      || status === "cancelled"
-    )
-  );
-}
-
-function attachTokenUsageToRawOutput(
-  rawOutput: unknown,
-  tokenSnapshot: AgentTokenSnapshot,
-  config: DownstreamAgentConfig,
-): Record<string, unknown> | undefined {
-  const tokenUsage = normalizeAgentTokenUsage(tokenSnapshot, config);
-  if (!tokenUsage) {
-    return undefined;
-  }
-
-  if (rawOutput === undefined) {
-    return {
-      tokenSnapshot,
-      tokenUsage,
-    };
-  }
-
-  if (!isRecord(rawOutput)) {
-    return undefined;
-  }
-
-  return {
-    ...rawOutput,
-    tokenSnapshot,
-    tokenUsage,
-  };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
-}
-
 function resolveHomeDir(): string {
   return process.env.HOME?.trim() || homedir();
 }
@@ -254,7 +115,8 @@ async function collectCopilotTokenSnapshot(
   const sessionStateDir = join(resolveHomeDir(), ".copilot", "session-state", params.sessionId);
 
   const fromLog = await retryRead(() => {
-    for (const processLogPath of findCopilotProcessLogs(params.childPid)) {
+    const processLogsDir = join(resolveHomeDir(), ".copilot", "logs");
+    for (const processLogPath of findCopilotProcessLogs(processLogsDir, params.childPid)) {
       if (!existsSync(processLogPath)) {
         continue;
       }
@@ -293,111 +155,7 @@ async function retryRead<T>(reader: () => T | undefined): Promise<T | undefined>
   return undefined;
 }
 
-function findCopilotProcessLogs(childPid: number | undefined): string[] {
-  if (!childPid) {
-    return [];
-  }
-
-  const dir = join(resolveHomeDir(), ".copilot", "logs");
-  if (!existsSync(dir)) {
-    return [];
-  }
-
-  const entries = readdirSync(dir);
-  const candidatePids = collectCopilotProcessFamilyPids(childPid);
-  const exactMatches = findCopilotLogsForPids(dir, candidatePids, entries);
-  if (exactMatches.length > 0) {
-    return exactMatches;
-  }
-
-  return findMostRecentCopilotLogs(dir, entries, 8);
-}
-
-export function findCopilotLogsForPids(
-  dir: string,
-  pids: number[],
-  entries: string[] = readdirSync(dir),
-): string[] {
-  const suffixes = new Set(pids.map((pid) => `-${pid}.log`));
-  return entries
-    .filter((entry) => {
-      for (const suffix of suffixes) {
-        if (entry.endsWith(suffix)) {
-          return true;
-        }
-      }
-      return false;
-    })
-    .map((entry) => join(dir, entry))
-    .sort((left, right) => right.localeCompare(left));
-}
-
-export function parseDescendantPidsFromPsOutput(psOutput: string, rootPid: number): number[] {
-  const children = new Map<number, number[]>();
-
-  for (const line of psOutput.split(/\n+/)) {
-    const match = line.match(/^\s*(\d+)\s+(\d+)\s+/);
-    if (!match) {
-      continue;
-    }
-
-    const pid = Number(match[1]);
-    const ppid = Number(match[2]);
-    const list = children.get(ppid) ?? [];
-    list.push(pid);
-    children.set(ppid, list);
-  }
-
-  const descendants: number[] = [];
-  const queue = [...(children.get(rootPid) ?? [])];
-  const seen = new Set<number>();
-
-  while (queue.length > 0) {
-    const pid = queue.shift();
-    if (pid === undefined || seen.has(pid)) {
-      continue;
-    }
-
-    seen.add(pid);
-    descendants.push(pid);
-    queue.push(...(children.get(pid) ?? []));
-  }
-
-  return descendants;
-}
-
-function collectCopilotProcessFamilyPids(rootPid: number): number[] {
-  const psOutput = readPsOutput();
-  return psOutput ? [rootPid, ...parseDescendantPidsFromPsOutput(psOutput, rootPid)] : [rootPid];
-}
-
-function readPsOutput(): string | undefined {
-  try {
-    const result = Bun.spawnSync({
-      cmd: ["ps", "-ax", "-o", "pid=,ppid=,command="],
-      env: process.env,
-      stdout: "pipe",
-      stderr: "pipe",
-    });
-    if (result.exitCode !== 0) {
-      return undefined;
-    }
-
-    return new TextDecoder().decode(result.stdout);
-  } catch {
-    return undefined;
-  }
-}
-
-function findMostRecentCopilotLogs(dir: string, entries: string[], limit: number): string[] {
-  return entries
-    .filter((entry) => entry.startsWith("process-") && entry.endsWith(".log"))
-    .sort((left, right) => right.localeCompare(left))
-    .slice(0, limit)
-    .map((entry) => join(dir, entry));
-}
-
-export function parseClaudeDebugMetrics(
+function parseClaudeDebugMetrics(
   text: string,
   config: DownstreamAgentConfig,
   sessionId: acp.SessionId,
@@ -419,7 +177,7 @@ export function parseClaudeDebugMetrics(
   };
 }
 
-export function parseCopilotLogMetrics(
+function parseCopilotLogMetrics(
   text: string,
   config: DownstreamAgentConfig,
   sessionId: acp.SessionId,
@@ -465,7 +223,7 @@ export function parseCopilotLogMetrics(
   };
 }
 
-export function parseCopilotSessionState(
+function parseCopilotSessionState(
   text: string,
   config: DownstreamAgentConfig,
   sessionId: acp.SessionId,

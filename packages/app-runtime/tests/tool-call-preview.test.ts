@@ -3,7 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   summarizeToolCallStart,
   summarizeToolCallUpdate,
-} from "@nanoboss/app-runtime";
+} from "../src/tool-call-preview.ts";
 
 describe("tool call preview normalization", () => {
   test("builds read input headers through the shared payload normalizer", () => {

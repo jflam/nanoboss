@@ -46,13 +46,6 @@ const HELPER_FAMILIES = [
         names: ["inferDataShape", "stringifyCompactShape"],
         source: "./data-shape.ts",
       },
-      {
-        packageName: "@nanoboss/procedure-engine",
-        barrel: "packages/procedure-engine/src/index.ts",
-        names: ["inferDataShape", "stringifyCompactShape"],
-        source: "@nanoboss/procedure-sdk",
-        removalNote: "Compatibility re-export: data shape helpers moved to @nanoboss/procedure-sdk.",
-      },
     ],
   },
   {
@@ -154,12 +147,25 @@ const HELPER_FAMILIES = [
         names: ["resolveSelfCommand", "resolveSelfCommandWithRuntime", "SelfCommand", "SelfCommandRuntime"],
         source: "./self-command.ts",
       },
+    ],
+  },
+  {
+    family: "timing traces",
+    canonicalOwner: "@nanoboss/app-support",
+    implementationNames: ["appendTimingTraceEvent", "createRunTimingTrace"],
+    allowedImplementations: [
       {
-        packageName: "@nanoboss/procedure-engine",
-        barrel: "packages/procedure-engine/src/index.ts",
-        names: ["resolveSelfCommand", "resolveSelfCommandWithRuntime"],
-        source: "@nanoboss/app-support",
-        removalNote: "Compatibility re-export: self-command helpers moved to @nanoboss/app-support.",
+        packageName: "@nanoboss/app-support",
+        path: "packages/app-support/src/timing-trace.ts",
+        reason: "Canonical low-level timing trace writer owner.",
+      },
+    ],
+    publicExports: [
+      {
+        packageName: "@nanoboss/app-support",
+        barrel: "packages/app-support/src/index.ts",
+        names: ["appendTimingTraceEvent", "createRunTimingTrace", "RunTimingTrace"],
+        source: "./timing-trace.ts",
       },
     ],
   },

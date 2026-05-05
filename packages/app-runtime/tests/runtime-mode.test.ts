@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { shouldLoadDiskCommands } from "@nanoboss/app-runtime";
+import { shouldLoadDiskCommands } from "../src/runtime-mode.ts";
 
 describe("shouldLoadDiskCommands", () => {
   test("defaults to loading commands from disk", () => {

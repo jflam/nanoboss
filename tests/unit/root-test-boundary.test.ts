@@ -41,6 +41,7 @@ const ROOT_OWNED_TESTS = [
   "simplify2-command.test.ts",
   "store-helper-convergence.test.ts",
   "test-home-isolation.test.ts",
+  "tui-helper-convergence.test.ts",
   "ui-cli.test.ts",
 ] as const;
 

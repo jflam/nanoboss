@@ -49,5 +49,4 @@ export {
   formatSessionDetailLine,
   formatSessionInitialPrompt,
   formatSessionLine,
-  formatTimestamp,
 } from "./session-picker-format.ts";

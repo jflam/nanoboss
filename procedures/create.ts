@@ -4,8 +4,8 @@ import { join } from "node:path";
 import typia from "typia";
 
 import { detectRepoRoot } from "@nanoboss/app-support";
-import type { LoadableProcedureRegistry } from "@nanoboss/procedure-catalog";
-import { expectData, jsonType } from "@nanoboss/procedure-sdk";
+import { normalizeProcedureName, type LoadableProcedureRegistry } from "@nanoboss/procedure-catalog";
+import { expectData, formatErrorMessage, jsonType } from "@nanoboss/procedure-sdk";
 import type {
   Procedure,
   ProcedureApi,
@@ -158,61 +158,4 @@ function normalizeGeneratedProcedureSource(source: string, procedureName: string
     .replace(/name:\s*["'`][^"'`]+["'`]/, `name: "${procedureName}"`)
     .replace(/(["'`])@nanoboss\/contracts\1/g, "$1@nanoboss/procedure-sdk$1")
     .replace(/(["'`])(?:\.\.?\/)+src\/core\/(?:types|run-result)\.ts\1/g, "$1@nanoboss/procedure-sdk$1");
-}
-
-function normalizeProcedureName(value: string): string {
-  const trimmed = value.trim().replace(/^\/+|\/+$/g, "");
-  if (!trimmed) {
-    throw new Error("Procedure name was empty");
-  }
-
-  const segments = trimmed
-    .split(/\/+/)
-    .map((segment) => normalizeProcedureNameSegment(segment));
-
-  return segments.join("/");
-}
-
-function normalizeProcedureNameSegment(value: string): string {
-  const sanitized = value
-    .trim()
-    .replace(/[^a-zA-Z0-9_-]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .toLowerCase();
-
-  if (!sanitized) {
-    throw new Error(`Procedure name segment was invalid: ${value}`);
-  }
-
-  return sanitized;
-}
-
-function formatErrorMessage(error: unknown): string {
-  if (error instanceof Error && error.message.trim().length > 0) {
-    return error.message;
-  }
-
-  if (typeof error === "string") {
-    return error;
-  }
-
-  if (
-    typeof error === "object"
-    && error !== null
-    && "message" in error
-    && typeof (error as { message?: unknown }).message === "string"
-    && (error as { message: string }).message.trim().length > 0
-  ) {
-    return (error as { message: string }).message;
-  }
-
-  if (typeof error === "object" && error !== null) {
-    try {
-      return JSON.stringify(error);
-    } catch {
-      return Object.prototype.toString.call(error);
-    }
-  }
-
-  return String(error);
 }

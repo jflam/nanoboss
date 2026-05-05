@@ -1,52 +1,28 @@
 {
   "$schema": "./node_modules/knip/schema.json",
-  "entry": [
-    "nanoboss.ts",
-    "cli.ts",
-    "resume.ts",
-    "build.ts",
-    "preload.ts",
-    "scripts/**/*.ts",
-    "packages/*/src/index.ts",
-    "packages/app-runtime/src/runtime-service.ts",
-    "procedures/**/*.ts",
-    "src/runtime/service.ts"
-  ],
   "include": [
     "files",
     "exports",
     "types"
   ],
-  "ignoreIssues": {
-    "packages/adapters-mcp/src/stdio-jsonrpc.ts": [
-      "exports",
-      "types"
-    ],
-    "packages/adapters-tui/src/controller.ts": [
-      "types"
-    ],
-    "packages/app-runtime/src/runtime-service.ts": [
-      "exports"
-    ],
-    "packages/adapters-tui/src/form-renderers.ts": [
-      "exports"
-    ],
-    "packages/procedure-catalog/src/names.ts": [
-      "exports"
-    ]
+  "workspaces": {
+    ".": {
+      "entry": [
+        "cli.ts",
+        "resume.ts",
+        "scripts/**/*.ts",
+        "procedures/**/*.ts"
+      ],
+      "project": [
+        "*.ts",
+        "scripts/**/*.ts",
+        "procedures/**/*.ts",
+        "src/**/*.ts"
+      ]
+    }
   },
-  "project": [
-    "*.ts",
-    "scripts/**/*.ts",
-    "packages/**/*.ts",
-    "procedures/**/*.ts",
-    "src/**/*.ts"
-  ],
   "ignore": [
-    "dist/**",
-    "coverage/**",
-    "tests/**",
-    "packages/*/tests/**",
+    "packages/adapters-tui/tests/preload-boot-extensions.ts",
     "packages/procedure-sdk/test-fixtures/consumer/index.ts"
   ]
 }

@@ -1,4 +1,4 @@
-import { mkdtempSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -6,12 +6,23 @@ import { expect, test } from "bun:test";
 
 import {
   collectTokenSnapshot,
-  findCopilotLogsForPids,
-  parseClaudeDebugMetrics,
-  parseCopilotLogMetrics,
-  parseCopilotSessionState,
-  parseDescendantPidsFromPsOutput,
 } from "@nanoboss/agent-acp";
+
+async function withTempHome<T>(run: (home: string) => Promise<T>): Promise<T> {
+  const previousHome = process.env.HOME;
+  const home = mkdtempSync(join(tmpdir(), "nanoboss-token-home-"));
+  process.env.HOME = home;
+  try {
+    return await run(home);
+  } finally {
+    if (previousHome === undefined) {
+      delete process.env.HOME;
+    } else {
+      process.env.HOME = previousHome;
+    }
+    rmSync(home, { recursive: true, force: true });
+  }
+}
 
 test("collectTokenSnapshot uses ACP usage_update for codex", async () => {
   const snapshot = await collectTokenSnapshot({
@@ -69,34 +80,41 @@ test("collectTokenSnapshot falls back to ACP usage_update for generic agents", a
   });
 });
 
-test("parseClaudeDebugMetrics extracts the latest autocompact line", () => {
-  const snapshot = parseClaudeDebugMetrics(
-    [
+test("collectTokenSnapshot extracts the latest Claude autocompact line", async () => {
+  await withTempHome(async (home) => {
+    const sessionId = "claude-session";
+    const debugDir = join(home, ".claude", "debug");
+    mkdirSync(debugDir, { recursive: true });
+    writeFileSync(join(debugDir, `${sessionId}.txt`), [
       "2026-04-02T15:48:46.999Z [DEBUG] autocompact: tokens=1508 threshold=167000 effectiveWindow=180000",
       "2026-04-02T15:48:50.752Z [DEBUG] autocompact: tokens=27685 threshold=167000 effectiveWindow=180000",
       "2026-04-02T15:48:52.694Z [DEBUG] autocompact: tokens=27707 threshold=167000 effectiveWindow=180000",
-    ].join("\n"),
-    {
-      provider: "claude",
-      command: "claude-code-acp",
-      args: [],
-      model: "sonnet",
-    },
-    "claude-session",
-  );
+    ].join("\n"));
 
-  expect(snapshot).toEqual({
-    provider: "claude",
-    model: "sonnet",
-    sessionId: "claude-session",
-    source: "claude_debug",
-    capturedAt: "2026-04-02T15:48:52.694Z",
-    usedContextTokens: 27707,
-    contextWindowTokens: 180000,
+    const snapshot = await collectTokenSnapshot({
+      config: {
+        provider: "claude",
+        command: "claude-code-acp",
+        args: [],
+        model: "sonnet",
+      },
+      sessionId,
+      updates: [],
+    });
+
+    expect(snapshot).toEqual({
+      provider: "claude",
+      model: "sonnet",
+      sessionId,
+      source: "claude_debug",
+      capturedAt: "2026-04-02T15:48:52.694Z",
+      usedContextTokens: 27707,
+      contextWindowTokens: 180000,
+    });
   });
 });
 
-test("parseCopilotLogMetrics extracts context and turn usage from telemetry logs", () => {
+test("collectTokenSnapshot extracts context and turn usage from matching Copilot telemetry logs", async () => {
   const text = [
     "2026-04-02T15:48:30.942Z [INFO] [Telemetry] cli.telemetry:",
     JSON.stringify({
@@ -127,57 +145,44 @@ test("parseCopilotLogMetrics extracts context and turn usage from telemetry logs
     }, null, 2),
   ].join("\n");
 
-  const snapshot = parseCopilotLogMetrics(text, {
-    provider: "copilot",
-    command: "copilot",
-    args: ["--acp"],
-    model: "gpt-5.4",
-  }, "copilot-session");
+  await withTempHome(async (home) => {
+    const logsDir = join(home, ".copilot", "logs");
+    mkdirSync(logsDir, { recursive: true });
+    writeFileSync(join(logsDir, "process-1775161293564-99653.log"), text);
 
-  expect(snapshot).toEqual({
-    provider: "copilot",
-    model: "gpt-5.4",
-    sessionId: "copilot-session",
-    source: "copilot_log",
-    capturedAt: "2026-04-02T15:48:30.942Z",
-    contextWindowTokens: 272000,
-    usedContextTokens: 24152,
-    systemTokens: 8011,
-    conversationTokens: 2178,
-    toolDefinitionsTokens: 13963,
-    inputTokens: 19428,
-    outputTokens: 92,
-    cacheReadTokens: 1536,
-    cacheWriteTokens: 0,
-    totalTokens: 21056,
+    const snapshot = await collectTokenSnapshot({
+      childPid: 99653,
+      config: {
+        provider: "copilot",
+        command: "copilot",
+        args: ["--acp"],
+        model: "gpt-5.4",
+      },
+      sessionId: "copilot-session",
+      updates: [],
+    });
+
+    expect(snapshot).toEqual({
+      provider: "copilot",
+      model: "gpt-5.4",
+      sessionId: "copilot-session",
+      source: "copilot_log",
+      capturedAt: "2026-04-02T15:48:30.942Z",
+      contextWindowTokens: 272000,
+      usedContextTokens: 24152,
+      systemTokens: 8011,
+      conversationTokens: 2178,
+      toolDefinitionsTokens: 13963,
+      inputTokens: 19428,
+      outputTokens: 92,
+      cacheReadTokens: 1536,
+      cacheWriteTokens: 0,
+      totalTokens: 21056,
+    });
   });
 });
 
-test("parseDescendantPidsFromPsOutput walks wrapper child processes", () => {
-  const psOutput = [
-    "  100   1 copilot --acp --allow-all-tools",
-    "  101 100 /opt/homebrew/Caskroom/copilot-cli/1.0.7/copilot --acp --allow-all-tools",
-    "  102 101 node helper.js",
-    "  200   1 unrelated",
-  ].join("\n");
-
-  expect(parseDescendantPidsFromPsOutput(psOutput, 100)).toEqual([101, 102]);
-});
-
-test("findCopilotLogsForPids matches descendant copilot logs", () => {
-  const dir = mkdtempSync(join(tmpdir(), "nanoboss-copilot-logs-"));
-  const entries = [
-    "process-1775161293564-99653.log",
-    "process-1775161261871-99467.log",
-    "process-1775161229038-99284.log",
-  ];
-
-  expect(findCopilotLogsForPids(dir, [99652, 99653], entries)).toEqual([
-    join(dir, "process-1775161293564-99653.log"),
-  ]);
-});
-
-test("parseCopilotSessionState falls back to shutdown metrics", () => {
+test("collectTokenSnapshot falls back to Copilot shutdown metrics", async () => {
   const text = [
     JSON.stringify({ type: "session.start", data: { sessionId: "copilot-session" } }),
     JSON.stringify({
@@ -202,27 +207,38 @@ test("parseCopilotSessionState falls back to shutdown metrics", () => {
     }),
   ].join("\n");
 
-  const snapshot = parseCopilotSessionState(text, {
-    provider: "copilot",
-    command: "copilot",
-    args: ["--acp"],
-    model: "gpt-5.4",
-  }, "copilot-session");
+  await withTempHome(async (home) => {
+    const sessionId = "copilot-session";
+    const sessionStateDir = join(home, ".copilot", "session-state", sessionId);
+    mkdirSync(sessionStateDir, { recursive: true });
+    writeFileSync(join(sessionStateDir, "events.jsonl"), text);
 
-  expect(snapshot).toEqual({
-    provider: "copilot",
-    model: "gpt-5.4",
-    sessionId: "copilot-session",
-    source: "copilot_session_state",
-    contextWindowTokens: undefined,
-    usedContextTokens: 23530,
-    systemTokens: 8011,
-    conversationTokens: 2269,
-    toolDefinitionsTokens: 13247,
-    inputTokens: 63150,
-    outputTokens: 248,
-    cacheReadTokens: 43264,
-    cacheWriteTokens: 0,
-    totalTokens: 106662,
+    const snapshot = await collectTokenSnapshot({
+      config: {
+        provider: "copilot",
+        command: "copilot",
+        args: ["--acp"],
+        model: "gpt-5.4",
+      },
+      sessionId,
+      updates: [],
+    });
+
+    expect(snapshot).toEqual({
+      provider: "copilot",
+      model: "gpt-5.4",
+      sessionId,
+      source: "copilot_session_state",
+      contextWindowTokens: undefined,
+      usedContextTokens: 23530,
+      systemTokens: 8011,
+      conversationTokens: 2269,
+      toolDefinitionsTokens: 13247,
+      inputTokens: 63150,
+      outputTokens: 248,
+      cacheReadTokens: 43264,
+      cacheWriteTokens: 0,
+      totalTokens: 106662,
+    });
   });
 });

@@ -2,12 +2,14 @@ import { describe, expect, test } from "bun:test";
 import type * as acp from "@agentclientprotocol/sdk";
 
 import {
+  runAcpServerCommand,
+} from "@nanoboss/adapters-acp-server";
+import {
   buildTopLevelSessionMeta,
   extractDefaultAgentSelection,
   extractNanobossSessionId,
-  QueuedSessionUpdateEmitter,
-  runAcpServerCommand,
-} from "@nanoboss/adapters-acp-server";
+} from "../src/session-metadata.ts";
+import { QueuedSessionUpdateEmitter } from "../src/session-update-emitter.ts";
 
 describe("top-level ACP session diagnostics", () => {
   test("exports the ACP server command through the package boundary", () => {

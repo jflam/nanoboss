@@ -3,11 +3,11 @@ import { describe, expect, test } from "bun:test";
 import {
   mapProcedureUiEventToFrontendEvent,
   mapSessionUpdateToFrontendEvents,
-  SessionEventLog,
   toReplayableFrontendEvent,
   toFrontendCommands,
 } from "@nanoboss/adapters-http";
 import { formatProcedureStatusText, type ProcedureUiEvent } from "@nanoboss/procedure-engine";
+import { SessionEventLog } from "../../packages/app-runtime/src/runtime-events.ts";
 
 describe("frontend-events", () => {
   const statusEvent = {

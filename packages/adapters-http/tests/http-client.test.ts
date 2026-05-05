@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { parseSseStream } from "@nanoboss/adapters-http";
+import { parseSseStream } from "../src/sse-stream.ts";
 
 describe("parseSseStream", () => {
   test("parses id, event, and multi-line data", async () => {

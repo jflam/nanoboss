@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { TuiExtensionRegistry } from "@nanoboss/tui-extension-catalog";
 import { runTuiCli } from "@nanoboss/adapters-tui";
 
 describe("runTuiCli", () => {
@@ -145,6 +146,49 @@ describe("runTuiCli", () => {
       "stopped",
       "stderr:nanoboss session id: session-123",
       "exit-code:130",
+    ]);
+  });
+
+  test("buffers extension boot statuses until the app can display them", async () => {
+    const events: string[] = [];
+
+    await runTuiCli({
+      cwd: "/repo-one",
+      connectionMode: "external",
+      serverUrl: "http://127.0.0.1:9999",
+      showToolCalls: true,
+    }, {
+      bootExtensions: (_cwd, { log }) => {
+        events.push("boot");
+        log("warning", "first warning");
+        return {
+          registry: new TuiExtensionRegistry({
+            cwd: "/repo-one",
+            extensionRoots: [],
+          }),
+          failedCount: 1,
+        };
+      },
+      createApp: (params) => {
+        events.push(params.listExtensionEntries ? "list-ready" : "list-missing");
+        return {
+          showStatus(text) {
+            events.push(`status:${text}`);
+          },
+          async run() {
+            events.push("run");
+            return undefined;
+          },
+        };
+      },
+    });
+
+    expect(events).toEqual([
+      "boot",
+      "list-ready",
+      "status:[extension:warning] first warning",
+      "status:[extensions] run /extensions for details",
+      "run",
     ]);
   });
 });

@@ -1,1 +1,1 @@
-export * from "./server.ts";
+export { runAcpServerCommand } from "./server.ts";

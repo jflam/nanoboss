@@ -28,10 +28,11 @@ const CANONICAL_IMPORT_EXPECTATIONS = [
 ] as const;
 
 const PACKAGE_EXPORT_EXPECTATIONS = [
-  ["packages/adapters-http/src/index.ts", 'export * from "./client.ts";'],
-  ["packages/adapters-http/src/index.ts", 'export * from "./server.ts";'],
-  ["packages/adapters-mcp/src/index.ts", 'export * from "./jsonrpc.ts";'],
-  ["packages/adapters-tui/src/index.ts", 'export * from "./controller.ts";'],
+  ["packages/adapters-http/src/index.ts", "getServerHealth"],
+  ["packages/adapters-http/src/index.ts", "startHttpServer"],
+  ["packages/adapters-mcp/src/index.ts", "runMcpServer"],
+  ["packages/adapters-mcp/src/index.ts", "registerSupportedAgentMcp"],
+  ["packages/adapters-tui/src/index.ts", "NanobossTuiController"],
   ["packages/agent-acp/src/index.ts", 'from "./token-metrics.ts";'],
   ["packages/procedure-sdk/src/index.ts", 'from "./tagged-json-line-stream.ts";'],
   ["packages/procedure-sdk/src/index.ts", 'from "./text.ts";'],
@@ -59,12 +60,10 @@ const PHASE_2_COLLAPSED_HELPER_FILES = new Map<string, readonly string[]>([
   ["workspace-identity.ts", ["packages/app-support/src/workspace-identity.ts"]],
 ]);
 const PHASE_2_HELPER_FUNCTION_OWNERS = new Map<string, string>([
-  ["buildReasoningModelSelection", "packages/agent-acp/src/model-catalog.ts"],
   ["buildImageTokenLabel", "packages/procedure-sdk/src/prompt-input.ts"],
   ["computeProceduresFingerprint", "packages/app-support/src/workspace-identity.ts"],
   ["createTextPromptInput", "packages/procedure-sdk/src/prompt-input.ts"],
   ["detectRepoRoot", "packages/app-support/src/procedure-paths.ts"],
-  ["findSelectableModelOption", "packages/agent-acp/src/model-catalog.ts"],
   ["getAgentCatalog", "packages/agent-acp/src/model-catalog.ts"],
   ["getBuildCommit", "packages/app-support/src/build-info.ts"],
   ["getBuildLabel", "packages/app-support/src/build-info.ts"],
@@ -72,9 +71,7 @@ const PHASE_2_HELPER_FUNCTION_OWNERS = new Map<string, string>([
   ["hasPromptInputContent", "packages/procedure-sdk/src/prompt-input.ts"],
   ["hasPromptInputImages", "packages/procedure-sdk/src/prompt-input.ts"],
   ["isKnownAgentProvider", "packages/agent-acp/src/model-catalog.ts"],
-  ["isKnownModelSelection", "packages/agent-acp/src/model-catalog.ts"],
   ["listKnownProviders", "packages/agent-acp/src/model-catalog.ts"],
-  ["listSelectableModelOptions", "packages/agent-acp/src/model-catalog.ts"],
   ["normalizePromptInput", "packages/procedure-sdk/src/prompt-input.ts"],
   ["parseReasoningModelSelection", "packages/agent-acp/src/model-catalog.ts"],
   ["parseRequiredDownstreamAgentSelection", "packages/store/src/agent-selection.ts"],
@@ -164,6 +161,18 @@ test("packages keep baseline manifest and tsconfig parity", () => {
 
     expect(typeof packageJson.scripts?.test).toBe("string");
     expect(typeof packageJson.scripts?.typecheck).toBe("string");
+  }
+});
+
+test("package entrypoints stay explicit", () => {
+  for (const packageRoot of listPackageRoots()) {
+    const indexPath = join(packageRoot, "src", "index.ts");
+    if (!existsSync(indexPath)) {
+      continue;
+    }
+
+    const source = readFileSync(indexPath, "utf8");
+    expect(source).not.toMatch(/^\s*export\s+\*\s+from\s+["'][^"']+["'];?\s*$/m);
   }
 });
 

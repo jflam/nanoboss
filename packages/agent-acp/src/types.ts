@@ -15,7 +15,7 @@ import type {
   TypeDescriptor,
 } from "@nanoboss/procedure-sdk";
 
-import type { RunTimingTrace } from "./timing-trace.ts";
+import type { RunTimingTrace } from "@nanoboss/app-support";
 
 export type {
   AgentRunResult,

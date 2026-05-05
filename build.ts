@@ -25,7 +25,6 @@ import {
   attributeSourceMapBytes,
   formatByteSize,
   summarizeBundledSources,
-  type SizeGroup,
 } from "./src/dev/build-size-report.ts";
 
 const outfile = "./dist/nanoboss";
@@ -87,8 +86,8 @@ interface BuildSizeReport {
   estimatedAppBytes?: number;
   estimatedDependencyBytes?: number;
   estimatedUnmappedBytes?: number;
-  appGroups: SizeGroup[];
-  dependencyGroups: SizeGroup[];
+  appGroups: Array<{ label: string; bytes: number }>;
+  dependencyGroups: Array<{ label: string; bytes: number }>;
   warnings: string[];
 }
 

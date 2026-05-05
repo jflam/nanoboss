@@ -9,7 +9,7 @@ export interface FrontendConnectionOptions {
   serverUrl?: string;
 }
 
-export interface ParsedFrontendConnectionOptions extends FrontendConnectionOptions {
+interface ParsedFrontendConnectionOptions extends FrontendConnectionOptions {
   remainingArgs: string[];
 }
 
