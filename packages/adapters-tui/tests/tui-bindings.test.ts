@@ -16,7 +16,7 @@ import {
   type BindingCtx,
   type KeyBinding,
   type KeyBindingAppHooks,
-} from "../src/bindings.ts";
+} from "../src/core/bindings.ts";
 
 function makeController(overrides: Partial<KeyBindingController> = {}): KeyBindingController {
   return {

@@ -1,4 +1,4 @@
-import type { ToolPreviewBlock } from "../tool-preview.ts";
+import type { ToolPreviewBlock } from "../shared/tool-preview.ts";
 
 export function buildFullPreviewBlock(text: string | undefined): ToolPreviewBlock | undefined {
   if (!text) {

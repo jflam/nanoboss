@@ -10,7 +10,7 @@ import {
 import {
   dispatchKeyBinding,
   registerKeyBinding,
-} from "../src/bindings.ts";
+} from "../src/core/bindings.ts";
 
 function stripAnsi(text: string): string {
   const esc = String.fromCharCode(27);

@@ -8,7 +8,7 @@ import {
   buildActivityBarLine,
   registerActivityBarSegment,
   type ActivityBarSegment,
-} from "../src/activity-bar.ts";
+} from "../src/core/activity-bar.ts";
 
 function stripAnsi(text: string): string {
   const esc = String.fromCharCode(27);

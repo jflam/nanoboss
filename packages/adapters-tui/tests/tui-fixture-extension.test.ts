@@ -17,8 +17,8 @@ import {
   listKeyBindings,
   type BindingCtx,
   type KeyBindingAppHooks,
-} from "../src/bindings.ts";
-import { getChromeContributions } from "../src/chrome.ts";
+} from "../src/core/bindings.ts";
+import { getChromeContributions } from "../src/core/chrome.ts";
 
 // The fixture lives under <repo>/tests/fixtures/extensions/acme-hello/ and
 // carries its own .nanoboss/extensions entry. Pointing bootExtensions at

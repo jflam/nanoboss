@@ -1,6 +1,6 @@
-import type { UiToolCall } from "../state.ts";
-import type { NanobossTuiTheme } from "../theme.ts";
-import type { ToolPreviewBlock } from "../tool-preview.ts";
+import type { UiToolCall } from "../state/state.ts";
+import type { NanobossTuiTheme } from "../theme/theme.ts";
+import type { ToolPreviewBlock } from "../shared/tool-preview.ts";
 import { DEFAULT_COLLAPSED_LINES, formatPreviewBody } from "./tool-card-body.ts";
 import { formatDiffLine, looksLikeDiffBlock } from "./tool-card-diff.ts";
 import { getToolCodeContext } from "./tool-card-code-context.ts";

@@ -6,8 +6,8 @@ import {
   type Component,
   type SelectItem,
   type TUI,
-} from "../pi-tui.ts";
-import type { NanobossTuiTheme } from "../theme.ts";
+} from "../shared/pi-tui.ts";
+import type { NanobossTuiTheme } from "../theme/theme.ts";
 
 export interface Simplify2FocusPickerEntry {
   id: string;

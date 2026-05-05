@@ -20,14 +20,14 @@ import {
   listKeyBindings,
   type BindingCtx,
   type KeyBindingAppHooks,
-} from "../src/bindings.ts";
+} from "../src/core/bindings.ts";
 import {
   getChromeContributions,
-} from "../src/chrome.ts";
+} from "../src/core/chrome.ts";
 import {
   getPanelRenderer,
   type PanelRenderer,
-} from "../src/panel-renderers.ts";
+} from "../src/core/panel-renderers.ts";
 
 function makeBindingCtx(overrides: Partial<BindingCtx> = {}): BindingCtx {
   const controller: KeyBindingController = {

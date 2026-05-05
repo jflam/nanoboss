@@ -10,7 +10,7 @@ import {
   getChromeContributions,
   registerChromeContribution,
   type ChromeContribution,
-} from "../src/chrome.ts";
+} from "../src/core/chrome.ts";
 
 function stripAnsi(text: string): string {
   const esc = String.fromCharCode(27);

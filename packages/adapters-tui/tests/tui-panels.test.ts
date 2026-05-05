@@ -11,7 +11,7 @@ import {
 import {
   getPanelRenderer,
   registerPanelRenderer,
-} from "../src/panel-renderers.ts";
+} from "../src/core/panel-renderers.ts";
 
 // The `nb/card@1` panel renderer is contributed by the built-in
 // `nanoboss-core-ui` TUI extension, which is only registered at

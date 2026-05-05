@@ -1,5 +1,5 @@
-import type { UiToolCall } from "../state.ts";
-import type { NanobossTuiTheme } from "../theme.ts";
+import type { UiToolCall } from "../state/state.ts";
+import type { NanobossTuiTheme } from "../theme/theme.ts";
 
 function formatDuration(durationMs: number): string {
   if (durationMs < 1_000) {

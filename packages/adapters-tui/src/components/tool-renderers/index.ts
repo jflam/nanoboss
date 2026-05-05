@@ -1,5 +1,5 @@
-import type { UiToolCall } from "../../state.ts";
-import type { NanobossTuiTheme } from "../../theme.ts";
+import type { UiToolCall } from "../../state/state.ts";
+import type { NanobossTuiTheme } from "../../theme/theme.ts";
 import type { RenderedToolCard } from "../tool-card-format.ts";
 import { getCanonicalToolName, renderPreviewToolCard } from "../tool-card-format.ts";
 import { renderDefaultToolCard } from "./default.ts";

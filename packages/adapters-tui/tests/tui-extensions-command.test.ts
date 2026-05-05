@@ -10,8 +10,8 @@ import {
   NanobossTuiController,
   type NanobossTuiControllerDeps,
 } from "@nanoboss/adapters-tui";
-import { formatExtensionsCard } from "../src/command-extensions-card.ts";
-import type { PanelRenderer } from "../src/panel-renderers.ts";
+import { formatExtensionsCard } from "../src/extensions/command-extensions-card.ts";
+import type { PanelRenderer } from "../src/core/panel-renderers.ts";
 import type { TypeDescriptor } from "@nanoboss/procedure-sdk";
 
 function makeRegistry(): TuiExtensionRegistry {

@@ -1,5 +1,5 @@
-import type { NanobossTuiTheme } from "../theme.ts";
-import type { ToolPreviewBlock } from "../tool-preview.ts";
+import type { NanobossTuiTheme } from "../theme/theme.ts";
+import type { ToolPreviewBlock } from "../shared/tool-preview.ts";
 import {
   formatDiffLine,
   looksLikeDiffBlock,

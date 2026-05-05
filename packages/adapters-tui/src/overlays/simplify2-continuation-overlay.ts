@@ -1,5 +1,5 @@
-import { Container, Spacer, Text, type Component, type TUI } from "../pi-tui.ts";
-import type { NanobossTuiTheme } from "../theme.ts";
+import { Container, Spacer, Text, type Component, type TUI } from "../shared/pi-tui.ts";
+import type { NanobossTuiTheme } from "../theme/theme.ts";
 
 export interface Simplify2CheckpointAction {
   id: "approve" | "stop" | "focus_tests" | "other";

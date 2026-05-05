@@ -1,5 +1,5 @@
-import { Container, SelectList, Spacer, Text, TUI, type Component, type SelectItem } from "../pi-tui.ts";
-import type { NanobossTuiTheme } from "../theme.ts";
+import { Container, SelectList, Spacer, Text, TUI, type Component, type SelectItem } from "../shared/pi-tui.ts";
+import type { NanobossTuiTheme } from "../theme/theme.ts";
 
 export interface SelectOverlayOptions<T extends string> {
   title: string;

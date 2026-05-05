@@ -5,9 +5,9 @@ import { join, relative } from "node:path";
 const REPO_ROOT = process.cwd();
 
 const CANONICAL_TUI_HELPER_OWNERS = [
-  "packages/adapters-tui/src/app-continuation-composer.ts",
-  "packages/adapters-tui/src/app-model-selection.ts",
-  "packages/adapters-tui/src/core-system-panels.ts",
+  "packages/adapters-tui/src/app/app-continuation-composer.ts",
+  "packages/adapters-tui/src/app/app-model-selection.ts",
+  "packages/adapters-tui/src/core/core-system-panels.ts",
 ] as const;
 
 const BANNED_TUI_GLUE_FILES = [

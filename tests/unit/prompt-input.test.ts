@@ -13,8 +13,8 @@ import {
   attachClipboardImage,
   createComposerState,
   reconcileComposerState,
-} from "../../packages/adapters-tui/src/composer.ts";
-import { buildPromptInputFromComposer } from "../../packages/adapters-tui/src/composer-prompt-input.ts";
+} from "../../packages/adapters-tui/src/app/composer.ts";
+import { buildPromptInputFromComposer } from "../../packages/adapters-tui/src/app/composer-prompt-input.ts";
 
 describe("prompt input helpers", () => {
   test("preserve text-image-text ordering through ACP block conversion", () => {

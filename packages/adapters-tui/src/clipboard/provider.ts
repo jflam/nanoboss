@@ -1,4 +1,4 @@
-import type { ClipboardImage } from "../composer.ts";
+import type { ClipboardImage } from "../app/composer.ts";
 
 import { createDarwinClipboardImageProvider } from "./darwin.ts";
 import { createLinuxClipboardImageProvider } from "./linux.ts";

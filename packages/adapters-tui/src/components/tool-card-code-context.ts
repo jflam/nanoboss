@@ -4,8 +4,8 @@ import {
   firstString,
 } from "@nanoboss/procedure-sdk";
 
-import type { UiToolCall } from "../state.ts";
-import { getLanguageFromPath } from "../theme.ts";
+import type { UiToolCall } from "../state/state.ts";
+import { getLanguageFromPath } from "../theme/theme.ts";
 
 export function getToolCodeContext(toolCall: UiToolCall): { shouldHighlight: boolean; language?: string } {
   const toolName = toolCall.toolName?.trim().toLowerCase() || undefined;

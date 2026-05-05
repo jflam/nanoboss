@@ -7,8 +7,8 @@ import {
   stringifyValue,
 } from "@nanoboss/procedure-sdk";
 
-import type { UiToolCall } from "../state.ts";
-import type { ToolPreviewBlock } from "../tool-preview.ts";
+import type { UiToolCall } from "../state/state.ts";
+import type { ToolPreviewBlock } from "../shared/tool-preview.ts";
 import {
   buildFullPreviewBlock,
   normalizeMultilineText,

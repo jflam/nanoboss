@@ -82,7 +82,7 @@ export interface Continuation<TState extends KernelValue = KernelValue> {
   /**
    * Open form-registry continuation descriptor. Resolved by the TUI via
    * the form-renderer registry
-   * (see `packages/adapters-tui/src/core-form-renderers.ts`).
+   * (see `packages/adapters-tui/src/core/core-form-renderers.ts`).
    */
   form?: ContinuationForm;
 }

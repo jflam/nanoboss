@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import type { UiToolCall } from "../src/state.ts";
+import type { UiToolCall } from "../src/state/state.ts";
 import {
   formatExpandedToolHeader,
   getExpandedToolInputBlock,

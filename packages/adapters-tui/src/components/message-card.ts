@@ -1,6 +1,6 @@
-import { Box, Container, Markdown, type Component } from "../pi-tui.ts";
-import type { NanobossTuiTheme } from "../theme.ts";
-import type { UiTurn } from "../state.ts";
+import { Box, Container, Markdown, type Component } from "../shared/pi-tui.ts";
+import type { NanobossTuiTheme } from "../theme/theme.ts";
+import type { UiTurn } from "../state/state.ts";
 
 type MessageCardTone = NonNullable<UiTurn["cardTone"]>;
 

@@ -4,7 +4,7 @@
 //
 // We run a hermetic bootExtensions with no disk roots so user-local
 // extensions under ~/.nanoboss/extensions don't leak into tests.
-import { bootExtensions } from "../src/boot-extensions.ts";
+import { bootExtensions } from "../src/extensions/boot-extensions.ts";
 
 await bootExtensions("/tmp/nanoboss-adapters-tui-tests", {
   extensionRoots: [],

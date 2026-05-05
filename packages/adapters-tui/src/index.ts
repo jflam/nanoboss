@@ -1,18 +1,18 @@
 export {
   NanobossTuiApp,
   type NanobossTuiAppParams,
-} from "./app.ts";
+} from "./app/app.ts";
 export {
   reduceUiState,
   type UiAction,
-} from "./reducer.ts";
+} from "./reducer/reducer.ts";
 export {
   assertInteractiveTty,
   canUseNanobossTui,
   runTuiCli,
   type RunTuiCliDeps,
   type RunTuiCliParams,
-} from "./run.ts";
+} from "./run/run.ts";
 export {
   createInitialUiState,
   type FrontendContinuation,
@@ -24,22 +24,22 @@ export {
   type UiToolCall,
   type UiTranscriptItem,
   type UiTurn,
-} from "./state.ts";
+} from "./state/state.ts";
 export {
   NanobossTuiController,
   type NanobossTuiControllerDeps,
   type NanobossTuiControllerParams,
   type SessionResponse,
-} from "./controller.ts";
+} from "./controller/controller.ts";
 export {
   NanobossAppView,
-} from "./views.ts";
-export type { FrontendConnectionMode } from "./connection-mode.ts";
+} from "./views/views.ts";
+export type { FrontendConnectionMode } from "./shared/connection-mode.ts";
 export {
   createNanobossTuiTheme,
   type NanobossTuiTheme,
   type ToolCardThemeMode,
-} from "./theme.ts";
+} from "./theme/theme.ts";
 export { promptForStoredSessionSelection } from "./overlays/session-picker.ts";
 export {
   bootExtensions,
@@ -49,4 +49,4 @@ export {
   type TuiExtensionBootLog,
   type TuiExtensionBootLogLevel,
   type TuiExtensionContextFactoryDeps,
-} from "./boot-extensions.ts";
+} from "./extensions/boot-extensions.ts";

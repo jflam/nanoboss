@@ -67,8 +67,13 @@ surface without wildcard barrels, grouped around:
 
 ## Internal Shape
 
-The package is currently the largest Nanoboss package. The main size drivers
-are:
+The package is currently the largest Nanoboss package. Internal implementation
+files are grouped by owner directory so future changes have an obvious home:
+`app/`, `controller/`, `reducer/`, `run/`, `state/`, `theme/`, `core/`,
+`extensions/`, `views/`, `shared/`, `components/`, `overlays/`, and
+`clipboard/`.
+
+The main size drivers are:
 
 - `app.ts`: terminal app wiring, editor behavior, and local command dispatch
 - `app-components.ts`: app-level default theme, terminal, TUI, editor,
@@ -272,9 +277,10 @@ are:
 - `theme-tool-card.ts`: tool-card palette data and RGB styling helpers
 - `theme.ts`: adapter theme construction
 
-Keep changes in those files focused. When behavior naturally has its own
-ownership boundary, prefer adding or extending a smaller sibling module instead
-of growing `reducer.ts`, `app.ts`, or `controller.ts` further.
+Keep changes in those directories focused. When behavior naturally has its own
+ownership boundary, prefer adding or extending a smaller sibling module in the
+same owner directory instead of growing `reducer/reducer.ts`, `app/app.ts`, or
+`controller/controller.ts` further.
 
 ## Simplification Rules
 
@@ -309,7 +315,7 @@ Measured during the 2026-05 TUI adapter review:
 
 - source files: 156
 - source lines: 10,358
-- largest file: `src/controller.ts` at 315 lines
+- largest file: `src/controller/controller.ts` at 315 lines
 - workspace package dependencies: 9
 - runtime value exports: 46 -> 12
 - public wildcard exports: 8 -> 0

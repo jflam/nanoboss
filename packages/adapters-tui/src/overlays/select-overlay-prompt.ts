@@ -1,5 +1,5 @@
-import { ProcessTerminal, TUI } from "../pi-tui.ts";
-import type { NanobossTuiTheme } from "../theme.ts";
+import { ProcessTerminal, TUI } from "../shared/pi-tui.ts";
+import type { NanobossTuiTheme } from "../theme/theme.ts";
 import {
   SelectOverlay,
   type SelectOverlayOptions,

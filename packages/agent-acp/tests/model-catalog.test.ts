@@ -402,9 +402,9 @@ test("keeps the model catalog owned by the public agent-acp package", () => {
   }
 
   for (const path of [
-    "packages/adapters-tui/src/agent-label.ts",
-    "packages/adapters-tui/src/app-model-selection.ts",
-    "packages/adapters-tui/src/commands.ts",
+    "packages/adapters-tui/src/shared/agent-label.ts",
+    "packages/adapters-tui/src/app/app-model-selection.ts",
+    "packages/adapters-tui/src/app/commands.ts",
     "packages/procedure-engine/src/agent-config.ts",
     "procedures/model.ts",
   ]) {

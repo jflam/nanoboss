@@ -1,6 +1,6 @@
-import { Box, Container, Text, type Component } from "../pi-tui.ts";
-import type { UiToolCall } from "../state.ts";
-import type { NanobossTuiTheme } from "../theme.ts";
+import { Box, Container, Text, type Component } from "../shared/pi-tui.ts";
+import type { UiToolCall } from "../state/state.ts";
+import type { NanobossTuiTheme } from "../theme/theme.ts";
 
 import { renderToolCard } from "./tool-renderers/index.ts";
 

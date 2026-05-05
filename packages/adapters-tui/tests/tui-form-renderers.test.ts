@@ -7,7 +7,7 @@ import {
   getFormRenderer,
   registerFormRenderer,
   type FormRenderContext,
-} from "../src/form-renderers.ts";
+} from "../src/core/form-renderers.ts";
 import {
   createInitialUiState,
   createNanobossTuiTheme,
@@ -15,7 +15,7 @@ import {
 // Side-effect import: populates the registry with core renderers that
 // other test files (e.g. tui-app.test.ts) rely on when running in the
 // shared bun test process.
-import "../src/core-form-renderers.ts";
+import "../src/core/core-form-renderers.ts";
 
 interface SamplePayload {
   title: string;

@@ -4,7 +4,7 @@ import {
   evaluateBuildFreshness,
   isBuildRelevantRepoPath,
   parseGitStatusPaths,
-} from "../src/build-freshness-rules.ts";
+} from "../src/run/build-freshness-rules.ts";
 
 describe("tui build freshness rules", () => {
   test("detects commit mismatch between working tree and installed CLI", () => {

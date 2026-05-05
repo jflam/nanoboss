@@ -1,4 +1,4 @@
-import type { NanobossTuiTheme } from "../theme.ts";
+import type { NanobossTuiTheme } from "../theme/theme.ts";
 
 export function formatDiffLine(theme: NanobossTuiTheme, line: string): string {
   if (
