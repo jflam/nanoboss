@@ -1,21 +1,16 @@
 import type {
   DownstreamAgentSelection,
 } from "@nanoboss/contracts";
-import { writePersistedDefaultAgentSelection } from "@nanoboss/store";
 import type { ClipboardImageProvider } from "./clipboard/provider.ts";
 import {
   type ComposerState,
   createComposerState,
 } from "./composer.ts";
-import { createAppControllerDeps } from "./app-controller-deps.ts";
+import { createAppController } from "./app-controller-wiring.ts";
 import {
   handleCtrlVImagePaste as handleCtrlVImagePasteInternal,
   handleImageTokenDeletion as handleImageTokenDeletionInternal,
 } from "./app-clipboard.ts";
-import {
-  NanobossTuiController,
-  type NanobossTuiControllerDeps,
-} from "./controller.ts";
 import { shouldDisableEditorSubmit } from "./commands.ts";
 import { createAppBindingHooks as createAppBindingHooksInternal } from "./app-binding-hooks.ts";
 // Side-effect import: registers the core keybindings into the module-level
@@ -88,20 +83,19 @@ export class NanobossTuiApp {
     this.editor = components.editor;
     this.clipboardImageProvider = components.clipboardImageProvider;
 
-    const controllerDeps: NanobossTuiControllerDeps = createAppControllerDeps({
+    this.controller = createAppController({
       appParams: params,
+      appDeps: deps,
       composerState: this.composerState,
       editor: this.editor,
       promptForModelSelection: async (currentSelection) =>
         await this.promptForInlineModelSelection(currentSelection),
       confirmPersistDefaultAgentSelection: async (selection) =>
         await this.promptToPersistInlineModelSelection(selection),
-      persistDefaultAgentSelection: writePersistedDefaultAgentSelection,
       onStateChange: (state) => {
         this.syncState(state);
       },
     });
-    this.controller = deps.createController?.(params, controllerDeps) ?? new NanobossTuiController(params, controllerDeps);
     this.state = this.controller.getState();
     this.view = createAppView({
       deps,

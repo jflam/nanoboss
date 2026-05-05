@@ -85,6 +85,8 @@ are:
 - `composer-prompt-input.ts`: composer text and image-token prompt-input
   assembly helper
 - `app-controller-deps.ts`: app-to-controller dependency adapter helper
+- `app-controller-wiring.ts`: app-level controller dependency and construction
+  wiring
 - `app-continuation-composer.ts`: app-level inline continuation composer
   lifecycle helpers
 - `app-continuation-form.ts`: app-level continuation form extraction and
@@ -273,8 +275,8 @@ of growing `reducer.ts`, `app.ts`, or `controller.ts` further.
 
 Measured during the 2026-05 TUI adapter review:
 
-- source files: 148
-- source lines: 10,238
+- source files: 149
+- source lines: 10,272
 - largest file: `src/controller.ts` at 315 lines
 - workspace package dependencies: 9
 - runtime value exports: 46 -> 12
@@ -343,6 +345,8 @@ Measured during the 2026-05 TUI adapter review:
   - split app-level live-update pause and refresh timer behavior out of the
     TUI app
   - split app-local dependency adapter contracts out of the TUI app
+  - split app-level controller dependency and construction wiring out of the
+    TUI app
   - split transcript turn, tool, and procedure-panel rendering out of the
     TUI view shell
   - split chrome contribution mounting and gated stateful-child registration
