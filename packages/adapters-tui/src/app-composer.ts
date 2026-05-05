@@ -1,10 +1,10 @@
 import type { PromptInput } from "@nanoboss/procedure-sdk";
 
 import {
-  buildPromptInputFromComposer,
   type ComposerImageRecord,
   type ComposerState,
 } from "./composer.ts";
+import { buildPromptInputFromComposer } from "./composer-prompt-input.ts";
 
 interface EditorTextCursorAdapter {
   setText(text: string): void;

@@ -79,8 +79,9 @@ are:
 - `command-extensions-card.ts`: `/extensions` local command card formatting
 - `app-clipboard.ts`: app-level clipboard image paste and image-token deletion
   helpers
-- `app-composer.ts`: app-level composer snapshot, prompt-input, and cursor
-  helpers
+- `app-composer.ts`: app-level composer snapshot and cursor helpers
+- `composer-prompt-input.ts`: composer text and image-token prompt-input
+  assembly helper
 - `app-controller-deps.ts`: app-to-controller dependency adapter helper
 - `app-continuation-composer.ts`: app-level inline continuation composer
   lifecycle helpers
@@ -228,8 +229,8 @@ of growing `reducer.ts`, `app.ts`, or `controller.ts` further.
 
 Measured during the 2026-05 TUI adapter review:
 
-- source files: 122
-- source lines: 9,527
+- source files: 123
+- source lines: 9,530
 - largest file: `src/controller.ts` at 355 lines
 - workspace package dependencies: 9
 - runtime value exports: 46 -> 12
@@ -278,6 +279,8 @@ Measured during the 2026-05 TUI adapter review:
     constructor
   - split app-level composer snapshot, prompt-input, and cursor helpers out of
     the TUI app
+  - split composer text and image-token prompt-input assembly out of composer
+    image state
   - split app-level keybinding hook wiring for cooldown and queued-prompt
     behavior out of the TUI app
   - split app-level clipboard image paste and image-token deletion helpers out
