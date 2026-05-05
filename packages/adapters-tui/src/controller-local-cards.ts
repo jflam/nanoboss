@@ -4,6 +4,10 @@ import { formatExtensionsCard } from "./command-extensions-card.ts";
 import type { UiAction } from "./reducer-actions.ts";
 
 export interface ControllerLocalCardOptions {
+  /**
+   * Stable keys replace prior local cards in place; omitted keys append a
+   * fresh card for affordances like keybinding help.
+   */
   key?: string;
   title: string;
   markdown: string;
@@ -14,6 +18,8 @@ export interface ControllerLocalCardOptions {
 export function createLocalCardAction(
   opts: ControllerLocalCardOptions,
 ): Extract<UiAction, { type: "local_procedure_panel" }> {
+  // Local cards render through nb/card@1 so command output remains visible in
+  // the transcript instead of disappearing through the status line.
   return {
     type: "local_procedure_panel",
     panelId: `local-${opts.key ?? "anon"}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,

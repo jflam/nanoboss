@@ -3,11 +3,10 @@ import {
   type SessionStreamHandle,
 } from "@nanoboss/adapters-http";
 import type { PromptInput } from "@nanoboss/contracts";
-import { getBuildLabel } from "@nanoboss/app-support";
 
 import { reduceUiState } from "./reducer.ts";
 import type { UiAction } from "./reducer-actions.ts";
-import { createInitialUiState, type UiPendingPrompt, type UiState } from "./state.ts";
+import { type UiPendingPrompt, type UiState } from "./state.ts";
 import {
   handleBusyPromptInput,
 } from "./controller-input-flow.ts";
@@ -37,12 +36,17 @@ import {
 import { toggleSessionAutoApprove as toggleSessionAutoApproveInternal } from "./controller-auto-approve.ts";
 import {
   applyControllerSessionStream,
-  closeControllerStream,
 } from "./controller-stream.ts";
 import {
   handleControllerSubmit,
   queueControllerPrompt,
 } from "./controller-submit.ts";
+import { createControllerInitialState } from "./controller-initial-state.ts";
+import {
+  createControllerExitSignal,
+  requestControllerExit,
+  stopControllerLifecycle,
+} from "./controller-lifecycle.ts";
 export type {
   NanobossTuiControllerDeps,
   NanobossTuiControllerParams,
@@ -61,7 +65,7 @@ export class NanobossTuiController {
   private stopped = false;
   private flushingPendingPrompt = false;
   private nextPendingPromptId = 1;
-  private exitResolver?: () => void;
+  private readonly exitResolver: () => void;
   private readonly exited: Promise<void>;
 
   constructor(
@@ -69,16 +73,14 @@ export class NanobossTuiController {
     private readonly deps: NanobossTuiControllerDeps = {},
   ) {
     this.cwd = params.cwd ?? process.cwd();
-    this.state = createInitialUiState({
+    this.state = createControllerInitialState({
       cwd: this.cwd,
-      buildLabel: getBuildLabel(),
-      agentLabel: "connecting",
       showToolCalls: params.showToolCalls,
       simplify2AutoApprove: params.simplify2AutoApprove,
     });
-    this.exited = new Promise<void>((resolve) => {
-      this.exitResolver = resolve;
-    });
+    const exitSignal = createControllerExitSignal();
+    this.exited = exitSignal.exited;
+    this.exitResolver = exitSignal.resolve;
   }
 
   getState(): UiState {
@@ -176,18 +178,6 @@ export class NanobossTuiController {
     this.dispatch({ type: "local_status", text });
   }
 
-  /**
-   * Render a small, user-facing card in the transcript as a local
-   * `nb/card@1` procedure panel. Used for slash-command output and
-   * other controller-originated messages that users need to actually
-   * read — the status line scrolls out of view too quickly for these.
-   *
-   * When a stable `key` is passed, repeated invocations replace the
-   * previous card in place (see the `local_procedure_panel` reducer
-   * path) so the transcript does not fill up with duplicates. Omit
-   * `key` for affordances where each invocation should append a fresh
-   * card (e.g. the ctrl+h keybinding help).
-   */
   showLocalCard(opts: ControllerLocalCardOptions): void {
     this.dispatch(createLocalCardAction(opts));
   }
@@ -197,21 +187,21 @@ export class NanobossTuiController {
   }
 
   requestExit(): void {
-    if (this.stopped) {
-      return;
-    }
-
-    this.deps.onExit?.();
-    this.exitResolver?.();
+    requestControllerExit({
+      stopped: this.stopped,
+      onExit: this.deps.onExit,
+      resolveExit: this.exitResolver,
+    });
   }
 
   async stop(): Promise<void> {
-    if (this.stopped) {
-      return;
-    }
-
-    this.stopped = true;
-    this.stream = await closeControllerStream(this.stream);
+    this.stream = await stopControllerLifecycle({
+      stopped: this.stopped,
+      stream: this.stream,
+      setStopped: (stopped) => {
+        this.stopped = stopped;
+      },
+    });
   }
 
   private dispatch(action: UiAction): void {

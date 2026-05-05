@@ -35,7 +35,7 @@ const CANONICAL_IMPORTERS = [
   "packages/adapters-http/src/server-supervisor.ts",
   "packages/adapters-mcp/src/server.ts",
   "packages/adapters-tui/src/build-freshness.ts",
-  "packages/adapters-tui/src/controller.ts",
+  "packages/adapters-tui/src/controller-initial-state.ts",
   "packages/app-runtime/src/session-runtime.ts",
   "packages/procedure-catalog/src/registry.ts",
   "packages/store/src/session-repository.ts",

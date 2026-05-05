@@ -143,8 +143,12 @@ are:
 - `controller.ts`: session/runtime orchestration for the TUI
 - `controller-auto-approve.ts`: controller-owned session auto-approve toggle
   helper
+- `controller-initial-state.ts`: controller-owned initial UI state defaults
+  and build-label wiring
 - `controller-input-flow.ts`: controller-owned busy-input, pending-prompt,
   and terminal-event helpers
+- `controller-lifecycle.ts`: controller-owned exit signal and stream shutdown
+  lifecycle helpers
 - `controller-local-cards.ts`: controller-owned local card action and
   `/extensions` card formatting helpers
 - `controller-model-inline-validation.ts`: controller-owned inline model
@@ -245,9 +249,9 @@ of growing `reducer.ts`, `app.ts`, or `controller.ts` further.
 
 Measured during the 2026-05 TUI adapter review:
 
-- source files: 131
-- source lines: 9,868
-- largest file: `src/controller.ts` at 355 lines
+- source files: 133
+- source lines: 9,923
+- largest file: `src/controller.ts` at 345 lines
 - workspace package dependencies: 9
 - runtime value exports: 46 -> 12
 - public wildcard exports: 8 -> 0
@@ -325,6 +329,8 @@ Measured during the 2026-05 TUI adapter review:
   - split app-level ctrl-c double-press exit handling out of the TUI app
   - split app-level inline select overlay mounting out of the TUI app
   - split controller-owned busy-input, pending-prompt, and terminal-event
+    helpers out of the TUI controller
+  - split controller-owned initial state defaults and exit/stop lifecycle
     helpers out of the TUI controller
   - consolidated controller busy-input steering and queued prompt handling
     into the controller input-flow helper
