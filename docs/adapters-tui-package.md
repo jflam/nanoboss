@@ -98,14 +98,15 @@ are:
 - `reducer-actions.ts`: reducer action contracts shared by controller and
   reducer helper modules
 - `reducer-local-actions.ts`: reducer-owned local/controller action handling
-- `reducer-run-events.ts`: reducer-owned run lifecycle frontend event
-  transitions
 - `reducer-tool-calls.ts`: reducer-owned tool-call list and preview helpers
 - `reducer-tool-events.ts`: reducer-owned tool start/update event reducers
 - `reducer-turns.ts`: reducer-owned assistant turn and transcript helpers
 - `reducer-run-completion.ts`: reducer-owned terminal run cleanup helpers
 - `reducer-run-finalize-turn.ts`: reducer-owned assistant-turn finalization
   and completion-note helpers
+- `reducer-run-restore.ts`: reducer-owned restored run replay transitions
+- `reducer-run-events.ts`: reducer-owned live run lifecycle frontend event
+  transitions
 - `reducer-panel-cards.ts`: reducer-owned procedure-card and transcript card
   rendering helpers
 - `reducer-procedure-panels.ts`: reducer-owned procedure-panel transcript
@@ -182,8 +183,8 @@ of growing `reducer.ts`, `app.ts`, or `controller.ts` further.
 
 Measured during the 2026-05 TUI adapter review:
 
-- source files: 97
-- source lines: 9,228
+- source files: 98
+- source lines: 9,237
 - largest file: `src/controller.ts` at 355 lines
 - workspace package dependencies: 9
 - runtime value exports: 46 -> 12
@@ -295,6 +296,7 @@ Measured during the 2026-05 TUI adapter review:
     shared tool-card formatting
   - split tool-card preview, warning, and error body formatting out of shared
     tool-card rendering assembly
+  - split restored run replay transitions out of live run lifecycle reducers
 
 The useful outcome of this pass is the entrypoint baseline: future TUI adapter
 exports should be deliberate additions, not accidental leakage from broad

@@ -21,11 +21,13 @@ import {
   reduceRunFailedEvent,
   reduceRunHeartbeatEvent,
   reduceRunPausedEvent,
-  reduceRunRestoredEvent,
   reduceRunStartedEvent,
   reduceTextDeltaEvent,
   reduceTokenUsageEvent,
 } from "./reducer-run-events.ts";
+import {
+  reduceRunRestoredEvent,
+} from "./reducer-run-restore.ts";
 import {
   reduceToolStartedEvent,
   reduceToolUpdatedEvent,
