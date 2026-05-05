@@ -7,10 +7,12 @@ import type {
 } from "./state.ts";
 import {
   appendTranscriptItem,
+} from "./reducer-turns.ts";
+import {
   buildAssistantTurnMeta,
   createTurn,
   nextTurnId,
-} from "./reducer-turns.ts";
+} from "./reducer-turn-factory.ts";
 
 type RunRestoredEvent = Extract<RenderedFrontendEventEnvelope, { type: "run_restored" }>;
 

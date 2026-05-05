@@ -1,9 +1,11 @@
 import type { UiState } from "./state.ts";
 import {
   appendTranscriptItem,
+} from "./reducer-turns.ts";
+import {
   createTurn,
   nextTurnId,
-} from "./reducer-turns.ts";
+} from "./reducer-turn-factory.ts";
 import { evictPanelsByLifetime } from "./reducer-run-completion.ts";
 import type { UiLocalAction } from "./reducer-actions.ts";
 

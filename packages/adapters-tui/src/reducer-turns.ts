@@ -3,6 +3,11 @@ import type {
   UiTranscriptItem,
   UiTurn,
 } from "./state.ts";
+import {
+  buildAssistantTurnMeta,
+  createTurn,
+  nextTurnId,
+} from "./reducer-turn-factory.ts";
 
 export function appendAssistantText(state: UiState, text: string): UiState {
   const activeAssistantTurnId = state.activeAssistantTurnId;
@@ -99,29 +104,6 @@ export function appendToolCallBlockToActiveTurn(state: UiState, toolCallId: stri
   };
 }
 
-export function buildAssistantTurnMeta(params: {
-  existing?: UiTurn["meta"];
-  procedure?: string;
-  tokenUsageLine?: string;
-  failureMessage?: string;
-  completionNote?: string;
-  statusMessage?: string;
-}): UiTurn["meta"] | undefined {
-  const statusMessage = params.statusMessage ?? params.existing?.statusMessage;
-  const meta = {
-    ...params.existing,
-    procedure: params.procedure ?? params.existing?.procedure,
-    tokenUsageLine: params.tokenUsageLine ?? params.existing?.tokenUsageLine,
-    failureMessage: params.failureMessage,
-    completionNote: params.completionNote ?? params.existing?.completionNote,
-    ...(statusMessage !== undefined ? { statusMessage } : {}),
-  };
-
-  return meta.procedure || meta.tokenUsageLine || meta.failureMessage || meta.completionNote || statusMessage
-    ? meta
-    : undefined;
-}
-
 export function appendTranscriptItem(items: UiTranscriptItem[], nextItem: UiTranscriptItem): UiTranscriptItem[] {
   const exists = items.some((item) => item.type === nextItem.type && item.id === nextItem.id);
   return exists ? items : [...items, nextItem];
@@ -133,14 +115,6 @@ export function removeTranscriptItem(
   id: string,
 ): UiTranscriptItem[] {
   return items.filter((item) => !(item.type === type && item.id === id));
-}
-
-export function createTurn(turn: UiTurn): UiTurn {
-  return turn;
-}
-
-export function nextTurnId(role: UiTurn["role"], index: number): string {
-  return `${role}-${index + 1}`;
 }
 
 function createAssistantTurn(state: UiState, markdown: string): UiTurn {

@@ -1,10 +1,12 @@
 import type { UiState, UiTurn } from "./state.ts";
 import {
   appendTranscriptItem,
+} from "./reducer-turns.ts";
+import {
   buildAssistantTurnMeta,
   createTurn,
   nextTurnId,
-} from "./reducer-turns.ts";
+} from "./reducer-turn-factory.ts";
 
 export function finalizeAssistantTurn(
   state: UiState,
