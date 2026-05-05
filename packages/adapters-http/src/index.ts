@@ -12,15 +12,9 @@ export {
   type SessionStreamHandle,
 } from "./client.ts";
 export {
-  isCommandsUpdatedEvent,
   isMemorySyncFrontendEvent,
   isRenderedFrontendEvent,
   isReplayableFrontendEvent,
-  isRunFailedEvent,
-  isTextDeltaEvent,
-  isTokenUsageEvent,
-  isToolStartedEvent,
-  isToolUpdatedEvent,
   mapProcedureUiEventToFrontendEvent,
   mapSessionUpdateToFrontendEvents,
   toFrontendCommands,

@@ -12,4 +12,10 @@ test("public entrypoint keeps server parsing and supervisor test seams internal"
   expect("describeWorkspaceMismatch" in adaptersHttp).toBe(false);
   expect("SessionEventLog" in adaptersHttp).toBe(false);
   expect("buildTurnDisplay" in adaptersHttp).toBe(false);
+  expect("isCommandsUpdatedEvent" in adaptersHttp).toBe(false);
+  expect("isRunFailedEvent" in adaptersHttp).toBe(false);
+  expect("isTextDeltaEvent" in adaptersHttp).toBe(false);
+  expect("isTokenUsageEvent" in adaptersHttp).toBe(false);
+  expect("isToolStartedEvent" in adaptersHttp).toBe(false);
+  expect("isToolUpdatedEvent" in adaptersHttp).toBe(false);
 });
