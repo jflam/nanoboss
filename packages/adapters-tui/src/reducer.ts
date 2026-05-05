@@ -32,6 +32,17 @@ import {
   removeToolCallAndReparent,
   upsertToolCall,
 } from "./reducer-tool-calls.ts";
+import {
+  appendAssistantText,
+  appendTextToTurnBlocks,
+  appendToolCallBlockToActiveTurn,
+  appendTranscriptItem,
+  buildAssistantTurnMeta,
+  createTurn,
+  markAssistantTextBoundary,
+  nextTurnId,
+  removeTranscriptItem,
+} from "./reducer-turns.ts";
 
 const STOP_REQUESTED_STATUS = "[run] ESC received - stopping at next tool boundary...";
 
@@ -707,101 +718,6 @@ function shouldIgnoreMismatchedRunEvent(state: UiState, runId: string): boolean 
   return state.activeRunId !== undefined && state.activeRunId !== runId;
 }
 
-function appendAssistantText(state: UiState, text: string): UiState {
-  const activeAssistantTurnId = state.activeAssistantTurnId;
-  const activeTurn = activeAssistantTurnId
-    ? state.turns.find((turn) => turn.id === activeAssistantTurnId)
-    : undefined;
-
-  if (!activeTurn || state.assistantParagraphBreakPending) {
-    const turns = activeTurn
-      ? state.turns.map((turn) => turn.id === activeAssistantTurnId && turn.status === "streaming"
-        ? { ...turn, status: "complete" as const }
-        : turn)
-      : state.turns;
-    const assistantTurn = createAssistantTurn(state, text);
-
-    return {
-      ...state,
-      turns: [...turns, assistantTurn],
-      transcriptItems: appendTranscriptItem(state.transcriptItems, { type: "turn", id: assistantTurn.id }),
-      activeAssistantTurnId: assistantTurn.id,
-      assistantParagraphBreakPending: false,
-    };
-  }
-
-  return {
-    ...state,
-    turns: state.turns.map((turn) => turn.id === activeAssistantTurnId
-      ? appendTextToTurnBlocks({
-          ...turn,
-          markdown: `${turn.markdown}${text}`,
-        }, text, "stream")
-      : turn),
-    assistantParagraphBreakPending: false,
-  };
-}
-
-function appendTextToTurnBlocks(
-  turn: UiTurn,
-  text: string,
-  origin: "stream" | "replay",
-): UiTurn {
-  if (text.length === 0) {
-    return turn;
-  }
-  const blocks = turn.blocks ?? [];
-  const last = blocks[blocks.length - 1];
-  if (last && last.kind === "text" && last.origin === origin) {
-    const nextBlocks = blocks.slice(0, -1);
-    nextBlocks.push({ kind: "text", text: `${last.text}${text}`, origin });
-    return { ...turn, blocks: nextBlocks };
-  }
-  return { ...turn, blocks: [...blocks, { kind: "text", text, origin }] };
-}
-
-function markAssistantTextBoundary(state: UiState): UiState {
-  if (!state.activeAssistantTurnId) {
-    return state;
-  }
-
-  const activeTurn = state.turns.find((turn) => turn.id === state.activeAssistantTurnId);
-  if (!activeTurn?.markdown) {
-    return state;
-  }
-
-  return {
-    ...state,
-    assistantParagraphBreakPending: true,
-  };
-}
-
-function appendToolCallBlockToActiveTurn(state: UiState, toolCallId: string): UiState {
-  const activeId = state.activeAssistantTurnId;
-  if (!activeId) {
-    return state;
-  }
-  return {
-    ...state,
-    turns: state.turns.map((turn) => {
-      if (turn.id !== activeId) {
-        return turn;
-      }
-      const blocks = turn.blocks ?? [];
-      const alreadyPresent = blocks.some(
-        (block) => block.kind === "tool_call" && block.toolCallId === toolCallId,
-      );
-      if (alreadyPresent) {
-        return turn;
-      }
-      return {
-        ...turn,
-        blocks: [...blocks, { kind: "tool_call", toolCallId }],
-      };
-    }),
-  };
-}
-
 function buildContinuationStatusLine(procedure: string): string {
   return `[continuation] /${procedure} active - waiting for your reply`;
 }
@@ -1218,42 +1134,6 @@ function procedureCardTone(kind: Extract<ProcedureUiEvent, { type: "card" }>["ki
   }
 }
 
-function buildAssistantTurnMeta(params: {
-  existing?: UiTurn["meta"];
-  procedure?: string;
-  tokenUsageLine?: string;
-  failureMessage?: string;
-  completionNote?: string;
-  statusMessage?: string;
-}): UiTurn["meta"] | undefined {
-  const statusMessage = params.statusMessage ?? params.existing?.statusMessage;
-  const meta = {
-    ...params.existing,
-    procedure: params.procedure ?? params.existing?.procedure,
-    tokenUsageLine: params.tokenUsageLine ?? params.existing?.tokenUsageLine,
-    failureMessage: params.failureMessage,
-    completionNote: params.completionNote ?? params.existing?.completionNote,
-    ...(statusMessage !== undefined ? { statusMessage } : {}),
-  };
-
-  return meta.procedure || meta.tokenUsageLine || meta.failureMessage || meta.completionNote || statusMessage
-    ? meta
-    : undefined;
-}
-
-function appendTranscriptItem(items: UiTranscriptItem[], nextItem: UiTranscriptItem): UiTranscriptItem[] {
-  const exists = items.some((item) => item.type === nextItem.type && item.id === nextItem.id);
-  return exists ? items : [...items, nextItem];
-}
-
-function removeTranscriptItem(
-  items: UiTranscriptItem[],
-  type: UiTranscriptItem["type"],
-  id: string,
-): UiTranscriptItem[] {
-  return items.filter((item) => !(item.type === type && item.id === id));
-}
-
 function uniqueStrings(values: string[]): string[] {
   return [...new Set(values)];
 }
@@ -1310,28 +1190,4 @@ function getCompletionTurnNumber(state: UiState): number {
 
 function countUserTurns(turns: UiTurn[]): number {
   return turns.filter((turn) => turn.role === "user").length;
-}
-
-function createAssistantTurn(state: UiState, markdown: string): UiTurn {
-  return createTurn({
-    id: nextTurnId("assistant", state.turns.length),
-    role: "assistant",
-    markdown,
-    blocks: markdown.length > 0
-      ? [{ kind: "text", text: markdown, origin: "stream" }]
-      : [],
-    status: "streaming",
-    runId: state.activeRunId,
-    meta: buildAssistantTurnMeta({
-      procedure: state.activeProcedure,
-    }),
-  });
-}
-
-function createTurn(turn: UiTurn): UiTurn {
-  return turn;
-}
-
-function nextTurnId(role: UiTurn["role"], index: number): string {
-  return `${role}-${index + 1}`;
 }

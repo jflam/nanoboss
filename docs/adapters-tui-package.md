@@ -72,6 +72,7 @@ are:
 
 - `reducer.ts`: frontend event reduction and state transition logic
 - `reducer-tool-calls.ts`: reducer-owned tool-call list and preview helpers
+- `reducer-turns.ts`: reducer-owned assistant turn and transcript helpers
 - `app.ts`: terminal app wiring, editor behavior, and local command dispatch
 - `controller.ts`: session/runtime orchestration for the TUI
 - `views.ts`: transcript, chrome, and panel composition
@@ -96,9 +97,9 @@ of growing `reducer.ts`, `app.ts`, or `controller.ts` further.
 
 Measured during the 2026-05 TUI adapter review:
 
-- source files: 48
-- source lines: 7,862
-- largest file: `src/reducer.ts` at 1,337 lines
+- source files: 49
+- source lines: 7,879
+- largest file: `src/reducer.ts` at 1,193 lines
 - workspace package dependencies: 9
 - runtime value exports: 46 -> 12
 - public wildcard exports: 8 -> 0
@@ -116,6 +117,8 @@ Measured during the 2026-05 TUI adapter review:
     behind adapter source modules and extension boot context wiring
   - split reducer-owned tool-call list and preview helpers out of the central
     reducer
+  - split reducer-owned assistant turn and transcript helpers out of the
+    central reducer
 
 The useful outcome of this pass is the entrypoint baseline: future TUI adapter
 exports should be deliberate additions, not accidental leakage from broad
