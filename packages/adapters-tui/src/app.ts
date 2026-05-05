@@ -42,7 +42,8 @@ import {
   matchesKey,
 } from "./pi-tui.ts";
 import { NanobossAutocompleteProvider } from "./app-autocomplete.ts";
-import { dispatchKeyBinding, type BindingCtx, type KeyBindingAppHooks } from "./bindings.ts";
+import { createAppBindingHooks as createAppBindingHooksInternal } from "./app-binding-hooks.ts";
+import { dispatchKeyBinding, type BindingCtx } from "./bindings.ts";
 // Side-effect import: registers the core keybindings into the module-level
 // registry so dispatchKeyBinding() resolves them without the caller having
 // to wire individual handlers.
@@ -553,38 +554,27 @@ export class NanobossTuiApp {
     void this.controller.handleContinuationCancel?.();
   }
 
-  private createBindingAppHooks(): KeyBindingAppHooks {
-    return {
-      handleCtrlC: () => this.handleCtrlC(),
-      handleCtrlVImagePaste: () => this.handleCtrlVImagePaste(),
-      handleCtrlOWithCooldown: () => {
-        const now = this.now();
-        if (now - this.lastToolOutputToggleAt >= TOOL_OUTPUT_TOGGLE_COOLDOWN_MS) {
-          this.lastToolOutputToggleAt = now;
-          this.controller.toggleToolOutput();
-        }
+  private createBindingAppHooks() {
+    return createAppBindingHooksInternal({
+      controller: this.controller,
+      editor: this.editor,
+      composerState: this.composerState,
+      getClearedComposerStateSnapshot: () => this.clearedComposerStateSnapshot,
+      clearClearedComposerStateSnapshot: () => {
+        this.clearedComposerStateSnapshot = undefined;
       },
+      handleCtrlC: () => this.handleCtrlC(),
+      handleCtrlVImagePaste: async () => await this.handleCtrlVImagePaste(),
       toggleLiveUpdatesPaused: () => {
         this.toggleLiveUpdatesPaused();
       },
-      handleTabQueue: () => {
-        if (this.editor.isShowingAutocomplete()) {
-          return false;
-        }
-        const text = this.editor.getText();
-        if (text.trim().length === 0) {
-          return false;
-        }
-        const promptInput = buildPromptInputForSubmit(
-          this.composerState,
-          text,
-          this.clearedComposerStateSnapshot,
-        );
-        this.clearedComposerStateSnapshot = undefined;
-        void this.controller.queuePrompt(promptInput);
-        return true;
+      now: this.now,
+      getLastToolOutputToggleAt: () => this.lastToolOutputToggleAt,
+      setLastToolOutputToggleAt: (value) => {
+        this.lastToolOutputToggleAt = value;
       },
-    };
+      toolOutputToggleCooldownMs: TOOL_OUTPUT_TOGGLE_COOLDOWN_MS,
+    });
   }
 
   private async stop(): Promise<void> {

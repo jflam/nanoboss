@@ -71,6 +71,8 @@ The package is currently the largest Nanoboss package. The main size drivers
 are:
 
 - `app.ts`: terminal app wiring, editor behavior, and local command dispatch
+- `app-binding-hooks.ts`: app-level keybinding hook wiring for cooldown and
+  queued-prompt behavior
 - `app-autocomplete.ts`: slash-aware app autocomplete provider
 - `app-clipboard.ts`: app-level clipboard image paste and image-token deletion
   helpers
@@ -117,8 +119,8 @@ of growing `reducer.ts`, `app.ts`, or `controller.ts` further.
 
 Measured during the 2026-05 TUI adapter review:
 
-- source files: 60
-- source lines: 8,156
+- source files: 61
+- source lines: 8,206
 - largest file: `src/controller.ts` at 665 lines
 - workspace package dependencies: 9
 - runtime value exports: 46 -> 12
@@ -147,6 +149,8 @@ Measured during the 2026-05 TUI adapter review:
     central reducer
   - split app-level composer snapshot, prompt-input, and cursor helpers out of
     the TUI app
+  - split app-level keybinding hook wiring for cooldown and queued-prompt
+    behavior out of the TUI app
   - split app-level clipboard image paste and image-token deletion helpers out
     of the TUI app
   - split app-level continuation form extraction and signature helpers out of
