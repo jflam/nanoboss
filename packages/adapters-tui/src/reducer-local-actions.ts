@@ -5,13 +5,11 @@ import {
   createInitialUiState,
   type UiState,
 } from "./state.ts";
-import {
-  appendTranscriptItem,
-  createTurn,
-  nextTurnId,
-} from "./reducer-turns.ts";
-import { evictPanelsByLifetime } from "./reducer-run-completion.ts";
 import { applyLocalProcedurePanel } from "./reducer-procedure-panels.ts";
+import {
+  reduceLocalSendFailed,
+  reduceLocalUserSubmitted,
+} from "./reducer-local-turns.ts";
 import type { UiLocalAction } from "./reducer-actions.ts";
 
 export const STOP_REQUESTED_STATUS = "[run] ESC received - stopping at next tool boundary...";
@@ -37,63 +35,10 @@ export function reduceLocalUiAction(state: UiState, action: UiLocalAction): UiSt
         defaultAgentSelection: action.defaultAgentSelection,
         availableCommands: mergeAvailableCommands(action.commands),
       };
-    case "local_user_submitted": {
-      const nextTurn = createTurn({
-        id: nextTurnId("user", state.turns.length),
-        role: "user",
-        markdown: action.text,
-        status: "complete",
-      });
-
-      return {
-        ...state,
-        turns: [...state.turns, nextTurn],
-        transcriptItems: appendTranscriptItem(state.transcriptItems, { type: "turn", id: nextTurn.id }),
-        activeRunId: undefined,
-        activeProcedure: undefined,
-        activeAssistantTurnId: undefined,
-        assistantParagraphBreakPending: undefined,
-        runStartedAtMs: Date.now(),
-        activeRunAttemptedToolCallIds: [],
-        activeRunSucceededToolCallIds: [],
-        pendingStopRequest: false,
-        stopRequestedRunId: undefined,
-        statusLine: "[run] waiting for response",
-        inputDisabled: true,
-        inputDisabledReason: "run",
-        panels: evictPanelsByLifetime(state.panels, {
-          scopes: ["turn"],
-        }),
-      };
-    }
-    case "local_send_failed": {
-      const nextTurn = createTurn({
-        id: nextTurnId("system", state.turns.length),
-        role: "system",
-        markdown: action.error,
-        status: "failed",
-        displayStyle: "card",
-        cardTone: "error",
-      });
-
-      return {
-        ...state,
-        turns: [...state.turns, nextTurn],
-        transcriptItems: appendTranscriptItem(state.transcriptItems, { type: "turn", id: nextTurn.id }),
-        activeRunId: undefined,
-        activeProcedure: undefined,
-        activeAssistantTurnId: undefined,
-        assistantParagraphBreakPending: undefined,
-        runStartedAtMs: undefined,
-        activeRunAttemptedToolCallIds: [],
-        activeRunSucceededToolCallIds: [],
-        pendingStopRequest: false,
-        stopRequestedRunId: undefined,
-        statusLine: `[run] ${action.error}`,
-        inputDisabled: false,
-        inputDisabledReason: undefined,
-      };
-    }
+    case "local_user_submitted":
+      return reduceLocalUserSubmitted(state, action);
+    case "local_send_failed":
+      return reduceLocalSendFailed(state, action);
     case "local_status":
       return {
         ...state,
