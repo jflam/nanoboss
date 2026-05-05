@@ -31,7 +31,6 @@ import { formatAgentSelectionLabel } from "./agent-label.ts";
 import { getBuildFreshnessNotice } from "./build-freshness.ts";
 import { buildModelCommand } from "./model-command.ts";
 import {
-  formatExtensionsCard,
   isExitRequest,
   isExtensionsListRequest,
   isModelPickerRequest,
@@ -48,6 +47,11 @@ import {
   isTerminalFrontendEvent,
   selectNextPendingPrompt,
 } from "./controller-input-flow.ts";
+import {
+  buildExtensionsLocalCard,
+  createLocalCardAction,
+  type ControllerLocalCardOptions,
+} from "./controller-local-cards.ts";
 
 import type { TuiExtensionStatus } from "@nanoboss/tui-extension-catalog";
 
@@ -388,46 +392,12 @@ export class NanobossTuiController {
    * `key` for affordances where each invocation should append a fresh
    * card (e.g. the ctrl+h keybinding help).
    */
-  showLocalCard(opts: {
-    key?: string;
-    title: string;
-    markdown: string;
-    severity?: "info" | "warn" | "error";
-    dismissible?: boolean;
-  }): void {
-    this.dispatch({
-      type: "local_procedure_panel",
-      panelId: `local-${opts.key ?? "anon"}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      rendererId: "nb/card@1",
-      payload: {
-        kind: "notice",
-        title: opts.title,
-        markdown: opts.markdown,
-      },
-      severity: opts.severity ?? "info",
-      dismissible: opts.dismissible ?? true,
-      ...(opts.key !== undefined ? { key: opts.key } : {}),
-    });
+  showLocalCard(opts: ControllerLocalCardOptions): void {
+    this.dispatch(createLocalCardAction(opts));
   }
 
   private emitExtensionsList(): void {
-    const provider = this.deps.listExtensionEntries;
-    if (!provider) {
-      this.showLocalCard({
-        key: "local:extensions",
-        title: "Extensions",
-        markdown: "Extension registry is not available.",
-        severity: "error",
-      });
-      return;
-    }
-    const card = formatExtensionsCard(provider());
-    this.showLocalCard({
-      key: "local:extensions",
-      title: card.title,
-      markdown: card.markdown,
-      severity: card.severity,
-    });
+    this.showLocalCard(buildExtensionsLocalCard(this.deps.listExtensionEntries));
   }
 
   requestExit(): void {

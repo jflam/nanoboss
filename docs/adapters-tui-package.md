@@ -85,6 +85,8 @@ are:
 - `controller.ts`: session/runtime orchestration for the TUI
 - `controller-input-flow.ts`: controller-owned busy-input, pending-prompt,
   and terminal-event helpers
+- `controller-local-cards.ts`: controller-owned local card action and
+  `/extensions` card formatting helpers
 - `views.ts`: transcript, chrome, and panel composition
 - `theme.ts`: adapter theme construction
 
@@ -107,8 +109,8 @@ of growing `reducer.ts`, `app.ts`, or `controller.ts` further.
 
 Measured during the 2026-05 TUI adapter review:
 
-- source files: 54
-- source lines: 7,959
+- source files: 55
+- source lines: 7,980
 - largest file: `src/app.ts` at 774 lines
 - workspace package dependencies: 9
 - runtime value exports: 46 -> 12
@@ -138,6 +140,8 @@ Measured during the 2026-05 TUI adapter review:
   - split app-level continuation form extraction and signature helpers out of
     the TUI app
   - split controller-owned busy-input, pending-prompt, and terminal-event
+    helpers out of the TUI controller
+  - split controller-owned local card action and `/extensions` card formatting
     helpers out of the TUI controller
 
 The useful outcome of this pass is the entrypoint baseline: future TUI adapter
