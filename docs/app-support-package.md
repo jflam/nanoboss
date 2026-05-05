@@ -132,6 +132,8 @@ and file layout stay in one low-level owner.
   Process re-entry command resolution.
 - `src/disk-loader.ts`
   Generic disk module discovery, transpilation, and loading.
+- `src/disk-build-diagnostics.ts`
+  Private Bun build-log extraction and diagnostic formatting for disk loading.
 - `src/typia-bun-plugin.ts`
   Private Bun plugin used by disk loading.
 - `src/nanoboss-home.ts`
@@ -181,9 +183,9 @@ adapter types is probably too high-level for this package.
 
 Measured during the 2026-05 app-support review:
 
-- source files: 14
-- source lines: 1,584
-- largest file: `src/disk-loader.ts` at 637 lines
+- source files: 15
+- source lines: 1,587
+- largest file: `src/disk-loader.ts` at 536 lines
 - workspace package dependencies: 0
 - public app-support runtime value exports: 30
 - internalized implementation helpers: `splitPath(...)` and
@@ -199,9 +201,9 @@ diagnostic file writer.
 
 ## Good Future Targets
 
-- Review whether `disk-loader.ts` should split discovery, transpilation, and
-  module-shape extraction into smaller private files while keeping one public
-  disk-loader API.
+- Review whether `disk-loader.ts` should split discovery, transpilation cache,
+  and temporary overlay setup into smaller private files while keeping one
+  public disk-loader API.
 - Keep `path-utils.ts` private; if a path helper becomes public, document the
   package-level behavior it represents rather than exporting a raw utility.
 - Revisit repo fingerprinting after any new artifact-producing procedures are
