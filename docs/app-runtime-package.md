@@ -134,6 +134,8 @@ entrypoint APIs. Generic data helpers belong in `@nanoboss/procedure-sdk` or
   Async procedure dispatch cancellation helpers.
 - `src/tool-call-preview.ts`
   Adapter-neutral tool-call summary blocks.
+- `src/tool-preview-text.ts`
+  Text normalization and bounded preview-line helpers for tool summaries.
 - `src/turn-display.ts`
   Turn-display reconstruction from persisted runtime events.
 - `src/replay.ts`
@@ -196,8 +198,8 @@ HTTP/frontend flow:
 
 Measured during the 2026-05 app-runtime review:
 
-- source files: 21
-- source lines: 3,466
+- source files: 22
+- source lines: 3,475
 - largest file: `src/service.ts` at 674 lines
 - public barrel wildcard exports: reduced from 2 to 0
 - public app-runtime symbols: reduced from 58 to 57 by removing the accidental
@@ -213,6 +215,8 @@ Measured during the 2026-05 app-runtime review:
   dispatch-result, and failure-parsing helpers
 - code simplification applied: split tool-call runtime event projection out of
   the central runtime event mapper
+- code simplification applied: split text normalization and bounded preview
+  helpers out of the tool-call preview policy module
 
 The small surface reduction matters more than the raw symbol count: the package
 now exports runtime abstractions intentionally instead of forwarding every
