@@ -15,19 +15,11 @@ import {
 import type { DownstreamAgentSelection, PromptInput } from "@nanoboss/contracts";
 import { getBuildLabel } from "@nanoboss/app-support";
 import {
-  discoverAgentCatalog,
-  formatAgentCatalogRefreshError,
-  getProviderLabel,
-  hasAgentCatalogRefreshedToday,
-  isKnownModelSelectionInCatalog,
-} from "@nanoboss/agent-acp";
-import {
   createTextPromptInput,
   normalizePromptInput,
   promptInputDisplayText,
 } from "@nanoboss/procedure-sdk";
 
-import { formatAgentSelectionLabel } from "./agent-label.ts";
 import { getBuildFreshnessNotice } from "./build-freshness.ts";
 import { buildModelCommand } from "./model-command.ts";
 import {
@@ -52,6 +44,12 @@ import {
   createLocalCardAction,
   type ControllerLocalCardOptions,
 } from "./controller-local-cards.ts";
+import {
+  createLocalAgentSelectionAction,
+  maybePersistDefaultSelection as maybePersistDefaultSelectionInternal,
+  validateInlineModelSelection as validateInlineModelSelectionInternal,
+  type ControllerModelSelectionDeps,
+} from "./controller-model-selection.ts";
 
 import type { TuiExtensionStatus } from "@nanoboss/tui-extension-catalog";
 
@@ -73,7 +71,7 @@ export interface NanobossTuiControllerParams {
   simplify2AutoApprove?: boolean;
 }
 
-export interface NanobossTuiControllerDeps {
+export interface NanobossTuiControllerDeps extends ControllerModelSelectionDeps {
   ensureMatchingHttpServer?: typeof ensureMatchingHttpServer;
   createHttpSession?: typeof createHttpSession;
   resumeHttpSession?: typeof resumeHttpSession;
@@ -87,15 +85,9 @@ export interface NanobossTuiControllerDeps {
     onEvent: (event: FrontendEventEnvelope) => void;
     onError?: (error: unknown) => void;
   }) => SessionStreamHandle;
-  discoverAgentCatalog?: typeof discoverAgentCatalog;
-  hasAgentCatalogRefreshedToday?: typeof hasAgentCatalogRefreshedToday;
   promptForModelSelection?: (
     currentSelection?: DownstreamAgentSelection,
   ) => Promise<DownstreamAgentSelection | undefined>;
-  confirmPersistDefaultAgentSelection?: (
-    selection: DownstreamAgentSelection,
-  ) => Promise<boolean>;
-  persistDefaultAgentSelection?: (selection: DownstreamAgentSelection) => Promise<void> | void;
   /**
    * Snapshot of loaded TUI extensions, used to serve the `/extensions`
    * slash command. Supplied at boot by runTuiCli from the
@@ -600,82 +592,25 @@ export class NanobossTuiController {
   private async validateInlineModelSelection(
     selection: DownstreamAgentSelection,
   ): Promise<DownstreamAgentSelection | undefined> {
-    if (!selection.model) {
-      return undefined;
-    }
-
-    const refreshedToday = (this.deps.hasAgentCatalogRefreshedToday ?? hasAgentCatalogRefreshedToday)(
-      selection.provider,
-      {
-        config: { cwd: this.cwd },
-      },
-    );
-    const discoverCatalog = async () => await (this.deps.discoverAgentCatalog ?? discoverAgentCatalog)(
-      selection.provider,
-      {
-        config: { cwd: this.cwd },
-        ...(refreshedToday ? {} : { forceRefresh: true }),
-      },
-    );
-
-    try {
-      const catalog = refreshedToday
-        ? await discoverCatalog()
-        : await this.withLocalBusy(
-            `[model] refreshing ${getProviderLabel(selection.provider)} model cache…`,
-            discoverCatalog,
-          );
-      return isKnownModelSelectionInCatalog(catalog, selection.model)
-        ? selection
-        : undefined;
-    } catch (error) {
-      this.showLocalCard({
-        key: "local:model",
-        title: "Model",
-        markdown: formatAgentCatalogRefreshError(selection.provider, error),
-        severity: "error",
-      });
-      return undefined;
-    }
-  }
-
-  private applyLocalSelection(selection: DownstreamAgentSelection): void {
-    this.dispatch({
-      type: "local_agent_selection",
-      agentLabel: formatAgentSelectionLabel(selection),
+    return await validateInlineModelSelectionInternal({
       selection,
+      cwd: this.cwd,
+      deps: this.deps,
+      withLocalBusy: async (status, work) => await this.withLocalBusy(status, work),
+      showLocalCard: (opts) => this.showLocalCard(opts),
     });
   }
 
+  private applyLocalSelection(selection: DownstreamAgentSelection): void {
+    this.dispatch(createLocalAgentSelectionAction(selection));
+  }
+
   private async maybePersistDefaultSelection(selection: DownstreamAgentSelection): Promise<void> {
-    const confirm = this.deps.confirmPersistDefaultAgentSelection;
-    const persist = this.deps.persistDefaultAgentSelection;
-    if (!confirm || !persist) {
-      return;
-    }
-
-    try {
-      const shouldPersist = await confirm(selection);
-      if (!shouldPersist) {
-        return;
-      }
-
-      await persist(selection);
-      this.showLocalCard({
-        key: "local:model",
-        title: "Model",
-        markdown: `Saved **${formatAgentSelectionLabel(selection)}** as the default for future runs.`,
-        severity: "info",
-      });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      this.showLocalCard({
-        key: "local:model",
-        title: "Model",
-        markdown: `Failed to save default: ${message}`,
-        severity: "error",
-      });
-    }
+    await maybePersistDefaultSelectionInternal({
+      selection,
+      deps: this.deps,
+      showLocalCard: (opts) => this.showLocalCard(opts),
+    });
   }
 
   private async withLocalBusy<T>(status: string, work: () => Promise<T>): Promise<T> {
