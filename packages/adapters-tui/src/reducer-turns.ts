@@ -39,7 +39,7 @@ export function appendAssistantText(state: UiState, text: string): UiState {
   };
 }
 
-export function appendTextToTurnBlocks(
+function appendTextToTurnBlocks(
   turn: UiTurn,
   text: string,
   origin: "stream" | "replay",
