@@ -1,12 +1,10 @@
 import type {
   UiState,
-  UiTurn,
 } from "./state.ts";
 import {
-  buildAssistantTurnMeta,
-  createTurn,
-  nextTurnId,
-} from "./reducer-turn-factory.ts";
+  appendTextToTurnBlocks,
+  createAssistantTurn,
+} from "./reducer-assistant-turn-text.ts";
 import { appendTranscriptItem } from "./reducer-transcript-items.ts";
 
 export function appendAssistantText(state: UiState, text: string): UiState {
@@ -42,24 +40,6 @@ export function appendAssistantText(state: UiState, text: string): UiState {
       : turn),
     assistantParagraphBreakPending: false,
   };
-}
-
-function appendTextToTurnBlocks(
-  turn: UiTurn,
-  text: string,
-  origin: "stream" | "replay",
-): UiTurn {
-  if (text.length === 0) {
-    return turn;
-  }
-  const blocks = turn.blocks ?? [];
-  const last = blocks[blocks.length - 1];
-  if (last && last.kind === "text" && last.origin === origin) {
-    const nextBlocks = blocks.slice(0, -1);
-    nextBlocks.push({ kind: "text", text: `${last.text}${text}`, origin });
-    return { ...turn, blocks: nextBlocks };
-  }
-  return { ...turn, blocks: [...blocks, { kind: "text", text, origin }] };
 }
 
 export function markAssistantTextBoundary(state: UiState): UiState {
@@ -102,20 +82,4 @@ export function appendToolCallBlockToActiveTurn(state: UiState, toolCallId: stri
       };
     }),
   };
-}
-
-function createAssistantTurn(state: UiState, markdown: string): UiTurn {
-  return createTurn({
-    id: nextTurnId("assistant", state.turns.length),
-    role: "assistant",
-    markdown,
-    blocks: markdown.length > 0
-      ? [{ kind: "text", text: markdown, origin: "stream" }]
-      : [],
-    status: "streaming",
-    runId: state.activeRunId,
-    meta: buildAssistantTurnMeta({
-      procedure: state.activeProcedure,
-    }),
-  });
 }
