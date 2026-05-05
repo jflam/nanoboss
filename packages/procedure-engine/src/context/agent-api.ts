@@ -38,7 +38,9 @@ import {
   shouldForwardNestedAgentUpdate,
   withNestedToolCallMetadata,
 } from "./agent-output-events.ts";
+import { BoundAgentInvocationApiImpl } from "./bound-agent-invocation.ts";
 import { resolveNamedRefs } from "./named-refs.ts";
+import { isTypeDescriptor } from "./type-descriptor.ts";
 
 type ActiveRun = ReturnType<SessionStore["startRun"]>;
 
@@ -385,57 +387,10 @@ export class AgentInvocationApiImpl implements AgentInvocationApi {
 
 }
 
-class BoundAgentInvocationApiImpl implements BoundAgentInvocationApi {
-  constructor(
-    private readonly agent: AgentInvocationApiImpl,
-    private readonly sessionMode: AgentSessionMode,
-  ) {}
-
-  async run(
-    prompt: string,
-    options?: Omit<CommandCallAgentOptions, "session">,
-  ): Promise<RunResult<string>>;
-  async run<T extends KernelValue>(
-    prompt: string,
-    descriptor: TypeDescriptor<T>,
-    options?: Omit<CommandCallAgentOptions, "session">,
-  ): Promise<RunResult<T>>;
-  async run<T extends KernelValue>(
-    prompt: string,
-    descriptorOrOptions?: TypeDescriptor<T> | Omit<CommandCallAgentOptions, "session">,
-    maybeOptions?: Omit<CommandCallAgentOptions, "session">,
-  ) {
-    const descriptor = isTypeDescriptor(descriptorOrOptions)
-      ? descriptorOrOptions
-      : undefined;
-    const options = (descriptor ? maybeOptions : descriptorOrOptions) as Omit<CommandCallAgentOptions, "session"> | undefined;
-    const boundOptions: CommandCallAgentOptions = {
-      ...(options ?? {}),
-      session: this.sessionMode,
-    };
-
-    if (descriptor) {
-      return await this.agent.run(prompt, descriptor, boundOptions);
-    }
-
-    return await this.agent.run(prompt, boundOptions);
-  }
-}
-
 function formatAgentLabel(agent?: DownstreamAgentSelection): string {
   if (!agent) {
     return "";
   }
 
   return agent.model ? ` [${agent.provider}:${agent.model}]` : ` [${agent.provider}]`;
-}
-
-function isTypeDescriptor<T>(value: unknown): value is TypeDescriptor<T> {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    "schema" in value &&
-    "validate" in value &&
-    typeof (value as { validate: unknown }).validate === "function"
-  );
 }

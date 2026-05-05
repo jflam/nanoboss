@@ -70,10 +70,14 @@ The central type is `ProcedureDispatchJobManager`.
   Concrete `ProcedureApi` implementation.
 - [src/context/agent-api.ts](/Users/jflam/agentboss/workspaces/nanoboss/packages/procedure-engine/src/context/agent-api.ts:1)
   Implements `ctx.agent`.
+- `src/context/bound-agent-invocation.ts`
+  Bound `ctx.agent.session(mode).run(...)` wrapper.
 - `src/context/agent-output-events.ts`
   Internal structured-output panel formatting and nested agent update metadata helpers.
 - `src/context/named-refs.ts`
   Internal named ref resolution for `ctx.agent.run(...)` inputs.
+- `src/context/type-descriptor.ts`
+  Shared runtime guard for procedure-sdk type descriptors.
 - [src/context/procedure-api.ts](/Users/jflam/agentboss/workspaces/nanoboss/packages/procedure-engine/src/context/procedure-api.ts:1)
   Implements `ctx.procedures`.
 - [src/context/session-api.ts](/Users/jflam/agentboss/workspaces/nanoboss/packages/procedure-engine/src/context/session-api.ts:1)
@@ -417,8 +421,8 @@ If new execution logic is added outside these paths, that is usually a sign that
 
 Measured during the 2026-05 compatibility re-export review:
 
-- source files: 30
-- source lines: 3,183
+- source files: 32
+- source lines: 3,197
 - largest file: `src/dispatch/jobs.ts` at 465 lines
 - runtime value exports: 36 -> 30
 - public wildcard exports: 0
@@ -437,3 +441,5 @@ Measured during the 2026-05 compatibility re-export review:
   the job manager module
 - code simplification applied: split named ref resolution out of the agent API
   implementation module
+- code simplification applied: split bound agent session invocation and the
+  shared type-descriptor guard out of the agent API implementation module
