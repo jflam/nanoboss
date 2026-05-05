@@ -41,12 +41,11 @@ The package entrypoint is
 explicit; avoid wildcard exports from the barrel because they can expose
 implementation classes from downstream packages.
 
-The surface has five groups.
+The surface has four groups.
 
 ### 1. Foreground session runtime
 
 - `NanobossService`
-- `extractProcedureDispatchResult`
 
 `NanobossService` is the live session orchestrator used by interactive and
 server adapters. It keeps session state, default-agent policy, event logs,
@@ -123,6 +122,9 @@ entrypoint APIs. Generic data helpers belong in `@nanoboss/procedure-sdk` or
   Default downstream-agent prewarm and prompt preparation policy.
 - `src/memory-cards.ts`
   Procedure memory-card extraction and prompt rendering.
+- `src/procedure-dispatch-result.ts`
+  Internal async procedure dispatch result parsing from downstream agent tool
+  payloads.
 - `src/tool-call-preview.ts`
   Adapter-neutral tool-call summary blocks.
 - `src/turn-display.ts`
@@ -184,15 +186,15 @@ HTTP/frontend flow:
 
 Measured during the 2026-05 app-runtime review:
 
-- source files: 17
-- source lines: 4,037
-- largest file: `src/service.ts` at 1,479 lines
+- source files: 18
+- source lines: 4,002
+- largest file: `src/service.ts` at 1,157 lines
 - public barrel wildcard exports: reduced from 2 to 0
 - public app-runtime symbols: reduced from 58 to 57 by removing the accidental
   `UiApiImpl` value re-export
-- runtime value exports: 29 -> 16 by internalizing runtime-mode, tool-call
-  preview helper exports, unused runtime-event guard aliases, and prompt/memory
-  presentation helpers
+- runtime value exports: 29 -> 15 by internalizing runtime-mode, tool-call
+  preview helper exports, unused runtime-event guard aliases, prompt/memory
+  presentation helpers, and async dispatch-result parsing
 
 The small surface reduction matters more than the raw symbol count: the package
 now exports runtime abstractions intentionally instead of forwarding every

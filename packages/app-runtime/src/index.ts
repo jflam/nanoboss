@@ -1,5 +1,4 @@
 export {
-  extractProcedureDispatchResult,
   NanobossService,
 } from "./service.ts";
 export {
