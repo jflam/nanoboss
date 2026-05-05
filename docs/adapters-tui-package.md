@@ -128,6 +128,8 @@ are:
 - `controller-submit.ts`: controller-owned prompt submit and queued-prompt
   command flow helpers
 - `controller-types.ts`: controller public and app-facing dependency contracts
+- `boot-extension-context.ts`: extension context factory and contribution
+  namespacing helpers
 - `views.ts`: transcript, chrome, and panel composition
 - `views-panels.ts`: non-transcript ui_panel chrome host components
 - `views-procedure-panels.ts`: transcript procedure-panel rendering and
@@ -155,16 +157,16 @@ of growing `reducer.ts`, `app.ts`, or `controller.ts` further.
 - Keep extension catalog/discovery behavior in `@nanoboss/tui-extension-catalog`.
 - Keep adapter-private implementation helpers out of the public entrypoint
   unless root commands, package consumers, or intentional tests need them.
-- Prefer registry/context wiring in `boot-extensions.ts`; do not let extension
-  activation bypass namespacing or catalog precedence rules.
+- Keep registry/context wiring in the extension boot helpers; do not let
+  extension activation bypass namespacing or catalog precedence rules.
 - Keep protocol-level HTTP behavior in `@nanoboss/adapters-http`.
 
 ## Current Review Metrics
 
 Measured during the 2026-05 TUI adapter review:
 
-- source files: 85
-- source lines: 9,027
+- source files: 86
+- source lines: 9,035
 - largest file: `src/controller.ts` at 355 lines
 - workspace package dependencies: 9
 - runtime value exports: 46 -> 12
@@ -252,6 +254,8 @@ Measured during the 2026-05 TUI adapter review:
     tool-card formatting
   - split tool-card diff detection and line styling helpers out of shared
     tool-card formatting
+  - split extension context factory and contribution namespacing helpers out
+    of extension boot orchestration
 
 The useful outcome of this pass is the entrypoint baseline: future TUI adapter
 exports should be deliberate additions, not accidental leakage from broad
