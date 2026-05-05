@@ -154,6 +154,8 @@ are:
   helpers
 - `components/tool-card-code-context.ts`: tool-card code language and
   highlighting context inference
+- `components/tool-card-header.ts`: tool-card header, canonical name, and
+  duration formatting helpers
 - `components/tool-card-format.ts`: shared tool-card rendering and line
   formatting helpers
 - `theme-languages.ts`: file-extension language inference for syntax
@@ -179,8 +181,8 @@ of growing `reducer.ts`, `app.ts`, or `controller.ts` further.
 
 Measured during the 2026-05 TUI adapter review:
 
-- source files: 95
-- source lines: 9,200
+- source files: 96
+- source lines: 9,211
 - largest file: `src/controller.ts` at 355 lines
 - workspace package dependencies: 9
 - runtime value exports: 46 -> 12
@@ -288,6 +290,8 @@ Measured during the 2026-05 TUI adapter review:
     shared tool-card formatting
   - split transcript turn rendering components out of the transcript item
     composition shell
+  - split tool-card header, canonical name, and duration formatting out of
+    shared tool-card formatting
 
 The useful outcome of this pass is the entrypoint baseline: future TUI adapter
 exports should be deliberate additions, not accidental leakage from broad
