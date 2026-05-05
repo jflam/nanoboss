@@ -136,6 +136,8 @@ are:
   normalization helpers
 - `components/tool-card-format.ts`: shared tool-card rendering and line
   formatting helpers
+- `theme-languages.ts`: file-extension language inference for syntax
+  highlighting
 - `theme.ts`: adapter theme construction
 
 Keep changes in those files focused. When behavior naturally has its own
@@ -157,7 +159,7 @@ of growing `reducer.ts`, `app.ts`, or `controller.ts` further.
 
 Measured during the 2026-05 TUI adapter review:
 
-- source files: 82
+- source files: 83
 - source lines: 9,014
 - largest file: `src/controller.ts` at 355 lines
 - workspace package dependencies: 9
@@ -190,6 +192,7 @@ Measured during the 2026-05 TUI adapter review:
     central reducer
   - split reducer-owned procedure-card and transcript card rendering helpers
     out of the panel reducer
+  - split file-extension language inference out of the TUI theme constructor
   - split app-level composer snapshot, prompt-input, and cursor helpers out of
     the TUI app
   - split app-level keybinding hook wiring for cooldown and queued-prompt
