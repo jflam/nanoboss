@@ -244,9 +244,9 @@ The strongest package-level usage examples are in [packages/agent-acp/tests/agen
 
 Measured during the 2026-05 agent-acp boundary reviews:
 
-- source files: 16
-- source lines: 3,578
-- largest file: `src/catalog-discovery.ts` at 677 lines
+- source files: 17
+- source lines: 3,581
+- largest file: `src/token-metrics.ts` at 646 lines
 - runtime value exports: 51 -> 31
 - public wildcard exports: 0
 - code simplification applied:
@@ -263,6 +263,8 @@ Measured during the 2026-05 agent-acp boundary reviews:
     option construction
   - internalized token-usage enrichment behind session/transport behavior while
     keeping `collectTokenSnapshot(...)` public for diagnostics
+  - split model catalog discovery cache/persistence into a private helper while
+    keeping refresh APIs unchanged
 
 Those tests demonstrate:
 
