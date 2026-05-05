@@ -1,7 +1,6 @@
 import {
   TuiExtensionRegistry,
   type TuiExtensionContextFactory,
-  type TuiExtensionContributionCounts,
 } from "@nanoboss/tui-extension-catalog";
 
 import {
@@ -10,7 +9,8 @@ import {
   type TuiExtensionBootLogLevel,
   type TuiExtensionContextFactoryDeps,
 } from "./boot-extension-context.ts";
-import { registerBuiltinTuiExtensions } from "./builtin-extensions.ts";
+import { activateTuiExtensionRegistry } from "./boot-extension-activation.ts";
+import { prepareTuiExtensionRegistry } from "./boot-extension-registry.ts";
 import { createNanobossTuiTheme, type NanobossTuiTheme } from "./theme.ts";
 
 export {
@@ -66,63 +66,28 @@ export async function bootExtensions(
 ): Promise<BootExtensionsResult> {
   const theme = options.theme ?? createNanobossTuiTheme();
   const log = options.log ?? defaultBootLog;
-  const registry = options.registry
-    ?? new TuiExtensionRegistry({
-      cwd,
-      profileExtensionRoot: options.profileExtensionRoot,
-      extensionRoots: options.extensionRoots,
-    });
 
-  if (!options.registry && !options.skipBuiltins) {
-    try {
-      registerBuiltinTuiExtensions(registry);
-    } catch (error) {
-      log("error", `failed to load builtin extensions: ${formatError(error)}`);
-    }
-  }
+  const registry = await prepareTuiExtensionRegistry({
+    cwd,
+    log,
+    profileExtensionRoot: options.profileExtensionRoot,
+    extensionRoots: options.extensionRoots,
+    registry: options.registry,
+    skipDisk: options.skipDisk,
+    skipBuiltins: options.skipBuiltins,
+  });
 
-  if (!options.registry && !options.skipDisk) {
-    try {
-      await registry.loadFromDisk();
-    } catch (error) {
-      log("error", `failed to load extensions from disk: ${formatError(error)}`);
-    }
-  }
+  const activation = await activateTuiExtensionRegistry({
+    registry,
+    theme,
+    log,
+    contextFactory: options.contextFactory,
+    contextFactoryDeps: options.contextFactoryDeps,
+  });
 
-  const contributionCounts = new Map<string, TuiExtensionContributionCounts>();
-
-  const factory = options.contextFactory
-    ?? createTuiExtensionContextFactory(theme, log, options.contextFactoryDeps, contributionCounts);
-
-  await registry.activateAll(factory);
-
-  // Forward captured contribution counts into the registry so the
-  // `/extensions` slash command (and anyone else calling listMetadata)
-  // sees what each extension registered during activate().
-  if (!options.contextFactory) {
-    for (const [name, counts] of contributionCounts) {
-      registry.setContributions(name, counts);
-    }
-  }
-
-  const statuses = registry.listMetadata();
-  const failedCount = statuses.filter((entry) => entry.status === "failed").length;
-  const result: BootExtensionsResult = { registry, failedCount };
-
-  if (failedCount > 0) {
-    const plural = failedCount === 1 ? "" : "s";
-    const aggregate = `[extensions] ${failedCount} extension${plural} failed to activate`;
-    result.aggregateStatus = aggregate;
-    log("error", aggregate);
-  }
-
-  return result;
+  return { registry, ...activation };
 }
 
 function defaultBootLog(level: TuiExtensionBootLogLevel, text: string): void {
   process.stderr.write(`[extension:${level}] ${text}\n`);
-}
-
-function formatError(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }

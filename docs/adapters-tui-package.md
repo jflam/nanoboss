@@ -167,10 +167,14 @@ are:
 - `activity-bar-cascade.ts`: activity-bar priority-drop rendering cascade
   helper
 - `activity-bar.ts`: activity-bar segment registry and line rendering entry
+- `boot-extension-activation.ts`: extension activation, contribution count
+  publication, and aggregate failure summary helper
 - `boot-extension-contributions.ts`: extension contribution registration,
   namespacing, shadowing, and count helpers
 - `boot-extension-context.ts`: extension context factory and activation logger
   wiring
+- `boot-extension-registry.ts`: extension registry construction, builtin
+  seeding, and disk loading helper
 - `build-freshness-rules.ts`: TUI build-freshness evaluation and git-status
   path filtering rules
 - `build-freshness.ts`: TUI build-freshness filesystem and git probing helper
@@ -237,8 +241,8 @@ of growing `reducer.ts`, `app.ts`, or `controller.ts` further.
 
 Measured during the 2026-05 TUI adapter review:
 
-- source files: 127
-- source lines: 9,683
+- source files: 129
+- source lines: 9,765
 - largest file: `src/controller.ts` at 355 lines
 - workspace package dependencies: 9
 - runtime value exports: 46 -> 12
@@ -354,6 +358,8 @@ Measured during the 2026-05 TUI adapter review:
     of extension boot orchestration
   - split extension contribution registration, shadowing, and count handling
     out of context factory construction
+  - split extension registry preparation and activation summary handling out
+    of the extension boot entrypoint
   - split reducer-owned run lifecycle frontend event transitions out of the
     central reducer
   - split reducer-owned terminal run outcome transitions out of live run
