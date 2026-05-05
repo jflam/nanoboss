@@ -74,7 +74,6 @@ manually.
 
 ### 3. Runtime events and replay
 
-- `SessionEventLog`
 - `RuntimeEvent`
 - `RuntimeEventEnvelope`
 - event envelope type aliases
@@ -187,14 +186,15 @@ HTTP/frontend flow:
 Measured during the 2026-05 app-runtime review:
 
 - source files: 18
-- source lines: 4,000
+- source lines: 3,999
 - largest file: `src/service.ts` at 1,157 lines
 - public barrel wildcard exports: reduced from 2 to 0
 - public app-runtime symbols: reduced from 58 to 57 by removing the accidental
   `UiApiImpl` value re-export
-- runtime value exports: 29 -> 13 by internalizing runtime-mode, tool-call
+- runtime value exports: 29 -> 12 by internalizing runtime-mode, tool-call
   preview helper exports, unused runtime-event guard aliases, prompt/memory
-  presentation helpers, and async dispatch-result parsing/guards
+  presentation helpers, async dispatch-result parsing/guards, and the session
+  event-log implementation
 
 The small surface reduction matters more than the raw symbol count: the package
 now exports runtime abstractions intentionally instead of forwarding every

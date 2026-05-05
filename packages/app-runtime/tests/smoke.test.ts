@@ -19,6 +19,7 @@ test("public entrypoint exports a smoke symbol", () => {
   expect("extractProcedureDispatchResult" in appRuntime).toBe(false);
   expect("isProcedureDispatchResult" in appRuntime).toBe(false);
   expect("isProcedureDispatchStatusResult" in appRuntime).toBe(false);
+  expect("SessionEventLog" in appRuntime).toBe(false);
 });
 
 test("public entrypoint does not leak procedure-engine implementation classes", () => {

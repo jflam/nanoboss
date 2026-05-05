@@ -27,7 +27,6 @@ export {
   isRenderedRuntimeEvent,
   mapProcedureUiEventToRuntimeEvent,
   mapSessionUpdateToRuntimeEvents,
-  SessionEventLog,
   toPersistedRuntimeEvent,
   toRuntimeCommands,
   type CommandsUpdatedEventEnvelope,
