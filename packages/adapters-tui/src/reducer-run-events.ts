@@ -2,7 +2,7 @@ import type { RenderedFrontendEventEnvelope } from "@nanoboss/adapters-http";
 
 import { formatTokenUsageLine, toTokenUsageSummary } from "./format.ts";
 import { type UiState } from "./state.ts";
-import { STOP_REQUESTED_STATUS } from "./reducer-local-actions.ts";
+import { STOP_REQUESTED_STATUS } from "./reducer-local-status.ts";
 import {
   appendAssistantText,
 } from "./reducer-turns.ts";

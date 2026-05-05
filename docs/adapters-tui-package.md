@@ -125,6 +125,8 @@ are:
 - `state-tools.ts`: TUI tool-call state record contract
 - `state-transcript.ts`: TUI transcript turn and item state record contracts
 - `reducer-local-actions.ts`: reducer-owned local/controller action dispatch
+- `reducer-local-status.ts`: reducer-owned local status, busy, and stop-request
+  action transitions
 - `reducer-local-turns.ts`: reducer-owned local submitted/send-failed turn
   construction
 - `reducer-local-procedure-panels.ts`: reducer-owned local procedure-panel
@@ -286,8 +288,8 @@ of growing `reducer.ts`, `app.ts`, or `controller.ts` further.
 
 Measured during the 2026-05 TUI adapter review:
 
-- source files: 155
-- source lines: 10,371
+- source files: 156
+- source lines: 10,394
 - largest file: `src/controller.ts` at 315 lines
 - workspace package dependencies: 9
 - runtime value exports: 46 -> 12
@@ -320,6 +322,8 @@ Measured during the 2026-05 TUI adapter review:
     of local action dispatch
   - split reducer-owned local/controller action handling out of the central
     reducer
+  - split reducer-owned local status, busy, and stop-request transitions out
+    of local action dispatch
   - split reducer-owned assistant turn and transcript helpers out of the
     central reducer
   - split reducer-owned assistant turn text-block mutation and construction

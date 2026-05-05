@@ -6,8 +6,7 @@ import {
 } from "./reducer-local-turns.ts";
 import type { UiLocalAction } from "./reducer-actions.ts";
 import { reduceSessionReady } from "./reducer-session-ready.ts";
-
-export const STOP_REQUESTED_STATUS = "[run] ESC received - stopping at next tool boundary...";
+import { reduceLocalStatusAction } from "./reducer-local-status.ts";
 
 export function reduceLocalUiAction(state: UiState, action: UiLocalAction): UiState {
   switch (action.type) {
@@ -18,49 +17,11 @@ export function reduceLocalUiAction(state: UiState, action: UiLocalAction): UiSt
     case "local_send_failed":
       return reduceLocalSendFailed(state, action);
     case "local_status":
-      return {
-        ...state,
-        statusLine: action.text,
-      };
     case "local_busy_started":
-      return {
-        ...state,
-        statusLine: action.text,
-        inputDisabled: true,
-        inputDisabledReason: "local",
-      };
     case "local_busy_finished":
-      if (state.inputDisabledReason !== "local") {
-        return state;
-      }
-      return {
-        ...state,
-        statusLine: undefined,
-        inputDisabled: false,
-        inputDisabledReason: undefined,
-      };
     case "local_stop_requested":
-      return {
-        ...state,
-        pendingStopRequest: !action.runId,
-        stopRequestedRunId: action.runId,
-        statusLine: STOP_REQUESTED_STATUS,
-      };
     case "local_stop_request_failed":
-      if (action.runId) {
-        if (state.stopRequestedRunId !== action.runId) {
-          return state;
-        }
-      } else if (!state.pendingStopRequest) {
-        return state;
-      }
-
-      return {
-        ...state,
-        pendingStopRequest: false,
-        stopRequestedRunId: undefined,
-        statusLine: action.text,
-      };
+      return reduceLocalStatusAction(state, action);
     case "local_pending_prompt_added":
       return {
         ...state,
