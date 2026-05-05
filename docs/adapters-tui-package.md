@@ -78,6 +78,8 @@ are:
   helpers
 - `app-composer.ts`: app-level composer snapshot, prompt-input, and cursor
   helpers
+- `app-continuation-composer.ts`: app-level inline continuation composer
+  lifecycle helpers
 - `app-continuation-form.ts`: app-level continuation form extraction and
   signature helpers
 - `app-live-updates.ts`: app-level live-update pause and refresh timer
@@ -137,9 +139,9 @@ of growing `reducer.ts`, `app.ts`, or `controller.ts` further.
 
 Measured during the 2026-05 TUI adapter review:
 
-- source files: 72
-- source lines: 8,610
-- largest file: `src/app.ts` at 504 lines
+- source files: 73
+- source lines: 8,653
+- largest file: `src/controller.ts` at 495 lines
 - workspace package dependencies: 9
 - runtime value exports: 46 -> 12
 - public wildcard exports: 8 -> 0
@@ -180,6 +182,8 @@ Measured during the 2026-05 TUI adapter review:
   - split non-transcript ui_panel chrome hosts out of the TUI view shell
   - split app-level continuation form extraction and signature helpers out of
     the TUI app
+  - split app-level inline continuation composer lifecycle helpers out of the
+    TUI app
   - split controller-owned busy-input, pending-prompt, and terminal-event
     helpers out of the TUI controller
   - consolidated controller busy-input steering and queued prompt handling

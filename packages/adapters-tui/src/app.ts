@@ -1,4 +1,3 @@
-import { createTextPromptInput } from "@nanoboss/procedure-sdk";
 import type {
   DownstreamAgentSelection,
 } from "@nanoboss/contracts";
@@ -18,11 +17,7 @@ import {
   handleCtrlVImagePaste as handleCtrlVImagePasteInternal,
   handleImageTokenDeletion as handleImageTokenDeletionInternal,
 } from "./app-clipboard.ts";
-import {
-  buildContinuationFormSignature,
-  getFormContinuation,
-  type FrontendContinuationWithFormId,
-} from "./app-continuation-form.ts";
+import { AppContinuationComposer } from "./app-continuation-composer.ts";
 
 import {
   NanobossTuiController,
@@ -50,7 +45,6 @@ import "./core-bindings.ts";
 // the caller having to wire individual handlers.
 import "./core-form-renderers.ts";
 import { SelectOverlay, type SelectOverlayOptions } from "./overlays/select-overlay.ts";
-import { getFormRenderer, type FormRenderContext } from "./form-renderers.ts";
 import type { UiState } from "./state.ts";
 import { createNanobossTuiTheme, type NanobossTuiTheme } from "./theme.ts";
 import { NanobossAppView } from "./views.ts";
@@ -83,6 +77,7 @@ export class NanobossTuiApp {
   private readonly controller: ControllerLike;
   private readonly clipboardImageProvider: ClipboardImageProvider;
   private readonly liveUpdates: AppLiveUpdates;
+  private readonly continuationComposer: AppContinuationComposer;
   private readonly now: () => number;
   private state: UiState;
   private readonly composerState = createComposerState();
@@ -91,10 +86,6 @@ export class NanobossTuiApp {
   private stopped = false;
   private lastToolOutputToggleAt = Number.NEGATIVE_INFINITY;
   private lastCtrlCAt = Number.NEGATIVE_INFINITY;
-  private inlineComposerMode: "editor" | "select" | "simplify2" = "editor";
-  private openSimplify2ContinuationSignature?: string;
-  private lastSeenSimplify2ContinuationSignature?: string;
-  private dismissedSimplify2ContinuationSignature?: string;
 
   constructor(
     private readonly params: NanobossTuiAppParams,
@@ -136,6 +127,15 @@ export class NanobossTuiApp {
     this.controller = deps.createController?.(params, controllerDeps) ?? new NanobossTuiController(params, controllerDeps);
     this.state = this.controller.getState();
     this.view = deps.createView?.(this.editor, this.theme, this.state) ?? new NanobossAppView(this.editor as Editor, this.theme, this.state);
+    this.continuationComposer = new AppContinuationComposer({
+      tui: this.tui,
+      view: this.view,
+      editor: this.editor,
+      controller: this.controller,
+      theme: this.theme,
+      getState: () => this.state,
+      requestRender: (force) => this.requestRender(force),
+    });
     this.liveUpdates = new AppLiveUpdates({
       tui: this.tui,
       view: this.view,
@@ -255,7 +255,7 @@ export class NanobossTuiApp {
     this.updateEditorSubmitState();
     this.refreshAutocompleteProvider();
     this.view.setState(this.state);
-    this.syncSimplify2ContinuationComposer();
+    this.continuationComposer.sync();
     this.requestRender();
   }
 
@@ -348,13 +348,13 @@ export class NanobossTuiApp {
     options: SelectOverlayOptions<T>,
   ): Promise<T | undefined> {
     return await new Promise<T | undefined>((resolve) => {
-      this.inlineComposerMode = "select";
+      this.continuationComposer.beginSelect();
       const component = new SelectOverlay<T>(
         this.tui as TUI,
         this.theme,
         options,
         (value) => {
-          this.restoreEditorComposer();
+          this.continuationComposer.restoreEditorComposer();
           resolve(value);
         },
       );
@@ -362,103 +362,6 @@ export class NanobossTuiApp {
       this.tui.setFocus(component);
       this.requestRender(true);
     });
-  }
-
-  private restoreEditorComposer(): void {
-    this.inlineComposerMode = "editor";
-    this.openSimplify2ContinuationSignature = undefined;
-    this.view.showEditor();
-    this.tui.setFocus(this.editor);
-    this.requestRender(true);
-  }
-
-  private syncSimplify2ContinuationComposer(): void {
-    const continuation = getFormContinuation(this.state.pendingContinuation);
-    const signature = continuation ? buildContinuationFormSignature(continuation) : undefined;
-    if (signature !== this.lastSeenSimplify2ContinuationSignature) {
-      this.lastSeenSimplify2ContinuationSignature = signature;
-      this.dismissedSimplify2ContinuationSignature = undefined;
-    }
-
-    const shouldShow = Boolean(
-      continuation
-      && signature
-      && !this.state.simplify2AutoApprove
-      && !this.state.inputDisabled
-      && this.inlineComposerMode !== "select"
-      && this.dismissedSimplify2ContinuationSignature !== signature,
-    );
-
-    if (shouldShow && continuation && signature && this.inlineComposerMode !== "simplify2") {
-      this.mountContinuationForm(continuation, signature);
-      return;
-    }
-
-    if (!shouldShow && this.inlineComposerMode === "simplify2") {
-      this.restoreEditorComposer();
-    }
-  }
-
-  private mountContinuationForm(
-    continuation: FrontendContinuationWithFormId,
-    signature: string,
-  ): void {
-    const renderer = getFormRenderer(continuation.formId);
-    if (!renderer) {
-      // Unknown formId: dismiss the inline composer so the user can
-      // still type a free-form reply instead of crashing the TUI.
-      this.dismissedSimplify2ContinuationSignature = signature;
-      return;
-    }
-
-    if (!renderer.schema.validate(continuation.formPayload)) {
-      // Payload failed typia validation. Treat as unknown/dismissed
-      // rather than crashing the TUI; the underlying continuation is
-      // still pending and the user can type a reply in the default
-      // composer.
-      this.dismissedSimplify2ContinuationSignature = signature;
-      return;
-    }
-
-    this.inlineComposerMode = "simplify2";
-    this.openSimplify2ContinuationSignature = signature;
-
-    const ctx: FormRenderContext<unknown> = {
-      payload: continuation.formPayload,
-      state: this.state,
-      theme: this.theme,
-      editor: {
-        setText: (text: string) => {
-          this.editor.setText(text);
-        },
-        getText: () => this.editor.getText(),
-      },
-      submit: (reply: string) => {
-        this.handleFormSubmit(reply);
-      },
-      cancel: () => {
-        this.handleFormCancel();
-      },
-    };
-
-    const component = renderer.render(ctx);
-    this.view.showComposer(component);
-    this.tui.setFocus(component);
-    this.requestRender(true);
-  }
-
-  private handleFormSubmit(reply: string): void {
-    this.restoreEditorComposer();
-    void this.controller.handleSubmit(createTextPromptInput(reply));
-  }
-
-  private handleFormCancel(): void {
-    const signature = this.openSimplify2ContinuationSignature;
-    this.restoreEditorComposer();
-    if (signature) {
-      this.dismissedSimplify2ContinuationSignature = signature;
-    }
-    void this.controller.handleContinuationCancel?.();
   }
 
   private createBindingAppHooks() {
