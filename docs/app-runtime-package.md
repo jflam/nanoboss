@@ -113,6 +113,9 @@ entrypoint APIs. Generic data helpers belong in `@nanoboss/procedure-sdk` or
   Interface and result types for the runtime API.
 - `src/runtime-events.ts`
   Adapter-neutral event projection and event-log storage.
+- `src/runtime-tool-events.ts`
+  Tool-call runtime event projection, preview shaping, cancellation status, and
+  token usage extraction.
 - `src/composite-session-update-emitter.ts`
   Session update fanout into runtime events, token snapshots, and delegate
   emitters.
@@ -193,8 +196,8 @@ HTTP/frontend flow:
 
 Measured during the 2026-05 app-runtime review:
 
-- source files: 20
-- source lines: 3,442
+- source files: 21
+- source lines: 3,466
 - largest file: `src/service.ts` at 674 lines
 - public barrel wildcard exports: reduced from 2 to 0
 - public app-runtime symbols: reduced from 58 to 57 by removing the accidental
@@ -208,6 +211,8 @@ Measured during the 2026-05 app-runtime review:
 - code simplification applied: removed an obsolete private default-session
   dispatch path from `NanobossService` and deleted its unused prompt, polling,
   dispatch-result, and failure-parsing helpers
+- code simplification applied: split tool-call runtime event projection out of
+  the central runtime event mapper
 
 The small surface reduction matters more than the raw symbol count: the package
 now exports runtime abstractions intentionally instead of forwarding every
