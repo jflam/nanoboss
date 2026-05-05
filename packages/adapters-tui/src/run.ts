@@ -6,6 +6,10 @@ import {
   type RunTuiAppDeps,
   type TuiAppRunner,
 } from "./run-app.ts";
+export {
+  assertInteractiveTty,
+  canUseNanobossTui,
+} from "./run-tty.ts";
 import { installTuiExitSignalHandlers } from "./run-signals.ts";
 import {
   addProcessSignalListener,
@@ -15,20 +19,6 @@ import {
   type RestoreTerminalInput,
   type TuiExitSignal,
 } from "./run-terminal.ts";
-
-export function canUseNanobossTui(): boolean {
-  return process.stdin.isTTY && process.stdout.isTTY;
-}
-
-export function assertInteractiveTty(commandName: string): void {
-  if (canUseNanobossTui()) {
-    return;
-  }
-
-  throw new Error(
-    `nanoboss ${commandName} requires an interactive TTY; use the HTTP server, MCP, or ACP interfaces for automation.`,
-  );
-}
 
 export interface RunTuiCliParams extends Omit<NanobossTuiAppParams, "serverUrl"> {
   connectionMode: FrontendConnectionMode;
