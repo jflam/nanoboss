@@ -113,6 +113,9 @@ entrypoint APIs. Generic data helpers belong in `@nanoboss/procedure-sdk` or
   Interface and result types for the runtime API.
 - `src/runtime-events.ts`
   Adapter-neutral event projection and event-log storage.
+- `src/composite-session-update-emitter.ts`
+  Session update fanout into runtime events, token snapshots, and delegate
+  emitters.
 - `src/session-runtime.ts`
   Live session state and persisted descriptor helpers.
 - `src/continuations.ts`
@@ -185,9 +188,9 @@ HTTP/frontend flow:
 
 Measured during the 2026-05 app-runtime review:
 
-- source files: 18
-- source lines: 3,999
-- largest file: `src/service.ts` at 1,157 lines
+- source files: 19
+- source lines: 4,009
+- largest file: `src/service.ts` at 1,101 lines
 - public barrel wildcard exports: reduced from 2 to 0
 - public app-runtime symbols: reduced from 58 to 57 by removing the accidental
   `UiApiImpl` value re-export
