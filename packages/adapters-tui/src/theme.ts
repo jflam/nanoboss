@@ -1,10 +1,9 @@
-import { highlight, supportsLanguage } from "cli-highlight";
-
 import type {
   NanobossTuiTheme as SdkNanobossTuiTheme,
   ToolCardThemeMode,
 } from "@nanoboss/tui-extension-sdk";
 import type { EditorTheme, MarkdownTheme, SelectListTheme } from "./pi-tui.ts";
+import { createToolCardCodeHighlighter } from "./theme-highlight.ts";
 import {
   applyBoldRgb,
   applyRgb,
@@ -44,8 +43,6 @@ function attrStyle(text: string, code: number, resetCode: number): string {
   return style(text, [code], [resetCode]);
 }
 
-type CliHighlightTheme = Record<string, (text: string) => string>;
-
 export function createNanobossTuiTheme(initialToolCardMode: ToolCardThemeMode = "dark"): NanobossTuiTheme {
   let toolCardMode = initialToolCardMode;
   const toolCardPalette = () => getToolCardPalette(toolCardMode);
@@ -84,39 +81,18 @@ export function createNanobossTuiTheme(initialToolCardMode: ToolCardThemeMode = 
   const syntaxType = (value: string) => applyRgb(value, toolCardPalette().syntaxType);
   const syntaxOperator = (value: string) => applyRgb(value, toolCardPalette().syntaxOperator);
   const syntaxPunctuation = (value: string) => applyRgb(value, toolCardPalette().syntaxPunctuation);
-  const cliHighlightTheme: CliHighlightTheme = {
-    keyword: syntaxKeyword,
-    built_in: syntaxType,
-    literal: syntaxNumber,
-    number: syntaxNumber,
-    string: syntaxString,
-    comment: syntaxComment,
-    function: syntaxFunction,
-    title: syntaxFunction,
-    class: syntaxType,
-    type: syntaxType,
-    attr: syntaxVariable,
-    variable: syntaxVariable,
-    params: syntaxVariable,
-    operator: syntaxOperator,
-    punctuation: syntaxPunctuation,
-  };
-  const highlightCode = (code: string, lang?: string): string[] => {
-    const validLanguage = lang && supportsLanguage(lang) ? lang : undefined;
-    if (!validLanguage) {
-      return code.split("\n").map((line) => toolCardCode(line));
-    }
-
-    try {
-      return highlight(code, {
-        language: validLanguage,
-        ignoreIllegals: true,
-        theme: cliHighlightTheme,
-      }).split("\n");
-    } catch {
-      return code.split("\n").map((line) => toolCardCode(line));
-    }
-  };
+  const highlightCode = createToolCardCodeHighlighter({
+    toolCardCode,
+    syntaxComment,
+    syntaxKeyword,
+    syntaxFunction,
+    syntaxVariable,
+    syntaxString,
+    syntaxNumber,
+    syntaxType,
+    syntaxOperator,
+    syntaxPunctuation,
+  });
 
   const selectList: SelectListTheme = {
     selectedPrefix: (value) => style(value, [1, 36], [22, 39]),
