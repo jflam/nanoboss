@@ -2,7 +2,6 @@ import {
   setSessionAutoApprove,
   startSessionEventStream,
   isRenderedFrontendEvent,
-  type FrontendCommand,
   type FrontendEventEnvelope,
   type SessionStreamHandle,
 } from "@nanoboss/adapters-http";
@@ -38,70 +37,32 @@ import {
   createLocalAgentSelectionAction,
   maybePersistDefaultSelection as maybePersistDefaultSelectionInternal,
   validateInlineModelSelection as validateInlineModelSelectionInternal,
-  type ControllerModelSelectionDeps,
 } from "./controller-model-selection.ts";
 import {
   connectControllerSession,
   createControllerSession,
-  type ControllerSessionDeps,
 } from "./controller-session.ts";
 import {
   cancelActiveRun as cancelActiveRunInternal,
   handleContinuationCancel as handleContinuationCancelInternal,
   maybeSendLatchedStopRequest as maybeSendLatchedStopRequestInternal,
   sendStopRequest as sendStopRequestInternal,
-  type ControllerStopDeps,
 } from "./controller-stop.ts";
 import {
   buildPendingPromptAction,
   forwardPrompt as forwardPromptInternal,
   maybeFlushPendingPrompt as maybeFlushPendingPromptInternal,
-  type ControllerPromptFlowDeps,
 } from "./controller-prompt-flow.ts";
-
-import type { TuiExtensionStatus } from "@nanoboss/tui-extension-catalog";
-
-export interface SessionResponse {
-  sessionId: string;
-  cwd: string;
-  commands: FrontendCommand[];
-  buildLabel: string;
-  agentLabel: string;
-  autoApprove: boolean;
-  defaultAgentSelection?: DownstreamAgentSelection;
-}
-
-export interface NanobossTuiControllerParams {
-  cwd?: string;
-  serverUrl: string;
-  showToolCalls: boolean;
-  sessionId?: string;
-  simplify2AutoApprove?: boolean;
-}
-
-export interface NanobossTuiControllerDeps
-  extends ControllerModelSelectionDeps, ControllerSessionDeps, ControllerStopDeps, ControllerPromptFlowDeps {
-  setSessionAutoApprove?: typeof setSessionAutoApprove;
-  startSessionEventStream?: (params: {
-    baseUrl: string;
-    sessionId: string;
-    onEvent: (event: FrontendEventEnvelope) => void;
-    onError?: (error: unknown) => void;
-  }) => SessionStreamHandle;
-  promptForModelSelection?: (
-    currentSelection?: DownstreamAgentSelection,
-  ) => Promise<DownstreamAgentSelection | undefined>;
-  /**
-   * Snapshot of loaded TUI extensions, used to serve the `/extensions`
-   * slash command. Supplied at boot by runTuiCli from the
-   * `TuiExtensionRegistry` returned by `bootExtensions`.
-   */
-  listExtensionEntries?: () => readonly TuiExtensionStatus[];
-  onStateChange?: (state: UiState) => void;
-  onExit?: () => void;
-  onClearInput?: () => void;
-  onAddHistory?: (text: string) => void;
-}
+export type {
+  NanobossTuiControllerDeps,
+  NanobossTuiControllerParams,
+  SessionResponse,
+} from "./controller-types.ts";
+import type {
+  NanobossTuiControllerDeps,
+  NanobossTuiControllerParams,
+  SessionResponse,
+} from "./controller-types.ts";
 
 export class NanobossTuiController {
   private readonly cwd: string;

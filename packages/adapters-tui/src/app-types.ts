@@ -1,6 +1,6 @@
 import type { PromptInput } from "@nanoboss/procedure-sdk";
 import type { ClipboardImageProvider } from "./clipboard/provider.ts";
-import type { NanobossTuiControllerDeps } from "./controller.ts";
+import type { NanobossTuiControllerDeps } from "./controller-types.ts";
 import type { TuiExtensionStatus } from "@nanoboss/tui-extension-catalog";
 import type { UiState } from "./state.ts";
 import type { NanobossTuiTheme } from "./theme.ts";

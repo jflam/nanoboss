@@ -6,7 +6,7 @@ import {
 import type { DownstreamAgentSelection } from "@nanoboss/contracts";
 
 import { getBuildFreshnessNotice } from "./build-freshness.ts";
-import type { SessionResponse } from "./controller.ts";
+import type { SessionResponse } from "./controller-types.ts";
 
 export interface ControllerSessionDeps {
   ensureMatchingHttpServer?: typeof ensureMatchingHttpServer;
