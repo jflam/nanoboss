@@ -109,6 +109,8 @@ are:
   confirmation flow
 - `app-runtime-helpers.ts`: app-level autocomplete, SIGINT, continuation,
   inline-select, and live-update helper construction bundle
+- `app-runtime-wiring.ts`: app-level view, runtime helper, and model-prompt
+  construction wiring
 - `app-sigint-exit.ts`: app-level ctrl-c double-press exit helper
 - `app-types.ts`: app-local dependency adapter contracts
 - `reducer.ts`: top-level local-vs-frontend reducer router
@@ -275,8 +277,8 @@ of growing `reducer.ts`, `app.ts`, or `controller.ts` further.
 
 Measured during the 2026-05 TUI adapter review:
 
-- source files: 149
-- source lines: 10,272
+- source files: 150
+- source lines: 10,337
 - largest file: `src/controller.ts` at 315 lines
 - workspace package dependencies: 9
 - runtime value exports: 46 -> 12
@@ -336,6 +338,8 @@ Measured during the 2026-05 TUI adapter review:
   - split app-level concrete component construction and run/stop lifecycle
     helpers out of the TUI app
   - split app-level runtime helper construction bundle out of the TUI app
+  - split app-level view, runtime helper, and model-prompt construction
+    wiring out of the TUI app
   - split composer text and image-token prompt-input assembly out of composer
     image state
   - split app-level keybinding hook wiring for cooldown and queued-prompt

@@ -25,20 +25,15 @@ import "./core-form-renderers.ts";
 import type { SelectOverlayOptions } from "./overlays/select-overlay.ts";
 import type { UiState } from "./state.ts";
 import type { NanobossTuiTheme } from "./theme.ts";
-import {
-  createAppCoreComponents,
-  createAppView,
-} from "./app-components.ts";
+import { createAppCoreComponents } from "./app-components.ts";
 import {
   runAppLifecycle,
   stopAppLifecycle,
 } from "./app-lifecycle.ts";
 import { AppModelPrompts } from "./app-model-prompts.ts";
 import { bindAppInteractions } from "./app-interaction-wiring.ts";
-import {
-  createAppRuntimeHelpers,
-  type AppRuntimeHelpers,
-} from "./app-runtime-helpers.ts";
+import { type AppRuntimeHelpers } from "./app-runtime-helpers.ts";
+import { createAppRuntimeWiring } from "./app-runtime-wiring.ts";
 export type { NanobossTuiAppParams } from "./app-types.ts";
 import type {
   ControllerLike,
@@ -97,20 +92,14 @@ export class NanobossTuiApp {
       },
     });
     this.state = this.controller.getState();
-    this.view = createAppView({
-      deps,
-      editor: this.editor,
-      theme: this.theme,
-      state: this.state,
-    });
-    this.helpers = createAppRuntimeHelpers({
+    const runtimeWiring = createAppRuntimeWiring({
       deps,
       cwd: this.cwd,
       tui: this.tui,
-      view: this.view,
       editor: this.editor,
       controller: this.controller,
       theme: this.theme,
+      state: this.state,
       getState: () => this.state,
       setState: (state) => {
         this.state = state;
@@ -118,14 +107,12 @@ export class NanobossTuiApp {
       isStopped: () => this.stopped,
       now: this.now,
       requestRender: (force) => this.requestRender(force),
-    });
-    this.modelPrompts = new AppModelPrompts({
-      cwd: this.cwd,
-      deps: this.deps,
-      controller: this.controller,
       promptWithInlineSelect: async (options) =>
         await this.promptWithInlineSelect(options),
     });
+    this.view = runtimeWiring.view;
+    this.helpers = runtimeWiring.helpers;
+    this.modelPrompts = runtimeWiring.modelPrompts;
 
     bindAppInteractions({
       tui: this.tui,
