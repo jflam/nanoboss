@@ -99,6 +99,8 @@ are:
   `/extensions` card formatting helpers
 - `controller-model-selection.ts`: controller-owned model validation and
   default persistence helpers
+- `controller-prompt-flow.ts`: controller-owned prompt forwarding and
+  pending-prompt flushing helpers
 - `controller-session.ts`: controller-owned HTTP session connect/create helpers
 - `controller-stop.ts`: controller-owned run stop and continuation cancel
   helpers
@@ -124,9 +126,9 @@ of growing `reducer.ts`, `app.ts`, or `controller.ts` further.
 
 Measured during the 2026-05 TUI adapter review:
 
-- source files: 64
-- source lines: 8,385
-- largest file: `src/controller.ts` at 613 lines
+- source files: 65
+- source lines: 8,467
+- largest file: `src/app.ts` at 587 lines
 - workspace package dependencies: 9
 - runtime value exports: 46 -> 12
 - public wildcard exports: 8 -> 0
@@ -168,6 +170,8 @@ Measured during the 2026-05 TUI adapter review:
     helpers out of the TUI controller
   - split controller-owned model validation and default persistence helpers
     out of the TUI controller
+  - split controller-owned prompt forwarding and pending-prompt flushing
+    helpers out of the TUI controller
   - split controller-owned HTTP session connect/create helpers out of the TUI
     controller
   - split controller-owned run stop and continuation cancel helpers out of

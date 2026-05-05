@@ -1,6 +1,5 @@
 import {
   setSessionAutoApprove,
-  sendSessionPrompt,
   startSessionEventStream,
   isRenderedFrontendEvent,
   type FrontendCommand,
@@ -27,11 +26,8 @@ import {
 import { reduceUiState, type UiAction } from "./reducer.ts";
 import { createInitialUiState, type UiPendingPrompt, type UiState } from "./state.ts";
 import {
-  formatPendingPromptClearStatus,
   getBusyLocalCommandLabel,
   getLocalBusyInputStatus,
-  isTerminalFrontendEvent,
-  selectNextPendingPrompt,
 } from "./controller-input-flow.ts";
 import {
   buildExtensionsLocalCard,
@@ -56,6 +52,12 @@ import {
   sendStopRequest as sendStopRequestInternal,
   type ControllerStopDeps,
 } from "./controller-stop.ts";
+import {
+  buildPendingPromptAction,
+  forwardPrompt as forwardPromptInternal,
+  maybeFlushPendingPrompt as maybeFlushPendingPromptInternal,
+  type ControllerPromptFlowDeps,
+} from "./controller-prompt-flow.ts";
 
 import type { TuiExtensionStatus } from "@nanoboss/tui-extension-catalog";
 
@@ -78,9 +80,8 @@ export interface NanobossTuiControllerParams {
 }
 
 export interface NanobossTuiControllerDeps
-  extends ControllerModelSelectionDeps, ControllerSessionDeps, ControllerStopDeps {
+  extends ControllerModelSelectionDeps, ControllerSessionDeps, ControllerStopDeps, ControllerPromptFlowDeps {
   setSessionAutoApprove?: typeof setSessionAutoApprove;
-  sendSessionPrompt?: typeof sendSessionPrompt;
   startSessionEventStream?: (params: {
     baseUrl: string;
     sessionId: string;
@@ -431,16 +432,13 @@ export class NanobossTuiController {
   }
 
   private async enqueuePendingPrompt(promptInput: PromptInput, kind: UiPendingPrompt["kind"]): Promise<void> {
-    const text = promptInputDisplayText(promptInput);
-    this.dispatch({
-      type: "local_pending_prompt_added",
-      prompt: {
-        id: `pending-${this.nextPendingPromptId++}`,
-        text,
-        kind,
-        promptInput,
-      },
+    const pendingPrompt = buildPendingPromptAction({
+      promptInput,
+      kind,
+      nextPendingPromptId: this.nextPendingPromptId,
     });
+    this.nextPendingPromptId = pendingPrompt.nextPendingPromptId;
+    this.dispatch(pendingPrompt.action);
 
     if (kind === "steering") {
       await this.cancelActiveRun();
@@ -448,32 +446,16 @@ export class NanobossTuiController {
   }
 
   private async maybeFlushPendingPrompt(event: FrontendEventEnvelope): Promise<void> {
-    if (!isTerminalFrontendEvent(event) || this.flushingPendingPrompt || this.state.inputDisabled) {
-      return;
-    }
-
-    const nextPrompt = selectNextPendingPrompt(this.state.pendingPrompts);
-    if (!nextPrompt) {
-      return;
-    }
-
-    this.flushingPendingPrompt = true;
-    this.dispatch({
-      type: "local_pending_prompt_removed",
-      promptId: nextPrompt.id,
+    await maybeFlushPendingPromptInternal({
+      event,
+      getState: () => this.state,
+      flushingPendingPrompt: this.flushingPendingPrompt,
+      setFlushingPendingPrompt: (flushing) => {
+        this.flushingPendingPrompt = flushing;
+      },
+      forwardPrompt: async (prompt) => await this.forwardPrompt(prompt),
+      dispatch: (action) => this.dispatch(action),
     });
-
-    try {
-      const forwarded = await this.forwardPrompt(nextPrompt.promptInput ?? normalizePromptInput(nextPrompt.text));
-      if (!forwarded && this.state.pendingPrompts.length > 0) {
-        this.dispatch({
-          type: "local_pending_prompts_cleared",
-          text: formatPendingPromptClearStatus(this.state.pendingPrompts.length),
-        });
-      }
-    } finally {
-      this.flushingPendingPrompt = false;
-    }
   }
 
   private async createNewSession(): Promise<void> {
@@ -571,24 +553,13 @@ export class NanobossTuiController {
   }
 
   private async forwardPrompt(prompt: PromptInput): Promise<boolean> {
-    this.dispatch({ type: "local_user_submitted", text: promptInputDisplayText(prompt) });
-
-    try {
-      if (!this.state.sessionId) {
-        throw new Error("No active session");
-      }
-
-      await (this.deps.sendSessionPrompt ?? sendSessionPrompt)(
-        this.params.serverUrl,
-        this.state.sessionId,
-        prompt,
-      );
-      return true;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      this.dispatch({ type: "local_send_failed", error: message });
-      return false;
-    }
+    return await forwardPromptInternal({
+      deps: this.deps,
+      serverUrl: this.params.serverUrl,
+      state: this.state,
+      prompt,
+      dispatch: (action) => this.dispatch(action),
+    });
   }
 
   private async toggleSessionAutoApprove(): Promise<void> {
