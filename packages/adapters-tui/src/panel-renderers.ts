@@ -1,12 +1,8 @@
-import type {
-  PanelRenderer as SdkPanelRenderer,
-  PanelRenderContext as SdkPanelRenderContext,
-} from "@nanoboss/tui-extension-sdk";
+import type { PanelRenderer as SdkPanelRenderer } from "@nanoboss/tui-extension-sdk";
 
 import type { UiState } from "./state.ts";
 import type { NanobossTuiTheme } from "./theme.ts";
 
-export type PanelRenderContext<T> = SdkPanelRenderContext<T, UiState, NanobossTuiTheme>;
 export type PanelRenderer<T = unknown> = SdkPanelRenderer<T, UiState, NanobossTuiTheme>;
 
 const registry = new Map<string, PanelRenderer<unknown>>();
@@ -30,8 +26,4 @@ export function unregisterPanelRenderer(rendererId: string): boolean {
 
 export function getPanelRenderer(rendererId: string): PanelRenderer<unknown> | undefined {
   return registry.get(rendererId);
-}
-
-export function listPanelRenderers(): PanelRenderer<unknown>[] {
-  return Array.from(registry.values());
 }

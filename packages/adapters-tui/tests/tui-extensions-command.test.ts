@@ -9,9 +9,9 @@ import {
   bootExtensions,
   NanobossTuiController,
   type NanobossTuiControllerDeps,
-  type PanelRenderer,
 } from "@nanoboss/adapters-tui";
 import { formatExtensionsCard } from "../src/commands.ts";
+import type { PanelRenderer } from "../src/panel-renderers.ts";
 import type { TypeDescriptor } from "@nanoboss/procedure-sdk";
 
 function makeRegistry(): TuiExtensionRegistry {

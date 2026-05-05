@@ -23,10 +23,6 @@ export function registerChromeContribution(contribution: ChromeContribution): vo
   nextInsertionIndex += 1;
 }
 
-export function listChromeContributions(): ChromeContribution[] {
-  return Array.from(registry.values()).sort(compareContributions);
-}
-
 export function getChromeContributions(slot: ChromeSlotId): ChromeContribution[] {
   return Array.from(registry.values())
     .filter((c) => c.slot === slot)

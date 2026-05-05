@@ -42,45 +42,6 @@ export {
 } from "./theme.ts";
 export { promptForStoredSessionSelection } from "./overlays/session-picker.ts";
 export {
-  registerKeyBinding,
-  listKeyBindings,
-  keyMatches,
-  dispatchKeyBinding,
-  type KeyBinding,
-  type KeyBindingCategory,
-  type KeyMatcher,
-  type BindingCtx,
-  type BindingResult,
-  type KeyBindingController,
-  type KeyBindingEditor,
-  type KeyBindingAppHooks,
-} from "./bindings.ts";
-export {
-  registerChromeContribution,
-  listChromeContributions,
-  getChromeContributions,
-  type ChromeContribution,
-  type ChromeRenderContext,
-  type ChromeSlotId,
-} from "./chrome.ts";
-export {
-  registerActivityBarSegment,
-  listActivityBarSegments,
-  getActivityBarSegments,
-  buildActivityBarLine,
-  type ActivityBarSegment,
-  type ActivityBarSegmentContext,
-  type ActivityBarLine,
-} from "./activity-bar.ts";
-export {
-  registerPanelRenderer,
-  unregisterPanelRenderer,
-  listPanelRenderers,
-  getPanelRenderer,
-  type PanelRenderer,
-  type PanelRenderContext,
-} from "./panel-renderers.ts";
-export {
   bootExtensions,
   createTuiExtensionContextFactory,
   type BootExtensionsOptions,

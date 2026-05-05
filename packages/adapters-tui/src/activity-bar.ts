@@ -1,15 +1,11 @@
 import type {
   ActivityBarLine,
   ActivityBarSegment as SdkActivityBarSegment,
-  ActivityBarSegmentContext as SdkActivityBarSegmentContext,
 } from "@nanoboss/tui-extension-sdk";
 import type { UiState } from "./state.ts";
 import type { NanobossTuiTheme } from "./theme.ts";
 import { visibleWidth } from "./pi-tui.ts";
 
-export type { ActivityBarLine } from "@nanoboss/tui-extension-sdk";
-export type ActivityBarSegmentContext =
-  SdkActivityBarSegmentContext<UiState, NanobossTuiTheme>;
 export type ActivityBarSegment =
   SdkActivityBarSegment<UiState, NanobossTuiTheme>;
 
@@ -26,11 +22,7 @@ export function registerActivityBarSegment(segment: ActivityBarSegment): void {
   nextInsertionIndex += 1;
 }
 
-export function listActivityBarSegments(): ActivityBarSegment[] {
-  return Array.from(registry.values()).sort(compareByOrder);
-}
-
-export function getActivityBarSegments(line: ActivityBarLine): ActivityBarSegment[] {
+function getActivityBarSegments(line: ActivityBarLine): ActivityBarSegment[] {
   return Array.from(registry.values())
     .filter((segment) => segment.line === line)
     .sort(compareByOrder);

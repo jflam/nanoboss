@@ -12,12 +12,8 @@ import type { UiState } from "./state.ts";
 import { matchesKey } from "./pi-tui.ts";
 
 export type {
-  BindingResult,
   KeyBindingAppHooks,
   KeyBindingCategory,
-  KeyBindingController,
-  KeyBindingEditor,
-  KeyMatcher,
 } from "@nanoboss/tui-extension-sdk";
 
 export type BindingCtx = SdkBindingCtx<UiState>;
@@ -51,7 +47,7 @@ export function listKeyBindings(): KeyBinding[] {
   });
 }
 
-export function keyMatches(match: KeyMatcher | undefined, data: string): boolean {
+function keyMatches(match: KeyMatcher | undefined, data: string): boolean {
   if (match === undefined) {
     return false;
   }

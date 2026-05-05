@@ -12,7 +12,8 @@ It owns:
 - terminal views, transcript rendering, composer behavior, and overlays
 - command parsing for local TUI commands
 - theme creation and TUI formatting helpers
-- key binding, chrome, activity bar, panel, and form renderer registries
+- adapter-private key binding, chrome, activity bar, panel, and form renderer
+  registries
 - TUI extension bootstrapping into concrete adapter registries
 - built-in TUI extension contributions
 - clipboard integration behind platform-specific providers
@@ -56,12 +57,10 @@ surface without wildcard barrels, grouped around:
 - views and overlays:
   - `NanobossAppView`
   - `promptForStoredSessionSelection`
-- extension host registries:
-  - key bindings
-  - chrome contributions
-  - activity bar segments
-  - panel renderers
-  - extension boot helpers
+- extension boot helpers:
+  - `bootExtensions`
+  - `createTuiExtensionContextFactory`
+  - extension boot result/options/log types
 - theme:
   - `createNanobossTuiTheme`
   - theme-related types
@@ -100,7 +99,7 @@ Measured during the 2026-05 TUI adapter review:
 - source lines: 7,963
 - largest file: `src/reducer.ts` at 1,418 lines
 - workspace package dependencies: 9
-- runtime value exports: 46 -> 27
+- runtime value exports: 46 -> 12
 - public wildcard exports: 8 -> 0
 - code simplification applied:
   - replaced the public wildcard barrel with an explicit named-entrypoint
@@ -112,6 +111,8 @@ Measured during the 2026-05 TUI adapter review:
   - internalized form renderer registry helpers behind TUI app behavior
   - removed test-only form renderer list/reset helpers by using isolated
     registry ids in tests
+  - internalized key binding, chrome, activity-bar, and panel registry helpers
+    behind adapter source modules and extension boot context wiring
 
 The useful outcome of this pass is the entrypoint baseline: future TUI adapter
 exports should be deliberate additions, not accidental leakage from broad

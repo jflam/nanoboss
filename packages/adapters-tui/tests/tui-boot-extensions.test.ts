@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
 import type {
+  BindingResult,
+  KeyBindingController,
+  KeyBindingEditor,
   TuiExtension,
   TuiExtensionContext,
 } from "@nanoboss/tui-extension-sdk";
@@ -11,17 +14,20 @@ import {
   bootExtensions,
   createInitialUiState,
   createNanobossTuiTheme,
+} from "@nanoboss/adapters-tui";
+import {
   dispatchKeyBinding,
-  getChromeContributions,
-  getPanelRenderer,
   listKeyBindings,
   type BindingCtx,
-  type BindingResult,
   type KeyBindingAppHooks,
-  type KeyBindingController,
-  type KeyBindingEditor,
+} from "../src/bindings.ts";
+import {
+  getChromeContributions,
+} from "../src/chrome.ts";
+import {
+  getPanelRenderer,
   type PanelRenderer,
-} from "@nanoboss/adapters-tui";
+} from "../src/panel-renderers.ts";
 
 function makeBindingCtx(overrides: Partial<BindingCtx> = {}): BindingCtx {
   const controller: KeyBindingController = {
