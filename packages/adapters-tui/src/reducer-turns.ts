@@ -1,6 +1,5 @@
 import type {
   UiState,
-  UiToolCall,
   UiTranscriptItem,
   UiTurn,
 } from "./state.ts";
