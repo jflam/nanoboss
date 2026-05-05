@@ -155,6 +155,8 @@ These are store-owned because they are durable local persistence, but they are g
   `formatSessionLine`, `formatSessionDetailLine`, `formatSessionInitialPrompt`
 - value normalization helpers:
   `publicKernelValueFromStored`, `publicContinuationFromStored`
+- stored value access helpers:
+  internal path lookup, stat preview, and file materialization helpers
 - path helpers:
   `getNanobossHome`, `getSessionDir`
 - validation helper:
@@ -256,9 +258,9 @@ The right standard for future tests is: if a new client capability depends on th
 
 Measured during the 2026-05 store boundary review:
 
-- source files: 10
-- source lines: 1,816
-- largest file: `src/session-store.ts` at 978 lines
+- source files: 11
+- source lines: 1,832
+- largest file: `src/session-store.ts` at 890 lines
 - runtime value exports: 24 -> 23
 - public wildcard exports: 0
 - code simplification applied: made `formatTimestamp(...)` a module-private
