@@ -4,10 +4,7 @@ import type {
 } from "@nanoboss/tui-extension-sdk";
 import type { EditorTheme, MarkdownTheme, SelectListTheme } from "./pi-tui.ts";
 import {
-  attrStyle,
-  fgStyle,
   rgbBgStyle,
-  style,
 } from "./theme-ansi.ts";
 import { createToolCardCodeHighlighter } from "./theme-highlight.ts";
 import {
@@ -15,6 +12,11 @@ import {
   applyRgb,
   getToolCardPalette,
 } from "./theme-tool-card.ts";
+import {
+  createBaseTextStyles,
+  createMarkdownTheme,
+  createSelectListTheme,
+} from "./theme-base.ts";
 
 export type { ToolCardThemeMode } from "@nanoboss/tui-extension-sdk";
 export { getLanguageFromPath } from "./theme-languages.ts";
@@ -28,16 +30,7 @@ export type NanobossTuiTheme = SdkNanobossTuiTheme<
 export function createNanobossTuiTheme(initialToolCardMode: ToolCardThemeMode = "dark"): NanobossTuiTheme {
   let toolCardMode = initialToolCardMode;
   const toolCardPalette = () => getToolCardPalette(toolCardMode);
-  const text = (value: string) => value;
-  const accent = (value: string) => fgStyle(value, 36);
-  const muted = (value: string) => fgStyle(value, 90);
-  const dim = (value: string) => attrStyle(value, 2, 22);
-  const success = (value: string) => fgStyle(value, 32);
-  const error = (value: string) => fgStyle(value, 31);
-  const warning = (value: string) => fgStyle(value, 33);
-  const bold = (value: string) => attrStyle(value, 1, 22);
-  const italic = (value: string) => attrStyle(value, 3, 23);
-  const underline = (value: string) => attrStyle(value, 4, 24);
+  const base = createBaseTextStyles();
   const toolCardBackground = (value: string) => {
     const [red, green, blue] = toolCardPalette().background;
     return rgbBgStyle(value, red, green, blue);
@@ -76,30 +69,8 @@ export function createNanobossTuiTheme(initialToolCardMode: ToolCardThemeMode = 
     syntaxPunctuation,
   });
 
-  const selectList: SelectListTheme = {
-    selectedPrefix: (value) => style(value, [1, 36], [22, 39]),
-    selectedText: (value) => style(value, [1, 36], [22, 39]),
-    description: muted,
-    scrollInfo: dim,
-    noMatch: warning,
-  };
-
-  const markdown: MarkdownTheme = {
-    heading: (value) => style(value, [1, 36], [22, 39]),
-    link: (value) => style(value, [4, 36], [24, 39]),
-    linkUrl: muted,
-    code: (value) => warning(value),
-    codeBlock: text,
-    codeBlockBorder: muted,
-    quote: muted,
-    quoteBorder: muted,
-    hr: muted,
-    listBullet: accent,
-    bold,
-    italic,
-    strikethrough: (value) => attrStyle(value, 9, 29),
-    underline,
-  };
+  const selectList = createSelectListTheme(base);
+  const markdown = createMarkdownTheme(base);
 
   const getToolCardMode = (): ToolCardThemeMode => toolCardMode;
   const setToolCardMode = (mode: ToolCardThemeMode): void => {
@@ -107,16 +78,7 @@ export function createNanobossTuiTheme(initialToolCardMode: ToolCardThemeMode = 
   };
 
   return {
-    text,
-    accent,
-    muted,
-    dim,
-    success,
-    error,
-    warning,
-    bold,
-    italic,
-    underline,
+    ...base,
     toolCardPendingBg,
     toolCardSuccessBg,
     toolCardErrorBg,
@@ -132,7 +94,7 @@ export function createNanobossTuiTheme(initialToolCardMode: ToolCardThemeMode = 
     getToolCardMode,
     setToolCardMode,
     editor: {
-      borderColor: accent,
+      borderColor: base.accent,
       selectList,
     },
     selectList,
