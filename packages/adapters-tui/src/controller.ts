@@ -41,6 +41,13 @@ import {
 } from "./commands.ts";
 import { reduceUiState, type UiAction } from "./reducer.ts";
 import { createInitialUiState, type UiPendingPrompt, type UiState } from "./state.ts";
+import {
+  formatPendingPromptClearStatus,
+  getBusyLocalCommandLabel,
+  getLocalBusyInputStatus,
+  isTerminalFrontendEvent,
+  selectNextPendingPrompt,
+} from "./controller-input-flow.ts";
 
 import type { TuiExtensionStatus } from "@nanoboss/tui-extension-catalog";
 
@@ -750,40 +757,4 @@ export class NanobossTuiController {
       this.dispatch({ type: "local_status", text: `[session] failed to update auto-approve: ${message}` });
     }
   }
-}
-
-function getBusyLocalCommandLabel(trimmed: string): string | undefined {
-  if (trimmed === "/new") {
-    return "/new";
-  }
-
-  if (trimmed === "/model" || trimmed.startsWith("/model ")) {
-    return "/model";
-  }
-
-  return undefined;
-}
-
-function isTerminalFrontendEvent(event: FrontendEventEnvelope): boolean {
-  return event.type === "run_completed"
-    || event.type === "run_paused"
-    || event.type === "run_failed"
-    || event.type === "run_cancelled";
-}
-
-function selectNextPendingPrompt(prompts: UiPendingPrompt[]): UiPendingPrompt | undefined {
-  return prompts.find((prompt) => prompt.kind === "steering")
-    ?? prompts.find((prompt) => prompt.kind === "queued");
-}
-
-function formatPendingPromptClearStatus(count: number): string {
-  return `[run] cleared ${count} pending prompt${count === 1 ? "" : "s"} after send failed`;
-}
-
-function getLocalBusyInputStatus(statusLine: string | undefined): string {
-  if (statusLine?.startsWith("[model]")) {
-    return "[model] wait for the current model update to finish before sending more input";
-  }
-
-  return "[status] wait for the current local task to finish before sending more input";
 }

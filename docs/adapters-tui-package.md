@@ -83,6 +83,8 @@ are:
 - `reducer-panels.ts`: reducer-owned procedure-card, procedure-panel, and
   ui-panel helpers
 - `controller.ts`: session/runtime orchestration for the TUI
+- `controller-input-flow.ts`: controller-owned busy-input, pending-prompt,
+  and terminal-event helpers
 - `views.ts`: transcript, chrome, and panel composition
 - `theme.ts`: adapter theme construction
 
@@ -105,9 +107,9 @@ of growing `reducer.ts`, `app.ts`, or `controller.ts` further.
 
 Measured during the 2026-05 TUI adapter review:
 
-- source files: 53
-- source lines: 7,947
-- largest file: `src/controller.ts` at 789 lines
+- source files: 54
+- source lines: 7,959
+- largest file: `src/app.ts` at 774 lines
 - workspace package dependencies: 9
 - runtime value exports: 46 -> 12
 - public wildcard exports: 8 -> 0
@@ -135,6 +137,8 @@ Measured during the 2026-05 TUI adapter review:
     the TUI app
   - split app-level continuation form extraction and signature helpers out of
     the TUI app
+  - split controller-owned busy-input, pending-prompt, and terminal-event
+    helpers out of the TUI controller
 
 The useful outcome of this pass is the entrypoint baseline: future TUI adapter
 exports should be deliberate additions, not accidental leakage from broad
