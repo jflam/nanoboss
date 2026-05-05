@@ -1,9 +1,7 @@
 import type { TokenUsageSummary } from "./format.ts";
 import type { UiPanel, UiState, UiTurn } from "./state.ts";
-import {
-  buildTurnCompletionNote,
-  finalizeAssistantTurn,
-} from "./reducer-run-finalize-turn.ts";
+import { finalizeAssistantTurn } from "./reducer-run-finalize-turn.ts";
+import { buildTurnCompletionNote } from "./reducer-run-completion-note.ts";
 
 export function buildContinuationStatusLine(procedure: string): string {
   return `[continuation] /${procedure} active - waiting for your reply`;

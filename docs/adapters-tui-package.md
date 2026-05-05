@@ -111,8 +111,10 @@ are:
   and assistant meta helpers
 - `reducer-turns.ts`: reducer-owned assistant turn and transcript helpers
 - `reducer-run-completion.ts`: reducer-owned terminal run cleanup helpers
+- `reducer-run-completion-note.ts`: reducer-owned run completion-note
+  duration and turn-number formatting helpers
 - `reducer-run-finalize-turn.ts`: reducer-owned assistant-turn finalization
-  and completion-note helpers
+  helpers
 - `reducer-run-restore.ts`: reducer-owned restored run replay transitions
 - `reducer-run-events.ts`: reducer-owned live run lifecycle frontend event
   transitions
@@ -214,8 +216,8 @@ of growing `reducer.ts`, `app.ts`, or `controller.ts` further.
 
 Measured during the 2026-05 TUI adapter review:
 
-- source files: 116
-- source lines: 9,483
+- source files: 117
+- source lines: 9,482
 - largest file: `src/controller.ts` at 355 lines
 - workspace package dependencies: 9
 - runtime value exports: 46 -> 12
@@ -335,6 +337,8 @@ Measured during the 2026-05 TUI adapter review:
     generic chrome line helpers
   - split assistant-turn finalization and completion-note helpers out of
     reducer run cleanup
+  - split run completion-note duration and turn-number formatting out of
+    assistant-turn finalization
   - split core keybinding help-card formatting out of the registration
     manifest
   - split core keybinding app/controller action dispatch helpers out of the
