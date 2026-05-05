@@ -76,20 +76,20 @@ That buffering is ACP presentation policy. It should not move into
 
 Measured during the 2026-05 ACP server adapter review:
 
-- source files: 2
-- source lines: 228
-- largest file: `src/server.ts` at 227 lines
+- source files: 4
+- source lines: 236
+- largest file: `src/server.ts` at 91 lines
 - public barrel wildcard exports: reduced from 1 to 0
 - public package symbols: reduced from 5 to 1
 
-This is a public-surface cleanup. Tests still cover the internal helper seams
-directly through `src/server.ts`, while consumers only see the command
+This is a public-surface cleanup. Tests still cover metadata parsing and update
+buffering through internal modules, while consumers only see the command
 entrypoint the top-level Nanoboss binary actually calls.
 
 ## Good Future Targets
 
-- If metadata parsing grows, move it to a private `metadata.ts` file without
-  widening the package entrypoint.
+- Keep metadata parsing in `session-metadata.ts` without widening the package
+  entrypoint.
 - Keep update buffering covered at the adapter boundary because it is specific
   ACP client presentation behavior.
 - Revisit whether `Nanoboss` should become a private factory if more ACP agent

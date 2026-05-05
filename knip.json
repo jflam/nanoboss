@@ -15,9 +15,6 @@
     ],
     "packages/adapters-mcp/src/server.ts": [
       "exports"
-    ],
-    "packages/adapters-acp-server/src/server.ts": [
-      "exports"
     ]
   },
   "workspaces": {

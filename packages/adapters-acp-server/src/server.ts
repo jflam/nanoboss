@@ -1,87 +1,18 @@
 import * as acp from "@agentclientprotocol/sdk";
 import { getBuildLabel } from "@nanoboss/app-support";
 import {
-  parseAssistantNoticeText,
   promptInputFromAcpBlocks,
   setAgentRuntimeSessionRuntimeFactory,
 } from "@nanoboss/agent-acp";
 import { buildGlobalMcpStdioServer } from "@nanoboss/adapters-mcp";
 import { NanobossService } from "@nanoboss/app-runtime";
-import type {
-  DownstreamAgentProvider,
-  DownstreamAgentSelection,
-} from "@nanoboss/contracts";
 import {
-  parseProcedureUiMarker,
-  toProcedureUiSessionUpdate,
-  type ProcedureUiEvent,
-  type SessionUpdateEmitter,
-} from "@nanoboss/procedure-engine";
+  buildTopLevelSessionMeta,
+  extractDefaultAgentSelection,
+  extractNanobossSessionId,
+} from "./session-metadata.ts";
+import { QueuedSessionUpdateEmitter } from "./session-update-emitter.ts";
 import { Readable, Writable } from "node:stream";
-
-export class QueuedSessionUpdateEmitter implements SessionUpdateEmitter {
-  private queue = Promise.resolve();
-  private pendingAssistantMessageChunks: Array<Extract<acp.SessionUpdate, { sessionUpdate: "agent_message_chunk" }>> = [];
-
-  constructor(
-    private readonly connection: acp.AgentSideConnection,
-    private readonly sessionId: acp.SessionId,
-  ) {}
-
-  emit(update: acp.SessionUpdate): void {
-    this.queue = this.queue
-      .then(() =>
-        this.forwardUpdate(update)
-      )
-      .catch((error: unknown) => {
-        console.error("failed to emit session update", error);
-      });
-  }
-
-  emitUiEvent(event: ProcedureUiEvent): void {
-    this.emit(toProcedureUiSessionUpdate(event));
-  }
-
-  flush(): Promise<void> {
-    this.queue = this.queue
-      .then(() => this.flushPendingAssistantMessageChunks("message"))
-      .catch((error: unknown) => {
-        console.error("failed to flush session updates", error);
-      });
-    return this.queue;
-  }
-
-  private async forwardUpdate(update: acp.SessionUpdate): Promise<void> {
-    if (shouldBufferClientFacingAssistantMessageChunk(update)) {
-      this.pendingAssistantMessageChunks.push(update);
-      return;
-    }
-
-    if (update.sessionUpdate === "tool_call" && this.pendingAssistantMessageChunks.length > 0) {
-      await this.flushPendingAssistantMessageChunks("thought");
-    }
-
-    await this.connection.sessionUpdate({
-      sessionId: this.sessionId,
-      update,
-    });
-  }
-
-  private async flushPendingAssistantMessageChunks(mode: "message" | "thought"): Promise<void> {
-    const pending = this.pendingAssistantMessageChunks;
-    if (pending.length === 0) {
-      return;
-    }
-
-    this.pendingAssistantMessageChunks = [];
-    for (const update of pending) {
-      await this.connection.sessionUpdate({
-        sessionId: this.sessionId,
-        update: mode === "message" ? update : toThoughtChunk(update),
-      });
-    }
-  }
-}
 
 class Nanoboss implements acp.Agent {
   constructor(
@@ -142,54 +73,6 @@ class Nanoboss implements acp.Agent {
   }
 }
 
-export function buildTopLevelSessionMeta(): NonNullable<acp.NewSessionResponse["_meta"]> {
-  return {
-    nanoboss: {
-      sessionInspection: {
-        surface: "global-mcp",
-        note: "Session inspection is available through the globally registered `nanoboss` MCP server.",
-      },
-    },
-  };
-}
-
-function shouldBufferClientFacingAssistantMessageChunk(
-  update: acp.SessionUpdate,
-): update is Extract<acp.SessionUpdate, { sessionUpdate: "agent_message_chunk" }> {
-  return update.sessionUpdate === "agent_message_chunk"
-    && update.content.type === "text"
-    && !parseAssistantNoticeText(update.content.text)
-    && !parseProcedureUiMarker(update.content.text);
-}
-
-function toThoughtChunk(
-  update: Extract<acp.SessionUpdate, { sessionUpdate: "agent_message_chunk" }>,
-): Extract<acp.SessionUpdate, { sessionUpdate: "agent_thought_chunk" }> {
-  return {
-    ...update,
-    sessionUpdate: "agent_thought_chunk",
-  };
-}
-
-export function extractNanobossSessionId(params: acp.NewSessionRequest): string | undefined {
-  const record = params._meta;
-  if (!record || typeof record !== "object") {
-    return undefined;
-  }
-
-  const candidate = (record as Record<string, unknown>).nanobossSessionId;
-  return typeof candidate === "string" && candidate.length > 0 ? candidate : undefined;
-}
-
-export function extractDefaultAgentSelection(params: acp.NewSessionRequest): DownstreamAgentSelection | undefined {
-  const record = params._meta;
-  if (!record || typeof record !== "object") {
-    return undefined;
-  }
-
-  return parseDownstreamAgentSelection((record as Record<string, unknown>).defaultAgentSelection);
-}
-
 export async function runAcpServerCommand(): Promise<void> {
   console.error(`${getBuildLabel()} acp-server ready`);
   setAgentRuntimeSessionRuntimeFactory(() => ({
@@ -205,23 +88,4 @@ export async function runAcpServerCommand(): Promise<void> {
     stream,
   );
   await connection.closed;
-}
-
-const DOWNSTREAM_AGENT_PROVIDERS: DownstreamAgentProvider[] = ["claude", "gemini", "codex", "copilot"];
-
-function parseDownstreamAgentSelection(value: unknown): DownstreamAgentSelection | undefined {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    return undefined;
-  }
-
-  const record = value as Record<string, unknown>;
-  const provider = typeof record.provider === "string" && DOWNSTREAM_AGENT_PROVIDERS.includes(record.provider as DownstreamAgentProvider)
-    ? record.provider as DownstreamAgentProvider
-    : undefined;
-  if (!provider) {
-    return undefined;
-  }
-
-  const model = typeof record.model === "string" && record.model.trim().length > 0 ? record.model : undefined;
-  return model === undefined ? { provider } : { provider, model };
 }
